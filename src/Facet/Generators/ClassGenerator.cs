@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 
@@ -12,147 +13,125 @@ public sealed class ClassGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var typeDeclarations = context.SyntaxProvider
-            .CreateSyntaxProvider(
-                predicate: static (s, _) => s is TypeDeclarationSyntax tds && tds.AttributeLists.Count > 0,
-                transform: static (ctx, _) => (TypeDeclarationSyntax)ctx.Node
-            )
+        var facetDeclarations = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                "Facet.FacetAttribute",
+                predicate: static (node, _) => node is TypeDeclarationSyntax,
+                transform: static (ctx, _) => GetTargetModel(ctx))
             .Where(static m => m is not null);
 
-        var compilation = context.CompilationProvider;
-        var combined = typeDeclarations.Combine(compilation);
-
-        context.RegisterSourceOutput(combined, (spc, source) => Generate(source.Left, source.Right, spc));
-    }
-
-    private void Generate(TypeDeclarationSyntax typeDecl, Compilation compilation, SourceProductionContext context)
-    {
-        var model = compilation.GetSemanticModel(typeDecl.SyntaxTree);
-        if (model.GetDeclaredSymbol(typeDecl) is not INamedTypeSymbol targetSymbol)
-            return;
-
-        foreach (var attributeData in targetSymbol.GetAttributes()
-            .Where(a => a.AttributeClass?.ToDisplayString() == "Facet.FacetAttribute"))
+        context.RegisterSourceOutput(facetDeclarations, static (context, model) =>
         {
-            var sourceTypeArg = attributeData.ConstructorArguments.FirstOrDefault();
-            var excludedArg = attributeData.ConstructorArguments.ElementAtOrDefault(1);
-
-            if (sourceTypeArg.Value is not INamedTypeSymbol sourceTypeSymbol)
-                continue;
-
-            var excluded = new HashSet<string>(excludedArg.Values
-                .Select(v => v.Value?.ToString())
-                .Where(v => v != null)!
-                .Cast<string>());
-
-            var namedArgs = attributeData.NamedArguments.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-
-            bool includeFields = namedArgs.TryGetValue("IncludeFields", out var includeFieldsValue)
-                && includeFieldsValue.Value is bool f && f;
-
-            bool generateConstructor = !namedArgs.TryGetValue("GenerateConstructor", out var generateCtorValue)
-                || (generateCtorValue.Value is bool g && g);
-
-            var configurationType = namedArgs.TryGetValue("Configuration", out var configValue)
-                ? configValue.Value as INamedTypeSymbol
-                : null;
-
-            var kind = namedArgs.TryGetValue("Kind", out var kindValue) && kindValue.Value is int kindInt
-                ? (FacetKind)kindInt
-                : FacetKind.Class;
-
-            var props = sourceTypeSymbol.GetMembers()
-                .OfType<IPropertySymbol>()
-                .Where(p =>
-                    p.DeclaredAccessibility == Accessibility.Public &&
-                    !excluded.Contains(p.Name))
-                .Cast<ISymbol>();
-
-            var fields = includeFields
-                ? sourceTypeSymbol.GetMembers()
-                    .OfType<IFieldSymbol>()
-                    .Where(f =>
-                        f.DeclaredAccessibility == Accessibility.Public &&
-                        !excluded.Contains(f.Name))
-                    .Cast<ISymbol>()
-                : Enumerable.Empty<ISymbol>();
-
-            var sourceMembers = props.Concat(fields).ToList();
-
-            var ns = targetSymbol.ContainingNamespace?.IsGlobalNamespace == false
-                ? targetSymbol.ContainingNamespace.ToDisplayString()
-                : null;
-
-            var generatedSource = GenerateType(
-                targetSymbol.Name,
-                ns,
-                sourceMembers,
-                sourceTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                generateConstructor,
-                configurationType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                kind);
-
-            context.AddSource(targetSymbol.Name + ".g.cs", SourceText.From(generatedSource, Encoding.UTF8));
-        }
+            var generated = Generate(model!);
+            context.AddSource(model!.Name + ".g.cs", SourceText.From(generated, Encoding.UTF8));
+        });
     }
 
-    private static string GenerateType(
-        string typeName,
-        string? ns,
-        List<ISymbol> members,
-        string sourceTypeName,
-        bool generateConstructor,
-        string? configurationTypeName,
-        FacetKind kind)
+    private static FacetTargetModel? GetTargetModel(GeneratorAttributeSyntaxContext context)
+    {
+        if (context.TargetSymbol is not INamedTypeSymbol targetSymbol)
+            return null;
+
+        var attribute = context.Attributes.FirstOrDefault();
+        if (attribute == null || attribute.ConstructorArguments.Length == 0)
+            return null;
+
+        var sourceType = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
+        if (sourceType == null)
+            return null;
+
+        var excluded = new HashSet<string>(attribute.ConstructorArguments.ElementAtOrDefault(1).Values
+            .Select(v => v.Value?.ToString())
+            .Where(n => n != null));
+
+        var includeFields = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "IncludeFields").Value.Value as bool? ?? false;
+        var generateConstructor = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "GenerateConstructor").Value.Value as bool? ?? true;
+        var configurationTypeName = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "Configuration").Value.Value?.ToString();
+        var kind = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "Kind").Value.Value is int k
+            ? (FacetKind)k
+            : FacetKind.Class;
+
+        var members = new List<FacetMember>();
+
+        foreach (var m in sourceType.GetMembers())
+        {
+            if (!excluded.Contains(m.Name))
+            {
+                if (m is IPropertySymbol p && p.DeclaredAccessibility == Accessibility.Public)
+                {
+                    members.Add(new FacetMember(
+                        p.Name,
+                        p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        FacetMemberKind.Property));
+                }
+                else if (includeFields && m is IFieldSymbol f && f.DeclaredAccessibility == Accessibility.Public)
+                {
+                    members.Add(new FacetMember(
+                        f.Name,
+                        f.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        FacetMemberKind.Field));
+                }
+            }
+        }
+
+        var ns = targetSymbol.ContainingNamespace.IsGlobalNamespace ? null : targetSymbol.ContainingNamespace.ToDisplayString();
+
+        return new FacetTargetModel(
+            name: targetSymbol.Name,
+            @namespace: ns,
+            kind: kind,
+            generateConstructor: generateConstructor,
+            sourceTypeName: sourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            configurationTypeName: configurationTypeName,
+            members: members.ToImmutableArray()
+        );
+    }
+
+    private static string Generate(FacetTargetModel model)
     {
         var sb = new StringBuilder();
 
-        if (!string.IsNullOrWhiteSpace(ns))
+        if (!string.IsNullOrWhiteSpace(model.Namespace))
         {
-            sb.AppendLine($"namespace {ns}");
+            sb.AppendLine($"namespace {model.Namespace}");
             sb.AppendLine("{");
         }
 
-        var keyword = kind == FacetKind.Record ? "record" : "class";
+        var keyword = model.Kind == FacetKind.Record ? "record" : "class";
 
-        sb.AppendLine($"public partial {keyword} {typeName}");
+        sb.AppendLine($"public partial {keyword} {model.Name}");
         sb.AppendLine("{");
 
-        foreach (var member in members)
+        foreach (var member in model.Members)
         {
-            string type = (member as IPropertySymbol)?.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-                       ?? (member as IFieldSymbol)?.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-                       ?? "object";
-
-            if (member is IPropertySymbol)
+            if (member.Kind == FacetMemberKind.Property)
             {
-                sb.AppendLine($"    public {type} {member.Name} {{ get; set; }}");
+                sb.AppendLine($"    public {member.TypeName} {member.Name} {{ get; set; }}");
             }
-            else if (member is IFieldSymbol)
+            else if (member.Kind == FacetMemberKind.Field)
             {
-                sb.AppendLine($"    public {type} {member.Name};");
+                sb.AppendLine($"    public {member.TypeName} {member.Name};");
             }
         }
 
-        if (generateConstructor)
+        if (model.GenerateConstructor)
         {
             sb.AppendLine();
-            sb.AppendLine($"    public {typeName}({sourceTypeName} source)");
+            sb.AppendLine($"    public {model.Name}({model.SourceTypeName} source)");
             sb.AppendLine("    {");
 
-            foreach (var member in members)
-            {
+            foreach (var member in model.Members)
                 sb.AppendLine($"        this.{member.Name} = source.{member.Name};");
-            }
 
-            if (!string.IsNullOrWhiteSpace(configurationTypeName))
-                sb.AppendLine($"        {configurationTypeName}.Map(source, this);");
+            if (!string.IsNullOrWhiteSpace(model.ConfigurationTypeName))
+                sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
 
             sb.AppendLine("    }");
         }
 
         sb.AppendLine("}");
-        if (!string.IsNullOrWhiteSpace(ns)) sb.AppendLine("}");
+        if (!string.IsNullOrWhiteSpace(model.Namespace))
+            sb.AppendLine("}");
 
         return sb.ToString();
     }

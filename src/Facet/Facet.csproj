@@ -8,7 +8,7 @@
 		<IsPackable>true</IsPackable>
 		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 		<PackageId>Facet</PackageId>
-		<Version>1.3.0</Version>
+		<Version>1.4.0</Version>
 		<Authors>Tim Maes</Authors>
 		<Description>Generate lean DTOs, slim views, or faceted projections of your models with a single attribute.</Description>
 		<PackageTags>source-generator dto projection redaction facet</PackageTags>
