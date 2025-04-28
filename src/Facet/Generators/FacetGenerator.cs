@@ -12,7 +12,7 @@ namespace Facet.Generators
     [Generator(LanguageNames.CSharp)]
     public sealed class FacetGenerator : IIncrementalGenerator
     {
-        private const string FacetAttributeName = "Facet.FacetAttribute";
+        private const string FacetAttributeName = $"{FacetConstants.DefaultNamespace}.FacetAttribute";
 
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {

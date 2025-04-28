@@ -1,17 +1,19 @@
 ﻿using System;
+using Facet.Generators;
+using Microsoft.CodeAnalysis;
 
-namespace Facet;
+namespace Facet.Attributes;
 
 /// <summary>
 /// Indicates that this class should be generated based on a source type, optionally excluding properties or including fields.
 /// </summary>
-[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+[GenerateAttribute(AttributeTargets.Class, AllowMultiple = true)]
 public sealed class FacetAttribute : Attribute
 {
     /// <summary>
     /// The type to project from.
     /// </summary>
-    public Type SourceType { get; }
+    public INamedTypeSymbol SourceType { get; }
 
     /// <summary>
     /// An array of property or field names to exclude from the generated class.
@@ -37,7 +39,7 @@ public sealed class FacetAttribute : Attribute
     /// <c>public static void Map(TSource source, TTarget target)</c>.
     /// This allows injecting custom projections, formatting, or derived values at compile time.
     /// </remarks>
-    public Type? Configuration { get; set; }
+    public INamedTypeSymbol? Configuration { get; set; }
 
     /// <summary>
     /// Whether to generate the static Expression&lt;Func&lt;TSource,TTarget&gt;&gt; Projection.
@@ -55,7 +57,7 @@ public sealed class FacetAttribute : Attribute
     /// </summary>
     /// <param name="sourceType">The type to generate from.</param>
     /// <param name="exclude">The names of the properties or fields to exclude.</param>
-    public FacetAttribute(Type sourceType, params string[] exclude)
+    public FacetAttribute(INamedTypeSymbol sourceType, params string[] exclude)
     {
         SourceType = sourceType;
         Exclude = exclude ?? Array.Empty<string>();
