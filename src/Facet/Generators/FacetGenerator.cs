@@ -3,9 +3,10 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 using System.Text;
 using System.Threading;
+using Facet.Attributes;
+using Facet.Util;
 
 namespace Facet.Generators
 {
@@ -35,30 +36,19 @@ namespace Facet.Generators
         {
             token.ThrowIfCancellationRequested();
             if (context.TargetSymbol is not INamedTypeSymbol targetSymbol) return null;
-            if (context.Attributes.Length == 0) return null;
-
-            var attribute = context.Attributes[0];
+            if (!targetSymbol.TryGetAttribute<FacetAttribute>(out var attribute)) {
+                return null;
+            }
+            
             token.ThrowIfCancellationRequested();
 
-            var sourceType = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
-            if (sourceType == null) return null;
-
-            var excluded = new HashSet<string>(
-                attribute.ConstructorArguments.ElementAtOrDefault(1).Values
-                    .Select(v => v.Value?.ToString())
-                    .Where(n => n != null)!);
-
-            var includeFields = GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
-
-            var generateConstructor = GetNamedArg(attribute.NamedArguments, "GenerateConstructor", true);
-
-            var generateProjection = GetNamedArg(attribute.NamedArguments, "GenerateProjection", true);
-
-            var configurationTypeName = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "Configuration")
-                                                  .Value.Value?.ToString();
-            var kind = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "Kind").Value.Value is int k
-                ? (FacetKind)k
-                : FacetKind.Class;
+            var sourceType = attribute.SourceType;
+            var excluded = attribute.Exclude.ToHashSet();
+            var includeFields = attribute.IncludeFields;
+            var generateConstructor = attribute.GenerateConstructor;
+            var generateProjection = attribute.GenerateProjection;
+            var configurationTypeName = attribute.Configuration?.ToString();
+            var kind = attribute.Kind;
 
             var members = new List<FacetMember>();
 
@@ -97,9 +87,6 @@ namespace Facet.Generators
                 configurationTypeName,
                 members.ToImmutableArray());
         }
-
-        private static T GetNamedArg<T>(ImmutableArray<KeyValuePair<string, TypedConstant>> args, string name, T defaultValue)
-            => args.FirstOrDefault(kv => kv.Key == name).Value.Value is T t ? t : defaultValue;
 
         private static string Generate(FacetTargetModel model)
         {
