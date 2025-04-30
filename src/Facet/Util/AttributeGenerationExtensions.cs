@@ -138,7 +138,7 @@ public static class AttributeGenerationExtensions {
 
         foreach (var attr in attrs) {
             var ctorArgs = attr.ConstructorArguments
-                .Select(x => x.Value)
+                .Select(GetTypedConstantValue)
                 .ToArray();
 
             var instance = (T)Activator.CreateInstance(
@@ -151,7 +151,7 @@ public static class AttributeGenerationExtensions {
 
             foreach (var namedArg in attr.NamedArguments) {
                 var name = namedArg.Key;
-                var value = namedArg.Value.Value;
+                var value = GetTypedConstantValue(namedArg.Value);
 
                 var pi = typeof(T).GetProperty(name);
                 if (pi?.SetMethod is null) {
@@ -162,10 +162,36 @@ public static class AttributeGenerationExtensions {
                     pi.SetValue(instance, value);
                 } else if (value.GetType().IsAssignableTo(pi.PropertyType)) {
                     pi.SetValue(instance, value);
+                } else if (value is int i && pi.PropertyType.IsEnum) {
+                    pi.SetValue(instance, i);
                 }
             }
 
             yield return instance;
+        }
+
+        yield break;
+
+        static object? GetTypedConstantValue(TypedConstant tc) {
+            if (tc.Kind == TypedConstantKind.Array) {
+                
+                // This is really brittle, but I can't think of a very reliable alternative atm..
+                // the problem is we need the array to be correctly typed in order to find the appropriate constructor
+                // with reflection
+                if (tc.Type?.Fqn() == "string[]") {
+                    return tc.Values
+                        .Select(GetTypedConstantValue)
+                        .Cast<string>()
+                        .ToArray();
+                }
+                
+                // object[]
+                return tc.Values
+                    .Select(GetTypedConstantValue)
+                    .ToArray();
+            }
+
+            return tc.Value;
         }
     }
 
