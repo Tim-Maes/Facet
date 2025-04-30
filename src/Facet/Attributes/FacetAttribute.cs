@@ -8,7 +8,7 @@ namespace Facet.Attributes;
 /// Indicates that this class should be generated based on a source type, optionally excluding properties or including fields.
 /// </summary>
 [GenerateAttribute(AttributeTargets.Class, AllowMultiple = true)]
-public sealed class FacetAttribute : Attribute
+public sealed class FacetAttribute
 {
     /// <summary>
     /// The type to project from.
