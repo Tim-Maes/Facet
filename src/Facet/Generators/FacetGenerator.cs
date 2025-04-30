@@ -36,10 +36,11 @@ namespace Facet.Generators
         {
             token.ThrowIfCancellationRequested();
             if (context.TargetSymbol is not INamedTypeSymbol targetSymbol) return null;
-            if (!targetSymbol.TryGetAttribute<FacetAttribute>(out var attribute)) {
+            if (!targetSymbol.TryGetAttribute<Facet.Attributes.FacetAttribute>(out var attribute))
+            {
                 return null;
             }
-            
+
             token.ThrowIfCancellationRequested();
 
             var sourceType = attribute.SourceType;
