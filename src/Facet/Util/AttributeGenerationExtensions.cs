@@ -24,15 +24,18 @@ public static class AttributeGenerationExtensions {
             var constructors = metadata.Constructors
                 .Select(c => new {
                     Parameters = c.Parameters.Select(x => new {
-                        Type = x.Type,
+                        Type = x.Type.IsAssignableFrom(typeof(INamedTypeSymbol))
+                            ? typeof(Type)
+                            : x.Type,
                         x.Name,
                         LiteralString = x.Default.HasValue
                             ? LiteralString(x.Default.Value)
                             : null,
+                        x.IsParams,
                     }).Select(x => new {
                         ArgDefinition = x.LiteralString is not null
-                            ? $"{x.Type.Fqn()} {x.Name} = {x.LiteralString}"
-                            : $"{x.Type.Fqn()} {x.Name}",
+                            ? $"{(x.IsParams ? "params " : "")}{x.Type.Fqn()} {x.Name} = {x.LiteralString}"
+                            : $"{(x.IsParams ? "params " : "")}{x.Type.Fqn()} {x.Name}",
                     }).ToList(),
                 }).ToList();
 
@@ -235,6 +238,7 @@ public static class AttributeGenerationExtensions {
                         Default = p.HasDefaultValue
                             ? new Optional<object?>(p.DefaultValue)
                             : new Optional<object?>(),
+                        IsParams = p.GetCustomAttribute<ParamArrayAttribute>() is not null,
                     }).ToArray(),
                 };
             }
@@ -268,6 +272,7 @@ public static class AttributeGenerationExtensions {
         public required Type Type { get; init; }
         public required string Name { get; init; }
         public required Optional<object?> Default { get; init; }
+        public required bool IsParams { get; set; }
 
     }
 
