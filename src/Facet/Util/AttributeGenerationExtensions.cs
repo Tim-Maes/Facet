@@ -133,8 +133,8 @@ public static class AttributeGenerationExtensions {
             .Where(x =>
                 (x.AttributeClass is IErrorTypeSymbol && x.AttributeClass?.Name == metadata.AttributeName)
                 || x.AttributeClass?.Fqn() == typeof(T).Fqn().Replace(
-                    "global::SullivanDigital.DomainLayer.SourceGeneration.Attributes.",
-                    "global::SullivanDigital.DomainLayer."));
+                    "global::Facet.Attributes.",
+                    "global::Facet."));
 
         foreach (var attr in attrs) {
             var ctorArgs = attr.ConstructorArguments
