@@ -7,6 +7,11 @@ namespace Facet.Util;
 
 public static class Extensions {
 
+    public static string WithIndent(this string src, string indent)
+        => src.Split('\n')
+            .Select(x => $"{indent}{x}")
+            .JoinStrings("\n");
+
     public static string Fqn(this ITypeSymbol ts) {
         var displayString = ts.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         if (ts.NullableAnnotation == NullableAnnotation.Annotated && !displayString.EndsWith("?")) {
@@ -15,7 +20,7 @@ public static class Extensions {
 
         return displayString;
     }
-    
+
     public static string Fqn(this Type type) {
         var fqn = "global::";
         if (!String.IsNullOrEmpty(type.Namespace)) {
@@ -31,11 +36,11 @@ public static class Extensions {
 
         return fqn;
     }
-    
+
     public static string JoinStrings(this IEnumerable<string> strings, string sep) {
         return String.Join(sep, strings);
     }
-    
+
     public static bool IsWrappedNullable(this Type type) {
         return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>);
     }

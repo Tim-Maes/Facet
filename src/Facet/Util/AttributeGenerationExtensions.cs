@@ -43,6 +43,7 @@ public static class AttributeGenerationExtensions {
                 .Select(x => new {
                     x.Name,
                     Type = GetPropertyTypeSymbol(x.PropertyInfo),
+                    x.Comment,
                 }).Select(x => x with {
                     // If the type is INamedTypeSymbol on the generator side, accept a `System.Type` on the consumer side.
                     // This is because typeof(...) in an attribute arg, will be given as an INamedTypeSymbol when parsed by the generator
@@ -54,6 +55,7 @@ public static class AttributeGenerationExtensions {
                 })
                 .Select(x => new {
                     PropDefinition = $"public {x.Type.Fqn()} {x.Name} {{ get; init; }}",
+                    x.Comment,
                 }).ToList();
 
             var sb = new StringBuilder();
@@ -65,6 +67,10 @@ public static class AttributeGenerationExtensions {
                   namespace {{FacetConstants.DefaultNamespace}} {
                   """);
 
+            if (!String.IsNullOrEmpty(metadata.Comment)) {
+                sb.AppendLine(metadata.Comment!.WithIndent("    "));
+            }
+            
             sb.AppendLine($"    {MakeAttributeUsageLine(metadata)}");
             sb.AppendLine($"    internal sealed class {metadata.AttributeClassName} : Attribute {{");
 
@@ -74,6 +80,10 @@ public static class AttributeGenerationExtensions {
             }
 
             foreach (var prop in properties) {
+                if (!String.IsNullOrEmpty(prop.Comment)) {
+                    sb.AppendLine(prop.Comment!.WithIndent("        "));
+                }
+                
                 sb.AppendLine($"        {prop.PropDefinition}");
             }
 
@@ -232,6 +242,8 @@ public static class AttributeGenerationExtensions {
 
             Constructors = BuildConstructors(type).ToArray();
             Properties = BuildProperties(type).ToArray();
+            Comment = type.GetCustomAttribute<GenerateCommentAttribute>()
+                ?.Content;
         }
 
         public string AttributeClassName { get; }
@@ -241,6 +253,7 @@ public static class AttributeGenerationExtensions {
         public bool AllowMultiple { get; set; }
         public AttributeConstructor[] Constructors { get; set; }
         public AttributeProperty[] Properties { get; set; }
+        public string? Comment { get; }
 
         private static IEnumerable<AttributeTargets> YieldAttributeTargets(AttributeTargets targets) {
             var values = Enum.GetValues(typeof(AttributeTargets))
@@ -281,6 +294,8 @@ public static class AttributeGenerationExtensions {
                     Name = pi.Name,
                     Type = pi.PropertyType,
                     PropertyInfo = pi,
+                    Comment = pi.GetCustomAttribute<GenerateCommentAttribute>()
+                        ?.Content,
                 };
             }
         }
@@ -307,6 +322,7 @@ public static class AttributeGenerationExtensions {
         public required PropertyInfo PropertyInfo { get; init; }
         public required Type Type { get; init; }
         public required string Name { get; init; }
+        public string? Comment { get; init; }
 
     }
 
