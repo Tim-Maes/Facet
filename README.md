@@ -42,7 +42,7 @@ public class Person
 
 // Generate a DTO that excludes Email
 [Facet(typeof(Person), exclude: nameof(Person.Email))]
-public partial class PersonDto;
+public partial class PersonDto { }
 ```
 
 This generates a PersonDto with only Name and Age, and a constructor that copies values.
@@ -70,7 +70,6 @@ var query = dbContext.People
 ```csharp
 [Facet(typeof(Person), Kind = FacetKind.Record)]
 public partial record PersonRecord;
-`
 ```
 
 ### Custom mapping
@@ -121,6 +120,26 @@ var dtos = await dbContext.People.ToFacetsAsync<Person, PersonDto>();
 
 var single = await dbContext.People.FirstFacetAsync<Person, PersonDto>();
 ```
+
+---
+
+# What is Facetting?
+
+Facetting is the process of defining **focused views** of a larger model at compile time.
+
+Instead of manually writing separate DTOs, mappers, and projections, **Facet** allows you to declare what you want to keep — and generates everything else.
+
+You can think of it like **carving out a specific facet** of a gem:  
+
+- The part you care about  
+- Leaving the rest behind.
+
+## Why Facetting?
+
+- Reduce duplication across DTOs, projections, and ViewModels
+- Maintain strong typing with no runtime cost
+- Stay DRY (Don't Repeat Yourself) without sacrificing performance
+- Works seamlessly with LINQ providers like Entity Framework
 
 ---
 
