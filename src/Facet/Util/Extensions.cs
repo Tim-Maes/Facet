@@ -8,6 +8,11 @@ namespace Facet.Util;
 public static class Extensions
 {
 
+    public static string WithIndent(this string src, string indent)
+        => src.Split('\n')
+            .Select(x => $"{indent}{x}")
+            .JoinStrings("\n");
+    
     public static string Fqn(this ITypeSymbol ts)
     {
         var displayString = ts.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);

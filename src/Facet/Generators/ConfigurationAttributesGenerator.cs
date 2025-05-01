@@ -10,7 +10,6 @@ namespace Facet.Generators;
 public class ConfigurationAttributesGenerator : IIncrementalGenerator {
 
     public void Initialize(IncrementalGeneratorInitializationContext context) {
-        
         // Get the attribute types to generate from this assembly. In this assembly, they are simply DTOs.
         // In the target assembly, they will be generated as attributes.
         var attributeTypes = Assembly.GetExecutingAssembly()
@@ -38,5 +37,15 @@ public class GenerateAttributeAttribute : Attribute {
     public bool AllowMultiple { get; set; }
     public bool Inherited { get; set; }
     public AttributeTargets ValidOn { get; }
+
+}
+
+public class GenerateCommentAttribute : Attribute {
+
+    public string Content { get; }
+
+    public GenerateCommentAttribute(string content) {
+        Content = content;
+    }
 
 }
