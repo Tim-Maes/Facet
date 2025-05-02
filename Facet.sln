@@ -14,6 +14,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Mapping", "src\Facet.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Extensions", "src\Facet.Extensions\Facet.Extensions.csproj", "{DC7D6F19-83E8-4430-A7E1-11E3BC6D9EB6}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test", "Test\Test.csproj", "{E539BD5F-D79B-4A3A-B53D-0D19C63B73FF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -32,6 +34,10 @@ Global
 		{DC7D6F19-83E8-4430-A7E1-11E3BC6D9EB6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DC7D6F19-83E8-4430-A7E1-11E3BC6D9EB6}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DC7D6F19-83E8-4430-A7E1-11E3BC6D9EB6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E539BD5F-D79B-4A3A-B53D-0D19C63B73FF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E539BD5F-D79B-4A3A-B53D-0D19C63B73FF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E539BD5F-D79B-4A3A-B53D-0D19C63B73FF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E539BD5F-D79B-4A3A-B53D-0D19C63B73FF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
