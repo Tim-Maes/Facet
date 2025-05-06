@@ -8,7 +8,7 @@
 		<IsPackable>true</IsPackable>
 		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 		<PackageId>Facet.Mapping</PackageId>
-		<Version>1.6.0</Version>
+		<Version>1.7.0</Version>
 		<Authors>Tim Maes</Authors>
 		<Description>Advanced static mapping configuration support for the Facet source generator.</Description>
 		<PackageTags>facet mapping source-generator dto compile-time</PackageTags>

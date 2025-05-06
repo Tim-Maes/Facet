@@ -5,7 +5,7 @@ namespace Facet;
 /// <summary>
 /// Indicates that this class should be generated based on a source type, optionally excluding properties or including fields.
 /// </summary>
-[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = true)]
 public sealed class FacetAttribute : Attribute
 {
     /// <summary>
@@ -46,7 +46,7 @@ public sealed class FacetAttribute : Attribute
     public bool GenerateProjection { get; set; } = true;
 
     /// <summary>
-    /// The kind of facet to generate. Determines whether a class or record is created.
+    /// Which facet to generate: Class, Record (class), RecordStruct, or Struct.
     /// </summary>
     public FacetKind Kind { get; set; } = FacetKind.Class;
 

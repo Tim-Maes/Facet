@@ -1,6 +1,7 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -49,19 +50,19 @@ namespace Facet.Generators
                     .Where(n => n != null)!);
 
             var includeFields = GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
-
             var generateConstructor = GetNamedArg(attribute.NamedArguments, "GenerateConstructor", true);
-
             var generateProjection = GetNamedArg(attribute.NamedArguments, "GenerateProjection", true);
-
-            var configurationTypeName = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "Configuration")
-                                                  .Value.Value?.ToString();
-            var kind = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "Kind").Value.Value is int k
+            var configurationTypeName = attribute.NamedArguments
+                                                 .FirstOrDefault(kvp => kvp.Key == "Configuration")
+                                                 .Value.Value?
+                                                 .ToString();
+            var kind = attribute.NamedArguments
+                               .FirstOrDefault(kvp => kvp.Key == "Kind")
+                               .Value.Value is int k
                 ? (FacetKind)k
                 : FacetKind.Class;
 
             var members = new List<FacetMember>();
-
             foreach (var m in sourceType.GetMembers())
             {
                 token.ThrowIfCancellationRequested();
@@ -98,8 +99,12 @@ namespace Facet.Generators
                 members.ToImmutableArray());
         }
 
-        private static T GetNamedArg<T>(ImmutableArray<KeyValuePair<string, TypedConstant>> args, string name, T defaultValue)
-            => args.FirstOrDefault(kv => kv.Key == name).Value.Value is T t ? t : defaultValue;
+        private static T GetNamedArg<T>(
+            ImmutableArray<KeyValuePair<string, TypedConstant>> args,
+            string name,
+            T defaultValue)
+            => args.FirstOrDefault(kv => kv.Key == name)
+                   .Value.Value is T t ? t : defaultValue;
 
         private static string Generate(FacetTargetModel model)
         {
@@ -114,31 +119,56 @@ namespace Facet.Generators
                 sb.AppendLine("{");
             }
 
-            var keyword = model.Kind == FacetKind.Record ? "record" : "class";
+            var keyword = model.Kind switch
+            {
+                FacetKind.Class => "class",
+                FacetKind.Record => "record",
+                FacetKind.RecordStruct => "record struct",
+                FacetKind.Struct => "struct",
+                _ => "class",
+            };
+
+            var isPositional = model.Kind is FacetKind.Record or FacetKind.RecordStruct;
+
+            if (isPositional)
+            {
+                var parameters = string.Join(", ",
+                    model.Members.Select(m => $"{m.TypeName} {m.Name}"));
+                sb.AppendLine($"public partial {keyword} {model.Name}({parameters});");
+            }
 
             sb.AppendLine($"public partial {keyword} {model.Name}");
             sb.AppendLine("{");
 
-            foreach (var m in model.Members)
+            if (!isPositional)
             {
-                if (m.Kind == FacetMemberKind.Property)
-                    sb.AppendLine($"    public {m.TypeName} {m.Name} {{ get; set; }}");
-                else
-                    sb.AppendLine($"    public {m.TypeName} {m.Name};");
+                foreach (var m in model.Members)
+                {
+                    if (m.Kind == FacetMemberKind.Property)
+                        sb.AppendLine($"    public {m.TypeName} {m.Name} {{ get; set; }}");
+                    else
+                        sb.AppendLine($"    public {m.TypeName} {m.Name};");
+                }
             }
 
             if (model.GenerateConstructor)
             {
-                sb.AppendLine();
-                sb.AppendLine($"    public {model.Name}({model.SourceTypeName} source)");
+                var ctorSig = $"public {model.Name}({model.SourceTypeName} source)";
+                if (isPositional)
+                {
+                    var args = string.Join(", ",
+                        model.Members.Select(m => $"source.{m.Name}"));
+                    ctorSig += $" : this({args})";
+                }
+                sb.AppendLine($"    {ctorSig}");
                 sb.AppendLine("    {");
-
-                foreach (var m in model.Members)
-                    sb.AppendLine($"        this.{m.Name} = source.{m.Name};");
-
+                if (!isPositional)
+                {
+                    foreach (var m in model.Members)
+                        sb.AppendLine($"        this.{m.Name} = source.{m.Name};");
+                }
                 if (!string.IsNullOrWhiteSpace(model.ConfigurationTypeName))
                     sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
-
                 sb.AppendLine("    }");
             }
 
