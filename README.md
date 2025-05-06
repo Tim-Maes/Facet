@@ -12,13 +12,12 @@ It generates partial classes or records with constructors, optional LINQ project
 
 ---
 
-- :white_check_mark: Generate classes or records from existing types
-- :white_check_mark: Exclude fields/properties you don't want (basically create a Facetted view of your model))
+- :white_check_mark: Generate classes, records, structs or record structs from existing types
+- :white_check_mark: Exclude fields/properties you don't want (create a Facetted view of your model))
 - :white_check_mark: Include public fields (optional)
 - :white_check_mark: Auto-generate constructors for fast mapping
 - :white_check_mark: LINQ projection expressions `(Expression<Func<TSource,TTarget>>)`
 - :white_check_mark: Custom mapping via `IFacetMapConfiguration`
-- :white_check_mark: Project **EF Core** queries by using `Facet.Extensions`
 
 ## Quick Start
 
