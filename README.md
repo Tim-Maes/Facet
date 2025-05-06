@@ -71,6 +71,16 @@ var query = dbContext.People
 public partial record PersonRecord;
 ```
 
+### Struct & Record Struct
+
+```csharp
+[Facet(typeof(MyStruct), Kind = FacetKind.Struct, IncludeFields = true)]
+public partial struct MyStructDto;
+
+[Facet(typeof(MyRecordStruct), Kind = FacetKind.RecordStruct)]
+public partial record struct MyRecordStructDto;
+```
+
 ### Custom mapping
 
 Eg. you need to compile extra fields
