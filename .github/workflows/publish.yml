@@ -62,25 +62,11 @@ jobs:
       - name: Publish NuGet packages
         run: |
           foreach ($file in Get-ChildItem "${{ env.NuGetDirectory }}" -Recurse -Include *.nupkg) {
-            if ($file.Name -like "Facet.Mapping.*.nupkg") {
-              dotnet nuget push $file `
-                --api-key "${{ secrets.NUGET_MAP_API_KEY }}" `
-                --source https://api.nuget.org/v3/index.json `
-                --skip-duplicate
-            } elseif ($file.Name -like "Facet.Extensions.EFCore.*.nupkg") {
+            if ($file.Name -like "Facet.Extensions.EFCore.*.nupkg") {
               dotnet nuget push $file `
                 --api-key "${{ secrets.NUGET_API_KEY_EXTENSIONS_EF }}" `
                 --source https://api.nuget.org/v3/index.json `
                 --skip-duplicate
-            } elseif ($file.Name -like "Facet.Extensions.*.nupkg") {
-              dotnet nuget push $file `
-                --api-key "${{ secrets.NUGET_API_KEY_EXTENSIONS }}" `
-                --source https://api.nuget.org/v3/index.json `
-                --skip-duplicate
             } elseif ($file.Name -like "Facet.*.nupkg") {
               dotnet nuget push $file `
-                --api-key "${{ secrets.NUGET_API_KEY }}" `
-                --source https://api.nuget.org/v3/index.json `
-                --skip-duplicate
-            }
-          }
+                --api-key "${{ secrets

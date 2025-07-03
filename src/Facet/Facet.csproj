@@ -1,17 +1,17 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>netstandard2.0</TargetFramework>
+		<TargetFramework>net8.0</TargetFramework>
 		<LangVersion>latest</LangVersion>
 		<Nullable>enable</Nullable>
 
 		<IsPackable>true</IsPackable>
 		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 		<PackageId>Facet</PackageId>
-		<Version>1.8.0</Version>
+		<Version>1.9.0</Version>
 		<Authors>Tim Maes</Authors>
-		<Description>A Roslyn source generator for lean DTOs.</Description>
-		<PackageTags>source-generator dto projection redaction facet</PackageTags>
+		<Description>A Roslyn source generator for lean DTOs with provider-agnostic extension methods and advanced mapping configuration support.</Description>
+		<PackageTags>source-generator dto projection redaction facet mapping extensions</PackageTags>
 		<RepositoryUrl>https://github.com/Tim-Maes/Facet</RepositoryUrl>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 		<EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>

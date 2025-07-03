@@ -1,4 +1,4 @@
-﻿namespace Facet.Mapping;
+namespace Facet.Mapping;
 
 /// <summary>
 /// Allows defining custom mapping logic between a source and target Facet-generated type.

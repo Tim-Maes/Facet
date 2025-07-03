@@ -15,12 +15,13 @@ All methods leverage your already generated ctor or Projection property and requ
 ### 1. Install packages
 
 ```bash
+dotnet add package Facet
 dotnet add package Facet.Extensions.EFCore
 ```
-
 ### 2. Import namespaces
 
 ```csharp
+using Facet.Extensions;        // for sync extension methods (built into Facet)
 using Facet.Extensions.EFCore; // for async EF Core extension methods
 ```
 
@@ -39,10 +40,10 @@ var singleDto = await dbContext.People.SingleFacetAsync<Person, PersonDto>();
 
 ## Requirements
 
-- Facet.Extensions
+- Facet
 - .NET 6.0+
 - Microsoft.EntityFrameworkCore 6.0+
 
 ---
 
-For provider-agnostic sync and LINQ methods, see [Facet.Extensions](https://www.nuget.org/packages/Facet.Extensions).
+For provider-agnostic sync and LINQ methods, these are now built into the main [Facet](https://www.nuget.org/packages/Facet) package.
