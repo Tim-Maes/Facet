@@ -3,6 +3,7 @@
 Facet supports custom mapping logic for advanced scenarios via the `IFacetMapConfiguration<TSource, TTarget>` interface, which is included in the main Facet package.
 
 ## When to Use Custom Mapping
+
 - You need to compute derived properties.
 - You want to format or transform values.
 - You need to inject additional logic during mapping.
@@ -10,6 +11,8 @@ Facet supports custom mapping logic for advanced scenarios via the `IFacetMapCon
 ## How to Use
 
 1. **Implement the Interface:**
+
+```csharp
 using Facet.Mapping;
 
 public class UserMapConfig : IFacetMapConfiguration<User, UserDto>
@@ -19,9 +22,15 @@ public class UserMapConfig : IFacetMapConfiguration<User, UserDto>
         target.FullName = $"{source.FirstName} {source.LastName}";
     }
 }
+```
+
 2. **Reference in the Facet Attribute:**
+
+```csharp
 [Facet(typeof(User), Configuration = typeof(UserMapConfig))]
 public partial class UserDto { public string FullName { get; set; } }
+```
+
 The generated constructor will call your `Map` method after copying properties.
 
 ## Notes
