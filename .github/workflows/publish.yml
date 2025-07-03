@@ -69,4 +69,8 @@ jobs:
                 --skip-duplicate
             } elseif ($file.Name -like "Facet.*.nupkg") {
               dotnet nuget push $file `
-                --api-key "${{ secrets
+                --api-key "${{ secrets.NUGET_API_KEY }}" `
+                --source https://api.nuget.org/v3/index.json `
+                --skip-duplicate
+            }
+          }
