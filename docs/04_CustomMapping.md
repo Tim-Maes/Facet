@@ -26,7 +26,7 @@ public class UserMapConfig : IFacetMapConfiguration<User, UserDto>
 
 2. **Reference in the Facet Attribute:**
 
-```
+```csharp
 [Facet(typeof(User), Configuration = typeof(UserMapConfig))]
 public partial class UserDto { public string FullName { get; set; } }
 ```
