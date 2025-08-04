@@ -1,36 +1,36 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
-    <IsPackable>true</IsPackable>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PackageId>Facet.Extensions.EFCore</PackageId>
-    <Version>1.9.3</Version>
-    <Authors>Tim Maes</Authors>
-    <Description>EF Core async extension methods for Facet.</Description>
-    <RepositoryUrl>https://github.com/Tim-Maes/Facet</RepositoryUrl>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-    <Title>Facet.Extensions.EFCore</Title>
-    <PackageProjectUrl>https://www.github.com/Tim-Maes/Facet</PackageProjectUrl>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<LangVersion>latest</LangVersion>
+		<Nullable>enable</Nullable>
+		<IsPackable>true</IsPackable>
+		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+		<PackageId>Facet.Extensions.EFCore</PackageId>
+		<Version>2.0.0</Version>
+		<Authors>Tim Maes</Authors>
+		<Description>EF Core async extension methods for Facet.</Description>
+		<RepositoryUrl>https://github.com/Tim-Maes/Facet</RepositoryUrl>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<Title>Facet.Extensions.EFCore</Title>
+		<PackageProjectUrl>https://www.github.com/Tim-Maes/Facet</PackageProjectUrl>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
-    <ProjectReference Include="..\Facet.Extensions\Facet.Extensions.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
+		<ProjectReference Include="..\Facet.Extensions\Facet.Extensions.csproj" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <None Include="FacetEfCoreExtensions.cs" />
-  </ItemGroup>
+	<ItemGroup>
+		<None Include="FacetEfCoreExtensions.cs" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <None Update="README.md">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
-  </ItemGroup>
+	<ItemGroup>
+		<None Update="README.md">
+			<Pack>True</Pack>
+			<PackagePath>\</PackagePath>
+		</None>
+	</ItemGroup>
 
 </Project>
