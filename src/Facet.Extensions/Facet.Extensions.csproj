@@ -1,31 +1,27 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-	  <LangVersion>latest</LangVersion>
-	  <Nullable>enable</Nullable>
+    <PropertyGroup>
+        <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <IsPackable>true</IsPackable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <PackageId>Facet.Extensions</PackageId>
+        <Version>2.0.1</Version>
+        <Authors>Tim Maes</Authors>
+        <Description>Provider-agnostic extension methods for Facet.</Description>
+        <RepositoryUrl>https://github.com/Tim-Maes/Facet</RepositoryUrl>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+    </PropertyGroup>
 
-	  <IsPackable>true</IsPackable>
-	  <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-	  <PackageId>Facet.Extensions</PackageId>
-	  <Version>2.0.1</Version>
-	  <Authors>Tim Maes</Authors>
-	  <Description>Provider-agnostic extension methods for Facet.</Description>
-	  <RepositoryUrl>https://github.com/Tim-Maes/Facet</RepositoryUrl>
-	  <PackageLicenseExpression>MIT</PackageLicenseExpression>
-	  <PackageReadmeFile>README.md</PackageReadmeFile>
-  </PropertyGroup>
+    <ItemGroup>
+        <None Include="..\..\README.md" Pack="true" PackagePath="" />
+        <None Include="FacetExtensions.cs" />
+    </ItemGroup>
 
-  <ItemGroup>
-    <None Include="..\..\README.md">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
-    <None Include="FacetExtensions.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Facet\Facet.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Facet\Facet.csproj" />
+    </ItemGroup>
 
 </Project>

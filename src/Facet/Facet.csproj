@@ -1,38 +1,34 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-	<PropertyGroup>
-		<TargetFramework>netstandard2.0</TargetFramework>
-		<LangVersion>latest</LangVersion>
-		<Nullable>enable</Nullable>
+    <PropertyGroup>
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <IsPackable>true</IsPackable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <PackageId>Facet</PackageId>
+        <Version>2.0.1</Version>
+        <Authors>Tim Maes</Authors>
+        <Description>A Roslyn source generator for lean DTOs.</Description>
+        <PackageTags>source-generator dto projection redaction facet</PackageTags>
+        <RepositoryUrl>https://github.com/Tim-Maes/Facet</RepositoryUrl>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+        <Title>Facet</Title>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+    </PropertyGroup>
 
-		<IsPackable>true</IsPackable>
-		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-		<PackageId>Facet</PackageId>
-		<Version>2.0.1</Version>
-		<Authors>Tim Maes</Authors>
-		<Description>A Roslyn source generator for lean DTOs.</Description>
-		<PackageTags>source-generator dto projection redaction facet</PackageTags>
-		<RepositoryUrl>https://github.com/Tim-Maes/Facet</RepositoryUrl>
-		<PackageLicenseExpression>MIT</PackageLicenseExpression>
-		<EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-		<Title>Facet</Title>
-		<PackageReadmeFile>README.md</PackageReadmeFile>
-	</PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
+    </ItemGroup>
 
-	<ItemGroup>
-		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.9.0" PrivateAssets="all" />
-		<PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4" PrivateAssets="all" />
-	</ItemGroup>
+    <ItemGroup>
+        <None Remove="bin\Debug\netstandard2.0\\Facet.dll" />
+    </ItemGroup>
 
-	<ItemGroup>
-	  <None Remove="bin\Debug\netstandard2.0\\Facet.dll" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
-		<None Include="..\..\README.md">
-		  <Pack>True</Pack>
-		  <PackagePath>\</PackagePath>
-		</None>
-	</ItemGroup>
+    <ItemGroup>
+        <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+        <None Include="..\..\README.md" Pack="true" PackagePath="" />
+    </ItemGroup>
 </Project>

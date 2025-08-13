@@ -1,40 +1,36 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-	<PropertyGroup>
-		<TargetFramework>net8.0</TargetFramework>
-		<LangVersion>latest</LangVersion>
-		<Nullable>enable</Nullable>
+    <PropertyGroup>
+        <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <IsPackable>true</IsPackable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <PackageId>Facet.Mapping</PackageId>
+        <Version>2.0.1</Version>
+        <Authors>Tim Maes</Authors>
+        <Description>Advanced static mapping configuration support for the Facet source generator with async capabilities.</Description>
+        <PackageTags>facet mapping source-generator dto compile-time async</PackageTags>
+        <RepositoryUrl>https://github.com/Tim-Maes/Facet</RepositoryUrl>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <Title>Facet.Mapping</Title>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageReleaseNotes>
+            Version 2.0.0:
+            - Added async mapping support with IFacetMapConfigurationAsync interface
+            - Added hybrid sync/async mapping with IFacetMapConfigurationHybrid interface
+            - Added comprehensive async extension methods
+            - Added parallel collection mapping capabilities
+            - Full cancellation token support throughout
+        </PackageReleaseNotes>
+    </PropertyGroup>
 
-		<IsPackable>true</IsPackable>
-		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-		<PackageId>Facet.Mapping</PackageId>
-		<Version>2.0.1</Version>
-		<Authors>Tim Maes</Authors>
-		<Description>Advanced static mapping configuration support for the Facet source generator with async capabilities.</Description>
-		<PackageTags>facet mapping source-generator dto compile-time async</PackageTags>
-		<RepositoryUrl>https://github.com/Tim-Maes/Facet</RepositoryUrl>
-		<PackageLicenseExpression>MIT</PackageLicenseExpression>
-		<Title>Facet.Mapping</Title>
-		<PackageReadmeFile>README.md</PackageReadmeFile>
-		<PackageReleaseNotes>
-			Version 2.0.0:
-			- Added async mapping support with IFacetMapConfigurationAsync interface
-			- Added hybrid sync/async mapping with IFacetMapConfigurationHybrid interface
-			- Added comprehensive async extension methods
-			- Added parallel collection mapping capabilities
-			- Full cancellation token support throughout
-		</PackageReleaseNotes>
-	</PropertyGroup>
-
-	<ItemGroup>
-	  <None Update="README.md">
-	    <Pack>True</Pack>
-	    <PackagePath>\</PackagePath>
-	  </None>
-	  <None Update="Examples.cs">
-	    <Pack>True</Pack>
-	    <PackagePath>content\</PackagePath>
-	  </None>
-	</ItemGroup>
+    <ItemGroup>
+        <None Include="README.md" Pack="true" PackagePath="" />
+        <None Update="Examples.cs">
+            <Pack>True</Pack>
+            <PackagePath>content\</PackagePath>
+        </None>
+    </ItemGroup>
 
 </Project>
