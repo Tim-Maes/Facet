@@ -62,10 +62,15 @@ namespace Facet.Generators
                 : FacetKind.Class;
 
             var members = new List<FacetMember>();
-            foreach (var m in sourceType.GetMembers())
+            var addedMembers = new HashSet<string>();
+
+            var allMembers = GetAllMembers(sourceType);
+
+            foreach (var m in allMembers)
             {
                 token.ThrowIfCancellationRequested();
                 if (excluded.Contains(m.Name)) continue;
+                if (addedMembers.Contains(m.Name)) continue;
 
                 if (m is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } p)
                 {
@@ -73,6 +78,7 @@ namespace Facet.Generators
                         p.Name,
                         p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                         FacetMemberKind.Property));
+                    addedMembers.Add(p.Name);
                 }
                 else if (includeFields && m is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
                 {
@@ -80,6 +86,7 @@ namespace Facet.Generators
                         f.Name,
                         f.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                         FacetMemberKind.Field));
+                    addedMembers.Add(f.Name);
                 }
             }
 
@@ -96,6 +103,35 @@ namespace Facet.Generators
                 sourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 configurationTypeName,
                 members.ToImmutableArray());
+        }
+
+        /// <summary>
+        /// Gets all members from the inheritance hierarchy, starting from the most derived type
+        /// and walking up to the base types. This ensures that overridden members are preferred.
+        /// </summary>
+        private static IEnumerable<ISymbol> GetAllMembers(INamedTypeSymbol type)
+        {
+            var visited = new HashSet<string>();
+            var current = type;
+
+            while (current != null)
+            {
+                foreach (var member in current.GetMembers())
+                {
+                    if ((member is IPropertySymbol || member is IFieldSymbol) &&
+                        member.DeclaredAccessibility == Accessibility.Public &&
+                        !visited.Contains(member.Name))
+                    {
+                        visited.Add(member.Name);
+                        yield return member;
+                    }
+                }
+
+                current = current.BaseType;
+
+                if (current?.SpecialType == SpecialType.System_Object)
+                    break;
+            }
         }
 
         private static T GetNamedArg<T>(
