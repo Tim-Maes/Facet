@@ -7,7 +7,7 @@
         <IsPackable>true</IsPackable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageId>Facet</PackageId>
-        <Version>2.0.2</Version>
+        <Version>2.1.0</Version>
         <Authors>Tim Maes</Authors>
         <Description>A Roslyn source generator for lean DTOs.</Description>
         <PackageTags>source-generator dto projection redaction facet</PackageTags>
