@@ -2,13 +2,13 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet", "src\Facet\Facet.csproj", "{E1B5B3C1-8F4A-4C8B-9D1E-F2C3A4B5D6E7}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet", "..\src\Facet\Facet.csproj", "{E1B5B3C1-8F4A-4C8B-9D1E-F2C3A4B5D6E7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Extensions", "src\Facet.Extensions\Facet.Extensions.csproj", "{E2B5B3C1-8F4A-4C8B-9D1E-F2C3A4B5D6E7}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Extensions", "..\src\Facet.Extensions\Facet.Extensions.csproj", "{E2B5B3C1-8F4A-4C8B-9D1E-F2C3A4B5D6E7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Mapping", "src\Facet.Mapping\Facet.Mapping.csproj", "{E4B5B3C1-8F4A-4C8B-9D1E-F2C3A4B5D6E7}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Mapping", "..\src\Facet.Mapping\Facet.Mapping.csproj", "{E4B5B3C1-8F4A-4C8B-9D1E-F2C3A4B5D6E7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.TestConsole", "test\Facet.TestConsole\Facet.TestConsole.csproj", "{E5B5B3C1-8F4A-4C8B-9D1E-F2C3A4B5D6E7}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.TestConsole", "Facet.TestConsole\Facet.TestConsole.csproj", "{E5B5B3C1-8F4A-4C8B-9D1E-F2C3A4B5D6E7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

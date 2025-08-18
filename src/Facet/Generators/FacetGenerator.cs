@@ -183,10 +183,8 @@ namespace Facet.Generators
         /// </summary>
         private static FacetKind InferFacetKind(INamedTypeSymbol targetSymbol)
         {
-            // Check if it's a struct
             if (targetSymbol.TypeKind == TypeKind.Struct)
             {
-                // Check if it's a record struct by looking at syntax
                 var syntax = targetSymbol.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
                 if (syntax != null && syntax.ToString().Contains("record struct"))
                 {
@@ -195,17 +193,14 @@ namespace Facet.Generators
                 return FacetKind.Struct;
             }
 
-            // Check if it's a class
             if (targetSymbol.TypeKind == TypeKind.Class)
             {
-                // Check if it's a record by looking for compiler-generated members or syntax
                 var syntax = targetSymbol.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
                 if (syntax != null && syntax.ToString().Contains("record "))
                 {
                     return FacetKind.Record;
                 }
                 
-                // Alternative check: records have compiler-generated methods like <Clone>$
                 if (targetSymbol.GetMembers().Any(m => m.Name.Contains("Clone") && m.IsImplicitlyDeclared))
                 {
                     return FacetKind.Record;
@@ -214,7 +209,6 @@ namespace Facet.Generators
                 return FacetKind.Class;
             }
 
-            // Default to class if we can't determine
             return FacetKind.Class;
         }
 
@@ -306,53 +300,13 @@ namespace Facet.Generators
                 }
             }
 
+            // Generate constructor
             if (model.GenerateConstructor)
             {
-                var ctorSig = $"public {model.Name}({model.SourceTypeName} source)";
-                if (isPositional)
-                {
-                    var args = string.Join(", ",
-                        model.Members.Select(m => $"source.{m.Name}"));
-                    ctorSig += $" : this({args})";
-                }
-                sb.AppendLine($"    {ctorSig}");
-                sb.AppendLine("    {");
-                
-                if (!isPositional)
-                {
-                    if (hasInitOnlyProperties && hasCustomMapping)
-                    {
-                        // For init-only properties with custom mapping, we need to call the mapping method
-                        // and let it return a new instance with all properties set
-                        sb.AppendLine($"        var mapped = {model.ConfigurationTypeName}.Map(source, this);");
-                        foreach (var m in model.Members.Where(x => !x.IsInitOnly))
-                        {
-                            sb.AppendLine($"        this.{m.Name} = mapped.{m.Name};");
-                        }
-                    }
-                    else if (hasCustomMapping)
-                    {
-                        // Regular mutable properties - copy first, then apply custom mapping
-                        foreach (var m in model.Members)
-                            sb.AppendLine($"        this.{m.Name} = source.{m.Name};");
-                        sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
-                    }
-                    else
-                    {
-                        // No custom mapping - just copy properties
-                        foreach (var m in model.Members)
-                            sb.AppendLine($"        this.{m.Name} = source.{m.Name};");
-                    }
-                }
-                else if (hasCustomMapping)
-                {
-                    // For positional records/record structs with custom mapping
-                    sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
-                }
-                
-                sb.AppendLine("    }");
+                GenerateConstructor(sb, model, isPositional, hasInitOnlyProperties, hasCustomMapping);
             }
 
+            // Generate projection
             if (model.GenerateExpressionProjection)
             {
                 sb.AppendLine();
@@ -366,6 +320,81 @@ namespace Facet.Generators
                 sb.AppendLine("}");
 
             return sb.ToString();
+        }
+
+        private static void GenerateConstructor(StringBuilder sb, FacetTargetModel model, bool isPositional, bool hasInitOnlyProperties, bool hasCustomMapping)
+        {
+            var ctorSig = $"public {model.Name}({model.SourceTypeName} source)";
+            
+            if (isPositional)
+            {
+                var args = string.Join(", ",
+                    model.Members.Select(m => $"source.{m.Name}"));
+                ctorSig += $" : this({args})";
+            }
+            
+            sb.AppendLine($"    {ctorSig}");
+            sb.AppendLine("    {");
+            
+            if (!isPositional)
+            {
+                if (hasCustomMapping && hasInitOnlyProperties)
+                {
+                    // For types with init-only properties and custom mapping, 
+                    // we can't assign after construction
+                    sb.AppendLine($"        // This constructor should not be used for types with init-only properties and custom mapping");
+                    sb.AppendLine($"        // Use FromSource factory method instead");
+                    sb.AppendLine($"        throw new InvalidOperationException(\"Use {model.Name}.FromSource(source) for types with init-only properties\");");
+                }
+                else if (hasCustomMapping)
+                {
+                    // Regular mutable properties - copy first, then apply custom mapping
+                    foreach (var m in model.Members)
+                        sb.AppendLine($"        this.{m.Name} = source.{m.Name};");
+                    sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
+                }
+                else
+                {
+                    // No custom mapping - copy properties directly
+                    foreach (var m in model.Members.Where(x => !x.IsInitOnly))
+                        sb.AppendLine($"        this.{m.Name} = source.{m.Name};");
+                }
+            }
+            else if (hasCustomMapping)
+            {
+                // For positional records/record structs with custom mapping
+                sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
+            }
+            
+            sb.AppendLine("    }");
+
+            // Add static factory method for types with init-only properties
+            if (!isPositional && hasInitOnlyProperties)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"    public static {model.Name} FromSource({model.SourceTypeName} source)");
+                sb.AppendLine("    {");
+                
+                if (hasCustomMapping)
+                {
+                    // For custom mapping with init-only properties, the mapper should create the instance
+                    sb.AppendLine($"        // Custom mapper creates and returns the instance with init-only properties set");
+                    sb.AppendLine($"        return {model.ConfigurationTypeName}.Map(source, null);");
+                }
+                else
+                {
+                    sb.AppendLine($"        return new {model.Name}");
+                    sb.AppendLine("        {");
+                    foreach (var m in model.Members)
+                    {
+                        var comma = m == model.Members.Last() ? "" : ",";
+                        sb.AppendLine($"            {m.Name} = source.{m.Name}{comma}");
+                    }
+                    sb.AppendLine("        };");
+                }
+                
+                sb.AppendLine("    }");
+            }
         }
     }
 }

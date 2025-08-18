@@ -13,9 +13,10 @@ public static class FacetExtensions
 {
     /// <summary>
     /// Maps a single source instance to the specified facet type by invoking its generated constructor.
+    /// If the constructor fails (e.g., due to required init-only properties), attempts to use a static FromSource factory method.
     /// </summary>
     /// <typeparam name="TSource">The source entity type.</typeparam>
-    /// <typeparam name="TTarget">The facet type, which must have a public constructor accepting <c>TSource</c>.</typeparam>
+    /// <typeparam name="TTarget">The facet type, which must have a public constructor accepting <c>TSource</c> or a static FromSource method.</typeparam>
     /// <param name="source">The source instance to map.</param>
     /// <returns>A new <typeparamref name="TTarget"/> instance populated from <paramref name="source"/>.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="source"/> is <c>null</c>.</exception>
@@ -23,7 +24,33 @@ public static class FacetExtensions
         where TTarget : class
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
-        return (TTarget)Activator.CreateInstance(typeof(TTarget), source)!;
+        
+        // Check for static FromSource factory method first (preferred for init-only properties)
+        var fromSourceMethod = typeof(TTarget).GetMethod(
+            "FromSource",
+            BindingFlags.Public | BindingFlags.Static,
+            null,
+            new[] { typeof(TSource) },
+            null);
+            
+        if (fromSourceMethod != null)
+        {
+            return (TTarget)fromSourceMethod.Invoke(null, new object[] { source })!;
+        }
+        
+        // Fall back to constructor
+        try
+        {
+            return (TTarget)Activator.CreateInstance(typeof(TTarget), source)!;
+        }
+        catch
+        {
+            // If neither works, provide a helpful error message
+            throw new InvalidOperationException(
+                $"Unable to map {typeof(TSource).Name} to {typeof(TTarget).Name}. " +
+                $"Ensure {typeof(TTarget).Name} has either a constructor accepting {typeof(TSource).Name} " +
+                $"or a static FromSource({typeof(TSource).Name}) method.");
+        }
     }
 
     /// <summary>
