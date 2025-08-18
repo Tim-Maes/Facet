@@ -33,8 +33,9 @@ public sealed class FacetAttribute : Attribute
     /// Must match the signature defined in IFacetMapConfiguration&lt;TSource, TTarget&gt;.
     /// </summary>
     /// <remarks>
-    /// The type must define a static method with the signature:
-    /// <c>public static void Map(TSource source, TTarget target)</c>.
+    /// The type must define a static method with one of the following signatures:
+    /// <c>public static void Map(TSource source, TTarget target)</c> for mutable properties, or
+    /// <c>public static TTarget Map(TSource source, TTarget target)</c> for init-only properties and records.
     /// This allows injecting custom projections, formatting, or derived values at compile time.
     /// </remarks>
     public Type? Configuration { get; set; }
@@ -47,8 +48,23 @@ public sealed class FacetAttribute : Attribute
 
     /// <summary>
     /// Which facet to generate: Class, Record (class), RecordStruct, or Struct.
+    /// When set to Auto, the generator will attempt to infer the kind from the target type declaration.
     /// </summary>
-    public FacetKind Kind { get; set; } = FacetKind.Class;
+    public FacetKind Kind { get; set; } = FacetKind.Auto;
+
+    /// <summary>
+    /// Controls whether generated properties should preserve init-only modifiers from source properties.
+    /// When true, properties with init accessors in the source will be generated as init-only in the target.
+    /// This is an opt-in feature for modern C# init-only property support.
+    /// </summary>
+    public bool PreserveInitOnlyProperties { get; set; } = false;
+
+    /// <summary>
+    /// Controls whether generated properties should preserve required modifiers from source properties.
+    /// When true, properties marked as required in the source will be generated as required in the target.
+    /// This is an opt-in feature for modern C# required property support.
+    /// </summary>
+    public bool PreserveRequiredProperties { get; set; } = false;
 
     /// <summary>
     /// Creates a new FacetAttribute that targets a given source type and excludes specified members.

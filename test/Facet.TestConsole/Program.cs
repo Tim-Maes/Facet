@@ -124,6 +124,65 @@ public partial struct ProductSummary;
 [Facet(typeof(User), "Password", "CreatedAt", "LastLoginAt", Kind = FacetKind.RecordStruct)]
 public partial record struct UserSummary;
 
+// Modern record types with init-only and required properties
+public record ModernUser
+{
+    public required string Id { get; init; }
+    public required string FirstName { get; init; }
+    public required string LastName { get; init; }
+    public string? Email { get; set; }
+    public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
+    public string? Bio { get; set; }
+    public string? PasswordHash { get; init; } // Sensitive field to exclude
+}
+
+public record struct CompactUser(string Id, string Name, DateTime CreatedAt);
+
+// Custom mapping for modern records that returns new instance to support init-only properties
+public class ModernUserMapper : IFacetMapConfigurationWithReturn<ModernUser, ModernUserDto>
+{
+    public static ModernUserDto Map(ModernUser source, ModernUserDto target)
+    {
+        // Return new instance with init-only properties set
+        return new ModernUserDto
+        {
+            Id = source.Id,
+            FirstName = source.FirstName,
+            LastName = source.LastName,
+            Email = source.Email,
+            CreatedAt = source.CreatedAt,
+            FullName = $"{source.FirstName} {source.LastName}",
+            DisplayName = string.IsNullOrWhiteSpace(source.Bio) ? 
+                $"{source.FirstName} {source.LastName}" : 
+                $"{source.FirstName} {source.LastName} - {source.Bio}"
+        };
+    }
+}
+
+// Test auto-detection and record features
+[Facet(typeof(ModernUser), "PasswordHash", "Bio", 
+       PreserveInitOnlyProperties = true, 
+       PreserveRequiredProperties = true,
+       Configuration = typeof(ModernUserMapper))]
+public partial record ModernUserDto
+{
+    public string FullName { get; init; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+}
+
+// Test auto-detection of record struct
+[Facet(typeof(CompactUser))]
+public partial record struct CompactUserDto;
+
+// Test with explicit init-only and required properties 
+[Facet(typeof(ModernUser), "PasswordHash", "Bio", "Email",
+       PreserveInitOnlyProperties = true,
+       PreserveRequiredProperties = true)]
+public partial class ModernUserClass
+{
+    public string? AdditionalInfo { get; set; }
+}
+
 class Program
 {
     static void Main(string[] args)
@@ -135,9 +194,13 @@ class Program
         var products = CreateSampleProducts();
         var employees = CreateSampleEmployees();
         var managers = CreateSampleManagers();
+        var modernUsers = CreateSampleModernUsers();
 
         // Test inheritance support
         TestInheritanceSupport(employees, managers);
+
+        // Test modern record features
+        TestModernRecordFeatures(modernUsers);
 
         // Test basic DTO mapping
         TestBasicDtoMapping(users);
@@ -156,74 +219,27 @@ class Program
         Console.ReadKey();
     }
 
-    static List<Employee> CreateSampleEmployees()
+    static List<ModernUser> CreateSampleModernUsers()
     {
-        return new List<Employee>
+        return new List<ModernUser>
         {
-            new Employee
+            new ModernUser
             {
-                Id = 1,
+                Id = "user_001",
                 FirstName = "Alice",
-                LastName = "Johnson",
-                EmployeeId = "EMP001",
-                Department = "Engineering",
-                Salary = 85000m,
-                HireDate = new DateTime(2020, 3, 15),
-                CreatedAt = DateTime.Now.AddDays(-365),
-                UpdatedAt = DateTime.Now.AddDays(-10),
-                CreatedBy = "HR System"
+                LastName = "Cooper",
+                Email = "alice.cooper@example.com",
+                Bio = "Software Engineer passionate about clean code",
+                PasswordHash = "hashed_password_123"
             },
-            new Employee
+            new ModernUser
             {
-                Id = 2,
+                Id = "user_002", 
                 FirstName = "Bob",
-                LastName = "Wilson",
-                EmployeeId = "EMP002",
-                Department = "Marketing",
-                Salary = 72000m,
-                HireDate = new DateTime(2019, 8, 22),
-                CreatedAt = DateTime.Now.AddDays(-400),
-                UpdatedAt = DateTime.Now.AddDays(-5),
-                CreatedBy = "HR System"
-            }
-        };
-    }
-
-    static List<Manager> CreateSampleManagers()
-    {
-        return new List<Manager>
-        {
-            new Manager
-            {
-                Id = 3,
-                FirstName = "Carol",
-                LastName = "Davis",
-                EmployeeId = "MGR001",
-                Department = "Engineering",
-                Salary = 120000m,
-                HireDate = new DateTime(2018, 1, 10),
-                TeamName = "Backend Team",
-                TeamSize = 8,
-                Budget = 500000m,
-                CreatedAt = DateTime.Now.AddDays(-500),
-                UpdatedAt = DateTime.Now.AddDays(-2),
-                CreatedBy = "HR System"
-            },
-            new Manager
-            {
-                Id = 4,
-                FirstName = "David",
-                LastName = "Brown",
-                EmployeeId = "MGR002",
-                Department = "Sales",
-                Salary = 110000m,
-                HireDate = new DateTime(2017, 6, 5),
-                TeamName = "Regional Sales",
-                TeamSize = 12,
-                Budget = 750000m,
-                CreatedAt = DateTime.Now.AddDays(-600),
-                UpdatedAt = DateTime.Now.AddDays(-1),
-                CreatedBy = "HR System"
+                LastName = "Dylan",
+                Email = "bob.dylan@example.com",
+                Bio = null,
+                PasswordHash = "hashed_password_456"
             }
         };
     }
@@ -433,5 +449,65 @@ class Program
             Console.WriteLine($"  {dto.Name}: ${dto.Price} - {dto.Description}");
         }
         Console.WriteLine();
+    }
+
+    static void TestModernRecordFeatures(List<ModernUser> modernUsers)
+    {
+        Console.WriteLine("1.5 Testing Modern Record Features:");
+        Console.WriteLine("===================================");
+
+        Console.WriteLine("Modern User DTOs (with auto-detected record, init-only & required properties):");
+        foreach (var user in modernUsers)
+        {
+            try
+            {
+                var userDto = user.ToFacet<ModernUser, ModernUserDto>();
+                Console.WriteLine($"  {userDto.FullName}");
+                Console.WriteLine($"    ID: {userDto.Id} (required init-only)");
+                Console.WriteLine($"    Email: {userDto.Email ?? "N/A"}");
+                Console.WriteLine($"    Created: {userDto.CreatedAt:yyyy-MM-dd}");
+                Console.WriteLine($"    Display: {userDto.DisplayName}");
+                Console.WriteLine();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  Error mapping {user.FirstName} {user.LastName}: {ex.Message}");
+                Console.WriteLine();
+            }
+        }
+
+        Console.WriteLine("Compact User DTOs (auto-detected record struct):");
+        var compactUsers = modernUsers.Select(u => new CompactUser(u.Id, $"{u.FirstName} {u.LastName}", u.CreatedAt)).ToList();
+        foreach (var compact in compactUsers)
+        {
+            try
+            {
+                var compactDto = compact.ToFacet<CompactUser, CompactUserDto>();
+                Console.WriteLine($"  {compactDto.Name} (ID: {compactDto.Id}, Created: {compactDto.CreatedAt:yyyy-MM-dd})");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  Error mapping compact user: {ex.Message}");
+            }
+        }
+        Console.WriteLine();
+
+        Console.WriteLine("Modern User Classes (preserved modifiers in class):");
+        foreach (var user in modernUsers)
+        {
+            try
+            {
+                var userClass = user.ToFacet<ModernUser, ModernUserClass>();
+                Console.WriteLine($"  {userClass.FirstName} {userClass.LastName}");
+                Console.WriteLine($"    ID: {userClass.Id} (required init-only in class)");
+                Console.WriteLine($"    Created: {userClass.CreatedAt:yyyy-MM-dd}");
+                Console.WriteLine();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  Error mapping {user.FirstName} {user.LastName} to class: {ex.Message}");
+                Console.WriteLine();
+            }
+        }
     }
 }

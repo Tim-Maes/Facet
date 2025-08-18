@@ -51,6 +51,8 @@ namespace Facet.Generators
             var includeFields = GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
             var generateConstructor = GetNamedArg(attribute.NamedArguments, "GenerateConstructor", true);
             var generateProjection = GetNamedArg(attribute.NamedArguments, "GenerateProjection", true);
+            var preserveInitOnly = GetNamedArg(attribute.NamedArguments, "PreserveInitOnlyProperties", false);
+            var preserveRequired = GetNamedArg(attribute.NamedArguments, "PreserveRequiredProperties", false);
             var configurationTypeName = attribute.NamedArguments
                                                  .FirstOrDefault(kvp => kvp.Key == "Configuration")
                                                  .Value.Value?
@@ -59,33 +61,48 @@ namespace Facet.Generators
                                .FirstOrDefault(kvp => kvp.Key == "Kind")
                                .Value.Value is int k
                 ? (FacetKind)k
-                : FacetKind.Class;
+                : FacetKind.Auto;
+
+            // If Auto is specified, infer the kind from the target type
+            if (kind == FacetKind.Auto)
+            {
+                kind = InferFacetKind(targetSymbol);
+            }
 
             var members = new List<FacetMember>();
             var addedMembers = new HashSet<string>();
 
-            var allMembers = GetAllMembers(sourceType);
+            var allMembersWithModifiers = GetAllMembersWithModifiers(sourceType);
 
-            foreach (var m in allMembers)
+            foreach (var (member, isInitOnly, isRequired) in allMembersWithModifiers)
             {
                 token.ThrowIfCancellationRequested();
-                if (excluded.Contains(m.Name)) continue;
-                if (addedMembers.Contains(m.Name)) continue;
+                if (excluded.Contains(member.Name)) continue;
+                if (addedMembers.Contains(member.Name)) continue;
 
-                if (m is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } p)
+                if (member is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } p)
                 {
+                    var shouldPreserveInitOnly = preserveInitOnly && isInitOnly;
+                    var shouldPreserveRequired = preserveRequired && isRequired;
+                    
                     members.Add(new FacetMember(
                         p.Name,
                         p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                        FacetMemberKind.Property));
+                        FacetMemberKind.Property,
+                        shouldPreserveInitOnly,
+                        shouldPreserveRequired));
                     addedMembers.Add(p.Name);
                 }
-                else if (includeFields && m is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
+                else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
                 {
+                    var shouldPreserveRequired = preserveRequired && isRequired;
+                    
                     members.Add(new FacetMember(
                         f.Name,
                         f.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                        FacetMemberKind.Field));
+                        FacetMemberKind.Field,
+                        false, // Fields don't have init-only
+                        shouldPreserveRequired));
                     addedMembers.Add(f.Name);
                 }
             }
@@ -109,7 +126,7 @@ namespace Facet.Generators
         /// Gets all members from the inheritance hierarchy, starting from the most derived type
         /// and walking up to the base types. This ensures that overridden members are preferred.
         /// </summary>
-        private static IEnumerable<ISymbol> GetAllMembers(INamedTypeSymbol type)
+        private static IEnumerable<(ISymbol Symbol, bool IsInitOnly, bool IsRequired)> GetAllMembersWithModifiers(INamedTypeSymbol type)
         {
             var visited = new HashSet<string>();
             var current = type;
@@ -118,12 +135,22 @@ namespace Facet.Generators
             {
                 foreach (var member in current.GetMembers())
                 {
-                    if ((member is IPropertySymbol || member is IFieldSymbol) &&
-                        member.DeclaredAccessibility == Accessibility.Public &&
+                    if (member.DeclaredAccessibility == Accessibility.Public &&
                         !visited.Contains(member.Name))
                     {
-                        visited.Add(member.Name);
-                        yield return member;
+                        if (member is IPropertySymbol prop)
+                        {
+                            visited.Add(member.Name);
+                            var isInitOnly = prop.SetMethod?.IsInitOnly == true;
+                            var isRequired = prop.IsRequired;
+                            yield return (prop, isInitOnly, isRequired);
+                        }
+                        else if (member is IFieldSymbol field)
+                        {
+                            visited.Add(member.Name);
+                            var isRequired = field.IsRequired;
+                            yield return (field, false, isRequired);
+                        }
                     }
                 }
 
@@ -132,6 +159,55 @@ namespace Facet.Generators
                 if (current?.SpecialType == SpecialType.System_Object)
                     break;
             }
+        }
+
+        /// <summary>
+        /// Gets all members from the inheritance hierarchy, starting from the most derived type
+        /// and walking up to the base types. This ensures that overridden members are preferred.
+        /// </summary>
+        private static IEnumerable<ISymbol> GetAllMembers(INamedTypeSymbol type)
+        {
+            return GetAllMembersWithModifiers(type).Select(x => x.Symbol);
+        }
+
+        /// <summary>
+        /// Attempts to determine the FacetKind from the target symbol's declaration.
+        /// </summary>
+        private static FacetKind InferFacetKind(INamedTypeSymbol targetSymbol)
+        {
+            // Check if it's a struct
+            if (targetSymbol.TypeKind == TypeKind.Struct)
+            {
+                // Check if it's a record struct by looking at syntax
+                var syntax = targetSymbol.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+                if (syntax != null && syntax.ToString().Contains("record struct"))
+                {
+                    return FacetKind.RecordStruct;
+                }
+                return FacetKind.Struct;
+            }
+
+            // Check if it's a class
+            if (targetSymbol.TypeKind == TypeKind.Class)
+            {
+                // Check if it's a record by looking for compiler-generated members or syntax
+                var syntax = targetSymbol.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+                if (syntax != null && syntax.ToString().Contains("record "))
+                {
+                    return FacetKind.Record;
+                }
+                
+                // Alternative check: records have compiler-generated methods like <Clone>$
+                if (targetSymbol.GetMembers().Any(m => m.Name.Contains("Clone") && m.IsImplicitlyDeclared))
+                {
+                    return FacetKind.Record;
+                }
+                
+                return FacetKind.Class;
+            }
+
+            // Default to class if we can't determine
+            return FacetKind.Class;
         }
 
         private static T GetNamedArg<T>(
@@ -164,11 +240,22 @@ namespace Facet.Generators
             };
 
             var isPositional = model.Kind is FacetKind.Record or FacetKind.RecordStruct;
+            var hasInitOnlyProperties = model.Members.Any(m => m.IsInitOnly);
+            var hasCustomMapping = !string.IsNullOrWhiteSpace(model.ConfigurationTypeName);
 
             if (isPositional)
             {
                 var parameters = string.Join(", ",
-                    model.Members.Select(m => $"{m.TypeName} {m.Name}"));
+                    model.Members.Select(m => 
+                    {
+                        var param = $"{m.TypeName} {m.Name}";
+                        // Add required modifier for positional parameters if needed
+                        if (m.IsRequired && model.Kind == FacetKind.RecordStruct)
+                        {
+                            param = $"required {param}";
+                        }
+                        return param;
+                    }));
                 sb.AppendLine($"public partial {keyword} {model.Name}({parameters});");
             }
 
@@ -180,9 +267,34 @@ namespace Facet.Generators
                 foreach (var m in model.Members)
                 {
                     if (m.Kind == FacetMemberKind.Property)
-                        sb.AppendLine($"    public {m.TypeName} {m.Name} {{ get; set; }}");
+                    {
+                        var propDef = $"public {m.TypeName} {m.Name}";
+                        
+                        if (m.IsInitOnly)
+                        {
+                            propDef += " { get; init; }";
+                        }
+                        else
+                        {
+                            propDef += " { get; set; }";
+                        }
+
+                        if (m.IsRequired)
+                        {
+                            propDef = $"required {propDef}";
+                        }
+
+                        sb.AppendLine($"    {propDef}");
+                    }
                     else
-                        sb.AppendLine($"    public {m.TypeName} {m.Name};");
+                    {
+                        var fieldDef = $"public {m.TypeName} {m.Name};";
+                        if (m.IsRequired)
+                        {
+                            fieldDef = $"required {fieldDef}";
+                        }
+                        sb.AppendLine($"    {fieldDef}");
+                    }
                 }
             }
 
@@ -197,13 +309,39 @@ namespace Facet.Generators
                 }
                 sb.AppendLine($"    {ctorSig}");
                 sb.AppendLine("    {");
+                
                 if (!isPositional)
                 {
-                    foreach (var m in model.Members)
-                        sb.AppendLine($"        this.{m.Name} = source.{m.Name};");
+                    if (hasInitOnlyProperties && hasCustomMapping)
+                    {
+                        // For init-only properties with custom mapping, we need to call the mapping method
+                        // and let it return a new instance with all properties set
+                        sb.AppendLine($"        var mapped = {model.ConfigurationTypeName}.Map(source, this);");
+                        foreach (var m in model.Members.Where(x => !x.IsInitOnly))
+                        {
+                            sb.AppendLine($"        this.{m.Name} = mapped.{m.Name};");
+                        }
+                    }
+                    else if (hasCustomMapping)
+                    {
+                        // Regular mutable properties - copy first, then apply custom mapping
+                        foreach (var m in model.Members)
+                            sb.AppendLine($"        this.{m.Name} = source.{m.Name};");
+                        sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
+                    }
+                    else
+                    {
+                        // No custom mapping - just copy properties
+                        foreach (var m in model.Members)
+                            sb.AppendLine($"        this.{m.Name} = source.{m.Name};");
+                    }
                 }
-                if (!string.IsNullOrWhiteSpace(model.ConfigurationTypeName))
+                else if (hasCustomMapping)
+                {
+                    // For positional records/record structs with custom mapping
                     sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
+                }
+                
                 sb.AppendLine("    }");
             }
 
