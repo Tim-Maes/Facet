@@ -188,6 +188,9 @@ class Program
         // Test LINQ projections
         TestLinqProjections(users, products);
 
+        // Test shorthand overloads
+        TestShorthandOverloads(users, products, employees);
+
         Console.WriteLine("\n=== All tests completed successfully! ===");
         Console.WriteLine("Press any key to exit...");
         Console.ReadKey();
@@ -558,4 +561,81 @@ class Program
             }
         }
     }
+
+    private static void TestShorthandOverloads(List<User> users, List<Product> products, List<Employee> employees)
+    {
+        Console.WriteLine("6. Testing Shorthand Overloads (omit TSource):");
+        Console.WriteLine("===============================");
+
+        Console.WriteLine("Single item (inheritance):");
+        foreach (var e in employees)
+        {
+            try
+            {
+                var dto = e.ToFacet<EmployeeDto>();
+                Console.WriteLine($"  EmployeeDto: {dto.DisplayName} | Dept: {dto.Department} | Hire: {dto.HireDate:yyyy-MM-dd}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  Error mapping employee to EmployeeDto: {ex.Message}");
+            }
+        }
+        Console.WriteLine();
+
+        Console.WriteLine("Single item (basic & custom mapping):");
+        foreach (var u in users)
+        {
+            try
+            {
+                var dtoBasic = u.ToFacet<UserDto>();
+                var dtoCustom = u.ToFacet<UserDtoWithMapping>();
+                Console.WriteLine($"  Basic:  {dtoBasic.FirstName} {dtoBasic.LastName} | Active: {dtoBasic.IsActive}");
+                Console.WriteLine($"  Custom: {dtoCustom.FullName} (Age: {dtoCustom.Age}) | Email: {dtoCustom.Email}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  Error mapping user to UserDto: {ex.Message}");
+            }
+        }
+        Console.WriteLine();
+
+        // --- IEnumerable: provider-agnostic projection ---
+        Console.WriteLine("IEnumerable.SelectFacets<TTarget>:");
+        var activeUsers = users.Where(u => u.IsActive).SelectFacets<UserDtoWithMapping>().ToList();
+        foreach (var dto in activeUsers)
+        {
+            try
+            {
+                Console.WriteLine($"  {dto.FullName} (Age: {dto.Age})");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  Error mapping user to UserDtoWithMapping: {ex.Message}");
+            }
+        }
+        Console.WriteLine();
+
+        Console.WriteLine("IQueryable.SelectFacet<TTarget> (simulated):");
+        var availableProducts =
+            products.AsQueryable()
+                    .Where(p => p.IsAvailable)
+                    .SelectFacet<ProductDto>()
+                    .ToList();
+
+        foreach (var p in availableProducts)
+        {
+            try
+            {
+                Console.WriteLine($"  {p.Name}: ${p.Price} - {p.Description}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  Error mapping product to ProductDto: {ex.Message}");
+            }
+        }
+        Console.WriteLine();
+    }
+
+    public class UnrelatedDto
+    { }
 }
