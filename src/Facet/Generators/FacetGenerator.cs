@@ -51,24 +51,32 @@ namespace Facet.Generators
             var includeFields = GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
             var generateConstructor = GetNamedArg(attribute.NamedArguments, "GenerateConstructor", true);
             var generateProjection = GetNamedArg(attribute.NamedArguments, "GenerateProjection", true);
-            var preserveInitOnly = GetNamedArg(attribute.NamedArguments, "PreserveInitOnlyProperties", false);
-            var preserveRequired = GetNamedArg(attribute.NamedArguments, "PreserveRequiredProperties", false);
+            
             var configurationTypeName = attribute.NamedArguments
                                                  .FirstOrDefault(kvp => kvp.Key == "Configuration")
                                                  .Value.Value?
                                                  .ToString();
+            
+            // If Auto is specified, infer the kind from the target type first
             var kind = attribute.NamedArguments
                                .FirstOrDefault(kvp => kvp.Key == "Kind")
-                               .Value.Value is int k
-                ? (FacetKind)k
+                               .Value.Value is int kindValue
+                ? (FacetKind)kindValue
                 : FacetKind.Auto;
 
-            // If Auto is specified, infer the kind from the target type
             if (kind == FacetKind.Auto)
             {
                 kind = InferFacetKind(targetSymbol);
             }
 
+            // For record types, default to preserving init-only and required modifiers
+            // unless explicitly overridden by the user
+            var preserveInitOnlyDefault = kind is FacetKind.Record or FacetKind.RecordStruct;
+            var preserveRequiredDefault = kind is FacetKind.Record or FacetKind.RecordStruct;
+            
+            var preserveInitOnly = GetNamedArg(attribute.NamedArguments, "PreserveInitOnlyProperties", preserveInitOnlyDefault);
+            var preserveRequired = GetNamedArg(attribute.NamedArguments, "PreserveRequiredProperties", preserveRequiredDefault);
+            
             var members = new List<FacetMember>();
             var addedMembers = new HashSet<string>();
 

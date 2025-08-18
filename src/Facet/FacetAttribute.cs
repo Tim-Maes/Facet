@@ -55,14 +55,14 @@ public sealed class FacetAttribute : Attribute
     /// <summary>
     /// Controls whether generated properties should preserve init-only modifiers from source properties.
     /// When true, properties with init accessors in the source will be generated as init-only in the target.
-    /// This is an opt-in feature for modern C# init-only property support.
+    /// Defaults to true for record and record struct types, false for class and struct types.
     /// </summary>
     public bool PreserveInitOnlyProperties { get; set; } = false;
 
     /// <summary>
     /// Controls whether generated properties should preserve required modifiers from source properties.
     /// When true, properties marked as required in the source will be generated as required in the target.
-    /// This is an opt-in feature for modern C# required property support.
+    /// Defaults to true for record and record struct types, false for class and struct types.
     /// </summary>
     public bool PreserveRequiredProperties { get; set; } = false;
 

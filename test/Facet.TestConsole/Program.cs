@@ -159,10 +159,8 @@ public class ModernUserMapper : IFacetMapConfigurationWithReturn<ModernUser, Mod
     }
 }
 
-// Test auto-detection and record features
+// Test auto-detection and modern record features - no need to specify preserve flags!
 [Facet(typeof(ModernUser), "PasswordHash", "Bio", 
-       PreserveInitOnlyProperties = true, 
-       PreserveRequiredProperties = true,
        Configuration = typeof(ModernUserMapper))]
 public partial record ModernUserDto
 {
@@ -170,14 +168,14 @@ public partial record ModernUserDto
     public string DisplayName { get; set; } = string.Empty;
 }
 
-// Test auto-detection of record struct
+// Test auto-detection of record struct - preserves modifiers automatically!
 [Facet(typeof(CompactUser))]
 public partial record struct CompactUserDto;
 
-// Test with explicit init-only and required properties 
+// Test with explicit init-only and required properties for class (needs explicit opt-in)
 [Facet(typeof(ModernUser), "PasswordHash", "Bio", "Email",
-       PreserveInitOnlyProperties = true,
-       PreserveRequiredProperties = true)]
+       PreserveInitOnlyProperties = true,  // Explicit for classes
+       PreserveRequiredProperties = true)] // Explicit for classes
 public partial class ModernUserClass
 {
     public string? AdditionalInfo { get; set; }
