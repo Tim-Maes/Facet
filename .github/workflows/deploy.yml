@@ -1,0 +1,77 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: deploy
+on:
+  release:
+    types:
+      - published
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: true
+  NuGetDirectory: ${{ github.workspace }}/nuget
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build Solution
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Run Tests
+        run: dotnet test --configuration Release --no-build --verbosity normal
+
+      - name: Pack NuGet Packages
+        run: dotnet pack --configuration Release --no-build --output ${{ env.NuGetDirectory }}
+
+      - name: Publish NuGet packages
+        run: |
+          foreach ($file in Get-ChildItem "${{ env.NuGetDirectory }}" -Recurse -Include *.nupkg) {
+            Write-Host "Processing package: $($file.Name)"
+            
+            if ($file.Name -like "Facet.Mapping.*.nupkg") {
+              Write-Host "Publishing Facet.Mapping package..."
+              dotnet nuget push $file `
+                --api-key "${{ secrets.NUGET_MAP_API_KEY }}" `
+                --source https://api.nuget.org/v3/index.json `
+                --skip-duplicate
+            } elseif ($file.Name -like "Facet.Extensions.EFCore.*.nupkg") {
+              Write-Host "Publishing Facet.Extensions.EFCore package..."
+              dotnet nuget push $file `
+                --api-key "${{ secrets.NUGET_API_KEY_EXTENSIONS_EF }}" `
+                --source https://api.nuget.org/v3/index.json `
+                --skip-duplicate
+            } elseif ($file.Name -like "Facet.Extensions.*.nupkg") {
+              Write-Host "Publishing Facet.Extensions package..."
+              dotnet nuget push $file `
+                --api-key "${{ secrets.NUGET_API_KEY_EXTENSIONS }}" `
+                --source https://api.nuget.org/v3/index.json `
+                --skip-duplicate
+            } elseif ($file.Name -like "Facet.*.nupkg") {
+              Write-Host "Publishing Facet package..."
+              dotnet nuget push $file `
+                --api-key "${{ secrets.NUGET_API_KEY }}" `
+                --source https://api.nuget.org/v3/index.json `
+                --skip-duplicate
+            } else {
+              Write-Host "Skipping unknown package: $($file.Name)"
+            }
+          }

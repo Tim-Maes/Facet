@@ -7,7 +7,7 @@
         <IsPackable>true</IsPackable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageId>Facet.Mapping</PackageId>
-        <Version>2.0.1</Version>
+		<Version>2.0.2</Version>
         <Authors>Tim Maes</Authors>
         <Description>Advanced static mapping configuration support for the Facet source generator with async capabilities.</Description>
         <PackageTags>facet mapping source-generator dto compile-time async</PackageTags>
@@ -15,14 +15,6 @@
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <Title>Facet.Mapping</Title>
         <PackageReadmeFile>README.md</PackageReadmeFile>
-        <PackageReleaseNotes>
-            Version 2.0.0:
-            - Added async mapping support with IFacetMapConfigurationAsync interface
-            - Added hybrid sync/async mapping with IFacetMapConfigurationHybrid interface
-            - Added comprehensive async extension methods
-            - Added parallel collection mapping capabilities
-            - Full cancellation token support throughout
-        </PackageReleaseNotes>
     </PropertyGroup>
 
     <ItemGroup>
