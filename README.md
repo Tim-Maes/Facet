@@ -46,12 +46,7 @@ You can think of it like **carving out a specific facet** of a gem:
 - :white_check_mark: Include/redact public fields
 - :white_check_mark: Auto-generate constructors for fast mapping
 - :white_check_mark: LINQ projection expressions `(Expression<Func<TSource,TTarget>>)`
-- :white_check_mark: Custom mapping via `IFacetMapConfiguration`
-- :white_check_mark: **Async mapping support** via `IFacetMapConfigurationAsync`
-- :white_check_mark: **Hybrid sync/async mapping** for optimal performance
-- :white_check_mark: **Collection mapping** with sequential and parallel processing
-- :white_check_mark: **Full cancellation token support** for async operations
-- :white_check_mark: **Dependency injection support** for mappers with external services
+- :white_check_mark: Full mapping support with custom mapping configurations
 
 ## :earth_americas: The Facet Ecosystem
 
