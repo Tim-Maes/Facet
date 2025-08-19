@@ -633,8 +633,5 @@ class Program
             }
         }
         Console.WriteLine();
-    }
-
-    public class UnrelatedDto
-    { }
+    }    
 }
