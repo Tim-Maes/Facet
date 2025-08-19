@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -11,6 +12,71 @@ namespace Facet.Extensions;
 /// </summary>
 public static class FacetExtensions
 {
+    
+    private static readonly ConcurrentDictionary<Type, Type> s_declaredSourceCache = new();
+    
+    private static readonly MethodInfo s_toFacet2Generic =
+        typeof(FacetExtensions)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .First(m =>
+            {
+                if (m.Name != nameof(ToFacet)) return false;
+                var ga = m.GetGenericArguments();
+                if (ga.Length != 2) return false;
+                var ps = m.GetParameters();
+                return ps.Length == 1; // (this TSource source)
+            });
+
+    
+    public static TTarget ToFacet<TTarget>(this object source)
+        where TTarget : class
+    {
+        if (source is null) throw new ArgumentNullException(nameof(source));
+
+        var targetType = typeof(TTarget);
+        
+        var declaredSource = GetDeclaredSourceType(targetType)
+            ?? throw new InvalidOperationException(
+                $"Type '{targetType.FullName}' must be annotated with [Facet(typeof(...))] to use ToFacet<{targetType.Name}>().");
+        
+        if (!declaredSource.IsInstanceOfType(source))
+        {
+            throw new InvalidOperationException(
+                $"Source instance type '{source.GetType().FullName}' is not assignable to declared Facet source '{declaredSource.FullName}' for target '{targetType.FullName}'.");
+        }
+        
+        var forwarded = s_toFacet2Generic.MakeGenericMethod(declaredSource, targetType)
+                                         .Invoke(null, new[] { source });
+        if (forwarded is null)
+        {
+            throw new InvalidOperationException(
+                $"Unable to map source '{declaredSource.FullName}' to '{targetType.FullName}'. Ensure a matching constructor or static FromSource exists.");
+        }
+
+        return (TTarget)forwarded;
+    }
+
+    private static Type? GetDeclaredSourceType(Type targetType)
+    {
+        if (s_declaredSourceCache.TryGetValue(targetType, out var cached))
+            return cached;
+        
+        var attr = targetType
+            .GetCustomAttributesData()
+            .FirstOrDefault(a => a.AttributeType.FullName == "Facet.FacetAttribute");
+
+        var declared = attr?.ConstructorArguments.Count > 0
+                       && attr.ConstructorArguments[0].ArgumentType == typeof(Type)
+                       ? attr.ConstructorArguments[0].Value as Type
+                       : null;
+
+        if (declared != null)
+        {
+            s_declaredSourceCache[targetType] = declared;
+        }
+
+        return declared;
+    }
     /// <summary>
     /// Maps a single source instance to the specified facet type by invoking its generated constructor.
     /// If the constructor fails (e.g., due to required init-only properties), attempts to use a static FromSource factory method.

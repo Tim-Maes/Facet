@@ -600,40 +600,40 @@ class Program
         Console.WriteLine();
 
         // --- IEnumerable: provider-agnostic projection ---
-        Console.WriteLine("IEnumerable.SelectFacets<TTarget>:");
-        var activeUsers = users.Where(u => u.IsActive).SelectFacets<UserDtoWithMapping>().ToList();
-        foreach (var dto in activeUsers)
-        {
-            try
-            {
-                Console.WriteLine($"  {dto.FullName} (Age: {dto.Age})");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"  Error mapping user to UserDtoWithMapping: {ex.Message}");
-            }
-        }
-        Console.WriteLine();
+        //Console.WriteLine("IEnumerable.SelectFacets<TTarget>:");
+        //var activeUsers = users.Where(u => u.IsActive).SelectFacets<UserDtoWithMapping>().ToList();
+        //foreach (var dto in activeUsers)
+        //{
+        //    try
+        //    {
+        //        Console.WriteLine($"  {dto.FullName} (Age: {dto.Age})");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        Console.WriteLine($"  Error mapping user to UserDtoWithMapping: {ex.Message}");
+        //    }
+        //}
+        //Console.WriteLine();
 
-        Console.WriteLine("IQueryable.SelectFacet<TTarget> (simulated):");
-        var availableProducts =
-            products.AsQueryable()
-                    .Where(p => p.IsAvailable)
-                    .SelectFacet<ProductDto>()
-                    .ToList();
+        //Console.WriteLine("IQueryable.SelectFacet<TTarget> (simulated):");
+        //var availableProducts =
+        //    products.AsQueryable()
+        //            .Where(p => p.IsAvailable)
+        //            .SelectFacet<ProductDto>()
+        //            .ToList();
 
-        foreach (var p in availableProducts)
-        {
-            try
-            {
-                Console.WriteLine($"  {p.Name}: ${p.Price} - {p.Description}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"  Error mapping product to ProductDto: {ex.Message}");
-            }
-        }
-        Console.WriteLine();
+        //foreach (var p in availableProducts)
+        //{
+        //    try
+        //    {
+        //        Console.WriteLine($"  {p.Name}: ${p.Price} - {p.Description}");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        Console.WriteLine($"  Error mapping product to ProductDto: {ex.Message}");
+        //    }
+        //}
+        //Console.WriteLine();
     }
 
     public class UnrelatedDto
