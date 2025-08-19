@@ -21,7 +21,7 @@ namespace Facet;
 /// <exception cref="InvalidOperationException">
 /// Thrown when no usable <c>FromSource</c> factory or compatible constructor is found on <typeparamref name="TTarget"/>.
 /// </exception>
-public static class FacetCache<TSource, TTarget>
+internal static class FacetCache<TSource, TTarget>
     where TTarget : class
 {
     public static readonly Func<TSource, TTarget> Mapper = CreateMapper();
