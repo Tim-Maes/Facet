@@ -23,34 +23,8 @@ public static class FacetExtensions
     public static TTarget ToFacet<TSource, TTarget>(this TSource source)
         where TTarget : class
     {
-        if (source is null) throw new ArgumentNullException(nameof(source));
-        
-        // Check for static FromSource factory method first (preferred for init-only properties)
-        var fromSourceMethod = typeof(TTarget).GetMethod(
-            "FromSource",
-            BindingFlags.Public | BindingFlags.Static,
-            null,
-            new[] { typeof(TSource) },
-            null);
-            
-        if (fromSourceMethod != null)
-        {
-            return (TTarget)fromSourceMethod.Invoke(null, new object[] { source })!;
-        }
-        
-        // Fall back to constructor
-        try
-        {
-            return (TTarget)Activator.CreateInstance(typeof(TTarget), source)!;
-        }
-        catch
-        {
-            // If neither works, provide a helpful error message
-            throw new InvalidOperationException(
-                $"Unable to map {typeof(TSource).Name} to {typeof(TTarget).Name}. " +
-                $"Ensure {typeof(TTarget).Name} has either a constructor accepting {typeof(TSource).Name} " +
-                $"or a static FromSource({typeof(TSource).Name}) method.");
-        }
+        if (source is null) throw new ArgumentNullException(nameof(source));    
+        return FacetCache<TSource, TTarget>.Mapper(source);
     }
 
     /// <summary>
