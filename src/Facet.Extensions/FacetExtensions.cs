@@ -12,10 +12,11 @@ namespace Facet.Extensions;
 /// </summary>
 public static class FacetExtensions
 {
-    
-    private static readonly ConcurrentDictionary<Type, Type> s_declaredSourceCache = new();
-    
-    private static readonly MethodInfo s_toFacet2Generic =
+    // Maps facet target type to declared source type from [Facet(typeof(...))].
+    private static readonly ConcurrentDictionary<Type, Type> _declaredSourceTypeByTarget = new();
+
+    // Cached MethodInfo for ToFacet<TSource, TTarget>(TSource)
+    private static readonly MethodInfo _toFacetTwoGenericMethod =
         typeof(FacetExtensions)
             .GetMethods(BindingFlags.Public | BindingFlags.Static)
             .First(m =>
@@ -24,59 +25,9 @@ public static class FacetExtensions
                 var ga = m.GetGenericArguments();
                 if (ga.Length != 2) return false;
                 var ps = m.GetParameters();
-                return ps.Length == 1; // (this TSource source)
+                return ps.Length == 1;
             });
-
     
-    public static TTarget ToFacet<TTarget>(this object source)
-        where TTarget : class
-    {
-        if (source is null) throw new ArgumentNullException(nameof(source));
-
-        var targetType = typeof(TTarget);
-        
-        var declaredSource = GetDeclaredSourceType(targetType)
-            ?? throw new InvalidOperationException(
-                $"Type '{targetType.FullName}' must be annotated with [Facet(typeof(...))] to use ToFacet<{targetType.Name}>().");
-        
-        if (!declaredSource.IsInstanceOfType(source))
-        {
-            throw new InvalidOperationException(
-                $"Source instance type '{source.GetType().FullName}' is not assignable to declared Facet source '{declaredSource.FullName}' for target '{targetType.FullName}'.");
-        }
-        
-        var forwarded = s_toFacet2Generic.MakeGenericMethod(declaredSource, targetType)
-                                         .Invoke(null, new[] { source });
-        if (forwarded is null)
-        {
-            throw new InvalidOperationException(
-                $"Unable to map source '{declaredSource.FullName}' to '{targetType.FullName}'. Ensure a matching constructor or static FromSource exists.");
-        }
-
-        return (TTarget)forwarded;
-    }
-
-    private static Type? GetDeclaredSourceType(Type targetType)
-    {
-        if (s_declaredSourceCache.TryGetValue(targetType, out var cached))
-            return cached;
-        
-        var attr = targetType
-            .GetCustomAttributesData()
-            .FirstOrDefault(a => a.AttributeType.FullName == "Facet.FacetAttribute");
-
-        var declared = attr?.ConstructorArguments.Count > 0
-                       && attr.ConstructorArguments[0].ArgumentType == typeof(Type)
-                       ? attr.ConstructorArguments[0].Value as Type
-                       : null;
-
-        if (declared != null)
-        {
-            s_declaredSourceCache[targetType] = declared;
-        }
-
-        return declared;
-    }
     /// <summary>
     /// Maps a single source instance to the specified facet type by invoking its generated constructor.
     /// If the constructor fails (e.g., due to required init-only properties), attempts to use a static FromSource factory method.
@@ -117,6 +68,47 @@ public static class FacetExtensions
                 $"Ensure {typeof(TTarget).Name} has either a constructor accepting {typeof(TSource).Name} " +
                 $"or a static FromSource({typeof(TSource).Name}) method.");
         }
+    }
+
+    /// <summary>
+    /// Converts the specified source object to an instance of the target type annotated as a facet.
+    /// </summary>
+    /// <typeparam name="TTarget">The target type to which the source object will be converted. Must be a reference type and annotated with
+    /// <c>[Facet(typeof(...))]</c>.</typeparam>
+    /// <param name="source">The source object to be converted. Cannot be <see langword="null"/>.</param>
+    /// <returns>An instance of the target type <typeparamref name="TTarget"/> created from the source object.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if <paramref name="source"/> is <see langword="null"/>.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if: <list type="bullet"> <item><description>The target type <typeparamref name="TTarget"/> is not
+    /// annotated with <c>[Facet(typeof(...))]</c>.</description></item> <item><description>The source object's type is
+    /// not assignable to the declared source type for the target facet.</description></item> <item><description>The
+    /// conversion process fails due to a missing constructor or static <c>FromSource</c> method.</description></item>
+    /// </list></exception>
+    public static TTarget ToFacet<TTarget>(this object source)
+        where TTarget : class
+    {
+        if (source is null) throw new ArgumentNullException(nameof(source));
+
+        var targetType = typeof(TTarget);
+
+        var declaredSource = GetDeclaredSourceType(targetType)
+            ?? throw new InvalidOperationException(
+                $"Type '{targetType.FullName}' must be annotated with [Facet(typeof(...))] to use ToFacet<{targetType.Name}>().");
+
+        if (!declaredSource.IsInstanceOfType(source))
+        {
+            throw new InvalidOperationException(
+                $"Source instance type '{source.GetType().FullName}' is not assignable to declared Facet source '{declaredSource.FullName}' for target '{targetType.FullName}'.");
+        }
+
+        var forwarded = _toFacetTwoGenericMethod.MakeGenericMethod(declaredSource, targetType)
+                                         .Invoke(null, new[] { source });
+        if (forwarded is null)
+        {
+            throw new InvalidOperationException(
+                $"Unable to map source '{declaredSource.FullName}' to '{targetType.FullName}'. Ensure a matching constructor or static FromSource exists.");
+        }
+
+        return (TTarget)forwarded;
     }
 
     /// <summary>
@@ -162,5 +154,27 @@ public static class FacetExtensions
 
         var expr = (Expression<Func<TSource, TTarget>>)prop.GetValue(null)!;
         return source.Select(expr);
+    }
+
+    private static Type? GetDeclaredSourceType(Type targetType)
+    {
+        if (_declaredSourceTypeByTarget.TryGetValue(targetType, out var cached))
+            return cached;
+
+        var attr = targetType
+            .GetCustomAttributesData()
+            .FirstOrDefault(a => a.AttributeType.FullName == "Facet.FacetAttribute");
+
+        var declared = attr?.ConstructorArguments.Count > 0
+                       && attr.ConstructorArguments[0].ArgumentType == typeof(Type)
+                       ? attr.ConstructorArguments[0].Value as Type
+                       : null;
+
+        if (declared != null)
+        {
+            _declaredSourceTypeByTarget[targetType] = declared;
+        }
+
+        return declared;
     }
 }
