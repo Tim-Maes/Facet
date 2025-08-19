@@ -409,7 +409,7 @@ class Program
 
         foreach (var user in users)
         {
-            var userDto = user.ToFacet<User, UserDto>();
+            var userDto = user.Facet().To<UserDto>();
             Console.WriteLine($"User: {userDto.FirstName} {userDto.LastName} ({userDto.Email})");
             Console.WriteLine($"  Active: {userDto.IsActive}, DOB: {userDto.DateOfBirth:yyyy-MM-dd}");
             Console.WriteLine($"  Last Login: {userDto.LastLoginAt?.ToString("yyyy-MM-dd HH:mm") ?? "Never"}");

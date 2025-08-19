@@ -27,6 +27,13 @@ public static class FacetExtensions
         return FacetCache<TSource, TTarget>.Mapper(source);
     }
 
+    public class Builder<TSource>(TSource source)
+    {
+        public TTarget To<TTarget>() where TTarget : class => source.ToFacet<TSource, TTarget>();
+    }
+    
+    public static Builder<TSource> Facet<TSource>(this TSource source) => new(source);
+
     /// <summary>
     /// Maps an <see cref="IEnumerable{TSource}"/> to an <see cref="IEnumerable{TTarget}"/>
     /// via the generated constructor of the facet type.
