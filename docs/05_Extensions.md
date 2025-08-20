@@ -3,7 +3,7 @@
 Facet.Extensions provides a set of provider-agnostic extension methods for mapping and projecting between your domain entities and generated facet types.
 For async EF Core support, see the separate Facet.Extensions.EFCore package.
 
-## Key Methods (Facet.Extensions)
+## Methods (Facet.Extensions)
 
 | Method                              | Description                                                      |
 |------------------------------------- |------------------------------------------------------------------|
@@ -14,13 +14,16 @@ For async EF Core support, see the separate Facet.Extensions.EFCore package.
 | `SelectFacet<TTarget>()`    | Project an `IQueryable<TSource>` to `IQueryable<TTarget>`.        |
 | `SelectFacet<TSource, TTarget>()`    | Project an `IQueryable<TSource>` to `IQueryable<TTarget>`.        |
 
-## Key Methods (Facet.Extensions.EFCore)
+## Methods (Facet.Extensions.EFCore)
 
 | Method                              | Description                                                      |
 |------------------------------------- |------------------------------------------------------------------|
 | `ToFacetsAsync<TSource, TTarget>()`  | Async projection to `List<TTarget>` (EF Core).                    |
 | `FirstFacetAsync<TSource, TTarget>()`| Async projection to first or default (EF Core).                   |
 | `SingleFacetAsync<TSource, TTarget>()`| Async projection to single (EF Core).                            |
+| `UpdateFromFacet<TEntity, TFacet>()`| Update entity with changed properties from facet DTO.            |
+| `UpdateFromFacetAsync<TEntity, TFacet>()`| Async update entity with changed properties from facet DTO.  |
+| `UpdateFromFacetWithChanges<TEntity, TFacet>()`| Update entity and return information about changed properties. |
 
 ## Usage Examples
 
@@ -58,6 +61,83 @@ var query = dbContext.People.SelectFacet<Person, PersonDto>();
 var dtosAsync = await dbContext.People.ToFacetsAsync<Person, PersonDto>();
 var firstDto = await dbContext.People.FirstFacetAsync<Person, PersonDto>();
 var singleDto = await dbContext.People.SingleFacetAsync<Person, PersonDto>();
+```
+
+### EF Core Reverse Mapping (UpdateFromFacet)
+
+```csharp
+using Facet.Extensions.EFCore;
+
+[HttpPut("{id}")]
+public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateUserDto dto)
+{
+    var user = await context.Users.FindAsync(id);
+    if (user == null) return NotFound();
+    
+    // Only updates properties that actually changed - selective update
+    user.UpdateFromFacet(dto, context);
+    
+    await context.SaveChangesAsync();
+    return Ok();
+}
+
+// With change tracking for auditing
+var result = user.UpdateFromFacetWithChanges(dto, context);
+if (result.HasChanges)
+{
+    logger.LogInformation("User {UserId} updated. Changed: {Properties}", 
+        user.Id, string.Join(", ", result.ChangedProperties));
+}
+
+// Async version
+await user.UpdateFromFacetAsync(dto, context);
+```
+
+### Complete API Example
+
+```csharp
+// Domain model
+public class User
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public string Email { get; set; }
+    public string Password { get; set; }  // Sensitive
+    public DateTime CreatedAt { get; set; }  // Immutable
+}
+
+// Update DTO - excludes sensitive/immutable properties
+[Facet(typeof(User), "Password", "CreatedAt")]
+public partial class UpdateUserDto { }
+
+// API Controller
+[ApiController]
+public class UsersController : ControllerBase
+{
+    // GET: Entity -> Facet
+    [HttpGet("{id}")]
+    public async Task<ActionResult<UserDto>> GetUser(int id)
+    {
+        var user = await context.Users.FindAsync(id);
+        if (user == null) return NotFound();
+        
+        return user.ToFacet<UserDto>();  // Forward mapping
+    }
+    
+    // PUT: Facet -> Entity (selective update)
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateUser(int id, UpdateUserDto dto)
+    {
+        var user = await context.Users.FindAsync(id);
+        if (user == null) return NotFound();
+        
+        user.UpdateFromFacet(dto, context);  // Reverse mapping
+        await context.SaveChangesAsync();
+        
+        return NoContent();
+    }
+}
 ```
 
 ---

@@ -55,9 +55,9 @@ Facet is modular and consists of several NuGet packages:
 
 - **Facet.Extensions**: Provider-agnostic extension methods for mapping and projecting (works with any LINQ provider, no EF Core dependency).
 
-- **Facet.Extensions.EFCore**: Async extension methods for Entity Framework Core (requires EF Core 6+).
-
 - **Facet.Mapping**: Advanced static mapping configuration support with async capabilities and dependency injection for complex mapping scenarios.
+
+- **Facet.Extensions.EFCore**: Async extension methods for Entity Framework Core (requires EF Core 6+).
 
 ## :rocket: Quick start 
 
@@ -195,6 +195,8 @@ var userDtos = await users.ToFacetsParallelAsync(mapper);
 ```
 
 ### EF Core Integration
+
+#### Forward Mapping (Entity -> Facet)
 ```csharp
 // Async projection directly in EF Core queries
 var userDtos = await dbContext.Users
@@ -208,3 +210,33 @@ var results = await dbContext.Products
     .OrderBy(dto => dto.Name)
     .ToListAsync();
 ```
+
+#### Reverse Mapping (facet -> Entity)
+```csharp
+// Define update DTO (excludes sensitive/immutable properties)
+[Facet(typeof(User), "Password", "CreatedAt")]
+public partial class UpdateUserDto { }
+
+// API Controller with selective updates
+[HttpPut("{id}")]
+public async Task<IActionResult> UpdateUser(int id, UpdateUserDto dto)
+{
+    var user = await context.Users.FindAsync(id);
+    if (user == null) return NotFound();
+    
+    // Only updates properties that actually changed
+    user.UpdateFromFacet(dto, context);
+    
+    await context.SaveChangesAsync();
+    return NoContent();
+}
+
+// With change tracking for auditing
+var result = user.UpdateFromFacetWithChanges(dto, context);
+if (result.HasChanges)
+{
+    logger.LogInformation("User {UserId} updated. Changed: {Properties}", 
+        user.Id, string.Join(", ", result.ChangedProperties));
+}
+```
+
