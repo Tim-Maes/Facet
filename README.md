@@ -112,21 +112,7 @@ public partial struct PointDto;
 
 // Generate as record struct (immutable value type)
 [Facet(typeof(Coordinates))]
-public partial record struct CoordinatesDto;
-```
-
-### Smart Defaults for Records
-```csharp
-public record ModernUser
-{
-    public required string Id { get; init; }
-    public required string Name { get; init; }
-    public string? Email { get; set; }
-}
-
-// Records automatically preserve init-only and required modifiers
-[Facet(typeof(ModernUser))]
-public partial record ModernUserDto;  // Preserves required/init-only automaticall
+public partial record struct CoordinatesDto; // Preserves required/init-only
 ```
 
 ### Custom Sync Mapping
@@ -213,18 +199,16 @@ var results = await dbContext.Products
 
 #### Reverse Mapping (facet -> Entity)
 ```csharp
-// Define update DTO (excludes sensitive/immutable properties)
-[Facet(typeof(User), "Password", "CreatedAt")]
+[Facet(typeof(User)]
 public partial class UpdateUserDto { }
 
-// API Controller with selective updates
 [HttpPut("{id}")]
 public async Task<IActionResult> UpdateUser(int id, UpdateUserDto dto)
 {
     var user = await context.Users.FindAsync(id);
     if (user == null) return NotFound();
     
-    // Only updates properties that actually changed
+    // Only updates properties that mutated
     user.UpdateFromFacet(dto, context);
     
     await context.SaveChangesAsync();
