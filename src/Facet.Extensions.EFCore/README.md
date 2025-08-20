@@ -4,12 +4,12 @@ EF Core async extension methods for the Facet library, enabling one-line async m
 
 ## Key Features
 
-- **Forward Mapping**: Entity ? Facet DTO
-  - Async projection to `List<TTarget>`: `ToFacetsAsync<TSource,TTarget>()`
-  - Async projection to first or default: `FirstFacetAsync<TSource,TTarget>()`
-  - Async projection to single: `SingleFacetAsync<TSource,TTarget>()`
+- **Forward Mapping**: Entity -> Facet DTO
+  - Async projection to `List<TTarget>`: `ToFacetsAsync<TSource,TTarget>()` or `ToFacetsAsync<TTarget>()`
+  - Async projection to first or default: `FirstFacetAsync<TSource,TTarget>()` or `FirstFacetAsync<TTarget>()`
+  - Async projection to single: `SingleFacetAsync<TSource,TTarget>()` or `SingleFacetAsync<TTarget>()`
 
-- **Reverse Mapping**: Facet DTO ? Entity (NEW!)
+- **Reverse Mapping**: Facet DTO -> Entity (NEW!)
   - Selective entity updates: `UpdateFromFacet<TEntity,TFacet>()`
   - Async entity updates: `UpdateFromFacetAsync<TEntity,TFacet>()`
   - Update with change tracking: `UpdateFromFacetWithChanges<TEntity,TFacet>()`
@@ -30,22 +30,25 @@ dotnet add package Facet.Extensions.EFCore
 using Facet.Extensions.EFCore; // for async EF Core extension methods
 ```
 
-## Forward Mapping (Entity ? DTO)
+## Forward Mapping (Entity -> DTO)
 
 ### 3. Use async mapping in EF Core
 
 ```csharp
-// Async projection to list
-var dtos = await dbContext.People.ToFacetsAsync<Person, PersonDto>();
+// Async projection to list (source type inferred)
+var dtos = await dbContext.People.ToFacetsAsync<PersonDto>();
 
-// Async projection to first or default
-var firstDto = await dbContext.People.FirstFacetAsync<Person, PersonDto>();
+// Async projection to first or default (source type inferred)
+var firstDto = await dbContext.People.FirstFacetAsync<PersonDto>();
 
-// Async projection to single
-var singleDto = await dbContext.People.SingleFacetAsync<Person, PersonDto>();
+// Async projection to single (source type inferred)
+var singleDto = await dbContext.People.SingleFacetAsync<PersonDto>();
+
+// Legacy explicit syntax still supported
+var dtosExplicit = await dbContext.People.ToFacetsAsync<Person, PersonDto>();
 ```
 
-## Reverse Mapping (DTO ? Entity)
+## Reverse Mapping (DTO -> Entity)
 
 ### 4. Use selective entity updates
 
@@ -118,25 +121,26 @@ public class ProductsController : ControllerBase
         _context = context;
     }
     
-    // GET: Forward mapping (Entity ? DTO)
+    // GET: Forward mapping (Entity -> DTO)
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ProductDto>>> GetProducts()
     {
         return await _context.Products
             .Where(p => p.IsActive)
-            .ToFacetsAsync<Product, ProductDto>();
+            .ToFacetsAsync<ProductDto>();  // Source type inferred
     }
     
     [HttpGet("{id}")]
     public async Task<ActionResult<ProductDto>> GetProduct(int id)
     {
         var product = await _context.Products
-            .FirstFacetAsync<Product, ProductDto>(p => p.Id == id);
+            .Where(p => p.Id == id)
+            .FirstFacetAsync<ProductDto>();  // Source type inferred
             
         return product == null ? NotFound() : product;
     }
     
-    // PUT: Reverse mapping (DTO ? Entity)
+    // PUT: Reverse mapping (DTO -> Entity)
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateProduct(int id, UpdateProductDto dto)
     {
@@ -160,49 +164,22 @@ public class ProductsController : ControllerBase
 }
 ```
 
-## Performance Benefits
-
-### Selective Updates
-- **Efficient SQL**: Only updates columns that actually changed
-- **Reduced Conflicts**: Minimizes optimistic concurrency conflicts
-- **Better Performance**: Smaller UPDATE statements
-- **Cleaner Logs**: Audit trails only show actual changes
-
-### Generated SQL Comparison
-
-**Traditional approach** (updates all properties):
-```sql
-UPDATE Products SET 
-    Name = @p0,         -- Even if unchanged
-    Description = @p1,  -- Even if unchanged
-    Price = @p2         -- Even if unchanged
-WHERE Id = @p3
-```
-
-**UpdateFromFacet** (selective updates):
-```sql
-UPDATE Products SET 
-    Price = @p0         -- Only changed property
-WHERE Id = @p1
-```
-
 ## API Reference
 
 | Method | Description | Use Case |
 |--------|-------------|----------|
-| `ToFacetsAsync<TSource, TTarget>()` | Project query to DTO list | GET endpoints |
-| `FirstFacetAsync<TSource, TTarget>()` | Project first result to DTO | GET single item |
-| `SingleFacetAsync<TSource, TTarget>()` | Project single result to DTO | GET single item (strict) |
-| `UpdateFromFacet<TEntity, TFacet>()` | Update entity from DTO | PUT/PATCH endpoints |
-| `UpdateFromFacetAsync<TEntity, TFacet>()` | Async update entity from DTO | PUT/PATCH with async logic |
-| `UpdateFromFacetWithChanges<TEntity, TFacet>()` | Update with change tracking | Auditing/logging scenarios |
+| `ToFacetsAsync<TTarget>()` | Project query to DTO list (source inferred) | GET endpoints |
+| `ToFacetsAsync<TSource, TTarget>()` | Project query to DTO list (explicit types) | Legacy/explicit typing |
+| `FirstFacetAsync<TTarget>()` | Get first DTO or null (source inferred) | GET single item |
+| `FirstFacetAsync<TSource, TTarget>()` | Get first DTO or null (explicit types) | Legacy/explicit typing |
+| `SingleFacetAsync<TTarget>()` | Get single DTO (source inferred) | GET unique item |
+| `SingleFacetAsync<TSource, TTarget>()` | Get single DTO (explicit types) | Legacy/explicit typing |
+| `UpdateFromFacet<TEntity, TFacet>()` | Selective entity update | PUT/PATCH endpoints |
+| `UpdateFromFacetWithChanges<TEntity, TFacet>()` | Update with change tracking | Auditing scenarios |
+| `UpdateFromFacetAsync<TEntity, TFacet>()` | Async selective update | Future extensibility |
 
 ## Requirements
 
-- Facet.Extensions
-- .NET 6.0+
-- Microsoft.EntityFrameworkCore 6.0+
-
----
-
-For provider-agnostic sync and LINQ methods, see [Facet.Extensions](https://www.nuget.org/packages/Facet.Extensions).
+- Facet v1.6.0+
+- Entity Framework Core 6+
+- .NET 6+

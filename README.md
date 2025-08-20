@@ -201,12 +201,12 @@ var userDtos = await users.ToFacetsParallelAsync(mapper);
 // Async projection directly in EF Core queries
 var userDtos = await dbContext.Users
     .Where(u => u.IsActive)
-    .ToFacetsAsync<User, UserDto>();
+    .ToFacetsAsync<UserDto>();
 
 // LINQ projection for complex queries
 var results = await dbContext.Products
     .Where(p => p.IsAvailable)
-    .SelectFacet<Product, ProductDto>()
+    .SelectFacet<ProductDto>()
     .OrderBy(dto => dto.Name)
     .ToListAsync();
 ```

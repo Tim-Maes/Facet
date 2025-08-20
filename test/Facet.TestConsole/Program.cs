@@ -1,13 +1,20 @@
+using Facet.Extensions;
+using Facet.Mapping;
+using Facet.TestConsole.Data;
+using Facet.TestConsole.Services;
+using Facet.TestConsole.Tests;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Facet;
-using Facet.Extensions;
-using Facet.Mapping;
+using System.Threading.Tasks;
 
 namespace Facet.TestConsole;
 
-// Base classes to test inheritance
 public abstract class BaseEntity
 {
     public int Id { get; set; }
@@ -40,11 +47,9 @@ public class Manager : Employee
     public int TeamSize { get; set; }
     public decimal Budget { get; set; }
     
-    // Override again
     public override string DisplayName => $"Manager {FirstName} {LastName} - {TeamName}";
 }
 
-// Sample domain models
 public class User
 {
     public int Id { get; set; }
@@ -52,7 +57,7 @@ public class User
     public string LastName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public DateTime DateOfBirth { get; set; }
-    public string Password { get; set; } = string.Empty; // This will be excluded in DTOs
+    public string Password { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? LastLoginAt { get; set; }
@@ -67,10 +72,9 @@ public class Product
     public int CategoryId { get; set; }
     public bool IsAvailable { get; set; }
     public DateTime CreatedAt { get; set; }
-    public string InternalNotes { get; set; } = string.Empty; // This will be excluded
+    public string InternalNotes { get; set; } = string.Empty;
 }
 
-// Custom mapping configuration
 public class UserDtoWithMappingMapper : IFacetMapConfiguration<User, UserDtoWithMapping>
 {
     public static void Map(User source, UserDtoWithMapping target)
@@ -88,23 +92,19 @@ public class UserDtoWithMappingMapper : IFacetMapConfiguration<User, UserDtoWith
     }
 }
 
-// Inheritance test DTOs
 [Facet(typeof(Employee), "Salary", "CreatedBy")]
 public partial class EmployeeDto;
 
 [Facet(typeof(Manager), "Salary", "Budget", "CreatedBy")]
 public partial class ManagerDto;
 
-// Basic DTO - excludes sensitive information like Password
 [Facet(typeof(User), "Password", "CreatedAt")]
 public partial class UserDto 
 {
-    // Custom properties that will be set by the mapper
     public string FullName { get; set; } = string.Empty;
     public int Age { get; set; }
 }
 
-// DTO with custom mapping
 [Facet(typeof(User), "Password", "CreatedAt", Configuration = typeof(UserDtoWithMappingMapper))]
 public partial class UserDtoWithMapping 
 {
@@ -112,19 +112,15 @@ public partial class UserDtoWithMapping
     public int Age { get; set; }
 }
 
-// Record DTO
 [Facet(typeof(Product), "InternalNotes", Kind = FacetKind.Record)]
 public partial record ProductDto;
 
-// Struct DTO
 [Facet(typeof(Product), "InternalNotes", "CreatedAt", Kind = FacetKind.Struct)]
 public partial struct ProductSummary;
 
-// Record struct DTO
 [Facet(typeof(User), "Password", "CreatedAt", "LastLoginAt", Kind = FacetKind.RecordStruct)]
 public partial record struct UserSummary;
 
-// Modern record types with init-only and required properties
 public record ModernUser
 {
     public required string Id { get; init; }
@@ -133,12 +129,11 @@ public record ModernUser
     public string? Email { get; set; }
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
     public string? Bio { get; set; }
-    public string? PasswordHash { get; init; } // Sensitive field to exclude
+    public string? PasswordHash { get; init; }
 }
 
 public record struct CompactUser(string Id, string Name, DateTime CreatedAt);
 
-// Test auto-detection and modern record features - no custom mapping for now
 [Facet(typeof(ModernUser), "PasswordHash", "Bio")]
 public partial record ModernUserDto
 {
@@ -146,11 +141,9 @@ public partial record ModernUserDto
     public string DisplayName { get; set; } = string.Empty;
 }
 
-// Test auto-detection of record struct - preserves modifiers automatically!
 [Facet(typeof(CompactUser))]
 public partial record struct CompactUserDto;
 
-// Simplify the class test to avoid issues with required init-only properties
 [Facet(typeof(ModernUser), "PasswordHash", "Bio", "Email")]
 public partial class ModernUserClass
 {
@@ -159,41 +152,118 @@ public partial class ModernUserClass
 
 class Program
 {
-    static void Main(string[] args)
+    static async Task Main(string[] args)
     {
         Console.WriteLine("=== Facet Generator Test Console ===\n");
 
-        // Create sample data
+        var host = CreateHostBuilder(args).Build();
+
+        try
+        {
+            await InitializeDatabaseAsync(host);
+
+            await RunTests();
+
+            await RunEfCoreTests(host);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+        }
+
+        Console.WriteLine("\n=== All tests completed! ===");
+        Console.WriteLine("Press any key to exit...");
+        Console.ReadKey();
+    }
+
+    static IHostBuilder CreateHostBuilder(string[] args) =>
+        Host.CreateDefaultBuilder(args)
+            .ConfigureAppConfiguration((context, config) =>
+            {
+                config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+            })
+            .ConfigureServices((context, services) =>
+            {
+                services.AddDbContext<FacetTestDbContext>(options =>
+                    options.UseSqlServer(context.Configuration.GetConnectionString("DefaultConnection")));
+
+                services.AddScoped<IUserService, UserService>();
+                services.AddScoped<IProductService, ProductService>();
+                
+                services.AddScoped<UpdateFromFacetTests>();
+                services.AddScoped<EfCoreIntegrationTests>();
+                services.AddScoped<ValidationAndErrorTests>();
+
+                // Add logging
+                services.AddLogging(builder =>
+                {
+                    builder.AddConsole();
+                    builder.SetMinimumLevel(LogLevel.Information);
+                });
+            });
+
+    static async Task InitializeDatabaseAsync(IHost host)
+    {
+        using var scope = host.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<FacetTestDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+        try
+        {
+            logger.LogInformation("Ensuring database is created...");
+            await context.Database.EnsureCreatedAsync();
+            logger.LogInformation("Database initialized successfully");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to initialize database");
+            throw;
+        }
+    }
+
+    static async Task RunEfCoreTests(IHost host)
+    {
+        Console.WriteLine("\n" + "=".PadRight(60, '='));
+        Console.WriteLine("EF CORE & UpdateFromFacet TESTS");
+        Console.WriteLine("=".PadRight(60, '='));
+
+        using var scope = host.Services.CreateScope();
+        
+        var updateFromFacetTests = scope.ServiceProvider.GetRequiredService<UpdateFromFacetTests>();
+        await updateFromFacetTests.RunAllTestsAsync();
+
+        var efCoreIntegrationTests = scope.ServiceProvider.GetRequiredService<EfCoreIntegrationTests>();
+        await efCoreIntegrationTests.RunAllTestsAsync();
+
+        var validationAndErrorTests = scope.ServiceProvider.GetRequiredService<ValidationAndErrorTests>();
+        await validationAndErrorTests.RunAllTestsAsync();
+    }
+
+    static async Task RunTests()
+    {
+        Console.WriteLine("EXISTING IN-MEMORY TESTS");
+        Console.WriteLine("=".PadRight(40, '='));
+
         var users = CreateSampleUsers();
         var products = CreateSampleProducts();
         var employees = CreateSampleEmployees();
         var managers = CreateSampleManagers();
         var modernUsers = CreateSampleModernUsers();
 
-        // Test inheritance support
         TestInheritanceSupport(employees, managers);
 
-        // Test modern record features
         TestModernRecordFeatures(modernUsers);
 
-        // Test basic DTO mapping
         TestBasicDtoMapping(users);
 
-        // Test DTO with custom mapping
         TestCustomMappingDto(users);
 
-        // Test different facet kinds
         TestDifferentFacetKinds(users, products);
 
-        // Test LINQ projections
         TestLinqProjections(users, products);
 
-        // Test shorthand overloads
         TestShorthandOverloads(users, products, employees);
-
-        Console.WriteLine("\n=== All tests completed successfully! ===");
-        Console.WriteLine("Press any key to exit...");
-        Console.ReadKey();
     }
 
     static List<ModernUser> CreateSampleModernUsers()
@@ -224,7 +294,7 @@ class Program
     static void TestInheritanceSupport(List<Employee> employees, List<Manager> managers)
     {
         Console.WriteLine("1. Testing Inheritance Support:");
-        Console.WriteLine("=============================== cont'd");
+        Console.WriteLine("===============================");
 
         Console.WriteLine("Employee DTOs (inherits from Person -> BaseEntity):");
         foreach (var employee in employees)
@@ -439,7 +509,6 @@ class Program
         Console.WriteLine("4. Testing Different Facet Kinds:");
         Console.WriteLine("==================================");
 
-        // Record DTO
         Console.WriteLine("Record DTOs:");
         foreach (var product in products)
         {
@@ -448,7 +517,6 @@ class Program
         }
         Console.WriteLine();
 
-        // Struct DTO - need to use constructor directly since ToFacet requires reference types
         Console.WriteLine("Struct DTOs:");
         foreach (var product in products)
         {
@@ -457,7 +525,6 @@ class Program
         }
         Console.WriteLine();
 
-        // Record Struct DTO - need to use constructor directly since ToFacet requires reference types
         Console.WriteLine("Record Struct DTOs:");
         foreach (var user in users)
         {
@@ -472,7 +539,6 @@ class Program
         Console.WriteLine("5. Testing LINQ Projections:");
         Console.WriteLine("=============================");
 
-        // Test enumerable projections
         Console.WriteLine("Active users (via SelectFacets):");
         var activeUserDtos = users
             .Where(u => u.IsActive)
@@ -485,7 +551,6 @@ class Program
         }
         Console.WriteLine();
 
-        // Test queryable projections (simulated)
         Console.WriteLine("Available products (via SelectFacet):");
         var availableProducts = products
             .AsQueryable()
@@ -532,7 +597,6 @@ class Program
         {
             try
             {
-                // Use constructor directly for record structs since ToFacet requires reference types
                 var compactDto = new CompactUserDto(compact);
                 Console.WriteLine($"  {compactDto.Name} (ID: {compactDto.Id}, Created: {compactDto.CreatedAt:yyyy-MM-dd})");
             }

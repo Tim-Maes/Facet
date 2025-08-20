@@ -14,7 +14,7 @@ namespace Facet.Extensions.EFCore;
 public static class FacetEfCoreExtensions
 {
     /// <summary>
-    /// Asynchronously projects an IQueryable<TSource> to a List<TTarget>
+    /// Asynchronously projects an IQueryable&lt;TSource&gt; to a List&lt;TTarget&gt;
     /// using the generated Projection expression and Entity Framework Core's ToListAsync.
     /// </summary>
     public static Task<List<TTarget>> ToFacetsAsync<TSource, TTarget>(
@@ -28,7 +28,22 @@ public static class FacetEfCoreExtensions
     }
 
     /// <summary>
-    /// Asynchronously projects the first element of an IQueryable<TSource>
+    /// Asynchronously projects an IQueryable&lt;TSource&gt; to a List&lt;TTarget&gt;
+    /// using the generated Projection expression and Entity Framework Core's ToListAsync.
+    /// The source type is inferred from the query.
+    /// </summary>
+    public static Task<List<TTarget>> ToFacetsAsync<TTarget>(
+        this IQueryable source,
+        CancellationToken cancellationToken = default)
+        where TTarget : class
+    {
+        if (source is null) throw new ArgumentNullException(nameof(source));
+        return Facet.Extensions.FacetExtensions.SelectFacet<TTarget>(source)
+                     .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Asynchronously projects the first element of an IQueryable&lt;TSource&gt;
     /// to a facet, or returns null if none found, using Entity Framework Core's FirstOrDefaultAsync.
     /// </summary>
     public static Task<TTarget?> FirstFacetAsync<TSource, TTarget>(
@@ -42,7 +57,22 @@ public static class FacetEfCoreExtensions
     }
 
     /// <summary>
-    /// Asynchronously projects a single element of an IQueryable<TSource>
+    /// Asynchronously projects the first element of an IQueryable&lt;TSource&gt;
+    /// to a facet, or returns null if none found, using Entity Framework Core's FirstOrDefaultAsync.
+    /// The source type is inferred from the query.
+    /// </summary>
+    public static Task<TTarget?> FirstFacetAsync<TTarget>(
+        this IQueryable source,
+        CancellationToken cancellationToken = default)
+        where TTarget : class
+    {
+        if (source is null) throw new ArgumentNullException(nameof(source));
+        return Facet.Extensions.FacetExtensions.SelectFacet<TTarget>(source)
+                     .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Asynchronously projects a single element of an IQueryable&lt;TSource&gt;
     /// to a facet, throwing if not exactly one element exists, using Entity Framework Core's SingleAsync.
     /// </summary>
     public static Task<TTarget> SingleFacetAsync<TSource, TTarget>(
@@ -52,6 +82,21 @@ public static class FacetEfCoreExtensions
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
         return Facet.Extensions.FacetExtensions.SelectFacet<TSource, TTarget>(source)
+                     .SingleAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Asynchronously projects a single element of an IQueryable&lt;TSource&gt;
+    /// to a facet, throwing if not exactly one element exists, using Entity Framework Core's SingleAsync.
+    /// The source type is inferred from the query.
+    /// </summary>
+    public static Task<TTarget> SingleFacetAsync<TTarget>(
+        this IQueryable source,
+        CancellationToken cancellationToken = default)
+        where TTarget : class
+    {
+        if (source is null) throw new ArgumentNullException(nameof(source));
+        return Facet.Extensions.FacetExtensions.SelectFacet<TTarget>(source)
                      .SingleAsync(cancellationToken);
     }
 
