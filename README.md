@@ -197,7 +197,7 @@ var results = await dbContext.Products
     .ToListAsync();
 ```
 
-#### Reverse Mapping (facet -> Entity)
+#### Reverse Mapping (Facet -> Entity)
 ```csharp
 [Facet(typeof(User)]
 public partial class UpdateUserDto { }
@@ -223,4 +223,3 @@ if (result.HasChanges)
         user.Id, string.Join(", ", result.ChangedProperties));
 }
 ```
-

@@ -18,10 +18,13 @@ For async EF Core support, see the separate Facet.Extensions.EFCore package.
 
 | Method                              | Description                                                      |
 |------------------------------------- |------------------------------------------------------------------|
-| `ToFacetsAsync<TSource, TTarget>()`  | Async projection to `List<TTarget>` (EF Core).                    |
-| `FirstFacetAsync<TSource, TTarget>()`| Async projection to first or default (EF Core).                   |
-| `SingleFacetAsync<TSource, TTarget>()`| Async projection to single (EF Core).                            |
-| `UpdateFromFacet<TEntity, TFacet>()`| Update entity with changed properties from facet DTO.            |
+| `ToFacetsAsync<TSource, TTarget>()`  | Async projection to `List<TTarget>` with explicit source type.    |
+| `ToFacetsAsync<TTarget>()`           | Async projection to `List<TTarget>` with inferred source type.    |
+| `FirstFacetAsync<TSource, TTarget>()`| Async projection to first/default with explicit source type.      |
+| `FirstFacetAsync<TTarget>()`         | Async projection to first/default with inferred source type.      |
+| `SingleFacetAsync<TSource, TTarget>()`| Async projection to single with explicit source type.            |
+| `SingleFacetAsync<TTarget>()`        | Async projection to single with inferred source type.            |
+| `UpdateFromFacet<TEntity, TFacet>()` | Update entity with changed properties from facet DTO.            |
 | `UpdateFromFacetAsync<TEntity, TFacet>()`| Async update entity with changed properties from facet DTO.  |
 | `UpdateFromFacetWithChanges<TEntity, TFacet>()`| Update entity and return information about changed properties. |
 
@@ -55,12 +58,18 @@ dotnet add package Facet.Extensions.EFCore
 
 using Facet.Extensions.EFCore; 
 
+var query = dbContext.People.SelectFacet<PersonDto>();
 var query = dbContext.People.SelectFacet<Person, PersonDto>();
 
-// Async (EF Core)
+// Async (EF Core) 
 var dtosAsync = await dbContext.People.ToFacetsAsync<Person, PersonDto>();
+var dtosInferred = await dbContext.People.ToFacetsAsync<PersonDto>();
+
 var firstDto = await dbContext.People.FirstFacetAsync<Person, PersonDto>();
+var firstInferred = await dbContext.People.FirstFacetAsync<PersonDto>();
+
 var singleDto = await dbContext.People.SingleFacetAsync<Person, PersonDto>();
+var singleInferred = await dbContext.People.SingleFacetAsync<PersonDto>();
 ```
 
 ### EF Core Reverse Mapping (UpdateFromFacet)

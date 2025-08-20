@@ -166,7 +166,7 @@ public record ModernUser
 [Facet(typeof(ModernUser))]
 public partial record UserRecord;
 
-// 2. CLASS: Defaults to mutable (backward compatibility)
+// 2. CLASS: Defaults to mutable
 [Facet(typeof(ModernUser))]
 public partial class UserClass;
 ```
