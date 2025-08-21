@@ -52,6 +52,13 @@ public static class FacetExtensions
         return FacetCache<TSource, TTarget>.Mapper(source);
     }
 
+    public class Builder<TSource>(TSource source)
+    {
+        public TTarget To<TTarget>() where TTarget : class => source.ToFacet<TSource, TTarget>();
+    }
+    
+    public static Builder<TSource> Facet<TSource>(this TSource source) => new(source);
+
     /// <summary>
     /// Converts the specified source object to an instance of the target type annotated as a facet.
     /// </summary>
