@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup>
+    <!-- Centralized version for all Facet packages -->
+    <Version>2.4.0</Version>
+    
+    <!-- Common package properties -->
+    <Authors>Tim Maes</Authors>
+    <RepositoryUrl>https://github.com/Tim-Maes/Facet</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    
+    <!-- Common build properties for packable projects -->
+    <IsPackable Condition="'$(IsPackable)' == ''">false</IsPackable>
+    <GeneratePackageOnBuild Condition="'$(IsPackable)' == 'true'">true</GeneratePackageOnBuild>
+  </PropertyGroup>
+</Project>

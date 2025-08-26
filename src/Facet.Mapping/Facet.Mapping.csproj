@@ -2,17 +2,10 @@
 
     <PropertyGroup>
         <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
-        <LangVersion>latest</LangVersion>
-        <Nullable>enable</Nullable>
         <IsPackable>true</IsPackable>
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageId>Facet.Mapping</PackageId>
-		<Version>2.4.0</Version>
-        <Authors>Tim Maes</Authors>
         <Description>Advanced static mapping configuration support for the Facet source generator with async capabilities.</Description>
         <PackageTags>facet mapping source-generator dto compile-time async</PackageTags>
-        <RepositoryUrl>https://github.com/Tim-Maes/Facet</RepositoryUrl>
-        <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <Title>Facet.Mapping</Title>
         <PackageReadmeFile>README.md</PackageReadmeFile>
     </PropertyGroup>

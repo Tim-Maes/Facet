@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: |
+          8.0.x
+          9.0.x
+    
+    - name: Extract version from release tag
+      id: get_version
+      run: |
+        # Remove 'v' prefix from tag name if present (e.g., v2.5.0 -> 2.5.0)
+        VERSION=${GITHUB_REF_NAME#v}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Extracted version: $VERSION"
+    
+    - name: Update version in Directory.Build.props
+      run: |
+        # Update the version in Directory.Build.props
+        sed -i "s|<Version>.*</Version>|<Version>${{ steps.get_version.outputs.VERSION }}</Version>|g" Directory.Build.props
+        echo "Updated Directory.Build.props with version ${{ steps.get_version.outputs.VERSION }}"
+        cat Directory.Build.props
+    
+    - name: Restore dependencies
+      run: dotnet restore
+    
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
+    
+    - name: Test
+      run: dotnet test --configuration Release --no-build --verbosity normal
+    
+    - name: Pack NuGet packages
+      run: dotnet pack --configuration Release --no-build --output ./artifacts
+    
+    - name: List generated packages
+      run: ls -la ./artifacts/
+    
+    - name: Publish to NuGet
+      run: |
+        for package in ./artifacts/*.nupkg; do
+          echo "Publishing $package"
+          dotnet nuget push "$package" \
+            --api-key ${{ secrets.NUGET_API_KEY }} \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+        done
+    
+    - name: Commit version update
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add Directory.Build.props
+        git commit -m "Bump version to ${{ steps.get_version.outputs.VERSION }}" || exit 0
+        git push
