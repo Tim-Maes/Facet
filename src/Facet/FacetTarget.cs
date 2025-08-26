@@ -15,6 +15,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public string SourceTypeName { get; }
     public string? ConfigurationTypeName { get; }
     public ImmutableArray<FacetMember> Members { get; }
+    public bool HasExistingPrimaryConstructor { get; }
 
     public FacetTargetModel(
         string name,
@@ -24,7 +25,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         bool generateExpressionProjection,
         string sourceTypeName,
         string? configurationTypeName,
-        ImmutableArray<FacetMember> members)
+        ImmutableArray<FacetMember> members,
+        bool hasExistingPrimaryConstructor = false)
     {
         Name = name;
         Namespace = @namespace;
@@ -34,6 +36,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         SourceTypeName = sourceTypeName;
         ConfigurationTypeName = configurationTypeName;
         Members = members;
+        HasExistingPrimaryConstructor = hasExistingPrimaryConstructor;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -48,6 +51,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && GenerateExpressionProjection == other.GenerateExpressionProjection
             && SourceTypeName == other.SourceTypeName
             && ConfigurationTypeName == other.ConfigurationTypeName
+            && HasExistingPrimaryConstructor == other.HasExistingPrimaryConstructor
             && Members.SequenceEqual(other.Members);
     }
 
@@ -65,6 +69,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + GenerateExpressionProjection.GetHashCode();
             hash = hash * 31 + (SourceTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + (ConfigurationTypeName?.GetHashCode() ?? 0);
+            hash = hash * 31 + HasExistingPrimaryConstructor.GetHashCode();
 
             foreach (var member in Members)
                 hash = hash * 31 + member.GetHashCode();

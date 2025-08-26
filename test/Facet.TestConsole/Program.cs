@@ -165,6 +165,9 @@ class Program
             await RunTests();
 
             await RunEfCoreTests(host);
+
+            // Run the record primary constructor tests
+            RecordPrimaryConstructorTests.RunAllTests();
         }
         catch (Exception ex)
         {
