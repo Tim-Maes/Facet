@@ -16,7 +16,7 @@ public class RecordPrimaryConstructorTests
 
         TestBasicRecordWithPrimaryConstructor();
         TestRegularRecordWithoutPrimaryConstructor();
-        
+
         Console.WriteLine("=== Record Primary Constructor Tests Completed ===");
         Console.WriteLine();
     }
@@ -29,7 +29,7 @@ public class RecordPrimaryConstructorTests
         try
         {
             var source = new TestSource { PropA = true, PropB = "Hello" };
-            
+
             // The key test: creating a record with user-defined primary constructor
             // This should work without compilation conflicts
             var facet = new TestFacet(42)
@@ -37,12 +37,22 @@ public class RecordPrimaryConstructorTests
                 PropA = source.PropA,
                 PropB = source.PropB
             };
-            
+
+            // Passing the source with extra param to the existing constructor
+            var anotherFacet = new TestFacet(source, 42);
+
+            // When you only pass parameters for the primary constructor, you will need to set properties manually as they are marked "required"
+            var facetWithoutSource = new TestFacet(100)
+            {
+                PropA = default,
+                PropB = default
+            };
+
             Console.WriteLine($"? Successfully created TestFacet with existing primary constructor");
             Console.WriteLine($"  PropA: {facet.PropA}");
             Console.WriteLine($"  PropB: {facet.PropB}");
             Console.WriteLine($"  ExtraParam (from primary constructor): {facet.ExtraParam}");
-            
+
             // Verify FromSource provides helpful guidance
             try
             {
@@ -53,7 +63,7 @@ public class RecordPrimaryConstructorTests
             {
                 Console.WriteLine($"? FromSource correctly provides guidance");
             }
-            
+
             Console.WriteLine();
         }
         catch (Exception ex)
@@ -71,10 +81,10 @@ public class RecordPrimaryConstructorTests
         try
         {
             var source = new TestSource { PropA = false, PropB = "World" };
-            
+
             // Regular record should still work with the generated constructor
             var facet = new RegularRecordFacet(source);
-            
+
             Console.WriteLine($"? Successfully created RegularRecordFacet with generated constructor");
             Console.WriteLine($"  PropA: {facet.PropA}");
             Console.WriteLine($"  PropB: {facet.PropB}");

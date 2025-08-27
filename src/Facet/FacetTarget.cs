@@ -1,4 +1,7 @@
-﻿using System;
+﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -15,7 +18,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public string SourceTypeName { get; }
     public string? ConfigurationTypeName { get; }
     public ImmutableArray<FacetMember> Members { get; }
-    public bool HasExistingPrimaryConstructor { get; }
+    public bool HasExistingPrimaryConstructor => PrimaryConstructorParameters != null && PrimaryConstructorParameters.Length > 0;
+    public ImmutableArray<FacetPrimaryConstuctorParameter> PrimaryConstructorParameters { get; }
 
     public FacetTargetModel(
         string name,
@@ -26,7 +30,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         string sourceTypeName,
         string? configurationTypeName,
         ImmutableArray<FacetMember> members,
-        bool hasExistingPrimaryConstructor = false)
+        ImmutableArray<FacetPrimaryConstuctorParameter> parameters)
     {
         Name = name;
         Namespace = @namespace;
@@ -36,7 +40,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         SourceTypeName = sourceTypeName;
         ConfigurationTypeName = configurationTypeName;
         Members = members;
-        HasExistingPrimaryConstructor = hasExistingPrimaryConstructor;
+        PrimaryConstructorParameters = parameters;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -51,8 +55,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && GenerateExpressionProjection == other.GenerateExpressionProjection
             && SourceTypeName == other.SourceTypeName
             && ConfigurationTypeName == other.ConfigurationTypeName
-            && HasExistingPrimaryConstructor == other.HasExistingPrimaryConstructor
-            && Members.SequenceEqual(other.Members);
+            && Members.SequenceEqual(other.Members)
+            && PrimaryConstructorParameters.SequenceEqual(other.PrimaryConstructorParameters);
     }
 
     public override bool Equals(object? obj) => obj is FacetTargetModel other && Equals(other);
