@@ -1,6 +1,7 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -51,12 +52,12 @@ namespace Facet.Generators
             var includeFields = GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
             var generateConstructor = GetNamedArg(attribute.NamedArguments, "GenerateConstructor", true);
             var generateProjection = GetNamedArg(attribute.NamedArguments, "GenerateProjection", true);
-            
+
             var configurationTypeName = attribute.NamedArguments
                                                  .FirstOrDefault(kvp => kvp.Key == "Configuration")
                                                  .Value.Value?
                                                  .ToString();
-            
+
             // If Auto is specified, infer the kind from the target type first
             var kind = attribute.NamedArguments
                                .FirstOrDefault(kvp => kvp.Key == "Kind")
@@ -73,10 +74,10 @@ namespace Facet.Generators
             // unless explicitly overridden by the user
             var preserveInitOnlyDefault = kind is FacetKind.Record or FacetKind.RecordStruct;
             var preserveRequiredDefault = kind is FacetKind.Record or FacetKind.RecordStruct;
-            
+
             var preserveInitOnly = GetNamedArg(attribute.NamedArguments, "PreserveInitOnlyProperties", preserveInitOnlyDefault);
             var preserveRequired = GetNamedArg(attribute.NamedArguments, "PreserveRequiredProperties", preserveRequiredDefault);
-            
+
             var members = new List<FacetMember>();
             var addedMembers = new HashSet<string>();
 
@@ -92,7 +93,7 @@ namespace Facet.Generators
                 {
                     var shouldPreserveInitOnly = preserveInitOnly && isInitOnly;
                     var shouldPreserveRequired = preserveRequired && isRequired;
-                    
+
                     members.Add(new FacetMember(
                         p.Name,
                         p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
@@ -104,7 +105,7 @@ namespace Facet.Generators
                 else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
                 {
                     var shouldPreserveRequired = preserveRequired && isRequired;
-                    
+
                     members.Add(new FacetMember(
                         f.Name,
                         f.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
@@ -120,7 +121,7 @@ namespace Facet.Generators
                 : targetSymbol.ContainingNamespace.ToDisplayString();
 
             // Check if the target type already has a primary constructor
-            var hasExistingPrimaryConstructor = HasExistingPrimaryConstructor(targetSymbol);
+            var primaryConstructorParameters = GetPrimaryConstructorParameters(targetSymbol);
 
             return new FacetTargetModel(
                 targetSymbol.Name,
@@ -131,14 +132,19 @@ namespace Facet.Generators
                 sourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 configurationTypeName,
                 members.ToImmutableArray(),
-                hasExistingPrimaryConstructor);
+                primaryConstructorParameters.Select(p =>
+                {
+                    var type = p.Type != null ? p.Type.ToString() : "object";
+                    var element = new FacetPrimaryConstuctorParameter(p.Identifier.ValueText, type);
+                    return element;
+                }).ToImmutableArray());
         }
 
         /// <summary>
         /// Checks if the target type already has a primary constructor defined.
         /// For records, this means checking if the user has defined constructor parameters.
         /// </summary>
-        private static bool HasExistingPrimaryConstructor(INamedTypeSymbol targetSymbol)
+        private static SeparatedSyntaxList<ParameterSyntax> GetPrimaryConstructorParameters(INamedTypeSymbol targetSymbol)
         {
             // Check if this is a record type with an existing primary constructor
             if (targetSymbol.TypeKind == TypeKind.Class || targetSymbol.TypeKind == TypeKind.Struct)
@@ -148,23 +154,27 @@ namespace Facet.Generators
                 if (syntaxRef != null)
                 {
                     var syntax = syntaxRef.GetSyntax();
-                    
+
                     // Check for record with parameter list
                     if (syntax is RecordDeclarationSyntax recordDecl && recordDecl.ParameterList != null && recordDecl.ParameterList.Parameters.Count > 0)
                     {
-                        return true;
+                        return recordDecl.ParameterList.Parameters;
                     }
-                    
+
                     // Check for regular class/struct with primary constructor (C# 12+)
-                    if ((syntax is ClassDeclarationSyntax classDecl && classDecl.ParameterList != null && classDecl.ParameterList.Parameters.Count > 0) ||
-                        (syntax is StructDeclarationSyntax structDecl && structDecl.ParameterList != null && structDecl.ParameterList.Parameters.Count > 0))
+                    if (syntax is ClassDeclarationSyntax classDecl && classDecl.ParameterList != null && classDecl.ParameterList.Parameters.Count > 0)
                     {
-                        return true;
+                        return [];
+                    }
+
+                    if (syntax is StructDeclarationSyntax structDecl && structDecl.ParameterList != null && structDecl.ParameterList.Parameters.Count > 0)
+                    {
+                        return [];
                     }
                 }
             }
-            
-            return false;
+
+            return [];
         }
 
         /// <summary>
@@ -237,12 +247,12 @@ namespace Facet.Generators
                 {
                     return FacetKind.Record;
                 }
-                
+
                 if (targetSymbol.GetMembers().Any(m => m.Name.Contains("Clone") && m.IsImplicitlyDeclared))
                 {
                     return FacetKind.Record;
                 }
-                
+
                 return FacetKind.Class;
             }
 
@@ -286,7 +296,7 @@ namespace Facet.Generators
             if (isPositional)
             {
                 var parameters = string.Join(", ",
-                    model.Members.Select(m => 
+                    model.Members.Select(m =>
                     {
                         var param = $"{m.TypeName} {m.Name}";
                         // Add required modifier for positional parameters if needed
@@ -310,7 +320,7 @@ namespace Facet.Generators
                     if (m.Kind == FacetMemberKind.Property)
                     {
                         var propDef = $"public {m.TypeName} {m.Name}";
-                        
+
                         if (m.IsInitOnly)
                         {
                             propDef += " { get; init; }";
@@ -320,7 +330,7 @@ namespace Facet.Generators
                             propDef += " { get; set; }";
                         }
 
-                        if (m.IsRequired)
+                        if (m.IsRequired || model.HasExistingPrimaryConstructor)
                         {
                             propDef = $"required {propDef}";
                         }
@@ -349,7 +359,7 @@ namespace Facet.Generators
             if (model.GenerateExpressionProjection)
             {
                 sb.AppendLine();
-                
+
                 if (model.HasExistingPrimaryConstructor && model.Kind is FacetKind.Record or FacetKind.RecordStruct)
                 {
                     // For records with existing primary constructors, the projection can't use the standard constructor approach
@@ -381,9 +391,9 @@ namespace Facet.Generators
                 GenerateFactoryMethodForExistingPrimaryConstructor(sb, model, hasCustomMapping);
                 return;
             }
-            
+
             var ctorSig = $"public {model.Name}({model.SourceTypeName} source)";
-            
+
             if (isPositional && !model.HasExistingPrimaryConstructor)
             {
                 // Traditional positional record - chain to primary constructor
@@ -391,10 +401,10 @@ namespace Facet.Generators
                     model.Members.Select(m => $"source.{m.Name}"));
                 ctorSig += $" : this({args})";
             }
-            
+
             sb.AppendLine($"    {ctorSig}");
             sb.AppendLine("    {");
-            
+
             if (!isPositional && !model.HasExistingPrimaryConstructor)
             {
                 if (hasCustomMapping && hasInitOnlyProperties)
@@ -424,7 +434,7 @@ namespace Facet.Generators
                 // For positional records/record structs with custom mapping
                 sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
             }
-            
+
             sb.AppendLine("    }");
 
             // Add static factory method for types with init-only properties
@@ -433,7 +443,7 @@ namespace Facet.Generators
                 sb.AppendLine();
                 sb.AppendLine($"    public static {model.Name} FromSource({model.SourceTypeName} source)");
                 sb.AppendLine("    {");
-                
+
                 if (hasCustomMapping)
                 {
                     // For custom mapping with init-only properties, the mapper should create the instance
@@ -451,42 +461,53 @@ namespace Facet.Generators
                     }
                     sb.AppendLine("        };");
                 }
-                
+
                 sb.AppendLine("    }");
             }
         }
 
         private static void GenerateFactoryMethodForExistingPrimaryConstructor(StringBuilder sb, FacetTargetModel model, bool hasCustomMapping)
         {
-            // For records with existing primary constructor, provide only a factory method
-            // Users must handle the primary constructor parameters manually
-            
+            // Generate constructor that accepts both source and primary constructor parameters
+            var primaryParametersDef = string.Join(", ",
+                model.PrimaryConstructorParameters.Select(p => $"{p.TypeName} {p.Name}"));
+
+            // Add using directive for the attribute
+            sb.AppendLine();
+            sb.AppendLine("    [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]");
+            sb.AppendLine($"    public {model.Name}({model.SourceTypeName} source, {primaryParametersDef})");
+
+            // Chain to the primary constructor by passing the primary constructor parameters
+            var primaryArgs = string.Join(", ",
+                model.PrimaryConstructorParameters.Select(p => p.Name));
+            sb.AppendLine($"        : this({primaryArgs})");
+            sb.AppendLine("    {");
+
+            // Copy properties from source to this instance
+            if (hasCustomMapping)
+            {
+                sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
+            }
+            else
+            {
+                foreach (var m in model.Members)
+                {
+                    sb.AppendLine($"        this.{m.Name} = source.{m.Name};");
+                }
+            }
+
+            sb.AppendLine("    }");
+
+            // Keep the existing factory method as a convenience method
+            sb.AppendLine();
             sb.AppendLine($"    /// <summary>");
             sb.AppendLine($"    /// Creates a new {model.Name} from the source with faceted properties initialized.");
             sb.AppendLine($"    /// This record has an existing primary constructor, so you must provide values");
             sb.AppendLine($"    /// for the primary constructor parameters when creating instances.");
-            sb.AppendLine($"    /// Example: new {model.Name}(primaryConstructorParam) {{ PropA = source.PropA, PropB = source.PropB }}");
             sb.AppendLine($"    /// </summary>");
-            sb.AppendLine($"    public static {model.Name} FromSource({model.SourceTypeName} source, params object[] primaryConstructorArgs)");
+            sb.AppendLine($"    public static {model.Name} FromSource({model.SourceTypeName} source, {primaryParametersDef})");
             sb.AppendLine("    {");
-            
-            if (hasCustomMapping)
-            {
-                sb.AppendLine($"        // Custom mapping is configured for this facet");
-                sb.AppendLine($"        // The custom mapper should handle both the primary constructor and faceted properties");
-                sb.AppendLine($"        throw new NotImplementedException(");
-                sb.AppendLine($"            \"Custom mapping with existing primary constructors requires manual implementation. \" +");
-                sb.AppendLine($"            \"Implement the mapping in your custom mapper configuration.\");");
-            }
-            else
-            {
-                sb.AppendLine($"        // For records with existing primary constructors, you must manually create the instance");
-                sb.AppendLine($"        // and initialize the faceted properties using object initializer syntax.");
-                sb.AppendLine($"        throw new NotSupportedException(");
-                sb.AppendLine($"            \"Records with existing primary constructors must be created manually. \" +");
-                sb.AppendLine($"            \"Example: new {model.Name}(primaryConstructorParam) {{ {string.Join(", ", model.Members.Take(2).Select(m => $"{m.Name} = source.{m.Name}"))} }}\");");
-            }
-            
+            sb.AppendLine($"        return new {model.Name}(source, {primaryArgs});");
             sb.AppendLine("    }");
         }
     }
