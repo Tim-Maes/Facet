@@ -168,6 +168,9 @@ class Program
 
             // Run the record primary constructor tests
             RecordPrimaryConstructorTests.RunAllTests();
+
+            // Run the new GenerateDtos tests
+            GenerateDtosTests.RunAllTests();
         }
         catch (Exception ex)
         {

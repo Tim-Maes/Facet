@@ -13,9 +13,12 @@ namespace Facet.Generators
     public sealed class FacetGenerator : IIncrementalGenerator
     {
         private const string FacetAttributeName = "Facet.FacetAttribute";
+        private const string GenerateDtosAttributeName = "Facet.GenerateDtosAttribute";
+        private const string GenerateAuditableDtosAttributeName = "Facet.GenerateAuditableDtosAttribute";
 
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
+            // Facets
             var facets = context.SyntaxProvider
                 .ForAttributeWithMetadataName(
                     FacetAttributeName,
@@ -23,11 +26,44 @@ namespace Facet.Generators
                     transform: static (ctx, token) => GetTargetModel(ctx, token))
                 .Where(static m => m is not null);
 
+            // DTO
+            var multiDtos = context.SyntaxProvider
+                .ForAttributeWithMetadataName(
+                    GenerateDtosAttributeName,
+                    predicate: static (node, _) => node is TypeDeclarationSyntax,
+                    transform: static (ctx, token) => GetMultiDtoModels(ctx, token))
+                .Where(static models => models is not null)
+                .SelectMany(static (models, _) => models ?? ImmutableArray<FacetTargetModel>.Empty);
+
+            var auditableDtos = context.SyntaxProvider
+                .ForAttributeWithMetadataName(
+                    GenerateAuditableDtosAttributeName,
+                    predicate: static (node, _) => node is TypeDeclarationSyntax,
+                    transform: static (ctx, token) => GetMultiDtoModels(ctx, token))
+                .Where(static models => models is not null)
+                .SelectMany(static (models, _) => models ?? ImmutableArray<FacetTargetModel>.Empty);
+
+            // Register facet
             context.RegisterSourceOutput(facets, static (spc, model) =>
             {
                 spc.CancellationToken.ThrowIfCancellationRequested();
                 var code = Generate(model!);
                 spc.AddSource($"{model!.Name}.g.cs", SourceText.From(code, Encoding.UTF8));
+            });
+
+            // Register multi-DTO
+            context.RegisterSourceOutput(multiDtos, static (spc, model) =>
+            {
+                spc.CancellationToken.ThrowIfCancellationRequested();
+                var code = Generate(model);
+                spc.AddSource($"{model.Name}.g.cs", SourceText.From(code, Encoding.UTF8));
+            });
+
+            context.RegisterSourceOutput(auditableDtos, static (spc, model) =>
+            {
+                spc.CancellationToken.ThrowIfCancellationRequested();
+                var code = Generate(model);
+                spc.AddSource($"{model.Name}.g.cs", SourceText.From(code, Encoding.UTF8));
             });
         }
 
@@ -488,6 +524,257 @@ namespace Facet.Generators
             }
             
             sb.AppendLine("    }");
+        }
+
+        // multi-DTO generation
+        private static ImmutableArray<FacetTargetModel>? GetMultiDtoModels(GeneratorAttributeSyntaxContext context, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            if (context.TargetSymbol is not INamedTypeSymbol sourceSymbol) return null;
+            if (context.Attributes.Length == 0) return null;
+
+            var attribute = context.Attributes[0];
+            
+            var types = GetNamedArg(attribute.NamedArguments, "Types", DtoTypes.All);
+            var outputType = GetNamedArg(attribute.NamedArguments, "OutputType", FacetKind.Record);
+            var excludeProperties = GetStringArrayArg(attribute.NamedArguments, "ExcludeProperties") ?? System.Array.Empty<string>();
+            var targetNamespace = GetNamedArg<string?>(attribute.NamedArguments, "Namespace", null);
+            var namingConvention = GetNamedArg(attribute.NamedArguments, "NamingConvention", DtoNamingConvention.Convention);
+            var customPrefix = GetNamedArg<string?>(attribute.NamedArguments, "CustomPrefix", null);
+            var customSuffix = GetNamedArg<string?>(attribute.NamedArguments, "CustomSuffix", null);
+            var includeFields = GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
+            var generateConstructor = GetNamedArg(attribute.NamedArguments, "GenerateConstructor", true);
+            var generateProjection = GetNamedArg(attribute.NamedArguments, "GenerateProjection", true);
+            var preserveInitOnlyDefault = outputType is FacetKind.Record or FacetKind.RecordStruct;
+            var preserveRequiredDefault = outputType is FacetKind.Record or FacetKind.RecordStruct;
+            var preserveInitOnly = GetNamedArg(attribute.NamedArguments, "PreserveInitOnlyProperties", preserveInitOnlyDefault);
+            var preserveRequired = GetNamedArg(attribute.NamedArguments, "PreserveRequiredProperties", preserveRequiredDefault);
+
+            var ns = !string.IsNullOrWhiteSpace(targetNamespace) 
+                ? targetNamespace 
+                : (sourceSymbol.ContainingNamespace.IsGlobalNamespace 
+                    ? null 
+                    : sourceSymbol.ContainingNamespace.ToDisplayString());
+
+            var models = new List<FacetTargetModel>();
+            var sourceTypeName = sourceSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            // Generate each requested DTO type
+            if (types.HasFlag(DtoTypes.Create))
+            {
+                models.Add(CreateDtoVariant(sourceSymbol, sourceTypeName, ns, outputType, excludeProperties, DtoTypes.Create, 
+                    namingConvention, customPrefix, customSuffix, includeFields, generateConstructor, generateProjection, 
+                    preserveInitOnly, preserveRequired, token));
+            }
+            
+            if (types.HasFlag(DtoTypes.Update))
+            {
+                models.Add(CreateDtoVariant(sourceSymbol, sourceTypeName, ns, outputType, excludeProperties, DtoTypes.Update, 
+                    namingConvention, customPrefix, customSuffix, includeFields, generateConstructor, generateProjection, 
+                    preserveInitOnly, preserveRequired, token));
+            }
+            
+            if (types.HasFlag(DtoTypes.Response))
+            {
+                models.Add(CreateDtoVariant(sourceSymbol, sourceTypeName, ns, outputType, excludeProperties, DtoTypes.Response, 
+                    namingConvention, customPrefix, customSuffix, includeFields, generateConstructor, generateProjection, 
+                    preserveInitOnly, preserveRequired, token));
+            }
+            
+            if (types.HasFlag(DtoTypes.Query))
+            {
+                models.Add(CreateDtoVariant(sourceSymbol, sourceTypeName, ns, outputType, excludeProperties, DtoTypes.Query, 
+                    namingConvention, customPrefix, customSuffix, includeFields, generateConstructor, generateProjection, 
+                    preserveInitOnly, preserveRequired, token));
+            }
+
+            return models.ToImmutableArray();
+        }
+
+        private static FacetTargetModel CreateDtoVariant(
+            INamedTypeSymbol sourceSymbol, 
+            string sourceTypeName, 
+            string? ns, 
+            FacetKind outputType, 
+            string[] baseExcludeProperties, 
+            DtoTypes dtoType, 
+            DtoNamingConvention namingConvention,
+            string? customPrefix,
+            string? customSuffix,
+            bool includeFields,
+            bool generateConstructor,
+            bool generateProjection,
+            bool preserveInitOnly,
+            bool preserveRequired,
+            CancellationToken token)
+        {
+            var excludeProperties = new HashSet<string>(baseExcludeProperties, System.StringComparer.OrdinalIgnoreCase);
+            
+            // Apply smart defaults based on DTO type
+            ApplyDtoTypeDefaults(excludeProperties, dtoType, sourceSymbol);
+
+            var members = new List<FacetMember>();
+            var addedMembers = new HashSet<string>();
+
+            foreach (var (member, isInitOnly, isRequired) in GetAllMembersWithModifiers(sourceSymbol))
+            {
+                token.ThrowIfCancellationRequested();
+                if (excludeProperties.Contains(member.Name)) continue;
+                if (addedMembers.Contains(member.Name)) continue;
+
+                if (member is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } p)
+                {
+                    var facetMember = CreateFacetMemberForDto(p, isInitOnly, isRequired, dtoType, outputType, preserveInitOnly, preserveRequired);
+                    members.Add(facetMember);
+                    addedMembers.Add(p.Name);
+                }
+                else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
+                {
+                    var facetMember = CreateFacetMemberForDto(f, false, isRequired, dtoType, outputType, preserveInitOnly, preserveRequired);
+                    members.Add(facetMember);
+                    addedMembers.Add(f.Name);
+                }
+            }
+
+            var dtoName = GenerateDtoName(sourceSymbol.Name, dtoType, namingConvention, customPrefix, customSuffix);
+
+            return new FacetTargetModel(
+                dtoName,
+                ns,
+                outputType,
+                generateConstructor,
+                generateProjection,
+                sourceTypeName,
+                null, // configurationTypeName - not supported for generated DTOs
+                members.ToImmutableArray(),
+                false); // hasExistingPrimaryConstructor - always false for generated DTOs
+        }
+
+        private static void ApplyDtoTypeDefaults(HashSet<string> excludeProperties, DtoTypes dtoType, INamedTypeSymbol sourceSymbol)
+        {
+            switch (dtoType)
+            {
+                case DtoTypes.Create:
+                    excludeProperties.Add("Id");
+                    AddIdPropertiesToExclude(excludeProperties, sourceSymbol);
+                    AddAuditFieldsToExclude(excludeProperties);
+                    break;
+                    
+                case DtoTypes.Update:
+                    AddAuditFieldsToExclude(excludeProperties);
+                    break;
+                    
+                case DtoTypes.Response:
+                    break;
+                    
+                case DtoTypes.Query:
+                    break;
+            }
+        }
+
+        private static void AddIdPropertiesToExclude(HashSet<string> excludeProperties, INamedTypeSymbol sourceSymbol)
+        {
+            foreach (var member in sourceSymbol.GetMembers())
+            {
+                if (member is IPropertySymbol prop && string.Equals(prop.Name, "Id", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    excludeProperties.Add(prop.Name);
+                    break; // Only exclude the first "Id" property
+                }
+            }
+        }
+
+        private static void AddAuditFieldsToExclude(HashSet<string> excludeProperties)
+        {
+            var auditFields = new[]
+            {
+                "CreatedAt", "CreatedDate", "CreatedOn", "CreatedBy",
+                "UpdatedAt", "UpdatedDate", "UpdatedOn", "UpdatedBy", "ModifiedBy",
+                "DeletedAt", "DeletedDate", "DeletedOn", "DeletedBy"
+            };
+            
+            foreach (var field in auditFields)
+            {
+                excludeProperties.Add(field);
+            }
+        }
+
+        private static FacetMember CreateFacetMemberForDto(ISymbol symbol, bool isInitOnly, bool isRequired, DtoTypes dtoType, FacetKind outputType, bool preserveInitOnly, bool preserveRequired)
+        {
+            var typeName = symbol switch
+            {
+                IPropertySymbol prop => prop.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                IFieldSymbol field => field.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                _ => "object"
+            };
+            
+            if (dtoType == DtoTypes.Query)
+            {
+                typeName = MakeNullable(typeName, symbol);
+                isRequired = false; // Query properties are never required
+            }
+
+            var memberKind = symbol is IPropertySymbol ? FacetMemberKind.Property : FacetMemberKind.Field;
+            
+            var shouldPreserveInitOnly = preserveInitOnly && outputType is FacetKind.Record or FacetKind.RecordStruct && 
+                              dtoType != DtoTypes.Query && isInitOnly;
+            
+            var shouldPreserveRequired = preserveRequired && outputType is FacetKind.Record or FacetKind.RecordStruct && 
+                              dtoType != DtoTypes.Query && isRequired;
+
+            return new FacetMember(symbol.Name, typeName, memberKind, shouldPreserveInitOnly, shouldPreserveRequired);
+        }
+
+        private static string MakeNullable(string typeName, ISymbol symbol)
+        {
+            var type = symbol switch
+            {
+                IPropertySymbol prop => prop.Type,
+                IFieldSymbol field => field.Type,
+                _ => null
+            };
+
+            if (type == null) return $"{typeName}?";
+
+            if (type.CanBeReferencedByName && type.Name == "Nullable" && type.ContainingNamespace?.Name == "System")
+                return typeName;
+
+            if (type.IsReferenceType)
+                return typeName.EndsWith("?") ? typeName : $"{typeName}?";
+
+            if (type.IsValueType)
+                return $"{typeName}?";
+
+            return $"{typeName}?";
+        }
+
+        private static string GenerateDtoName(string sourceTypeName, DtoTypes dtoType, DtoNamingConvention convention, string? customPrefix, string? customSuffix)
+        {
+            return convention switch
+            {
+                DtoNamingConvention.Convention => dtoType switch
+                {
+                    DtoTypes.Create => $"Create{sourceTypeName}Request",
+                    DtoTypes.Update => $"Update{sourceTypeName}Request", 
+                    DtoTypes.Response => $"{sourceTypeName}Response",
+                    DtoTypes.Query => $"{sourceTypeName}Query",
+                    _ => $"{sourceTypeName}Dto"
+                },
+                DtoNamingConvention.Custom => $"{customPrefix ?? ""}{sourceTypeName}{customSuffix ?? ""}",
+                _ => $"{sourceTypeName}Dto"
+            };
+        }
+
+        private static string[]? GetStringArrayArg(ImmutableArray<KeyValuePair<string, TypedConstant>> args, string name)
+        {
+            var arg = args.FirstOrDefault(kv => kv.Key == name);
+            if (arg.Value.IsNull || arg.Value.Values.IsDefaultOrEmpty)
+                return null;
+
+            return arg.Value.Values
+                .Select(v => v.Value?.ToString())
+                .Where(s => s != null)
+                .ToArray()!;
         }
     }
 }
