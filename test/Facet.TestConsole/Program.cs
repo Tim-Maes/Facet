@@ -3,6 +3,7 @@ using Facet.Mapping;
 using Facet.TestConsole.Data;
 using Facet.TestConsole.Services;
 using Facet.TestConsole.Tests;
+using Facet.TestConsole.GenerateDtosTests; // Add this using
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -162,6 +163,9 @@ class Program
         {
             await InitializeDatabaseAsync(host);
 
+            // Run new GenerateDtos feature tests
+            await RunGenerateDtosTests(host);
+
             await RunTests();
 
             await RunEfCoreTests(host);
@@ -220,6 +224,7 @@ class Program
                 services.AddScoped<UpdateFromFacetTests>();
                 services.AddScoped<EfCoreIntegrationTests>();
                 services.AddScoped<ValidationAndErrorTests>();
+                services.AddScoped<GenerateDtosFeatureTests>(); // Add GenerateDtos test service
 
                 // Add logging
                 services.AddLogging(builder =>
@@ -264,6 +269,31 @@ class Program
 
         var validationAndErrorTests = scope.ServiceProvider.GetRequiredService<ValidationAndErrorTests>();
         await validationAndErrorTests.RunAllTestsAsync();
+    }
+
+    static async Task RunGenerateDtosTests(IHost host)
+    {
+        Console.WriteLine("\n" + "=".PadRight(60, '='));
+        Console.WriteLine("GENERATE DTOS FEATURE TESTS");
+        Console.WriteLine("=".PadRight(60, '='));
+
+        try
+        {
+            using var scope = host.Services.CreateScope();
+            
+            Console.WriteLine("Resolving GenerateDtosFeatureTests service...");
+            var generateDtosTests = scope.ServiceProvider.GetRequiredService<GenerateDtosFeatureTests>();
+            Console.WriteLine("Service resolved successfully. Running tests...");
+            
+            await generateDtosTests.RunAllTestsAsync();
+            
+            Console.WriteLine("GenerateDtos tests completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"ERROR in RunGenerateDtosTests: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+        }
     }
 
     static async Task RunTests()
