@@ -50,6 +50,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
 
         var includeFields = GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
         var generateConstructor = GetNamedArg(attribute.NamedArguments, "GenerateConstructor", true);
+        var generateParameterlessConstructor = GetNamedArg(attribute.NamedArguments, "GenerateParameterlessConstructor", true);
         var generateProjection = GetNamedArg(attribute.NamedArguments, "GenerateProjection", true);
 
         var configurationTypeName = attribute.NamedArguments
@@ -127,6 +128,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
             ns,
             kind,
             generateConstructor,
+            generateParameterlessConstructor,
             generateProjection,
             sourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             configurationTypeName,
@@ -345,6 +347,12 @@ public sealed class FacetGenerator : IIncrementalGenerator
             GenerateConstructor(sb, model, isPositional, hasInitOnlyProperties, hasCustomMapping);
         }
 
+        // Generate parameterless constructor if requested
+        if (model.GenerateParameterlessConstructor)
+        {
+            GenerateParameterlessConstructor(sb, model, isPositional);
+        }
+
         // Generate projection
         if (model.GenerateExpressionProjection)
         {
@@ -495,5 +503,72 @@ public sealed class FacetGenerator : IIncrementalGenerator
         sb.AppendLine("//     the code is regenerated.");
         sb.AppendLine("// </auto-generated>");
         sb.AppendLine();
+    }
+
+    private static void GenerateParameterlessConstructor(StringBuilder sb, FacetTargetModel model, bool isPositional)
+    {
+        sb.AppendLine();
+
+        // Don't generate parameterless constructor for records with existing primary constructors
+        // as it would conflict with the C# language rules
+        if (model.HasExistingPrimaryConstructor && model.Kind is FacetKind.Record or FacetKind.RecordStruct)
+        {
+            sb.AppendLine($"    // Note: Parameterless constructor not generated for records with existing primary constructors");
+            sb.AppendLine($"    // to avoid conflicts with C# language rules. Use object initializer syntax instead:");
+            sb.AppendLine($"    // var instance = new {model.Name}(primaryConstructorParams) {{ /* initialize faceted properties */ }};");
+            return;
+        }
+
+        // For positional records, we need to call the primary constructor with default values
+        if (isPositional && !model.HasExistingPrimaryConstructor)
+        {
+            var defaultValues = model.Members.Select(m => GetDefaultValue(m.TypeName)).ToArray();
+            var defaultArgs = string.Join(", ", defaultValues);
+            
+            sb.AppendLine($"    public {model.Name}() : this({defaultArgs})");
+            sb.AppendLine("    {");
+            sb.AppendLine("    }");
+        }
+        // For non-positional types (classes, structs), generate a simple parameterless constructor
+        else if (!isPositional)
+        {
+            sb.AppendLine($"    public {model.Name}()");
+            sb.AppendLine("    {");
+            sb.AppendLine("    }");
+        }
+    }
+
+    private static string GetDefaultValue(string typeName)
+    {
+        // Handle nullable types
+        if (typeName.EndsWith("?"))
+        {
+            return "null";
+        }
+
+        // Handle common value types
+        return typeName switch
+        {
+            "bool" => "false",
+            "byte" => "0",
+            "sbyte" => "0",
+            "short" => "0",
+            "ushort" => "0",
+            "int" => "0",
+            "uint" => "0",
+            "long" => "0",
+            "ulong" => "0",
+            "float" => "0f",
+            "double" => "0d",
+            "decimal" => "0m",
+            "char" => "'\\0'",
+            "string" => "string.Empty",
+            var t when t.StartsWith("System.DateTime") => "default",
+            var t when t.StartsWith("System.DateTimeOffset") => "default",
+            var t when t.StartsWith("System.TimeSpan") => "default",
+            var t when t.StartsWith("System.Guid") => "default",
+            // For other types, use default() expression
+            _ => "default"
+        };
     }
 }

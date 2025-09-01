@@ -112,6 +112,17 @@ public partial class UserDtoWithMapping
     public int Age { get; set; }
 }
 
+// Add test facets with parameterless constructor enabled by default
+[Facet(typeof(User), "Password", "CreatedAt")]
+public partial class UserDtoWithParameterlessConstructor 
+{
+    public string FullName { get; set; } = string.Empty;
+    public int Age { get; set; }
+}
+
+[Facet(typeof(Product), "InternalNotes", Kind = FacetKind.Record)]
+public partial record ProductDtoWithParameterlessConstructor;
+
 [Facet(typeof(Product), "InternalNotes", Kind = FacetKind.Record)]
 public partial record ProductDto;
 
@@ -168,6 +179,9 @@ class Program
 
             // Run the record primary constructor tests
             RecordPrimaryConstructorTests.RunAllTests();
+
+            // Run the parameterless constructor tests
+            ParameterlessConstructorTests.RunAllTests();
         }
         catch (Exception ex)
         {
@@ -290,6 +304,8 @@ class Program
         TestLinqProjections(users, products);
 
         TestShorthandOverloads(users, products, employees);
+
+        TestParameterlessConstructors();
     }
 
     static List<ModernUser> CreateSampleModernUsers()
@@ -724,4 +740,72 @@ class Program
         }
         Console.WriteLine();
     }    
+
+    private static void TestParameterlessConstructors()
+    {
+        Console.WriteLine("7. Testing Parameterless Constructors (Now Default!):");
+        Console.WriteLine("=====================================================");
+
+        try
+        {
+            // Test that parameterless constructors work by default now
+            var userDto = new UserDto(); // No explicit GenerateParameterlessConstructor needed!
+            Console.WriteLine($"? Successfully created UserDto() - parameterless constructor enabled by default!");
+            Console.WriteLine($"  Properties initialized with defaults:");
+            Console.WriteLine($"    Id: {userDto.Id}");
+            Console.WriteLine($"    FirstName: '{userDto.FirstName}'");
+            Console.WriteLine($"    LastName: '{userDto.LastName}'");
+            Console.WriteLine($"    Email: '{userDto.Email}'");
+            Console.WriteLine($"    FullName: '{userDto.FullName}'");
+            Console.WriteLine($"    Age: {userDto.Age}");
+            Console.WriteLine($"    IsActive: {userDto.IsActive}");
+            Console.WriteLine();
+
+            // Test setting properties after construction
+            userDto.FirstName = "Test";
+            userDto.LastName = "User";
+            userDto.Email = "test@example.com";
+            userDto.FullName = "Test User";
+            userDto.Age = 25;
+            userDto.IsActive = true;
+
+            Console.WriteLine($"? Successfully set properties after parameterless construction:");
+            Console.WriteLine($"    FirstName: '{userDto.FirstName}'");
+            Console.WriteLine($"    LastName: '{userDto.LastName}'");
+            Console.WriteLine($"    Email: '{userDto.Email}'");
+            Console.WriteLine($"    FullName: '{userDto.FullName}'");
+            Console.WriteLine($"    Age: {userDto.Age}");
+            Console.WriteLine($"    IsActive: {userDto.IsActive}");
+            Console.WriteLine();
+
+            // Test record with parameterless constructor (also default now)
+            var productDto = new ProductDto(); // Record also gets parameterless constructor by default!
+            Console.WriteLine($"? Successfully created ProductDto() record - parameterless constructor enabled by default!");
+            Console.WriteLine($"  Properties initialized with defaults:");
+            Console.WriteLine($"    Id: {productDto.Id}");
+            Console.WriteLine($"    Name: '{productDto.Name}'");
+            Console.WriteLine($"    Description: '{productDto.Description}'");
+            Console.WriteLine($"    Price: {productDto.Price}");
+            Console.WriteLine($"    CategoryId: {productDto.CategoryId}");
+            Console.WriteLine($"    IsAvailable: {productDto.IsAvailable}");
+            Console.WriteLine();
+
+            // Test unit testing scenario - this is much cleaner now!
+            Console.WriteLine("? Unit Testing Scenario - Much Cleaner Now:");
+            var testDto = new UserDto(); // Simple!
+            testDto.FirstName = "Unit";
+            testDto.LastName = "Test";
+            testDto.IsActive = true;
+            Console.WriteLine($"    Created and populated DTO for testing: {testDto.FirstName} {testDto.LastName}, Active: {testDto.IsActive}");
+            Console.WriteLine();
+
+            Console.WriteLine("? Parameterless constructor feature (now default) tests completed successfully!");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"? Error in TestParameterlessConstructors: {ex.Message}");
+            Console.WriteLine($"  Stack trace: {ex.StackTrace}");
+        }
+        Console.WriteLine();
+    }
 }

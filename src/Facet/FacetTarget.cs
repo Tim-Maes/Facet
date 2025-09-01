@@ -11,6 +11,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public string? Namespace { get; }
     public FacetKind Kind { get; }
     public bool GenerateConstructor { get; }
+    public bool GenerateParameterlessConstructor { get; }
     public bool GenerateExpressionProjection { get; }
     public string SourceTypeName { get; }
     public string? ConfigurationTypeName { get; }
@@ -22,6 +23,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         string? @namespace,
         FacetKind kind,
         bool generateConstructor,
+        bool generateParameterlessConstructor,
         bool generateExpressionProjection,
         string sourceTypeName,
         string? configurationTypeName,
@@ -32,6 +34,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         Namespace = @namespace;
         Kind = kind;
         GenerateConstructor = generateConstructor;
+        GenerateParameterlessConstructor = generateParameterlessConstructor;
         GenerateExpressionProjection = generateExpressionProjection;
         SourceTypeName = sourceTypeName;
         ConfigurationTypeName = configurationTypeName;
@@ -48,6 +51,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && Namespace == other.Namespace
             && Kind == other.Kind
             && GenerateConstructor == other.GenerateConstructor
+            && GenerateParameterlessConstructor == other.GenerateParameterlessConstructor
             && GenerateExpressionProjection == other.GenerateExpressionProjection
             && SourceTypeName == other.SourceTypeName
             && ConfigurationTypeName == other.ConfigurationTypeName
@@ -66,6 +70,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + (Namespace?.GetHashCode() ?? 0);
             hash = hash * 31 + Kind.GetHashCode();
             hash = hash * 31 + GenerateConstructor.GetHashCode();
+            hash = hash * 31 + GenerateParameterlessConstructor.GetHashCode();
             hash = hash * 31 + GenerateExpressionProjection.GetHashCode();
             hash = hash * 31 + (SourceTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + (ConfigurationTypeName?.GetHashCode() ?? 0);
