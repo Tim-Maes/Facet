@@ -743,7 +743,7 @@ class Program
 
     private static void TestParameterlessConstructors()
     {
-        Console.WriteLine("7. Testing Parameterless Constructors (Now Default!):");
+        Console.WriteLine("7. Testing Parameterless Constructors:");
         Console.WriteLine("=====================================================");
 
         try
@@ -778,8 +778,8 @@ class Program
             Console.WriteLine($"    IsActive: {userDto.IsActive}");
             Console.WriteLine();
 
-            // Test record with parameterless constructor (also default now)
-            var productDto = new ProductDto(); // Record also gets parameterless constructor by default!
+            // Test record with parameterless constructor 
+            var productDto = new ProductDto(); // Record also gets parameterless constructor
             Console.WriteLine($"? Successfully created ProductDto() record - parameterless constructor enabled by default!");
             Console.WriteLine($"  Properties initialized with defaults:");
             Console.WriteLine($"    Id: {productDto.Id}");
@@ -790,8 +790,8 @@ class Program
             Console.WriteLine($"    IsAvailable: {productDto.IsAvailable}");
             Console.WriteLine();
 
-            // Test unit testing scenario - this is much cleaner now!
-            Console.WriteLine("? Unit Testing Scenario - Much Cleaner Now:");
+            // Test unit testing scenario
+            Console.WriteLine("? Unit Testing Scenario:");
             var testDto = new UserDto(); // Simple!
             testDto.FirstName = "Unit";
             testDto.LastName = "Test";
@@ -799,7 +799,7 @@ class Program
             Console.WriteLine($"    Created and populated DTO for testing: {testDto.FirstName} {testDto.LastName}, Active: {testDto.IsActive}");
             Console.WriteLine();
 
-            Console.WriteLine("? Parameterless constructor feature (now default) tests completed successfully!");
+            Console.WriteLine("? Parameterless constructor feature tests completed successfully!");
         }
         catch (Exception ex)
         {
