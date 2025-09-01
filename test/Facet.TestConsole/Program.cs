@@ -51,16 +51,138 @@ public class Manager : Employee
     public override string DisplayName => $"Manager {FirstName} {LastName} - {TeamName}";
 }
 
+/// <summary>
+/// Represents a user account in the system with authentication and profile information.
+/// This entity contains both public and sensitive data that should be carefully managed.
+/// Users are the primary actors in the system and have roles, permissions, and profile data.
+/// </summary>
+/// <remarks>
+/// Users are created through the registration process and can be activated/deactivated by administrators.
+/// The Password field contains sensitive information and should never be exposed in DTOs or API responses.
+/// This class follows domain-driven design principles and includes comprehensive validation.
+/// </remarks>
+/// <example>
+/// Creating a new user:
+/// <code>
+/// var user = new User
+/// {
+///     FirstName = "John",
+///     LastName = "Doe", 
+///     Email = "john.doe@example.com",
+///     IsActive = true
+/// };
+/// </code>
+/// </example>
 public class User
 {
+    /// <summary>
+    /// Gets or sets the unique identifier for the user account.
+    /// This is the primary key used for database operations and foreign key relationships.
+    /// </summary>
+    /// <value>A positive integer that uniquely identifies the user in the system.</value>
+    /// <example>12345</example>
     public int Id { get; set; }
+
+    /// <summary>
+    /// Gets or sets the user's first name or given name.
+    /// Used for display purposes and personalization throughout the application.
+    /// </summary>
+    /// <value>The first name of the user, typically 1-50 characters in length.</value>
+    /// <remarks>
+    /// This field is required and will be validated for length and appropriate content.
+    /// Special characters and numbers are generally not allowed in names.
+    /// </remarks>
+    /// <example>John</example>
     public string FirstName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the user's last name, surname, or family name.
+    /// Combined with FirstName to create the user's full display name for the UI.
+    /// </summary>
+    /// <value>The last name of the user, typically 1-50 characters in length.</value>
+    /// <remarks>
+    /// This field is required and follows the same validation rules as FirstName.
+    /// In some cultures, this might include multiple family names separated by spaces.
+    /// </remarks>
+    /// <example>Doe</example>
     public string LastName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the user's email address used for authentication and communication.
+    /// This serves as the primary means of user identification and must be unique across the entire system.
+    /// </summary>
+    /// <value>A valid email address in standard RFC 5322 format (user@domain.com).</value>
+    /// <remarks>
+    /// Email addresses must be unique across the system and are used for login authentication.
+    /// The system will send verification emails to this address during registration and password resets.
+    /// This field is required and must pass email validation.
+    /// </remarks>
+    /// <example>john.doe@example.com</example>
     public string Email { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the user's date of birth for age verification and personalization features.
+    /// Used to calculate age, ensure compliance with age-related restrictions, and birthday notifications.
+    /// </summary>
+    /// <value>A DateTime representing the user's birth date in UTC.</value>
+    /// <remarks>
+    /// This information is optional but helps with age verification for certain features.
+    /// The date should be in the past and reasonable (not more than 150 years ago).
+    /// Used for analytics, age-gated content, and compliance with regulations like COPPA.
+    /// </remarks>
+    /// <example>1990-05-15</example>
     public DateTime DateOfBirth { get; set; }
+
+    /// <summary>
+    /// Gets or sets the hashed password for user authentication.
+    /// WARNING: This contains sensitive security information and should NEVER be exposed in public APIs, DTOs, or logs.
+    /// </summary>
+    /// <value>A securely hashed password string using industry-standard cryptographic algorithms.</value>
+    /// <remarks>
+    /// Passwords are hashed using bcrypt, scrypt, or similar algorithms before storage.
+    /// This field should always be excluded when creating DTOs for API responses.
+    /// Raw passwords should never be stored in the database - only secure hashes.
+    /// Access to this field should be strictly controlled and audited.
+    /// </remarks>
     public string Password { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the user account is active and can authenticate.
+    /// Inactive users cannot log in but their data is preserved for potential reactivation and audit trails.
+    /// </summary>
+    /// <value><c>true</c> if the user can log in and access the system; otherwise, <c>false</c>.</value>
+    /// <remarks>
+    /// Administrators can deactivate users instead of deleting them to preserve audit trails and data integrity.
+    /// Inactive users will receive appropriate error messages when attempting to authenticate.
+    /// This field is used for soft deletion and account suspension functionality.
+    /// </remarks>
+    /// <example>true</example>
     public bool IsActive { get; set; }
+
+    /// <summary>
+    /// Gets or sets the timestamp when the user account was created in the system.
+    /// Used for audit purposes, analytics, and tracking user registration patterns over time.
+    /// </summary>
+    /// <value>A DateTime representing when the user was first registered, stored in UTC.</value>
+    /// <remarks>
+    /// This field is automatically set during user creation and should not be modified afterward.
+    /// Used for compliance reporting, analytics dashboards, and data retention policies.
+    /// Essential for audit trails and regulatory compliance requirements.
+    /// </remarks>
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets the timestamp of the user's last successful authentication session.
+    /// Used for security monitoring, user engagement analytics, and detecting inactive accounts.
+    /// </summary>
+    /// <value>A nullable DateTime representing the last login time in UTC, or null if the user has never logged in.</value>
+    /// <remarks>
+    /// This field is updated automatically during the authentication process on successful login.
+    /// A null value indicates the user has never successfully authenticated since account creation.
+    /// Used for security analysis, detecting dormant accounts, and user engagement metrics.
+    /// Important for compliance with data retention and account activity policies.
+    /// </remarks>
+    /// <example>2023-12-01T10:30:00Z</example>
     public DateTime? LastLoginAt { get; set; }
 }
 
@@ -112,6 +234,17 @@ public partial class UserDtoWithMapping
     public string FullName { get; set; } = string.Empty;
     public int Age { get; set; }
 }
+
+// Add test facets with parameterless constructor enabled by default
+[Facet(typeof(User), "Password", "CreatedAt")]
+public partial class UserDtoWithParameterlessConstructor 
+{
+    public string FullName { get; set; } = string.Empty;
+    public int Age { get; set; }
+}
+
+[Facet(typeof(Product), "InternalNotes", Kind = FacetKind.Record)]
+public partial record ProductDtoWithParameterlessConstructor;
 
 [Facet(typeof(Product), "InternalNotes", Kind = FacetKind.Record)]
 public partial record ProductDto;
@@ -172,6 +305,9 @@ class Program
 
             // Run the record primary constructor tests
             RecordPrimaryConstructorTests.RunAllTests();
+
+            // Run the parameterless constructor tests
+            ParameterlessConstructorTests.RunAllTests();
         }
         catch (Exception ex)
         {
@@ -320,6 +456,8 @@ class Program
         TestLinqProjections(users, products);
 
         TestShorthandOverloads(users, products, employees);
+
+        TestParameterlessConstructors();
     }
 
     static List<ModernUser> CreateSampleModernUsers()
@@ -754,4 +892,72 @@ class Program
         }
         Console.WriteLine();
     }    
+
+    private static void TestParameterlessConstructors()
+    {
+        Console.WriteLine("7. Testing Parameterless Constructors:");
+        Console.WriteLine("=====================================================");
+
+        try
+        {
+            // Test that parameterless constructors work by default now
+            var userDto = new UserDto(); // No explicit GenerateParameterlessConstructor needed!
+            Console.WriteLine($"? Successfully created UserDto() - parameterless constructor enabled by default!");
+            Console.WriteLine($"  Properties initialized with defaults:");
+            Console.WriteLine($"    Id: {userDto.Id}");
+            Console.WriteLine($"    FirstName: '{userDto.FirstName}'");
+            Console.WriteLine($"    LastName: '{userDto.LastName}'");
+            Console.WriteLine($"    Email: '{userDto.Email}'");
+            Console.WriteLine($"    FullName: '{userDto.FullName}'");
+            Console.WriteLine($"    Age: {userDto.Age}");
+            Console.WriteLine($"    IsActive: {userDto.IsActive}");
+            Console.WriteLine();
+
+            // Test setting properties after construction
+            userDto.FirstName = "Test";
+            userDto.LastName = "User";
+            userDto.Email = "test@example.com";
+            userDto.FullName = "Test User";
+            userDto.Age = 25;
+            userDto.IsActive = true;
+
+            Console.WriteLine($"? Successfully set properties after parameterless construction:");
+            Console.WriteLine($"    FirstName: '{userDto.FirstName}'");
+            Console.WriteLine($"    LastName: '{userDto.LastName}'");
+            Console.WriteLine($"    Email: '{userDto.Email}'");
+            Console.WriteLine($"    FullName: '{userDto.FullName}'");
+            Console.WriteLine($"    Age: {userDto.Age}");
+            Console.WriteLine($"    IsActive: {userDto.IsActive}");
+            Console.WriteLine();
+
+            // Test record with parameterless constructor 
+            var productDto = new ProductDto(); // Record also gets parameterless constructor
+            Console.WriteLine($"? Successfully created ProductDto() record - parameterless constructor enabled by default!");
+            Console.WriteLine($"  Properties initialized with defaults:");
+            Console.WriteLine($"    Id: {productDto.Id}");
+            Console.WriteLine($"    Name: '{productDto.Name}'");
+            Console.WriteLine($"    Description: '{productDto.Description}'");
+            Console.WriteLine($"    Price: {productDto.Price}");
+            Console.WriteLine($"    CategoryId: {productDto.CategoryId}");
+            Console.WriteLine($"    IsAvailable: {productDto.IsAvailable}");
+            Console.WriteLine();
+
+            // Test unit testing scenario
+            Console.WriteLine("? Unit Testing Scenario:");
+            var testDto = new UserDto(); // Simple!
+            testDto.FirstName = "Unit";
+            testDto.LastName = "Test";
+            testDto.IsActive = true;
+            Console.WriteLine($"    Created and populated DTO for testing: {testDto.FirstName} {testDto.LastName}, Active: {testDto.IsActive}");
+            Console.WriteLine();
+
+            Console.WriteLine("? Parameterless constructor feature tests completed successfully!");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"? Error in TestParameterlessConstructors: {ex.Message}");
+            Console.WriteLine($"  Stack trace: {ex.StackTrace}");
+        }
+        Console.WriteLine();
+    }
 }

@@ -29,6 +29,14 @@ public sealed class FacetAttribute : Attribute
     public bool GenerateConstructor { get; set; } = true;
 
     /// <summary>
+    /// Whether to generate a parameterless constructor for easier unit testing and object initialization.
+    /// When true, a public parameterless constructor will be generated. For record types without existing 
+    /// primary constructors, this creates a standard class-like parameterless constructor. For positional records,
+    /// the parameterless constructor initializes properties with default values.
+    /// </summary>
+    public bool GenerateParameterlessConstructor { get; set; } = true;
+
+    /// <summary>
     /// Optional type that provides custom mapping logic via a static Map(source, target) method.
     /// Must match the signature defined in IFacetMapConfiguration&lt;TSource, TTarget&gt;.
     /// </summary>

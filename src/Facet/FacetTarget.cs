@@ -11,32 +11,38 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public string? Namespace { get; }
     public FacetKind Kind { get; }
     public bool GenerateConstructor { get; }
+    public bool GenerateParameterlessConstructor { get; }
     public bool GenerateExpressionProjection { get; }
     public string SourceTypeName { get; }
     public string? ConfigurationTypeName { get; }
     public ImmutableArray<FacetMember> Members { get; }
     public bool HasExistingPrimaryConstructor { get; }
+    public string? TypeXmlDocumentation { get; }
 
     public FacetTargetModel(
         string name,
         string? @namespace,
         FacetKind kind,
         bool generateConstructor,
+        bool generateParameterlessConstructor,
         bool generateExpressionProjection,
         string sourceTypeName,
         string? configurationTypeName,
         ImmutableArray<FacetMember> members,
-        bool hasExistingPrimaryConstructor = false)
+        bool hasExistingPrimaryConstructor = false,
+        string? typeXmlDocumentation = null)
     {
         Name = name;
         Namespace = @namespace;
         Kind = kind;
         GenerateConstructor = generateConstructor;
+        GenerateParameterlessConstructor = generateParameterlessConstructor;
         GenerateExpressionProjection = generateExpressionProjection;
         SourceTypeName = sourceTypeName;
         ConfigurationTypeName = configurationTypeName;
         Members = members;
         HasExistingPrimaryConstructor = hasExistingPrimaryConstructor;
+        TypeXmlDocumentation = typeXmlDocumentation;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -48,10 +54,12 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && Namespace == other.Namespace
             && Kind == other.Kind
             && GenerateConstructor == other.GenerateConstructor
+            && GenerateParameterlessConstructor == other.GenerateParameterlessConstructor
             && GenerateExpressionProjection == other.GenerateExpressionProjection
             && SourceTypeName == other.SourceTypeName
             && ConfigurationTypeName == other.ConfigurationTypeName
             && HasExistingPrimaryConstructor == other.HasExistingPrimaryConstructor
+            && TypeXmlDocumentation == other.TypeXmlDocumentation
             && Members.SequenceEqual(other.Members);
     }
 
@@ -66,10 +74,12 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + (Namespace?.GetHashCode() ?? 0);
             hash = hash * 31 + Kind.GetHashCode();
             hash = hash * 31 + GenerateConstructor.GetHashCode();
+            hash = hash * 31 + GenerateParameterlessConstructor.GetHashCode();
             hash = hash * 31 + GenerateExpressionProjection.GetHashCode();
             hash = hash * 31 + (SourceTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + (ConfigurationTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + HasExistingPrimaryConstructor.GetHashCode();
+            hash = hash * 31 + (TypeXmlDocumentation?.GetHashCode() ?? 0);
 
             foreach (var member in Members)
                 hash = hash * 31 + member.GetHashCode();

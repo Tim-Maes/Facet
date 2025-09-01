@@ -50,6 +50,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
 
         var includeFields = GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
         var generateConstructor = GetNamedArg(attribute.NamedArguments, "GenerateConstructor", true);
+        var generateParameterlessConstructor = GetNamedArg(attribute.NamedArguments, "GenerateParameterlessConstructor", true);
         var generateProjection = GetNamedArg(attribute.NamedArguments, "GenerateProjection", true);
 
         var configurationTypeName = attribute.NamedArguments
@@ -82,6 +83,9 @@ public sealed class FacetGenerator : IIncrementalGenerator
 
         var allMembersWithModifiers = GetAllMembersWithModifiers(sourceType);
 
+        // Extract type-level XML documentation from the source type
+        var typeXmlDocumentation = ExtractXmlDocumentation(sourceType);
+
         foreach (var (member, isInitOnly, isRequired) in allMembersWithModifiers)
         {
             token.ThrowIfCancellationRequested();
@@ -92,25 +96,29 @@ public sealed class FacetGenerator : IIncrementalGenerator
             {
                 var shouldPreserveInitOnly = preserveInitOnly && isInitOnly;
                 var shouldPreserveRequired = preserveRequired && isRequired;
+                var memberXmlDocumentation = ExtractXmlDocumentation(p);
 
                 members.Add(new FacetMember(
                     p.Name,
                     p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     FacetMemberKind.Property,
                     shouldPreserveInitOnly,
-                    shouldPreserveRequired));
+                    shouldPreserveRequired,
+                    memberXmlDocumentation));
                 addedMembers.Add(p.Name);
             }
             else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
             {
                 var shouldPreserveRequired = preserveRequired && isRequired;
+                var memberXmlDocumentation = ExtractXmlDocumentation(f);
 
                 members.Add(new FacetMember(
                     f.Name,
                     f.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     FacetMemberKind.Field,
                     false, // Fields don't have init-only
-                    shouldPreserveRequired));
+                    shouldPreserveRequired,
+                    memberXmlDocumentation));
                 addedMembers.Add(f.Name);
             }
         }
@@ -127,11 +135,13 @@ public sealed class FacetGenerator : IIncrementalGenerator
             ns,
             kind,
             generateConstructor,
+            generateParameterlessConstructor,
             generateProjection,
             sourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             configurationTypeName,
             members.ToImmutableArray(),
-            hasExistingPrimaryConstructor);
+            hasExistingPrimaryConstructor,
+            typeXmlDocumentation);
     }
 
     /// <summary>
@@ -256,6 +266,122 @@ public sealed class FacetGenerator : IIncrementalGenerator
         => args.FirstOrDefault(kv => kv.Key == name)
             .Value.Value is T t ? t : defaultValue;
 
+    /// <summary>
+    /// Extracts and formats XML documentation from a symbol.
+    /// </summary>
+    private static string? ExtractXmlDocumentation(ISymbol symbol)
+    {
+        var documentationComment = symbol.GetDocumentationCommentXml();
+        if (string.IsNullOrWhiteSpace(documentationComment))
+            return null;
+
+        return FormatXmlDocumentation(documentationComment);
+    }
+
+    /// <summary>
+    /// Formats XML documentation comment into proper /// format for code generation.
+    /// </summary>
+    private static string FormatXmlDocumentation(string xmlDoc)
+    {
+        if (string.IsNullOrWhiteSpace(xmlDoc))
+            return string.Empty;
+
+        var lines = new List<string>();
+        
+        try
+        {
+            var doc = System.Xml.Linq.XDocument.Parse(xmlDoc);
+            var root = doc.Root;
+            
+            if (root == null)
+                return string.Empty;
+
+            // Process summary
+            var summary = root.Element("summary");
+            if (summary != null)
+            {
+                lines.Add("/// <summary>");
+                var summaryText = summary.Value.Trim();
+                if (!string.IsNullOrEmpty(summaryText))
+                {
+                    foreach (var line in summaryText.Split('\n'))
+                    {
+                        lines.Add($"/// {line.Trim()}");
+                    }
+                }
+                lines.Add("/// </summary>");
+            }
+
+            // Process value
+            var value = root.Element("value");
+            if (value != null)
+            {
+                lines.Add("/// <value>");
+                var valueText = value.Value.Trim();
+                if (!string.IsNullOrEmpty(valueText))
+                {
+                    foreach (var line in valueText.Split('\n'))
+                    {
+                        lines.Add($"/// {line.Trim()}");
+                    }
+                }
+                lines.Add("/// </value>");
+            }
+
+            // Process remarks
+            var remarks = root.Element("remarks");
+            if (remarks != null)
+            {
+                lines.Add("/// <remarks>");
+                var remarksText = remarks.Value.Trim();
+                if (!string.IsNullOrEmpty(remarksText))
+                {
+                    foreach (var line in remarksText.Split('\n'))
+                    {
+                        lines.Add($"/// {line.Trim()}");
+                    }
+                }
+                lines.Add("/// </remarks>");
+            }
+
+            // Process example
+            var example = root.Element("example");
+            if (example != null)
+            {
+                lines.Add("/// <example>");
+                var exampleText = example.Value.Trim();
+                if (!string.IsNullOrEmpty(exampleText))
+                {
+                    foreach (var line in exampleText.Split('\n'))
+                    {
+                        lines.Add($"/// {line.Trim()}");
+                    }
+                }
+                lines.Add("/// </example>");
+            }
+
+            return lines.Count > 0 ? string.Join("\n", lines) : string.Empty;
+        }
+        catch
+        {
+            // If XML parsing fails, return empty string rather than crashing the generator
+            return string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Gets the simple type name from a fully qualified type name.
+    /// </summary>
+    private static string GetSimpleTypeName(string fullyQualifiedTypeName)
+    {
+        var lastDotIndex = fullyQualifiedTypeName.LastIndexOf('.');
+        if (lastDotIndex >= 0 && lastDotIndex < fullyQualifiedTypeName.Length - 1)
+        {
+            return fullyQualifiedTypeName.Substring(lastDotIndex + 1);
+        }
+        return fullyQualifiedTypeName;
+    }
+
     private static string Generate(FacetTargetModel model)
     {
         var sb = new StringBuilder();
@@ -267,6 +393,12 @@ public sealed class FacetGenerator : IIncrementalGenerator
         if (!string.IsNullOrWhiteSpace(model.Namespace))
         {
             sb.AppendLine($"namespace {model.Namespace};");
+        }
+
+        // Generate type-level XML documentation if available
+        if (!string.IsNullOrWhiteSpace(model.TypeXmlDocumentation))
+        {
+            sb.AppendLine(model.TypeXmlDocumentation);
         }
 
         var keyword = model.Kind switch
@@ -307,6 +439,12 @@ public sealed class FacetGenerator : IIncrementalGenerator
         {
             foreach (var m in model.Members)
             {
+                // Generate member XML documentation if available
+                if (!string.IsNullOrWhiteSpace(m.XmlDocumentation))
+                {
+                    sb.AppendLine($"    {m.XmlDocumentation.Replace("\n", "\n    ")}");
+                }
+
                 if (m.Kind == FacetMemberKind.Property)
                 {
                     var propDef = $"public {m.TypeName} {m.Name}";
@@ -345,6 +483,12 @@ public sealed class FacetGenerator : IIncrementalGenerator
             GenerateConstructor(sb, model, isPositional, hasInitOnlyProperties, hasCustomMapping);
         }
 
+        // Generate parameterless constructor if requested
+        if (model.GenerateParameterlessConstructor)
+        {
+            GenerateParameterlessConstructor(sb, model, isPositional);
+        }
+
         // Generate projection
         if (model.GenerateExpressionProjection)
         {
@@ -359,6 +503,20 @@ public sealed class FacetGenerator : IIncrementalGenerator
             }
             else
             {
+                // Generate projection XML documentation
+                sb.AppendLine("    /// <summary>");
+                sb.AppendLine($"    /// Gets the projection expression for converting <see cref=\"{GetSimpleTypeName(model.SourceTypeName)}\"/> to <see cref=\"{model.Name}\"/>.");
+                sb.AppendLine("    /// Use this for LINQ and Entity Framework query projections.");
+                sb.AppendLine("    /// </summary>");
+                sb.AppendLine($"    /// <value>An expression tree that can be used in LINQ queries for efficient database projections.</value>");
+                sb.AppendLine("    /// <example>");
+                sb.AppendLine("    /// <code>");
+                sb.AppendLine($"    /// var dtos = context.{GetSimpleTypeName(model.SourceTypeName)}s");
+                sb.AppendLine("    ///     .Where(x => x.IsActive)");
+                sb.AppendLine($"    ///     .Select({model.Name}.Projection)");
+                sb.AppendLine("    ///     .ToList();");
+                sb.AppendLine("    /// </code>");
+                sb.AppendLine("    /// </example>");
                 sb.AppendLine($"    public static Expression<Func<{model.SourceTypeName}, {model.Name}>> Projection =>");
                 sb.AppendLine($"        source => new {model.Name}(source);");
             }
@@ -377,6 +535,19 @@ public sealed class FacetGenerator : IIncrementalGenerator
         {
             GenerateFactoryMethodForExistingPrimaryConstructor(sb, model, hasCustomMapping);
             return;
+        }
+
+        // Generate constructor XML documentation
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine($"    /// Initializes a new instance of the <see cref=\"{model.Name}\"/> class from the specified <see cref=\"{GetSimpleTypeName(model.SourceTypeName)}\"/>.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{GetSimpleTypeName(model.SourceTypeName)}\"/> object to copy data from.</param>");
+        if (hasCustomMapping)
+        {
+            sb.AppendLine("    /// <remarks>");
+            sb.AppendLine("    /// This constructor automatically maps all compatible properties and applies custom mapping logic.");
+            sb.AppendLine("    /// </remarks>");
         }
 
         var ctorSig = $"public {model.Name}({model.SourceTypeName} source)";
@@ -428,6 +599,11 @@ public sealed class FacetGenerator : IIncrementalGenerator
         if (!isPositional && hasInitOnlyProperties && !model.HasExistingPrimaryConstructor)
         {
             sb.AppendLine();
+            sb.AppendLine("    /// <summary>");
+            sb.AppendLine($"    /// Creates a new instance of <see cref=\"{model.Name}\"/> from the specified <see cref=\"{GetSimpleTypeName(model.SourceTypeName)}\"/> with init-only properties.");
+            sb.AppendLine("    /// </summary>");
+            sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{GetSimpleTypeName(model.SourceTypeName)}\"/> object to copy data from.</param>");
+            sb.AppendLine($"    /// <returns>A new <see cref=\"{model.Name}\"/> instance with all properties initialized from the source.</returns>");
             sb.AppendLine($"    public static {model.Name} FromSource({model.SourceTypeName} source)");
             sb.AppendLine("    {");
 
@@ -495,5 +671,81 @@ public sealed class FacetGenerator : IIncrementalGenerator
         sb.AppendLine("//     the code is regenerated.");
         sb.AppendLine("// </auto-generated>");
         sb.AppendLine();
+    }
+
+    private static void GenerateParameterlessConstructor(StringBuilder sb, FacetTargetModel model, bool isPositional)
+    {
+        sb.AppendLine();
+
+        // Don't generate parameterless constructor for records with existing primary constructors
+        // as it would conflict with the C# language rules
+        if (model.HasExistingPrimaryConstructor && model.Kind is FacetKind.Record or FacetKind.RecordStruct)
+        {
+            sb.AppendLine($"    // Note: Parameterless constructor not generated for records with existing primary constructors");
+            sb.AppendLine($"    // to avoid conflicts with C# language rules. Use object initializer syntax instead:");
+            sb.AppendLine($"    // var instance = new {model.Name}(primaryConstructorParams) {{ /* initialize faceted properties */ }};");
+            return;
+        }
+
+        // Generate parameterless constructor XML documentation
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine($"    /// Initializes a new instance of the <see cref=\"{model.Name}\"/> class with default values.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    /// <remarks>");
+        sb.AppendLine("    /// This constructor is useful for unit testing, object initialization, and scenarios");
+        sb.AppendLine("    /// where you need to create an empty instance and populate properties later.");
+        sb.AppendLine("    /// </remarks>");
+
+        // For positional records, we need to call the primary constructor with default values
+        if (isPositional && !model.HasExistingPrimaryConstructor)
+        {
+            var defaultValues = model.Members.Select(m => GetDefaultValue(m.TypeName)).ToArray();
+            var defaultArgs = string.Join(", ", defaultValues);
+            
+            sb.AppendLine($"    public {model.Name}() : this({defaultArgs})");
+            sb.AppendLine("    {");
+            sb.AppendLine("    }");
+        }
+        // For non-positional types (classes, structs), generate a simple parameterless constructor
+        else if (!isPositional)
+        {
+            sb.AppendLine($"    public {model.Name}()");
+            sb.AppendLine("    {");
+            sb.AppendLine("    }");
+        }
+    }
+
+    private static string GetDefaultValue(string typeName)
+    {
+        // Handle nullable types
+        if (typeName.EndsWith("?"))
+        {
+            return "null";
+        }
+
+        // Handle common value types
+        return typeName switch
+        {
+            "bool" => "false",
+            "byte" => "0",
+            "sbyte" => "0",
+            "short" => "0",
+            "ushort" => "0",
+            "int" => "0",
+            "uint" => "0",
+            "long" => "0",
+            "ulong" => "0",
+            "float" => "0f",
+            "double" => "0d",
+            "decimal" => "0m",
+            "char" => "'\\0'",
+            "string" => "string.Empty",
+            var t when t.StartsWith("System.DateTime") => "default",
+            var t when t.StartsWith("System.DateTimeOffset") => "default",
+            var t when t.StartsWith("System.TimeSpan") => "default",
+            var t when t.StartsWith("System.Guid") => "default",
+            // For other types, use default() expression
+            _ => "default"
+        };
     }
 }

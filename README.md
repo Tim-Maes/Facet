@@ -46,6 +46,7 @@ You can think of it like **carving out a specific facet** of a gem:
 - :white_check_mark: Auto-generate constructors for fast mapping
 - :white_check_mark: LINQ projection expressions
 - :white_check_mark: Full mapping support with custom mapping configurations
+- :white_check_mark: Preserves member and type XML documentation
 
 ## :earth_americas: The Facet Ecosystem
 
