@@ -225,6 +225,92 @@ if (result.HasChanges)
 }
 ```
 
+### Automatic CRUD DTO Generation
+
+Generate standard Create, Update, Response, Query, and Upsert DTOs automatically:
+
+```csharp
+// Generate all standard CRUD DTOs
+[GenerateDtos(Types = DtoTypes.All, OutputType = OutputType.Record)]
+public class User
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public string Email { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+// Auto-generates:
+// - CreateUserRequest (excludes Id)
+// - UpdateUserRequest (includes Id)  
+// - UserResponse (includes all)
+// - UserQuery (all properties nullable)
+// - UpsertUserRequest (includes Id, for create/update operations)
+```
+
+#### Auditable Entities with Smart Exclusions
+```csharp
+[GenerateAuditableDtos(
+    Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response,
+    OutputType = OutputType.Record,
+    ExcludeProperties = new[] { "Password" })]
+public class Product
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string Password { get; set; } // Excluded
+    public DateTime CreatedAt { get; set; } // Auto-excluded (audit)
+    public string CreatedBy { get; set; } // Auto-excluded (audit)
+}
+
+// Auto-excludes audit fields: CreatedAt, UpdatedAt, CreatedBy, UpdatedBy
+```
+
+#### Multiple Configurations for Fine-Grained Control
+```csharp
+// Different exclusions for different DTO types
+[GenerateDtos(Types = DtoTypes.Response, ExcludeProperties = new[] { "Password", "InternalNotes" })]
+[GenerateDtos(Types = DtoTypes.Upsert, ExcludeProperties = new[] { "Password" })]
+public class Schedule
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string Password { get; set; } // Excluded from both
+    public string InternalNotes { get; set; } // Only excluded from Response
+}
+
+// Generates:
+// - ScheduleResponse (excludes Password, InternalNotes) 
+// - UpsertScheduleRequest (excludes Password, includes InternalNotes)
+```
+
+#### Perfect for RESTful APIs
+```csharp
+[HttpPost]
+public async Task<ActionResult<ScheduleResponse>> CreateSchedule(CreateScheduleRequest request)
+{
+    var schedule = new Schedule(request);
+    context.Schedules.Add(schedule);
+    await context.SaveChangesAsync();
+    return schedule.ToFacet<ScheduleResponse>();
+}
+
+[HttpPut("{id}")]
+public async Task<ActionResult<ScheduleResponse>> UpsertSchedule(int id, UpsertScheduleRequest body)
+{
+    var schedule = context.GetScheduleById(id);
+    if (schedule == null) return NotFound();
+    
+    // Ensure the body ID matches the route ID  
+    body = body with { Id = id };
+    
+    schedule.UpdateFromFacet(body, context);
+    await context.SaveChangesAsync();
+    return schedule.ToFacet<ScheduleResponse>();
+}
+```
+
 ## :chart_with_upwards_trend: Performance Benchmarks
 
 Facet delivers competitive performance across different mapping scenarios. Here's how it compares to popular alternatives:

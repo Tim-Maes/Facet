@@ -50,3 +50,32 @@ public class TestOrder
     public DateTime OrderDate { get; set; }
     public string Status { get; set; } = string.Empty;
 }
+
+// Test model demonstrating AllowMultiple with different configurations
+[GenerateDtos(Types = DtoTypes.Response, ExcludeProperties = new[] { "Password", "InternalNotes" })]
+[GenerateDtos(Types = DtoTypes.Upsert, ExcludeProperties = new[] { "Password" })]
+public class TestSchedule
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public DateTime StartTime { get; set; }
+    public DateTime EndTime { get; set; }
+    public string? Password { get; set; } // Excluded from both
+    public string? InternalNotes { get; set; } // Only excluded from Response
+    public bool IsActive { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+}
+
+// Test model for Upsert-only DTO
+[GenerateDtos(Types = DtoTypes.Upsert, OutputType = OutputType.Record)]
+public class TestEvent
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public DateTime EventDate { get; set; }
+    public string Location { get; set; } = string.Empty;
+    public int MaxAttendees { get; set; }
+}

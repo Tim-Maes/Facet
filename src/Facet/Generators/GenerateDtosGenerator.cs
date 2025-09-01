@@ -34,15 +34,17 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             .ForAttributeWithMetadataName(
                 GenerateDtosAttributeName,
                 predicate: static (node, _) => node is TypeDeclarationSyntax,
-                transform: static (ctx, token) => GetGenerateDtosModel(ctx, token))
-            .Where(static m => m is not null);
+                transform: static (ctx, token) => GetGenerateDtosModels(ctx, token))
+            .Where(static m => m is not null)
+            .SelectMany(static (models, _) => models!);
 
         var generateAuditableDtosTargets = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 GenerateAuditableDtosAttributeName,
                 predicate: static (node, _) => node is TypeDeclarationSyntax,
-                transform: static (ctx, token) => GetGenerateAuditableDtosModel(ctx, token))
-            .Where(static m => m is not null);
+                transform: static (ctx, token) => GetGenerateAuditableDtosModels(ctx, token))
+            .Where(static m => m is not null)
+            .SelectMany(static (models, _) => models!);
 
         var allTargets = generateDtosTargets.Collect().Combine(generateAuditableDtosTargets.Collect())
             .Select(static (combined, _) => combined.Left.Concat(combined.Right));
@@ -60,23 +62,41 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         });
     }
 
-    private static GenerateDtosTargetModel? GetGenerateDtosModel(GeneratorAttributeSyntaxContext context, CancellationToken token)
+    private static IEnumerable<GenerateDtosTargetModel>? GetGenerateDtosModels(GeneratorAttributeSyntaxContext context, CancellationToken token)
     {
-        return GetDtosModel(context, token, isAuditable: false);
+        return GetDtosModels(context, token, isAuditable: false);
     }
 
-    private static GenerateDtosTargetModel? GetGenerateAuditableDtosModel(GeneratorAttributeSyntaxContext context, CancellationToken token)
+    private static IEnumerable<GenerateDtosTargetModel>? GetGenerateAuditableDtosModels(GeneratorAttributeSyntaxContext context, CancellationToken token)
     {
-        return GetDtosModel(context, token, isAuditable: true);
+        return GetDtosModels(context, token, isAuditable: true);
     }
 
-    private static GenerateDtosTargetModel? GetDtosModel(GeneratorAttributeSyntaxContext context, CancellationToken token, bool isAuditable)
+    private static IEnumerable<GenerateDtosTargetModel>? GetDtosModels(GeneratorAttributeSyntaxContext context, CancellationToken token, bool isAuditable)
     {
         token.ThrowIfCancellationRequested();
         if (context.TargetSymbol is not INamedTypeSymbol sourceSymbol) return null;
         if (context.Attributes.Length == 0) return null;
 
-        var attribute = context.Attributes[0];
+        var models = new List<GenerateDtosTargetModel>();
+
+        // Process each attribute separately to support AllowMultiple
+        foreach (var attribute in context.Attributes)
+        {
+            token.ThrowIfCancellationRequested();
+
+            var model = GetDtosModel(context, attribute, sourceSymbol, isAuditable, token);
+            if (model != null)
+            {
+                models.Add(model);
+            }
+        }
+
+        return models.Count > 0 ? models : null;
+    }
+
+    private static GenerateDtosTargetModel? GetDtosModel(GeneratorAttributeSyntaxContext context, AttributeData attribute, INamedTypeSymbol sourceSymbol, bool isAuditable, CancellationToken token)
+    {
         token.ThrowIfCancellationRequested();
 
         // Extract attribute properties
@@ -199,6 +219,19 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             
             var updateCode = GenerateDtoCode(model, updateDtoName, updateMembers, "Update");
             context.AddSource($"{updateDtoName}.g.cs", SourceText.From(updateCode, Encoding.UTF8));
+        }
+
+        // Generate Upsert DTO
+        if ((model.Types & DtoTypes.Upsert) != 0)
+        {
+            var upsertExclusions = new HashSet<string>(model.ExcludeProperties, System.StringComparer.OrdinalIgnoreCase);
+            // Include ID in Upsert DTOs (can be null for create, populated for update)
+
+            var upsertMembers = model.Members.Where(m => !upsertExclusions.Contains(m.Name)).ToImmutableArray();
+            var upsertDtoName = BuildDtoName(sourceTypeName, "Upsert", "Request", model.Prefix, model.Suffix);
+            
+            var upsertCode = GenerateDtoCode(model, upsertDtoName, upsertMembers, "Upsert");
+            context.AddSource($"{upsertDtoName}.g.cs", SourceText.From(upsertCode, Encoding.UTF8));
         }
 
         // Generate Response DTO
@@ -331,17 +364,28 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
         if (isPositional)
         {
-            var parameters = string.Join(", ",
-                members.Select(m =>
+            sb.AppendLine($"public {keyword} {dtoName}(");
+            
+            for (int i = 0; i < members.Length; i++)
+            {
+                var member = members[i];
+                var param = $"    {member.TypeName} {member.Name}";
+                
+                if (member.IsRequired && model.OutputType == OutputType.RecordStruct)
                 {
-                    var param = $"{m.TypeName} {m.Name}";
-                    if (m.IsRequired && model.OutputType == OutputType.RecordStruct)
-                    {
-                        param = $"required {param}";
-                    }
-                    return param;
-                }));
-            sb.AppendLine($"public {keyword} {dtoName}({parameters});");
+                    param = $"    required {member.TypeName} {member.Name}";
+                }
+                
+                // Add comma for all but the last parameter
+                if (i < members.Length - 1)
+                {
+                    param += ",";
+                }
+                
+                sb.AppendLine(param);
+            }
+            
+            sb.AppendLine(");");
         }
         else
         {

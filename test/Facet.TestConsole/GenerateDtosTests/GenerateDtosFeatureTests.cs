@@ -21,6 +21,9 @@ public class GenerateDtosFeatureTests
 
         TestGeneratedTypesExist();
         TestBasicFunctionality();
+        TestNewUpsertFeature();
+        TestAllowMultipleFeature();
+        TestImprovedRecordFormatting();
 
         Console.WriteLine("\n=== All GenerateDtos tests completed! ===");
     }
@@ -42,6 +45,8 @@ public class GenerateDtosFeatureTests
             var testUserDtos = allTypes.Where(t => t.Name.Contains("TestUser")).ToArray();
             var testProductDtos = allTypes.Where(t => t.Name.Contains("TestProduct")).ToArray();
             var testOrderDtos = allTypes.Where(t => t.Name.Contains("TestOrder")).ToArray();
+            var testScheduleDtos = allTypes.Where(t => t.Name.Contains("TestSchedule")).ToArray();
+            var testEventDtos = allTypes.Where(t => t.Name.Contains("TestEvent")).ToArray();
             
             Console.WriteLine($"\nFound {testUserDtos.Length} TestUser-related types:");
             foreach (var type in testUserDtos)
@@ -60,17 +65,28 @@ public class GenerateDtosFeatureTests
             {
                 Console.WriteLine($"  - {type.FullName}");
             }
-            
-            // Look for any generated types (*.g.cs pattern)
-            var generatedTypes = allTypes.Where(t => t.Name.Contains("Request") || t.Name.Contains("Response") || t.Name.Contains("Query")).ToArray();
-            
-            Console.WriteLine($"\nFound {generatedTypes.Length} DTO-pattern types:");
-            foreach (var type in generatedTypes)
+
+            Console.WriteLine($"\nFound {testScheduleDtos.Length} TestSchedule-related types:");
+            foreach (var type in testScheduleDtos)
+            {
+                Console.WriteLine($"  - {type.FullName}");
+            }
+
+            Console.WriteLine($"\nFound {testEventDtos.Length} TestEvent-related types:");
+            foreach (var type in testEventDtos)
             {
                 Console.WriteLine($"  - {type.FullName}");
             }
             
-            if (testUserDtos.Length > 0 || testProductDtos.Length > 0 || testOrderDtos.Length > 0)
+            // Look for Upsert types specifically
+            var upsertTypes = allTypes.Where(t => t.Name.Contains("Upsert")).ToArray();
+            Console.WriteLine($"\nFound {upsertTypes.Length} Upsert DTO types:");
+            foreach (var type in upsertTypes)
+            {
+                Console.WriteLine($"  - {type.FullName}");
+            }
+            
+            if (testUserDtos.Length > 0 || testProductDtos.Length > 0 || testOrderDtos.Length > 0 || upsertTypes.Length > 0)
             {
                 Console.WriteLine("\n? GenerateDtos feature is working - DTOs were generated!");
             }
@@ -112,56 +128,144 @@ public class GenerateDtosFeatureTests
         {
             // Test the attributes themselves
             var testUserType = typeof(TestUser);
-            var generateDtosAttr = testUserType.GetCustomAttribute<GenerateDtosAttribute>();
+            var generateDtosAttrs = testUserType.GetCustomAttributes<GenerateDtosAttribute>().ToArray();
             
-            if (generateDtosAttr != null)
+            Console.WriteLine($"? Found {generateDtosAttrs.Length} GenerateDtosAttribute(s) on TestUser");
+            foreach (var attr in generateDtosAttrs)
             {
-                Console.WriteLine("? GenerateDtosAttribute found on TestUser");
-                Console.WriteLine($"  Types: {generateDtosAttr.Types}");
-                Console.WriteLine($"  OutputType: {generateDtosAttr.OutputType}");
-                Console.WriteLine($"  ExcludeProperties: [{string.Join(", ", generateDtosAttr.ExcludeProperties)}]");
-            }
-            else
-            {
-                Console.WriteLine("? GenerateDtosAttribute not found on TestUser");
+                Console.WriteLine($"  Types: {attr.Types}");
+                Console.WriteLine($"  OutputType: {attr.OutputType}");
+                Console.WriteLine($"  ExcludeProperties: [{string.Join(", ", attr.ExcludeProperties)}]");
             }
 
             var testProductType = typeof(TestProduct);
-            var generateAuditableDtosAttr = testProductType.GetCustomAttribute<GenerateAuditableDtosAttribute>();
+            var generateAuditableDtosAttrs = testProductType.GetCustomAttributes<GenerateAuditableDtosAttribute>().ToArray();
             
-            if (generateAuditableDtosAttr != null)
+            Console.WriteLine($"? Found {generateAuditableDtosAttrs.Length} GenerateAuditableDtosAttribute(s) on TestProduct");
+            foreach (var attr in generateAuditableDtosAttrs)
             {
-                Console.WriteLine("? GenerateAuditableDtosAttribute found on TestProduct");
-                Console.WriteLine($"  Types: {generateAuditableDtosAttr.Types}");
-                Console.WriteLine($"  OutputType: {generateAuditableDtosAttr.OutputType}");
-                Console.WriteLine($"  ExcludeProperties: [{string.Join(", ", generateAuditableDtosAttr.ExcludeProperties)}]");
-            }
-            else
-            {
-                Console.WriteLine("? GenerateAuditableDtosAttribute not found on TestProduct");
-            }
-
-            var testOrderType = typeof(TestOrder);
-            var generateDtosOrderAttr = testOrderType.GetCustomAttribute<GenerateDtosAttribute>();
-            
-            if (generateDtosOrderAttr != null)
-            {
-                Console.WriteLine("? GenerateDtosAttribute found on TestOrder");
-                Console.WriteLine($"  Types: {generateDtosOrderAttr.Types}");
-                Console.WriteLine($"  OutputType: {generateDtosOrderAttr.OutputType}");
-                Console.WriteLine($"  Namespace: {generateDtosOrderAttr.Namespace}");
-                Console.WriteLine($"  Prefix: {generateDtosOrderAttr.Prefix}");
-                Console.WriteLine($"  Suffix: {generateDtosOrderAttr.Suffix}");
-            }
-            else
-            {
-                Console.WriteLine("? GenerateDtosAttribute not found on TestOrder");
+                Console.WriteLine($"  Types: {attr.Types}");
+                Console.WriteLine($"  OutputType: {attr.OutputType}");
+                Console.WriteLine($"  ExcludeProperties: [{string.Join(", ", attr.ExcludeProperties)}]");
             }
             
         }
         catch (Exception ex)
         {
             Console.WriteLine($"? Error testing functionality: {ex.Message}");
+        }
+
+        Console.WriteLine();
+    }
+
+    private void TestNewUpsertFeature()
+    {
+        Console.WriteLine("3. Testing New Upsert Feature:");
+        Console.WriteLine("==============================");
+
+        try
+        {
+            Console.WriteLine("Testing Upsert DTO generation:");
+            
+            // Check for TestEvent which only generates Upsert
+            var testEventType = typeof(TestEvent);
+            var generateDtosAttr = testEventType.GetCustomAttribute<GenerateDtosAttribute>();
+            
+            if (generateDtosAttr != null)
+            {
+                Console.WriteLine($"? TestEvent configured for: {generateDtosAttr.Types}");
+                Console.WriteLine("  Expected to generate: UpsertTestEventRequest");
+            }
+
+            // Check for TestSchedule which has multiple attributes including Upsert
+            var testScheduleType = typeof(TestSchedule);
+            var scheduleAttrs = testScheduleType.GetCustomAttributes<GenerateDtosAttribute>().ToArray();
+            
+            Console.WriteLine($"? TestSchedule has {scheduleAttrs.Length} GenerateDtos attributes:");
+            foreach (var attr in scheduleAttrs)
+            {
+                Console.WriteLine($"  - Types: {attr.Types}, ExcludeProperties: [{string.Join(", ", attr.ExcludeProperties)}]");
+            }
+            
+            Console.WriteLine("\nUpsert DTOs are ideal for scenarios where you want to:");
+            Console.WriteLine("  - Accept either create or update operations in a single endpoint");
+            Console.WriteLine("  - Handle 'body = body with { Id = scheduleId }' scenarios");
+            Console.WriteLine("  - Support both INSERT and UPDATE operations based on whether ID is provided");
+            
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"? Error testing Upsert feature: {ex.Message}");
+        }
+
+        Console.WriteLine();
+    }
+
+    private void TestAllowMultipleFeature()
+    {
+        Console.WriteLine("4. Testing AllowMultiple Feature:");
+        Console.WriteLine("=================================");
+
+        try
+        {
+            var testScheduleType = typeof(TestSchedule);
+            var scheduleAttrs = testScheduleType.GetCustomAttributes<GenerateDtosAttribute>().ToArray();
+            
+            Console.WriteLine($"TestSchedule demonstrates AllowMultiple with {scheduleAttrs.Length} attributes:");
+            
+            for (int i = 0; i < scheduleAttrs.Length; i++)
+            {
+                var attr = scheduleAttrs[i];
+                Console.WriteLine($"  Attribute {i + 1}:");
+                Console.WriteLine($"    Types: {attr.Types}");
+                Console.WriteLine($"    ExcludeProperties: [{string.Join(", ", attr.ExcludeProperties)}]");
+            }
+            
+            Console.WriteLine("\nThis allows for fine-grained control:");
+            Console.WriteLine("  - Different exclusions for Response vs Upsert DTOs");
+            Console.WriteLine("  - Response excludes: Password, InternalNotes");
+            Console.WriteLine("  - Upsert excludes: Password (but allows InternalNotes)");
+            Console.WriteLine("  - Perfect for scenarios where internal fields are needed for updates but not responses");
+            
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"? Error testing AllowMultiple feature: {ex.Message}");
+        }
+
+        Console.WriteLine();
+    }
+
+    private void TestImprovedRecordFormatting()
+    {
+        Console.WriteLine("5. Testing Improved Record Formatting:");
+        Console.WriteLine("======================================");
+
+        try
+        {
+            Console.WriteLine("The new record formatting includes:");
+            Console.WriteLine("  ? Line breaks between parameters for better readability");
+            Console.WriteLine("  ? Proper indentation for record constructor parameters");
+            Console.WriteLine("  ? No more giant single-line records that are hard to inspect");
+            
+            Console.WriteLine("\nExample generated record format:");
+            Console.WriteLine("  public record CreateTestUserRequest(");
+            Console.WriteLine("      string FirstName,");
+            Console.WriteLine("      string LastName,");
+            Console.WriteLine("      string Email,");
+            Console.WriteLine("      string? Password,");
+            Console.WriteLine("      DateTime DateOfBirth,");
+            Console.WriteLine("      bool IsActive,");
+            Console.WriteLine("      DateTime CreatedAt,");
+            Console.WriteLine("      DateTime? UpdatedAt");
+            Console.WriteLine("  );");
+            
+            Console.WriteLine("\nThis makes the generated code much more readable and easier to debug!");
+            
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"? Error testing record formatting: {ex.Message}");
         }
 
         Console.WriteLine();

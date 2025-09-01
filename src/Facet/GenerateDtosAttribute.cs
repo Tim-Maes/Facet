@@ -13,7 +13,8 @@ public enum DtoTypes
     Update = 2,
     Response = 4,
     Query = 8,
-    All = Create | Update | Response | Query
+    Upsert = 16,
+    All = Create | Update | Response | Query | Upsert
 }
 
 /// <summary>
@@ -28,9 +29,10 @@ public enum OutputType
 }
 
 /// <summary>
-/// Generates standard CRUD DTOs (Create, Update, Response, Query) for a domain model.
+/// Generates standard CRUD DTOs (Create, Update, Response, Query, Upsert) for a domain model.
+/// Can be applied multiple times with different configurations for fine-grained control.
 /// </summary>
-[AttributeUsage(AttributeTargets.Class)]
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public class GenerateDtosAttribute : Attribute
 {
     /// <summary>
@@ -82,8 +84,9 @@ public class GenerateDtosAttribute : Attribute
 /// <summary>
 /// Predefined attribute for common auditable entity scenarios.
 /// Automatically excludes common audit fields: CreatedDate, UpdatedDate, CreatedAt, UpdatedAt, CreatedBy, UpdatedBy.
+/// Can be applied multiple times with different configurations for fine-grained control.
 /// </summary>
-[AttributeUsage(AttributeTargets.Class)]
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public sealed class GenerateAuditableDtosAttribute : GenerateDtosAttribute
 {
     /// <summary>
