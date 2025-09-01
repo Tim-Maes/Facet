@@ -17,6 +17,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public string? ConfigurationTypeName { get; }
     public ImmutableArray<FacetMember> Members { get; }
     public bool HasExistingPrimaryConstructor { get; }
+    public string? TypeXmlDocumentation { get; }
 
     public FacetTargetModel(
         string name,
@@ -28,7 +29,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         string sourceTypeName,
         string? configurationTypeName,
         ImmutableArray<FacetMember> members,
-        bool hasExistingPrimaryConstructor = false)
+        bool hasExistingPrimaryConstructor = false,
+        string? typeXmlDocumentation = null)
     {
         Name = name;
         Namespace = @namespace;
@@ -40,6 +42,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         ConfigurationTypeName = configurationTypeName;
         Members = members;
         HasExistingPrimaryConstructor = hasExistingPrimaryConstructor;
+        TypeXmlDocumentation = typeXmlDocumentation;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -56,6 +59,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && SourceTypeName == other.SourceTypeName
             && ConfigurationTypeName == other.ConfigurationTypeName
             && HasExistingPrimaryConstructor == other.HasExistingPrimaryConstructor
+            && TypeXmlDocumentation == other.TypeXmlDocumentation
             && Members.SequenceEqual(other.Members);
     }
 
@@ -75,6 +79,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + (SourceTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + (ConfigurationTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + HasExistingPrimaryConstructor.GetHashCode();
+            hash = hash * 31 + (TypeXmlDocumentation?.GetHashCode() ?? 0);
 
             foreach (var member in Members)
                 hash = hash * 31 + member.GetHashCode();
