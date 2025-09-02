@@ -10,7 +10,7 @@ public class ToEntityTests
         TestBasicToEntityMapping();
     }
 
-    public static void TestBasicToEntityMapping()
+    private static void TestBasicToEntityMapping()
     {
         Console.WriteLine("=== Testing ToEntity Extension Method ===\n");
 
