@@ -86,7 +86,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         // Extract type-level XML documentation from the source type
         var typeXmlDocumentation = ExtractXmlDocumentation(sourceType);
 
-        foreach (var (member, isInitOnly, isRequired) in allMembersWithModifiers)
+        foreach (var (member, isInitOnly, isRequired, isSettable) in allMembersWithModifiers)
         {
             token.ThrowIfCancellationRequested();
             if (excluded.Contains(member.Name)) continue;
@@ -104,6 +104,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
                     FacetMemberKind.Property,
                     shouldPreserveInitOnly,
                     shouldPreserveRequired,
+                    isSettable,
                     memberXmlDocumentation));
                 addedMembers.Add(p.Name);
             }
@@ -118,6 +119,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
                     FacetMemberKind.Field,
                     false, // Fields don't have init-only
                     shouldPreserveRequired,
+                    isSettable,
                     memberXmlDocumentation));
                 addedMembers.Add(f.Name);
             }
@@ -181,7 +183,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
     /// Gets all members from the inheritance hierarchy, starting from the most derived type
     /// and walking up to the base types. This ensures that overridden members are preferred.
     /// </summary>
-    private static IEnumerable<(ISymbol Symbol, bool IsInitOnly, bool IsRequired)> GetAllMembersWithModifiers(INamedTypeSymbol type)
+    private static IEnumerable<(ISymbol Symbol, bool IsInitOnly, bool IsRequired, bool IsSettable)> GetAllMembersWithModifiers(INamedTypeSymbol type)
     {
         var visited = new HashSet<string>();
         var current = type;
@@ -198,13 +200,14 @@ public sealed class FacetGenerator : IIncrementalGenerator
                         visited.Add(member.Name);
                         var isInitOnly = prop.SetMethod?.IsInitOnly == true;
                         var isRequired = prop.IsRequired;
-                        yield return (prop, isInitOnly, isRequired);
+                        var isSettable = prop.SetMethod != null;
+                        yield return (prop, isInitOnly, isRequired, isSettable);
                     }
                     else if (member is IFieldSymbol field)
                     {
                         visited.Add(member.Name);
                         var isRequired = field.IsRequired;
-                        yield return (field, false, isRequired);
+                        yield return (field, false, isRequired, true);
                     }
                 }
             }
@@ -764,6 +767,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         sb.AppendLine("        return new " + model.SourceTypeName + " {");
 
         var propertyAssignments = model.Members
+            .Where(m => m.IsSettable)
             .Select(m => $"            {m.Name} = this.{m.Name}");
         sb.AppendLine(string.Join(",\n", propertyAssignments));
 

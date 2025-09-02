@@ -9,17 +9,20 @@ internal sealed class FacetMember : IEquatable<FacetMember>
     public FacetMemberKind Kind { get; }
     public bool IsInitOnly { get; }
     public bool IsRequired { get; }
+    public bool IsSettable { get; }
     public string? XmlDocumentation { get; }
 
-    public FacetMember(string name, string typeName, FacetMemberKind kind, bool isInitOnly = false, bool isRequired = false, string? xmlDocumentation = null)
+    public FacetMember(string name, string typeName, FacetMemberKind kind, bool isInitOnly = false, bool isRequired = false, bool isSettable = true, string? xmlDocumentation = null)
     {
         Name = name;
         TypeName = typeName;
         Kind = kind;
         IsInitOnly = isInitOnly;
         IsRequired = isRequired;
+        IsSettable = isSettable;
         XmlDocumentation = xmlDocumentation;
     }
+
 
     public bool Equals(FacetMember? other) =>
         other is not null &&
@@ -28,6 +31,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         Kind == other.Kind &&
         IsInitOnly == other.IsInitOnly &&
         IsRequired == other.IsRequired &&
+        IsSettable == other.IsSettable &&
         XmlDocumentation == other.XmlDocumentation;
 
     public override bool Equals(object? obj) => obj is FacetMember other && Equals(other);
@@ -42,6 +46,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
             hash = hash * 31 + Kind.GetHashCode();
             hash = hash * 31 + IsInitOnly.GetHashCode();
             hash = hash * 31 + IsRequired.GetHashCode();
+            hash = hash * 31 + IsSettable.GetHashCode();
             hash = hash * 31 + (XmlDocumentation?.GetHashCode() ?? 0);
             return hash;
         }
