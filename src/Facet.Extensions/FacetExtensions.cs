@@ -7,6 +7,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 
 namespace Facet.Extensions;
+
 /// <summary>
 /// Provides extension methods for mapping source entities or sequences
 /// to Facet-generated types (synchronous and provider-agnostic only).
@@ -23,6 +24,19 @@ public static class FacetExtensions
             .First(m =>
             {
                 if (m.Name != nameof(ToFacet)) return false;
+                var ga = m.GetGenericArguments();
+                if (ga.Length != 2) return false;
+                var ps = m.GetParameters();
+                return ps.Length == 1;
+            });
+
+    // Cached MethodInfo for ToEntity<TFacet, TEntity>(TFacet)
+    private static readonly MethodInfo _toEntityTwoGenericMethod =
+        typeof(FacetExtensions)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .First(m =>
+            {
+                if (m.Name != nameof(ToEntity)) return false;
                 var ga = m.GetGenericArguments();
                 if (ga.Length != 2) return false;
                 var ps = m.GetParameters();
@@ -94,6 +108,61 @@ public static class FacetExtensions
     }
 
     /// <summary>
+    /// Maps a single facet instance to the specified entity type by invoking its generated ToEntity method.
+    /// </summary>
+    /// <typeparam name="TFacet">The facet type that is annotated with [Facet(typeof(TEntity))].</typeparam>
+    /// <typeparam name="TEntity">The entity type to map to.</typeparam>
+    /// <param name="facet">The facet instance to map.</param>
+    /// <returns>A new <typeparamref name="TEntity"/> instance populated from <paramref name="facet"/>.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="facet"/> is <c>null</c>.</exception>
+    public static TEntity ToEntity<TFacet, TEntity>(this TFacet facet)
+        where TFacet : class
+        where TEntity : class
+    {
+        if (facet is null) throw new ArgumentNullException(nameof(facet));    
+        return EntityCache<TFacet, TEntity>.Mapper(facet);
+    }
+
+    /// <summary>
+    /// Converts the specified facet object to an instance of the entity type that the facet was created from.
+    /// </summary>
+    /// <typeparam name="TEntity">The entity type to which the facet object will be converted. Must be a reference type.</typeparam>
+    /// <param name="facet">The facet object to be converted. Cannot be <see langword="null"/>.</param>
+    /// <returns>An instance of the entity type <typeparamref name="TEntity"/> created from the facet object.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if <paramref name="facet"/> is <see langword="null"/>.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if: <list type="bullet"> <item><description>The facet type is not
+    /// annotated with <c>[Facet(typeof(...))]</c>.</description></item> <item><description>The target entity type does not match
+    /// the declared source type for the facet.</description></item> <item><description>The
+    /// conversion process fails due to a missing ToEntity method on the facet.</description></item>
+    /// </list></exception>
+    public static TEntity ToEntity<TEntity>(this object facet)
+        where TEntity : class
+    {
+        if (facet is null) throw new ArgumentNullException(nameof(facet));
+
+        var facetType = facet.GetType();
+        var declaredSource = GetDeclaredSourceType(facetType)
+            ?? throw new InvalidOperationException(
+                $"Type '{facetType.FullName}' must be annotated with [Facet(typeof(...))] to use ToEntity<{typeof(TEntity).Name}>().");
+
+        if (declaredSource != typeof(TEntity))
+        {
+            throw new InvalidOperationException(
+                $"Target entity type '{typeof(TEntity).FullName}' does not match declared Facet source '{declaredSource.FullName}' for facet '{facetType.FullName}'.");
+        }
+
+        var forwarded = _toEntityTwoGenericMethod.MakeGenericMethod(facetType, typeof(TEntity))
+                                         .Invoke(null, new[] { facet });
+        if (forwarded is null)
+        {
+            throw new InvalidOperationException(
+                $"Unable to map facet '{facetType.FullName}' to '{typeof(TEntity).FullName}'. Ensure the facet has a generated ToEntity method.");
+        }
+
+        return (TEntity)forwarded;
+    }
+
+    /// <summary>
     /// Maps an <see cref="IEnumerable{TSource}"/> to an <see cref="IEnumerable{TTarget}"/>
     /// via the generated constructor of the facet type.
     /// </summary>
@@ -107,6 +176,23 @@ public static class FacetExtensions
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
         return source.Select(item => item.ToFacet<TSource, TTarget>());
+    }
+
+    /// <summary>
+    /// Maps an <see cref="IEnumerable{TFacet}"/> to an <see cref="IEnumerable{TEntity}"/>
+    /// via the generated ToEntity method of the facet type.
+    /// </summary>
+    /// <typeparam name="TFacet">The facet type, which must be annotated with [Facet(typeof(TEntity))].</typeparam>
+    /// <typeparam name="TEntity">The entity type.</typeparam>
+    /// <param name="facets">The source collection of facets.</param>
+    /// <returns>An <see cref="IEnumerable{TEntity}"/> mapped from the input.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="facets"/> is <c>null</c>.</exception>
+    public static IEnumerable<TEntity> ToEntities<TFacet, TEntity>(this IEnumerable<TFacet> facets)
+        where TFacet : class
+        where TEntity : class
+    {
+        if (facets is null) throw new ArgumentNullException(nameof(facets));
+        return facets.Select(f => f.ToEntity<TFacet, TEntity>());
     }
 
     /// <summary>
@@ -174,11 +260,11 @@ public static class FacetExtensions
     }
 
     /// <summary>
-    /// Projects the elements of the source query into <typeparamref name="TTarget"/> using the facet’s generated projection.
+    /// Projects the elements of the source query into <typeparamref name="TTarget"/> using the facet's generated projection.
     /// </summary>
     /// <remarks>
     /// Uses <c>TTarget.Projection</c> (an <see cref="Expression{TDelegate}"/> of type
-    /// <c>Expression&lt;Func&lt;DeclaredSource, TTarget&gt;&gt;</c>) and adapts the parameter to the query’s
+    /// <c>Expression&lt;Func&lt;DeclaredSource, TTarget&gt;&gt;</c>) and adapts the parameter to the query's
     /// element type if necessary (by inserting a cast). This builds an expression tree only (no materialization)
     /// and therefore uses deferred execution; translation behavior is provider-dependent.
     /// </remarks>

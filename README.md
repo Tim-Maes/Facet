@@ -84,7 +84,8 @@ dotnet add package Facet.Extensions.EFCore
 public partial class UserFacet { }
 
 // Auto-generates constructor, properties, and LINQ projection
-var user = user.ToFacet<UserFacet>();
+var userFacet = user.ToFacet<UserFacet>();
+var user = userFacet.ToEntity<User>();
 var users = users.SelectFacets<UserFacet>();
 ```
 
