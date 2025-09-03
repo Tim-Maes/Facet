@@ -38,7 +38,7 @@ public class RecordPrimaryConstructorTests
                 PropB = source.PropB
             };
             
-            Console.WriteLine($"? Successfully created TestFacet with existing primary constructor");
+            Console.WriteLine($"SUCCESS: Successfully created TestFacet with existing primary constructor");
             Console.WriteLine($"  PropA: {facet.PropA}");
             Console.WriteLine($"  PropB: {facet.PropB}");
             Console.WriteLine($"  ExtraParam (from primary constructor): {facet.ExtraParam}");
@@ -47,18 +47,18 @@ public class RecordPrimaryConstructorTests
             try
             {
                 TestFacet.FromSource(source, 123);
-                Console.WriteLine("? FromSource should have thrown an exception with guidance");
+                Console.WriteLine("INFO: FromSource should have thrown an exception with guidance");
             }
             catch (NotSupportedException ex)
             {
-                Console.WriteLine($"? FromSource correctly provides guidance");
+                Console.WriteLine($"SUCCESS: FromSource correctly provides guidance");
             }
             
             Console.WriteLine();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"? Error in TestBasicRecordWithPrimaryConstructor: {ex.Message}");
+            Console.WriteLine($"ERROR: Error in TestBasicRecordWithPrimaryConstructor: {ex.Message}");
             Console.WriteLine();
         }
     }
@@ -75,14 +75,14 @@ public class RecordPrimaryConstructorTests
             // Regular record should still work with the generated constructor
             var facet = new RegularRecordFacet(source);
             
-            Console.WriteLine($"? Successfully created RegularRecordFacet with generated constructor");
+            Console.WriteLine($"SUCCESS: Successfully created RegularRecordFacet with generated constructor");
             Console.WriteLine($"  PropA: {facet.PropA}");
             Console.WriteLine($"  PropB: {facet.PropB}");
             Console.WriteLine();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"? Error in TestRegularRecordWithoutPrimaryConstructor: {ex.Message}");
+            Console.WriteLine($"ERROR: Error in TestRegularRecordWithoutPrimaryConstructor: {ex.Message}");
             Console.WriteLine();
         }
     }

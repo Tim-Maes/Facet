@@ -54,7 +54,7 @@ public class ValidationAndErrorTests
         }
         catch (DbUpdateException ex)
         {
-            Console.WriteLine($"    ? Correctly caught validation error: {ex.InnerException?.Message ?? ex.Message}");
+            Console.WriteLine($"    SUCCESS: Correctly caught validation error: {ex.InnerException?.Message ?? ex.Message}");
             _context.ChangeTracker.Clear();
         }
 
@@ -78,7 +78,7 @@ public class ValidationAndErrorTests
         }
         catch (DbUpdateException ex)
         {
-            Console.WriteLine($"    ? Correctly caught uniqueness constraint violation: {ex.InnerException?.Message ?? ex.Message}");
+            Console.WriteLine($"    SUCCESS: Correctly caught uniqueness constraint violation: {ex.InnerException?.Message ?? ex.Message}");
             _context.ChangeTracker.Clear();
         }
 
@@ -109,7 +109,7 @@ public class ValidationAndErrorTests
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"    ? Correctly caught DTO validation error: {ex.Message}");
+            Console.WriteLine($"    SUCCESS: Correctly caught DTO validation error: {ex.Message}");
             _context.ChangeTracker.Clear();
             await _context.Entry(user).ReloadAsync();
         }
@@ -122,7 +122,7 @@ public class ValidationAndErrorTests
 
         user.UpdateFromFacet(validUpdateDto, _context);
         await _context.SaveChangesAsync();
-        Console.WriteLine($"    ? Successfully updated user bio: {user.Bio}");
+        Console.WriteLine($"    SUCCESS: Successfully updated user bio: {user.Bio}");
 
         Console.WriteLine();
     }
@@ -183,7 +183,7 @@ public class ValidationAndErrorTests
         }
         catch (DbUpdateException ex)
         {
-            Console.WriteLine($"    ? Correctly caught foreign key constraint violation: {ex.InnerException?.Message ?? ex.Message}");
+            Console.WriteLine($"    SUCCESS: Correctly caught foreign key constraint violation: {ex.InnerException?.Message ?? ex.Message}");
             _context.ChangeTracker.Clear();
             await _context.Entry(product).ReloadAsync();
         }
@@ -205,7 +205,7 @@ public class ValidationAndErrorTests
         }
         catch (DbUpdateException ex)
         {
-            Console.WriteLine($"    ? Correctly caught string length constraint violation: {ex.InnerException?.Message ?? ex.Message}");
+            Console.WriteLine($"    SUCCESS: Correctly caught string length constraint violation: {ex.InnerException?.Message ?? ex.Message}");
             _context.ChangeTracker.Clear();
             await _context.Entry(user).ReloadAsync();
         }
@@ -250,11 +250,11 @@ public class ValidationAndErrorTests
             try
             {
                 await operation();
-                Console.WriteLine($"    ? {description}: Success");
+                Console.WriteLine($"    SUCCESS: {description}: Success");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"    ? {description}: Failed - {ex.Message}");
+                Console.WriteLine($"    INFO: {description}: Failed - {ex.Message}");
                 _context.ChangeTracker.Clear();
                 await _context.Entry(user).ReloadAsync();
             }

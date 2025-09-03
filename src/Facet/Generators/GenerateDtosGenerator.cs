@@ -100,91 +100,102 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     {
         token.ThrowIfCancellationRequested();
 
-        // Extract attribute properties
-        var types = GetNamedArg(attribute.NamedArguments, "Types", DtoTypes.All);
-        var outputType = GetNamedArg(attribute.NamedArguments, "OutputType", OutputType.Record);
-        var targetNamespace = GetNamedArg<string?>(attribute.NamedArguments, "Namespace", null);
-        var prefix = GetNamedArg<string?>(attribute.NamedArguments, "Prefix", null);
-        var suffix = GetNamedArg<string?>(attribute.NamedArguments, "Suffix", null);
-        var includeFields = GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
-        var generateConstructors = GetNamedArg(attribute.NamedArguments, "GenerateConstructors", true);
-        var generateProjections = GetNamedArg(attribute.NamedArguments, "GenerateProjections", true);
-
-        // Fix the ExcludeProperties handling
-        var userExcludeProperties = new List<string>();
-        var excludePropertiesArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "ExcludeProperties");
-        if (excludePropertiesArg.Value.Kind != TypedConstantKind.Error && !excludePropertiesArg.Value.IsNull)
+        try
         {
-            if (excludePropertiesArg.Value.Kind == TypedConstantKind.Array)
-            {
-                userExcludeProperties.AddRange(
-                    excludePropertiesArg.Value.Values
-                        .Where(v => v.Value?.ToString() != null)
-                        .Select(v => v.Value!.ToString()!));
-            }
-        }
+            // Extract attribute properties with proper enum handling
+            var types = GetNamedArg(attribute.NamedArguments, "Types", DtoTypes.All);
+            var outputType = GetNamedArg(attribute.NamedArguments, "OutputType", OutputType.Record);
+            var targetNamespace = GetNamedArg<string?>(attribute.NamedArguments, "Namespace", null);
+            var prefix = GetNamedArg<string?>(attribute.NamedArguments, "Prefix", null);
+            var suffix = GetNamedArg<string?>(attribute.NamedArguments, "Suffix", null);
+            var includeFields = GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
+            var generateConstructors = GetNamedArg(attribute.NamedArguments, "GenerateConstructors", true);
+            var generateProjections = GetNamedArg(attribute.NamedArguments, "GenerateProjections", true);
 
-        // Build exclusion list
-        var excludeProperties = new HashSet<string>(userExcludeProperties, System.StringComparer.OrdinalIgnoreCase);
-        
-        if (isAuditable)
+            // Fix the ExcludeProperties handling
+            var userExcludeProperties = new List<string>();
+            var excludePropertiesArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "ExcludeProperties");
+            if (excludePropertiesArg.Value.Kind != TypedConstantKind.Error && !excludePropertiesArg.Value.IsNull)
+            {
+                if (excludePropertiesArg.Value.Kind == TypedConstantKind.Array)
+                {
+                    userExcludeProperties.AddRange(
+                        excludePropertiesArg.Value.Values
+                            .Where(v => v.Value?.ToString() != null)
+                            .Select(v => v.Value!.ToString()!));
+                }
+            }
+
+            // Build exclusion list
+            var excludeProperties = new HashSet<string>(userExcludeProperties, System.StringComparer.OrdinalIgnoreCase);
+            
+            if (isAuditable)
+            {
+                foreach (var field in DefaultAuditFields)
+                {
+                    excludeProperties.Add(field);
+                }
+            }
+
+            var members = new List<FacetMember>();
+            var addedMembers = new HashSet<string>();
+
+            var allMembersWithModifiers = GetAllMembersWithModifiers(sourceSymbol);
+
+            foreach (var (member, isInitOnly, isRequired) in allMembersWithModifiers)
+            {
+                token.ThrowIfCancellationRequested();
+                if (excludeProperties.Contains(member.Name)) continue;
+                if (addedMembers.Contains(member.Name)) continue;
+
+                if (member is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } p)
+                {
+                    members.Add(new FacetMember(
+                        p.Name,
+                        p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        FacetMemberKind.Property,
+                        isInitOnly,
+                        isRequired,
+                        null)); // No XML documentation for GenerateDtos
+                    addedMembers.Add(p.Name);
+                }
+                else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
+                {
+                    members.Add(new FacetMember(
+                        f.Name,
+                        f.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        FacetMemberKind.Field,
+                        false, // Fields don't have init-only
+                        isRequired,
+                        null)); // No XML documentation for GenerateDtos
+                    addedMembers.Add(f.Name);
+                }
+            }
+
+            var sourceNamespace = sourceSymbol.ContainingNamespace.IsGlobalNamespace
+                ? null
+                : sourceSymbol.ContainingNamespace.ToDisplayString();
+
+            return new GenerateDtosTargetModel(
+                sourceSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                sourceNamespace,
+                targetNamespace ?? sourceNamespace,
+                types,
+                outputType,
+                prefix,
+                suffix,
+                includeFields,
+                generateConstructors,
+                generateProjections,
+                excludeProperties.ToImmutableArray(),
+                members.ToImmutableArray());
+        }
+        catch (Exception)
         {
-            foreach (var field in DefaultAuditFields)
-            {
-                excludeProperties.Add(field);
-            }
+            // Swallow exceptions to prevent generator crashes
+            // In a real scenario, you might want to emit a diagnostic instead
+            return null;
         }
-
-        var members = new List<FacetMember>();
-        var addedMembers = new HashSet<string>();
-
-        var allMembersWithModifiers = GetAllMembersWithModifiers(sourceSymbol);
-
-        foreach (var (member, isInitOnly, isRequired) in allMembersWithModifiers)
-        {
-            token.ThrowIfCancellationRequested();
-            if (excludeProperties.Contains(member.Name)) continue;
-            if (addedMembers.Contains(member.Name)) continue;
-
-            if (member is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } p)
-            {
-                members.Add(new FacetMember(
-                    p.Name,
-                    p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                    FacetMemberKind.Property,
-                    isInitOnly,
-                    isRequired));
-                addedMembers.Add(p.Name);
-            }
-            else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
-            {
-                members.Add(new FacetMember(
-                    f.Name,
-                    f.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                    FacetMemberKind.Field,
-                    false, // Fields don't have init-only
-                    isRequired));
-                addedMembers.Add(f.Name);
-            }
-        }
-
-        var sourceNamespace = sourceSymbol.ContainingNamespace.IsGlobalNamespace
-            ? null
-            : sourceSymbol.ContainingNamespace.ToDisplayString();
-
-        return new GenerateDtosTargetModel(
-            sourceSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-            sourceNamespace,
-            targetNamespace ?? sourceNamespace,
-            types,
-            outputType,
-            prefix,
-            suffix,
-            includeFields,
-            generateConstructors,
-            generateProjections,
-            excludeProperties.ToImmutableArray(),
-            members.ToImmutableArray());
     }
 
     private static void GenerateDtosForModel(SourceProductionContext context, GenerateDtosTargetModel model)

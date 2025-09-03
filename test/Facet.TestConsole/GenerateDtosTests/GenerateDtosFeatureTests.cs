@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Facet;
 
 namespace Facet.TestConsole.GenerateDtosTests;
 
@@ -88,17 +89,17 @@ public class GenerateDtosFeatureTests
             
             if (testUserDtos.Length > 0 || testProductDtos.Length > 0 || testOrderDtos.Length > 0 || upsertTypes.Length > 0)
             {
-                Console.WriteLine("\n? GenerateDtos feature is working - DTOs were generated!");
+                Console.WriteLine("\nSUCCESS: GenerateDtos feature is working - DTOs were generated!");
             }
             else
             {
-                Console.WriteLine("\n? No generated DTOs found - checking if attributes are being processed...");
+                Console.WriteLine("\nNo generated DTOs found - checking if attributes are being processed...");
             }
             
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"? Error inspecting generated types: {ex.Message}");
+            Console.WriteLine($"ERROR: Error inspecting generated types: {ex.Message}");
         }
 
         Console.WriteLine();
@@ -130,7 +131,7 @@ public class GenerateDtosFeatureTests
             var testUserType = typeof(TestUser);
             var generateDtosAttrs = testUserType.GetCustomAttributes<GenerateDtosAttribute>().ToArray();
             
-            Console.WriteLine($"? Found {generateDtosAttrs.Length} GenerateDtosAttribute(s) on TestUser");
+            Console.WriteLine($"FOUND: {generateDtosAttrs.Length} GenerateDtosAttribute(s) on TestUser");
             foreach (var attr in generateDtosAttrs)
             {
                 Console.WriteLine($"  Types: {attr.Types}");
@@ -141,7 +142,7 @@ public class GenerateDtosFeatureTests
             var testProductType = typeof(TestProduct);
             var generateAuditableDtosAttrs = testProductType.GetCustomAttributes<GenerateAuditableDtosAttribute>().ToArray();
             
-            Console.WriteLine($"? Found {generateAuditableDtosAttrs.Length} GenerateAuditableDtosAttribute(s) on TestProduct");
+            Console.WriteLine($"FOUND: {generateAuditableDtosAttrs.Length} GenerateAuditableDtosAttribute(s) on TestProduct");
             foreach (var attr in generateAuditableDtosAttrs)
             {
                 Console.WriteLine($"  Types: {attr.Types}");
@@ -152,7 +153,7 @@ public class GenerateDtosFeatureTests
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"? Error testing functionality: {ex.Message}");
+            Console.WriteLine($"ERROR: Error testing functionality: {ex.Message}");
         }
 
         Console.WriteLine();
@@ -173,7 +174,7 @@ public class GenerateDtosFeatureTests
             
             if (generateDtosAttr != null)
             {
-                Console.WriteLine($"? TestEvent configured for: {generateDtosAttr.Types}");
+                Console.WriteLine($"CONFIGURED: TestEvent configured for: {generateDtosAttr.Types}");
                 Console.WriteLine("  Expected to generate: UpsertTestEventRequest");
             }
 
@@ -181,7 +182,7 @@ public class GenerateDtosFeatureTests
             var testScheduleType = typeof(TestSchedule);
             var scheduleAttrs = testScheduleType.GetCustomAttributes<GenerateDtosAttribute>().ToArray();
             
-            Console.WriteLine($"? TestSchedule has {scheduleAttrs.Length} GenerateDtos attributes:");
+            Console.WriteLine($"MULTIPLE: TestSchedule has {scheduleAttrs.Length} GenerateDtos attributes:");
             foreach (var attr in scheduleAttrs)
             {
                 Console.WriteLine($"  - Types: {attr.Types}, ExcludeProperties: [{string.Join(", ", attr.ExcludeProperties)}]");
@@ -195,7 +196,7 @@ public class GenerateDtosFeatureTests
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"? Error testing Upsert feature: {ex.Message}");
+            Console.WriteLine($"ERROR: Error testing Upsert feature: {ex.Message}");
         }
 
         Console.WriteLine();
@@ -230,7 +231,7 @@ public class GenerateDtosFeatureTests
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"? Error testing AllowMultiple feature: {ex.Message}");
+            Console.WriteLine($"ERROR: Error testing AllowMultiple feature: {ex.Message}");
         }
 
         Console.WriteLine();
@@ -244,9 +245,9 @@ public class GenerateDtosFeatureTests
         try
         {
             Console.WriteLine("The new record formatting includes:");
-            Console.WriteLine("  ? Line breaks between parameters for better readability");
-            Console.WriteLine("  ? Proper indentation for record constructor parameters");
-            Console.WriteLine("  ? No more giant single-line records that are hard to inspect");
+            Console.WriteLine("  FEATURE: Line breaks between parameters for better readability");
+            Console.WriteLine("  FEATURE: Proper indentation for record constructor parameters");
+            Console.WriteLine("  FEATURE: No more giant single-line records that are hard to inspect");
             
             Console.WriteLine("\nExample generated record format:");
             Console.WriteLine("  public record CreateTestUserRequest(");
@@ -265,7 +266,7 @@ public class GenerateDtosFeatureTests
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"? Error testing record formatting: {ex.Message}");
+            Console.WriteLine($"ERROR: Error testing record formatting: {ex.Message}");
         }
 
         Console.WriteLine();

@@ -87,24 +87,50 @@ public class GenerateDtosAttribute : Attribute
 /// Can be applied multiple times with different configurations for fine-grained control.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
-public sealed class GenerateAuditableDtosAttribute : GenerateDtosAttribute
+public class GenerateAuditableDtosAttribute : Attribute
 {
     /// <summary>
-    /// Common audit field names to exclude by default.
+    /// Which DTO types to generate (default: All).
     /// </summary>
-    private static readonly string[] DefaultAuditFields = 
-    {
-        "CreatedDate", "UpdatedDate", "CreatedAt", "UpdatedAt", 
-        "CreatedBy", "UpdatedBy", "CreatedById", "UpdatedById"
-    };
+    public DtoTypes Types { get; set; } = DtoTypes.All;
 
-    public GenerateAuditableDtosAttribute()
-    {
-        // Combine user-specified exclusions with default audit fields
-        var userExclusions = base.ExcludeProperties ?? Array.Empty<string>();
-        var allExclusions = new string[userExclusions.Length + DefaultAuditFields.Length];
-        userExclusions.CopyTo(allExclusions, 0);
-        DefaultAuditFields.CopyTo(allExclusions, userExclusions.Length);
-        base.ExcludeProperties = allExclusions;
-    }
+    /// <summary>
+    /// The output type for generated DTOs (default: Record).
+    /// </summary>
+    public OutputType OutputType { get; set; } = OutputType.Record;
+
+    /// <summary>
+    /// Custom namespace for generated DTOs. If null, uses the same namespace as the source type.
+    /// </summary>
+    public string? Namespace { get; set; }
+
+    /// <summary>
+    /// Additional properties to exclude from all generated DTOs (in addition to audit fields).
+    /// </summary>
+    public string[] ExcludeProperties { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Custom prefix for generated DTO names (default: none).
+    /// </summary>
+    public string? Prefix { get; set; }
+
+    /// <summary>
+    /// Custom suffix for generated DTO names (default: none).
+    /// </summary>
+    public string? Suffix { get; set; }
+
+    /// <summary>
+    /// Whether to include public fields from the source type (default: false).
+    /// </summary>
+    public bool IncludeFields { get; set; } = false;
+
+    /// <summary>
+    /// Whether to generate constructors for the DTOs (default: true).
+    /// </summary>
+    public bool GenerateConstructors { get; set; } = true;
+
+    /// <summary>
+    /// Whether to generate projection expressions for the DTOs (default: true).
+    /// </summary>
+    public bool GenerateProjections { get; set; } = true;
 }
