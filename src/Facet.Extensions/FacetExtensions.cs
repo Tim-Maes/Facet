@@ -30,13 +30,13 @@ public static class FacetExtensions
                 return ps.Length == 1;
             });
 
-    // Cached MethodInfo for ToEntity<TFacet, TEntity>(TFacet)
+    // Cached MethodInfo for BackTo<TFacet, TEntity>(TFacet)
     private static readonly MethodInfo _toEntityTwoGenericMethod =
         typeof(FacetExtensions)
             .GetMethods(BindingFlags.Public | BindingFlags.Static)
             .First(m =>
             {
-                if (m.Name != nameof(ToEntity)) return false;
+                if (m.Name != nameof(BackTo)) return false;
                 var ga = m.GetGenericArguments();
                 if (ga.Length != 2) return false;
                 var ps = m.GetParameters();
@@ -108,14 +108,14 @@ public static class FacetExtensions
     }
 
     /// <summary>
-    /// Maps a single facet instance to the specified entity type by invoking its generated ToEntity method.
+    /// Maps a single facet instance to the specified entity type by invoking its generated BackTo method.
     /// </summary>
     /// <typeparam name="TFacet">The facet type that is annotated with [Facet(typeof(TEntity))].</typeparam>
     /// <typeparam name="TEntity">The entity type to map to.</typeparam>
     /// <param name="facet">The facet instance to map.</param>
     /// <returns>A new <typeparamref name="TEntity"/> instance populated from <paramref name="facet"/>.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="facet"/> is <c>null</c>.</exception>
-    public static TEntity ToEntity<TFacet, TEntity>(this TFacet facet)
+    public static TEntity BackTo<TFacet, TEntity>(this TFacet facet)
         where TFacet : class
         where TEntity : class
     {
@@ -133,9 +133,9 @@ public static class FacetExtensions
     /// <exception cref="InvalidOperationException">Thrown if: <list type="bullet"> <item><description>The facet type is not
     /// annotated with <c>[Facet(typeof(...))]</c>.</description></item> <item><description>The target entity type does not match
     /// the declared source type for the facet.</description></item> <item><description>The
-    /// conversion process fails due to a missing ToEntity method on the facet.</description></item>
+    /// conversion process fails due to a missing BackTo method on the facet.</description></item>
     /// </list></exception>
-    public static TEntity ToEntity<TEntity>(this object facet)
+    public static TEntity BackTo<TEntity>(this object facet)
         where TEntity : class
     {
         if (facet is null) throw new ArgumentNullException(nameof(facet));
@@ -143,7 +143,7 @@ public static class FacetExtensions
         var facetType = facet.GetType();
         var declaredSource = GetDeclaredSourceType(facetType)
             ?? throw new InvalidOperationException(
-                $"Type '{facetType.FullName}' must be annotated with [Facet(typeof(...))] to use ToEntity<{typeof(TEntity).Name}>().");
+                $"Type '{facetType.FullName}' must be annotated with [Facet(typeof(...))] to use BackTo<{typeof(TEntity).Name}>().");
 
         if (declaredSource != typeof(TEntity))
         {
@@ -156,7 +156,7 @@ public static class FacetExtensions
         if (forwarded is null)
         {
             throw new InvalidOperationException(
-                $"Unable to map facet '{facetType.FullName}' to '{typeof(TEntity).FullName}'. Ensure the facet has a generated ToEntity method.");
+                $"Unable to map facet '{facetType.FullName}' to '{typeof(TEntity).FullName}'. Ensure the facet has a generated BackTo method.");
         }
 
         return (TEntity)forwarded;
@@ -180,7 +180,7 @@ public static class FacetExtensions
 
     /// <summary>
     /// Maps an <see cref="IEnumerable{TFacet}"/> to an <see cref="IEnumerable{TEntity}"/>
-    /// via the generated ToEntity method of the facet type.
+    /// via the generated BackTo method of the facet type.
     /// </summary>
     /// <typeparam name="TFacet">The facet type, which must be annotated with [Facet(typeof(TEntity))].</typeparam>
     /// <typeparam name="TEntity">The entity type.</typeparam>
@@ -192,7 +192,7 @@ public static class FacetExtensions
         where TEntity : class
     {
         if (facets is null) throw new ArgumentNullException(nameof(facets));
-        return facets.Select(f => f.ToEntity<TFacet, TEntity>());
+        return facets.Select(f => f.BackTo<TFacet, TEntity>());
     }
 
     /// <summary>

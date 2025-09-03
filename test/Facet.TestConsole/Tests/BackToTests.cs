@@ -3,16 +3,16 @@ using Facet.Extensions;
 
 namespace Facet.TestConsole.Tests;
 
-public class ToEntityTests
+public class BackToTests
 {
     public static void RunAllTests()
     {
-        TestBasicToEntityMapping();
+        TestBasicBackToMapping();
     }
 
-    private static void TestBasicToEntityMapping()
+    private static void TestBasicBackToMapping()
     {
-        Console.WriteLine("=== Testing ToEntity Extension Method ===\n");
+        Console.WriteLine("=== Testing BackTo Extension Method ===\n");
 
         // Create a test user entity (using the correct Data.User class)
         var userFacet = new UserDto
@@ -26,8 +26,8 @@ public class ToEntityTests
             LastLoginAt = DateTime.UtcNow.AddHours(-2),
         };
 
-        // Test the new ToEntity functionality
-        var reconstructedUser = userFacet.ToEntity<User>();
+        // Test the new BackTo functionality
+        var reconstructedUser = userFacet.BackTo<User>();
         Console.WriteLine($"\nReconstructed User: {reconstructedUser.FirstName} {reconstructedUser.LastName}");
         Console.WriteLine($"  Email: {reconstructedUser.Email}");
         Console.WriteLine($"  Password: '{reconstructedUser.Password}' (should be empty/default)");
@@ -42,7 +42,7 @@ public class ToEntityTests
         
         if (success)
         {
-            Console.WriteLine("✅ ToEntity extension method works correctly!");
+            Console.WriteLine("✅ BackTo extension method works correctly!");
             Console.WriteLine("✅ Excluded properties (Password) are properly handled!");
         }
         else
@@ -50,6 +50,6 @@ public class ToEntityTests
             Console.WriteLine("❌ Something went wrong with the mapping");
         }
 
-        Console.WriteLine("\n=== ToEntity Test Completed ===\n");
+        Console.WriteLine("\n=== BackTo Test Completed ===\n");
     }
 }

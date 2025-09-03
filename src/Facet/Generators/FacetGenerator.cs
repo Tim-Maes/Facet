@@ -522,8 +522,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
             }
         }
 
-        // Generate reverse mapping method (ToEntity)
-        GenerateToEntityMethod(sb, model);
+        // Generate reverse mapping method (BackTo)
+        GenerateBackToMethod(sb, model);
 
         sb.AppendLine("}");
 
@@ -752,14 +752,14 @@ public sealed class FacetGenerator : IIncrementalGenerator
         };
     }
 
-    private static void GenerateToEntityMethod(StringBuilder sb, FacetTargetModel model)
+    private static void GenerateBackToMethod(StringBuilder sb, FacetTargetModel model)
     {
         sb.AppendLine();
         sb.AppendLine("    /// <summary>");
         sb.AppendLine($"    /// Converts this instance of <see cref=\"{model.Name}\"/> to an instance of the entity type.");
         sb.AppendLine("    /// </summary>");
         sb.AppendLine($"    /// <returns>An instance of the entity type with properties mapped from this instance.</returns>");
-        sb.AppendLine($"    public {model.SourceTypeName} ToEntity()");
+        sb.AppendLine($"    public {model.SourceTypeName} BackTo()");
         sb.AppendLine("    {");
         sb.AppendLine("        return new " + model.SourceTypeName + " {");
 

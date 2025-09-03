@@ -85,7 +85,7 @@ public partial class UserFacet { }
 
 // Auto-generates constructor, properties, and LINQ projection
 var userFacet = user.ToFacet<UserFacet>();
-var user = userFacet.ToEntity<User>();
+var user = userFacet.BackTo<User>();
 var users = users.SelectFacets<UserFacet>();
 ```
 

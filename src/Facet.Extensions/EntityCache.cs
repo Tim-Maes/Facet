@@ -6,7 +6,7 @@ namespace Facet;
 
 /// <summary>
 /// Provides a cached <see cref="Func{TFacet, TEntity}"/> mapping delegate used by
-/// <c>ToEntity&lt;TFacet, TEntity&gt;</c> to efficiently construct <typeparamref name="TEntity"/> instances
+/// <c>BackTo&lt;TFacet, TEntity&gt;</c> to efficiently construct <typeparamref name="TEntity"/> instances
 /// from <typeparamref name="TFacet"/> values.
 /// </summary>
 /// <typeparam name="TFacet">The facet type that is annotated with [Facet(typeof(TEntity))].</typeparam>
@@ -29,9 +29,9 @@ internal static class EntityCache<TFacet, TEntity>
 
     private static Func<TFacet, TEntity> CreateMapper()
     {
-        // Look for the ToEntity() method on the facet type
+        // Look for the BackTo() method on the facet type
         var toEntityMethod = typeof(TFacet).GetMethod(
-            "ToEntity",
+            "BackTo",
             BindingFlags.Public | BindingFlags.Instance,
             null,
             Type.EmptyTypes,
@@ -39,15 +39,15 @@ internal static class EntityCache<TFacet, TEntity>
 
         if (toEntityMethod != null && toEntityMethod.ReturnType == typeof(TEntity))
         {
-            // Create a delegate that calls the ToEntity() method on the facet instance
+            // Create a delegate that calls the BackTo() method on the facet instance
             var param = Expression.Parameter(typeof(TFacet), "facet");
             var call = Expression.Call(param, toEntityMethod);
             return Expression.Lambda<Func<TFacet, TEntity>>(call, param).Compile();
         }
 
-        // If no ToEntity method is found, provide a helpful error message
+        // If no BackTo method is found, provide a helpful error message
         throw new InvalidOperationException(
             $"Unable to map {typeof(TFacet).Name} to {typeof(TEntity).Name}: " +
-            $"no ToEntity() method found on the facet type. Ensure the facet is properly generated with source generation.");
+            $"no BackTo() method found on the facet type. Ensure the facet is properly generated with source generation.");
     }
 }

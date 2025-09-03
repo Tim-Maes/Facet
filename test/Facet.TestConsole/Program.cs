@@ -305,8 +305,8 @@ class Program
             // Run the parameterless constructor tests
             ParameterlessConstructorTests.RunAllTests();
             
-            // Run the ToEntity tests
-            ToEntityTests.RunAllTests();
+            // Run the BackTo tests
+            BackToTests.RunAllTests();
         }
         catch (Exception ex)
         {
