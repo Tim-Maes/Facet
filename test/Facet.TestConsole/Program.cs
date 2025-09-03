@@ -296,18 +296,17 @@ class Program
         {
             await InitializeDatabaseAsync(host);
 
-            // Run new GenerateDtos feature tests
             await RunGenerateDtosTests(host);
 
             await RunTests();
 
             await RunEfCoreTests(host);
 
-            // Run the record primary constructor tests
             RecordPrimaryConstructorTests.RunAllTests();
 
-            // Run the parameterless constructor tests
             ParameterlessConstructorTests.RunAllTests();
+
+            EnumHandlingTests.RunAllTests();
         }
         catch (Exception ex)
         {
@@ -360,7 +359,7 @@ class Program
                 services.AddScoped<UpdateFromFacetTests>();
                 services.AddScoped<EfCoreIntegrationTests>();
                 services.AddScoped<ValidationAndErrorTests>();
-                services.AddScoped<GenerateDtosFeatureTests>(); // Add GenerateDtos test service
+                services.AddScoped<GenerateDtosFeatureTests>();
 
                 // Add logging
                 services.AddLogging(builder =>
@@ -900,8 +899,8 @@ class Program
 
         try
         {
-            // Test that parameterless constructors work by default now
-            var userDto = new UserDto(); // No explicit GenerateParameterlessConstructor needed!
+            // Test that parameterless constructors work by default
+            var userDto = new UserDto();
             Console.WriteLine($"SUCCESS: Successfully created UserDto() - parameterless constructor enabled by default!");
             Console.WriteLine($"  Properties initialized with defaults:");
             Console.WriteLine($"    Id: {userDto.Id}");
