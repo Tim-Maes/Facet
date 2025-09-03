@@ -386,8 +386,15 @@ public sealed class FacetGenerator : IIncrementalGenerator
     {
         var sb = new StringBuilder();
         GenerateFileHeader(sb);
-        sb.AppendLine("using System;");
-        sb.AppendLine("using System.Linq.Expressions;");
+        
+        // Collect all namespaces from referenced types
+        var namespacesToImport = CollectNamespaces(model);
+        
+        // Generate using statements for all required namespaces
+        foreach (var ns in namespacesToImport.OrderBy(x => x))
+        {
+            sb.AppendLine($"using {ns};");
+        }
         sb.AppendLine();
 
         if (!string.IsNullOrWhiteSpace(model.Namespace))
@@ -747,5 +754,83 @@ public sealed class FacetGenerator : IIncrementalGenerator
             // For other types, use default() expression
             _ => "default"
         };
+    }
+
+    /// <summary>
+    /// Collects all namespaces that need to be imported based on the types used in the model.
+    /// </summary>
+    private static HashSet<string> CollectNamespaces(FacetTargetModel model)
+    {
+        var namespaces = new HashSet<string>
+        {
+            "System",
+            "System.Linq.Expressions"
+        };
+
+        var sourceTypeNamespace = ExtractNamespaceFromFullyQualifiedType(model.SourceTypeName);
+        if (!string.IsNullOrWhiteSpace(sourceTypeNamespace))
+        {
+            namespaces.Add(sourceTypeNamespace);
+        }
+
+        foreach (var member in model.Members)
+        {
+            var memberTypeNamespace = ExtractNamespaceFromFullyQualifiedType(member.TypeName);
+            if (!string.IsNullOrWhiteSpace(memberTypeNamespace))
+            {
+                namespaces.Add(memberTypeNamespace);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.ConfigurationTypeName))
+        {
+            var configNamespace = ExtractNamespaceFromFullyQualifiedType(model.ConfigurationTypeName);
+            if (!string.IsNullOrWhiteSpace(configNamespace))
+            {
+                namespaces.Add(configNamespace);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.Namespace))
+        {
+            namespaces.Remove(model.Namespace);
+        }
+
+        namespaces.Remove("");
+
+        return namespaces;
+    }
+
+    /// <summary>
+    /// Extracts the namespace from a fully qualified type name (e.g., "global::System.String" -> "System").
+    /// </summary>
+    private static string? ExtractNamespaceFromFullyQualifiedType(string fullyQualifiedTypeName)
+    {
+        if (string.IsNullOrWhiteSpace(fullyQualifiedTypeName))
+            return null;
+
+        // Remove global:: prefix if present
+        var typeName = fullyQualifiedTypeName.StartsWith("global::")
+            ? fullyQualifiedTypeName.Substring(8)
+            : fullyQualifiedTypeName;
+
+        var genericIndex = typeName.IndexOf('<');
+        if (genericIndex > 0)
+        {
+            typeName = typeName.Substring(0, genericIndex);
+        }
+
+        if (typeName.EndsWith("?"))
+        {
+            typeName = typeName.Substring(0, typeName.Length - 1);
+        }
+
+        var lastDotIndex = typeName.LastIndexOf('.');
+        if (lastDotIndex > 0)
+        {
+            return typeName.Substring(0, lastDotIndex);
+        }
+
+        return null; 
     }
 }
