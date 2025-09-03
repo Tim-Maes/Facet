@@ -304,6 +304,9 @@ class Program
 
             // Run the parameterless constructor tests
             ParameterlessConstructorTests.RunAllTests();
+            
+            // Run the BackTo tests
+            BackToTests.RunAllTests();
         }
         catch (Exception ex)
         {

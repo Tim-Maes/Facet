@@ -522,6 +522,9 @@ public sealed class FacetGenerator : IIncrementalGenerator
             }
         }
 
+        // Generate reverse mapping method (BackTo)
+        GenerateBackToMethod(sb, model);
+
         sb.AppendLine("}");
 
         return sb.ToString();
@@ -747,5 +750,25 @@ public sealed class FacetGenerator : IIncrementalGenerator
             // For other types, use default() expression
             _ => "default"
         };
+    }
+
+    private static void GenerateBackToMethod(StringBuilder sb, FacetTargetModel model)
+    {
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine($"    /// Converts this instance of <see cref=\"{model.Name}\"/> to an instance of the entity type.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine($"    /// <returns>An instance of the entity type with properties mapped from this instance.</returns>");
+        sb.AppendLine($"    public {model.SourceTypeName} BackTo()");
+        sb.AppendLine("    {");
+        sb.AppendLine("        return new " + model.SourceTypeName + " {");
+
+        // TODO this needs work - this won't work when the entity has a positional constructor, and it also won't work when the entity has properties without setters
+        var propertyAssignments = model.Members
+            .Select(m => $"            {m.Name} = this.{m.Name}");
+        sb.AppendLine(string.Join(",\n", propertyAssignments));
+
+        sb.AppendLine("        };");
+        sb.AppendLine("    }");
     }
 }

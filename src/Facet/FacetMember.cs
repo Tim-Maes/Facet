@@ -21,6 +21,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         XmlDocumentation = xmlDocumentation;
     }
 
+
     public bool Equals(FacetMember? other) =>
         other is not null &&
         Name == other.Name &&
