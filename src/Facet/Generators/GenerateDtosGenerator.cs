@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -537,6 +538,27 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         ImmutableArray<KeyValuePair<string, TypedConstant>> args,
         string name,
         T defaultValue)
-        => args.FirstOrDefault(kv => kv.Key == name)
-            .Value.Value is T t ? t : defaultValue;
+    {
+        var arg = args.FirstOrDefault(kv => kv.Key == name);
+        if (arg.Key == null) return defaultValue;
+
+        var value = arg.Value.Value;
+        if (value == null) return defaultValue;
+
+        if (typeof(T).IsEnum && value is int intValue)
+        {
+            return (T)Enum.ToObject(typeof(T), intValue);
+        }
+
+        if (value is T t) return t;
+
+        try
+        {
+            return (T)Convert.ChangeType(value, typeof(T));
+        }
+        catch
+        {
+            return defaultValue;
+        }
+    }
 }
