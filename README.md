@@ -290,7 +290,12 @@ public class Schedule
 [HttpPost]
 public async Task<ActionResult<ScheduleResponse>> CreateSchedule(CreateScheduleRequest request)
 {
-    var schedule = new Schedule(request);
+    var schedule = new Schedule
+    {
+        Name = request.Name,
+        // Map other properties;;;
+    };
+
     context.Schedules.Add(schedule);
     await context.SaveChangesAsync();
     return schedule.ToFacet<ScheduleResponse>();
