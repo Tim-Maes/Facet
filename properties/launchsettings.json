@@ -1,0 +1,7 @@
+{
+  "roslyn": {
+    "project": "../../backend/Immybot.Backend.Domain/Immybot.Backend.Domain.csproj",
+    "configuration": "Debug",
+    "targetFramework": "net9.0"
+  }
+}

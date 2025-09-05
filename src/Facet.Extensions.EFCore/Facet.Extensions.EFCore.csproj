@@ -4,14 +4,28 @@
         <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
         <IsPackable>true</IsPackable>
         <PackageId>Facet.Extensions.EFCore</PackageId>
-        <Description>EF Core async extension methods for Facet.</Description>
+        <Description>EF Core async extension methods for Facet with fluent navigation builders.</Description>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <Title>Facet.Extensions.EFCore</Title>
         <PackageProjectUrl>https://www.github.com/Tim-Maes/Facet</PackageProjectUrl>
+        <Nullable>enable</Nullable>
+        <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     </PropertyGroup>
 
     <ItemGroup>
+        <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+            <_Parameter1>Facet.Extensions.EFCore.Tests</_Parameter1>
+        </AssemblyAttribute>
+    </ItemGroup>
+
+    <ItemGroup>
         <PackageReference Include="Microsoft.EntityFrameworkCore" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
+        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+        <PackageReference Include="Microsoft.Build.Utilities.Core" PrivateAssets="all" />
+        <PackageReference Include="System.Text.Json" />
         <ProjectReference Include="..\Facet.Extensions\Facet.Extensions.csproj" />
     </ItemGroup>
 
@@ -21,6 +35,23 @@
 
     <ItemGroup>
         <None Include="README.md" Pack="true" PackagePath="" />
+    </ItemGroup>
+
+    <!-- Pack the source generator -->
+    <ItemGroup>
+        <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs/$(AssemblyName).dll" Visible="false" />
+    </ItemGroup>
+
+    <!-- Pack MSBuild targets and tasks -->
+    <ItemGroup>
+        <None Include="build\Facet.Extensions.EFCore.targets" Pack="true" PackagePath="build\Facet.Extensions.EFCore.targets" />
+        <None Include="buildTransitive\Facet.Extensions.EFCore.targets" Pack="true" PackagePath="buildTransitive\Facet.Extensions.EFCore.targets" />
+        <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="tasks\net8.0\$(AssemblyName).dll" Visible="false" />
+    </ItemGroup>
+
+    <!-- Mark as analyzer -->
+    <ItemGroup>
+        <Analyzer Include="$(OutputPath)$(AssemblyName).dll" />
     </ItemGroup>
 
 </Project>

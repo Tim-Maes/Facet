@@ -1,0 +1,24 @@
+<Project>
+  <UsingTask TaskName="ExportEfModelTask"
+             AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\net8.0\Facet.Extensions.EFCore.dll" />
+
+  <PropertyGroup>
+    <FacetEfExportEnabled Condition="'$(FacetEfExportEnabled)' == ''">true</FacetEfExportEnabled>
+    <FacetEfModelJson Condition="'$(FacetEfModelJson)' == ''">$(IntermediateOutputPath)efmodel.json</FacetEfModelJson>
+    <FacetEfContextAssemblyPath Condition="'$(FacetEfContextAssemblyPath)' == ''">$(TargetPath)</FacetEfContextAssemblyPath>
+    <FacetEfContextTypes Condition="'$(FacetEfContextTypes)' == ''"></FacetEfContextTypes>
+  </PropertyGroup>
+
+  <Target Name="Facet_ExportEfModel"
+          Condition="'$(FacetEfExportEnabled)' == 'true'"
+          BeforeTargets="CoreCompile"
+          Inputs="$(FacetEfContextAssemblyPath)"
+          Outputs="$(FacetEfModelJson)">
+    <ExportEfModelTask AssemblyPath="$(FacetEfContextAssemblyPath)"
+                       ContextTypes="$(FacetEfContextTypes)"
+                       OutputPath="$(FacetEfModelJson)" />
+    <ItemGroup>
+      <AdditionalFiles Include="$(FacetEfModelJson)" />
+    </ItemGroup>
+  </Target>
+</Project>
