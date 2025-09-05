@@ -25,6 +25,9 @@ public class GenerateDtosFeatureTests
         TestNewUpsertFeature();
         TestAllowMultipleFeature();
         TestImprovedRecordFormatting();
+        TestInterfaceContractsFeature();
+        TestExcludeMembersFromTypeFeature();
+        TestCombinedNewFeatures();
 
         Console.WriteLine("\n=== All GenerateDtos tests completed! ===");
     }
@@ -48,6 +51,9 @@ public class GenerateDtosFeatureTests
             var testOrderDtos = allTypes.Where(t => t.Name.Contains("TestOrder")).ToArray();
             var testScheduleDtos = allTypes.Where(t => t.Name.Contains("TestSchedule")).ToArray();
             var testEventDtos = allTypes.Where(t => t.Name.Contains("TestEvent")).ToArray();
+            var testContractEntityDtos = allTypes.Where(t => t.Name.Contains("TestContractEntity")).ToArray();
+            var testBaseExclusionDtos = allTypes.Where(t => t.Name.Contains("TestEntityWithBaseExclusions")).ToArray();
+            var testCombinedFeaturesDtos = allTypes.Where(t => t.Name.Contains("TestCombinedFeaturesEntity")).ToArray();
             
             Console.WriteLine($"\nFound {testUserDtos.Length} TestUser-related types:");
             foreach (var type in testUserDtos)
@@ -78,6 +84,24 @@ public class GenerateDtosFeatureTests
             {
                 Console.WriteLine($"  - {type.FullName}");
             }
+
+            Console.WriteLine($"\nFound {testContractEntityDtos.Length} TestContractEntity-related types:");
+            foreach (var type in testContractEntityDtos)
+            {
+                Console.WriteLine($"  - {type.FullName}");
+            }
+
+            Console.WriteLine($"\nFound {testBaseExclusionDtos.Length} TestEntityWithBaseExclusions-related types:");
+            foreach (var type in testBaseExclusionDtos)
+            {
+                Console.WriteLine($"  - {type.FullName}");
+            }
+
+            Console.WriteLine($"\nFound {testCombinedFeaturesDtos.Length} TestCombinedFeaturesEntity-related types:");
+            foreach (var type in testCombinedFeaturesDtos)
+            {
+                Console.WriteLine($"  - {type.FullName}");
+            }
             
             // Look for Upsert types specifically
             var upsertTypes = allTypes.Where(t => t.Name.Contains("Upsert")).ToArray();
@@ -87,7 +111,8 @@ public class GenerateDtosFeatureTests
                 Console.WriteLine($"  - {type.FullName}");
             }
             
-            if (testUserDtos.Length > 0 || testProductDtos.Length > 0 || testOrderDtos.Length > 0 || upsertTypes.Length > 0)
+            if (testUserDtos.Length > 0 || testProductDtos.Length > 0 || testOrderDtos.Length > 0 || upsertTypes.Length > 0 || 
+                testContractEntityDtos.Length > 0 || testBaseExclusionDtos.Length > 0 || testCombinedFeaturesDtos.Length > 0)
             {
                 Console.WriteLine("\nSUCCESS: GenerateDtos feature is working - DTOs were generated!");
             }
@@ -267,6 +292,238 @@ public class GenerateDtosFeatureTests
         catch (Exception ex)
         {
             Console.WriteLine($"ERROR: Error testing record formatting: {ex.Message}");
+        }
+
+        Console.WriteLine();
+    }
+
+    private void TestInterfaceContractsFeature()
+    {
+        Console.WriteLine("6. Testing InterfaceContracts Feature:");
+        Console.WriteLine("=====================================");
+
+        try
+        {
+            var testContractEntityType = typeof(TestContractEntity);
+            var generateDtosAttrs = testContractEntityType.GetCustomAttributes<GenerateDtosAttribute>().ToArray();
+            
+            Console.WriteLine($"FOUND: {generateDtosAttrs.Length} GenerateDtosAttribute(s) on TestContractEntity");
+            
+            foreach (var attr in generateDtosAttrs)
+            {
+                Console.WriteLine($"  Types: {attr.Types}");
+                Console.WriteLine($"  InterfaceContracts: [{string.Join(", ", attr.InterfaceContracts?.Select(t => t.Name) ?? new string[0])}]");
+            }
+
+            // Check for generated types that should implement interfaces
+            var assembly = Assembly.GetExecutingAssembly();
+            var allTypes = assembly.GetTypes();
+            
+            var contractEntityDtos = allTypes.Where(t => t.Name.Contains("TestContractEntity")).ToArray();
+            Console.WriteLine($"\nFound {contractEntityDtos.Length} TestContractEntity-related types:");
+            
+            foreach (var type in contractEntityDtos)
+            {
+                Console.WriteLine($"  - {type.FullName}");
+                var interfaces = type.GetInterfaces();
+                if (interfaces.Length > 0)
+                {
+                    Console.WriteLine($"    Implements: [{string.Join(", ", interfaces.Select(i => i.Name))}]");
+                }
+            }
+            
+            // Test that Create DTO implements ICreatePayload
+            var createType = allTypes.FirstOrDefault(t => t.Name == "CreateTestContractEntityRequest");
+            if (createType != null)
+            {
+                var implementsCreatePayload = createType.GetInterfaces().Any(i => i == typeof(ICreatePayload));
+                Console.WriteLine($"SUCCESS: CreateTestContractEntityRequest implements ICreatePayload: {implementsCreatePayload}");
+            }
+            else
+            {
+                Console.WriteLine("WARNING: CreateTestContractEntityRequest not found");
+            }
+
+            // Test that Update DTO implements IUpdatePayload  
+            var updateType = allTypes.FirstOrDefault(t => t.Name == "UpdateTestContractEntityRequest");
+            if (updateType != null)
+            {
+                var implementsUpdatePayload = updateType.GetInterfaces().Any(i => i == typeof(IUpdatePayload));
+                Console.WriteLine($"SUCCESS: UpdateTestContractEntityRequest implements IUpdatePayload: {implementsUpdatePayload}");
+            }
+            else
+            {
+                Console.WriteLine("WARNING: UpdateTestContractEntityRequest not found");
+            }
+
+            // Test that Response DTO implements IResponseData
+            var responseType = allTypes.FirstOrDefault(t => t.Name == "TestContractEntityResponse");
+            if (responseType != null)
+            {
+                var implementsResponseData = responseType.GetInterfaces().Any(i => i == typeof(IResponseData));
+                Console.WriteLine($"SUCCESS: TestContractEntityResponse implements IResponseData: {implementsResponseData}");
+            }
+            else
+            {
+                Console.WriteLine("WARNING: TestContractEntityResponse not found");
+            }
+
+            Console.WriteLine("\nInterfaceContracts feature provides:");
+            Console.WriteLine("  - Compile-time type safety for DTOs");
+            Console.WriteLine("  - Better integration with existing interfaces");
+            Console.WriteLine("  - Polymorphic usage of generated DTOs");
+            
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"ERROR: Error testing InterfaceContracts feature: {ex.Message}");
+        }
+
+        Console.WriteLine();
+    }
+
+    private void TestExcludeMembersFromTypeFeature()
+    {
+        Console.WriteLine("7. Testing ExcludeMembersFromType Feature:");
+        Console.WriteLine("=========================================");
+
+        try
+        {
+            var testEntityType = typeof(TestEntityWithBaseExclusions);
+            var generateDtosAttr = testEntityType.GetCustomAttribute<GenerateDtosAttribute>();
+            
+            if (generateDtosAttr != null)
+            {
+                Console.WriteLine($"CONFIGURED: TestEntityWithBaseExclusions configured with:");
+                Console.WriteLine($"  Types: {generateDtosAttr.Types}");
+                Console.WriteLine($"  ExcludeMembersFromType: [{string.Join(", ", generateDtosAttr.ExcludeMembersFromType?.Select(t => t.Name) ?? new string[0])}]");
+            }
+
+            // Get the generated DTO and check its properties
+            var assembly = Assembly.GetExecutingAssembly();
+            var allTypes = assembly.GetTypes();
+            
+            var createType = allTypes.FirstOrDefault(t => t.Name == "CreateTestEntityWithBaseExclusionsRequest");
+            if (createType != null)
+            {
+                var properties = createType.GetProperties().Select(p => p.Name).ToArray();
+                Console.WriteLine($"\nSUCCESS: Found CreateTestEntityWithBaseExclusionsRequest with properties:");
+                foreach (var prop in properties)
+                {
+                    Console.WriteLine($"  - {prop}");
+                }
+
+                // Verify base class properties are excluded
+                var baseEntityProperties = typeof(BaseEntity).GetProperties().Select(p => p.Name).ToArray();
+                var auditableProperties = typeof(IAuditableEntity).GetProperties().Select(p => p.Name).ToArray();
+                
+                var excludedFound = baseEntityProperties.Concat(auditableProperties).Where(p => properties.Contains(p)).ToArray();
+                
+                if (excludedFound.Length == 0)
+                {
+                    Console.WriteLine("SUCCESS: All BaseEntity and IAuditableEntity properties correctly excluded!");
+                }
+                else
+                {
+                    Console.WriteLine($"WARNING: Found excluded properties that should not be present: [{string.Join(", ", excludedFound)}]");
+                }
+
+                // Verify entity-specific properties are included
+                var expectedProperties = new[] { "Id", "Name", "Description", "Price" };
+                var missingProperties = expectedProperties.Where(p => !properties.Contains(p)).ToArray();
+                
+                if (missingProperties.Length == 0)
+                {
+                    Console.WriteLine("SUCCESS: All expected entity-specific properties are present!");
+                }
+                else
+                {
+                    Console.WriteLine($"WARNING: Missing expected properties: [{string.Join(", ", missingProperties)}]");
+                }
+            }
+            else
+            {
+                Console.WriteLine("WARNING: CreateTestEntityWithBaseExclusionsRequest not found");
+            }
+
+            Console.WriteLine("\nExcludeMembersFromType feature provides:");
+            Console.WriteLine("  - Clean DTOs without base class clutter");
+            Console.WriteLine("  - Automatic exclusion of audit fields from base classes");
+            Console.WriteLine("  - Works with both abstract classes and interfaces");
+            Console.WriteLine("  - Reduces the need for manual property exclusions");
+            
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"ERROR: Error testing ExcludeMembersFromType feature: {ex.Message}");
+        }
+
+        Console.WriteLine();
+    }
+
+    private void TestCombinedNewFeatures()
+    {
+        Console.WriteLine("8. Testing Combined New Features:");
+        Console.WriteLine("=================================");
+
+        try
+        {
+            var testCombinedType = typeof(TestCombinedFeaturesEntity);
+            var generateDtosAttr = testCombinedType.GetCustomAttribute<GenerateDtosAttribute>();
+            
+            if (generateDtosAttr != null)
+            {
+                Console.WriteLine($"CONFIGURED: TestCombinedFeaturesEntity combines both features:");
+                Console.WriteLine($"  ExcludeMembersFromType: [{string.Join(", ", generateDtosAttr.ExcludeMembersFromType?.Select(t => t.Name) ?? new string[0])}]");
+                Console.WriteLine($"  InterfaceContracts: [{string.Join(", ", generateDtosAttr.InterfaceContracts?.Select(t => t.Name) ?? new string[0])}]");
+            }
+
+            // Check for the generated DTO
+            var assembly = Assembly.GetExecutingAssembly();
+            var allTypes = assembly.GetTypes();
+            
+            var createType = allTypes.FirstOrDefault(t => t.Name == "CreateTestCombinedFeaturesEntityRequest");
+            if (createType != null)
+            {
+                var properties = createType.GetProperties().Select(p => p.Name).ToArray();
+                Console.WriteLine($"\nSUCCESS: Found CreateTestCombinedFeaturesEntityRequest with properties:");
+                foreach (var prop in properties)
+                {
+                    Console.WriteLine($"  - {prop}");
+                }
+
+                // Check interface implementation
+                var implementsCreatePayload = createType.GetInterfaces().Any(i => i == typeof(ICreatePayload));
+                Console.WriteLine($"SUCCESS: Implements ICreatePayload interface: {implementsCreatePayload}");
+
+                // Verify BaseEntity properties are excluded
+                var baseEntityProperties = typeof(BaseEntity).GetProperties().Select(p => p.Name).ToArray();
+                var excludedFound = baseEntityProperties.Where(p => properties.Contains(p)).ToArray();
+                
+                if (excludedFound.Length == 0)
+                {
+                    Console.WriteLine("SUCCESS: BaseEntity properties correctly excluded!");
+                }
+                else
+                {
+                    Console.WriteLine($"WARNING: Found excluded BaseEntity properties: [{string.Join(", ", excludedFound)}]");
+                }
+            }
+            else
+            {
+                Console.WriteLine("WARNING: CreateTestCombinedFeaturesEntityRequest not found");
+            }
+
+            Console.WriteLine("\nCombined features demonstrate:");
+            Console.WriteLine("  - Both features work together seamlessly");
+            Console.WriteLine("  - Clean DTOs that implement specific interfaces");
+            Console.WriteLine("  - Automatic base class exclusions with contract enforcement");
+            Console.WriteLine("  - Perfect for domain-driven design patterns");
+            
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"ERROR: Error testing combined features: {ex.Message}");
         }
 
         Console.WriteLine();

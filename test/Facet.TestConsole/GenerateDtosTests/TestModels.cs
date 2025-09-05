@@ -80,3 +80,90 @@ public class TestEvent
     public string Location { get; set; } = string.Empty;
     public int MaxAttendees { get; set; }
 }
+
+// Test interfaces for InterfaceContracts feature
+public interface ICreatePayload
+{
+    string Name { get; init; }
+}
+
+public interface IUpdatePayload
+{
+    int Id { get; init; }
+    string Name { get; init; }
+}
+
+public interface IResponseData
+{
+    int Id { get; init; }
+    string Name { get; init; }
+    DateTime CreatedAt { get; init; }
+}
+
+// Base classes for ExcludeMembersFromType feature
+public abstract class BaseEntity
+{
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public string CreatedBy { get; set; } = string.Empty;
+    public string UpdatedBy { get; set; } = string.Empty;
+}
+
+public interface IAuditableEntity
+{
+    DateTime LastModified { get; set; }
+    string ModifiedBy { get; set; }
+}
+
+// Test model with InterfaceContracts
+[GenerateDtos(
+    Types = DtoTypes.Create, 
+    InterfaceContracts = new[] { typeof(ICreatePayload) },
+    OutputType = OutputType.Record)]
+[GenerateDtos(
+    Types = DtoTypes.Update, 
+    InterfaceContracts = new[] { typeof(IUpdatePayload) },
+    OutputType = OutputType.Record)]
+[GenerateDtos(
+    Types = DtoTypes.Response, 
+    InterfaceContracts = new[] { typeof(IResponseData) },
+    OutputType = OutputType.Record)]
+public class TestContractEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public bool IsActive { get; set; }
+}
+
+// Test model with ExcludeMembersFromType
+[GenerateDtos(
+    Types = DtoTypes.Create,
+    ExcludeMembersFromType = new[] { typeof(BaseEntity), typeof(IAuditableEntity) },
+    OutputType = OutputType.Record)]
+public class TestEntityWithBaseExclusions : BaseEntity, IAuditableEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+    
+    // From IAuditableEntity - should be excluded
+    public DateTime LastModified { get; set; }
+    public string ModifiedBy { get; set; } = string.Empty;
+}
+
+// Test model combining both features
+[GenerateDtos(
+    Types = DtoTypes.Create,
+    ExcludeMembersFromType = new[] { typeof(BaseEntity) },
+    InterfaceContracts = new[] { typeof(ICreatePayload) },
+    OutputType = OutputType.Record)]
+public class TestCombinedFeaturesEntity : BaseEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    public bool IsPublished { get; set; }
+}

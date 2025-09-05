@@ -249,12 +249,31 @@ public class User
 // - UpsertUserRequest (includes Id, for create/update operations)
 ```
 
+#### Interface Contracts
+Generate DTOs that implement specific interfaces for better type safety:
+
+```csharp
+// Generate DTOs that implement interfaces
+[GenerateDtos(
+    Types = DtoTypes.Create, 
+    InterfaceContracts = new[] { typeof(ICreateSchedulePayload) })]
+public class Schedule
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public DateTime StartTime { get; set; }
+}
+
+// Generates: CreateScheduleRequest : ICreateSchedulePayload
+```
+
 #### Auditable Entities with Smart Exclusions
 ```csharp
 [GenerateAuditableDtos(
     Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response,
     OutputType = OutputType.Record,
-    ExcludeProperties = new[] { "Password" })]
+    ExcludeProperties = new[] { "Password" },
+    InterfaceContracts = new[] { typeof(IProductDto) })]
 public class Product
 {
     public int Id { get; set; }
@@ -265,6 +284,40 @@ public class Product
 }
 
 // Auto-excludes audit fields: CreatedAt, UpdatedAt, CreatedBy, UpdatedBy
+// All generated DTOs implement IProductDto interface
+```
+
+#### Excluding Members from Base Types
+```csharp
+public abstract class BaseEntity
+{
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public string CreatedBy { get; set; }
+}
+
+public interface IAuditable 
+{
+    DateTime LastModified { get; set; }
+    string ModifiedBy { get; set; }
+}
+
+// Exclude all members from base class and interface
+[GenerateDtos(
+    Types = DtoTypes.Create,
+    ExcludeMembersFromType = new[] { typeof(BaseEntity), typeof(IAuditable) })]
+public class Product : BaseEntity, IAuditable
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public decimal Price { get; set; }
+    
+    // From BaseEntity - will be excluded
+    public DateTime LastModified { get; set; }
+    public string ModifiedBy { get; set; }
+}
+
+// Generates: CreateProductRequest with only Id, Name, Price
 ```
 
 #### Multiple Configurations for Fine-Grained Control

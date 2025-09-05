@@ -5,6 +5,8 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Facet.Extensions.EFCore;
 /// <summary>
@@ -13,6 +15,95 @@ namespace Facet.Extensions.EFCore;
 /// </summary>
 public static class FacetEfCoreExtensions
 {
+    /// <summary>
+    /// Attribute to mark DTO properties that should be ignored by Facet UpdateFromFacet helpers.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Property)]
+    public sealed class FacetUpdateIgnoreAttribute : Attribute { }
+
+    private sealed record PropertyMap(Type EntityType, Type FacetType, IReadOnlyList<PropertyInfo> SharedFacetProps);
+    private static readonly Dictionary<(Type Entity, Type Facet), PropertyMap> _propertyMapCache = new();
+    private static readonly object _cacheLock = new();
+
+    private static PropertyMap GetOrAddPropertyMap<TEntity, TFacet>(DbContext context)
+        where TEntity : class
+    {
+        var key = (typeof(TEntity), typeof(TFacet));
+        lock (_cacheLock)
+        {
+            if (_propertyMapCache.TryGetValue(key, out var existing)) return existing;
+
+            // Build dictionary of facet props once
+            var facetProps = typeof(TFacet)
+                .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => p.CanRead && p.GetCustomAttribute<FacetUpdateIgnoreAttribute>() == null)
+                .ToDictionary(p => p.Name, p => p, StringComparer.Ordinal);
+
+            // Determine intersection using EF metadata (so we only consider mapped scalar properties)
+            var entityType = context.Model.FindEntityType(typeof(TEntity));
+            var scalarProps = entityType?.GetProperties() ?? Array.Empty<IProperty>();
+            var sharedFacetProps = new List<PropertyInfo>(capacity: facetProps.Count);
+            foreach (var sp in scalarProps)
+            {
+                if (facetProps.TryGetValue(sp.Name, out var pi))
+                {
+                    sharedFacetProps.Add(pi);
+                }
+            }
+
+            var map = new PropertyMap(typeof(TEntity), typeof(TFacet), sharedFacetProps);
+            _propertyMapCache[key] = map;
+            return map;
+        }
+    }
+
+    private static IReadOnlyList<string> ApplyFacetValues<TEntity, TFacet>(
+        EntityEntry<TEntity> entry,
+        TFacet facet,
+        PropertyMap map,
+        bool skipKeys,
+        bool skipConcurrency,
+        bool skipNavigations,
+        ISet<string>? excluded,
+        Func<PropertyInfo, bool>? predicate)
+        where TEntity : class
+    {
+        var changed = new List<string>();
+        var entityType = entry.Context.Model.FindEntityType(typeof(TEntity));
+        var keyNames = skipKeys && entityType != null ? entityType.FindPrimaryKey()?.Properties.Select(p => p.Name).ToHashSet(StringComparer.Ordinal) : null;
+        var concurrencyNames = skipConcurrency && entityType != null ? entityType.GetProperties().Where(p => p.IsConcurrencyToken).Select(p => p.Name).ToHashSet(StringComparer.Ordinal) : null;
+        var navigationNames = skipNavigations && entityType != null ? entityType.GetNavigations().Select(n => n.Name).ToHashSet(StringComparer.Ordinal) : null;
+
+        foreach (var facetProp in map.SharedFacetProps)
+        {
+            var name = facetProp.Name;
+            if (excluded?.Contains(name) == true) continue;
+            if (predicate != null && !predicate(facetProp)) continue;
+            if (keyNames != null && keyNames.Contains(name)) continue;
+            if (concurrencyNames != null && concurrencyNames.Contains(name)) continue;
+            if (navigationNames != null && navigationNames.Contains(name)) continue;
+
+            var entityProperty = entry.Property(name);
+            if (entityProperty == null) continue; // Should not happen but safe guard
+
+            // Skip if not mutable
+            var propMeta = entityProperty.Metadata;
+            // Skip key (already filtered optionally), shadow, or store-generated on add/update depending on configuration
+            if (propMeta.IsShadowProperty()) continue;
+            // If store-generated and not yet saved, we generally skip to avoid overwriting generated values.
+            if (propMeta.ValueGenerated != ValueGenerated.Never && entityProperty.EntityEntry.State == EntityState.Added) continue;
+
+            var facetValue = facetProp.GetValue(facet);
+            var currentValue = entityProperty.CurrentValue;
+            if (!Equals(facetValue, currentValue))
+            {
+                entityProperty.CurrentValue = facetValue;
+                entityProperty.IsModified = true;
+                changed.Add(name);
+            }
+        }
+        return changed;
+    }
     /// <summary>
     /// Asynchronously projects an IQueryable&lt;TSource&gt; to a List&lt;TTarget&gt;
     /// using the generated Projection expression and Entity Framework Core's ToListAsync.
@@ -127,10 +218,23 @@ public static class FacetEfCoreExtensions
     /// }
     /// </code>
     /// </example>
+    /// <summary>
+    /// Core update method copying differing scalar property values from a facet/DTO onto an entity.
+    /// </summary>
+    /// <param name="skipKeys">Skip primary key properties (default true).</param>
+    /// <param name="skipConcurrency">Skip concurrency token properties (default true).</param>
+    /// <param name="skipNavigations">Skip navigation properties (default true).</param>
+    /// <param name="excludedProperties">Specific property names to ignore.</param>
+    /// <param name="propertyPredicate">Additional predicate filter; return false to skip.</param>
     public static TEntity UpdateFromFacet<TEntity, TFacet>(
         this TEntity entity,
         TFacet facet,
-        DbContext context)
+        DbContext context,
+        bool skipKeys = true,
+        bool skipConcurrency = true,
+        bool skipNavigations = true,
+        IEnumerable<string>? excludedProperties = null,
+        Func<PropertyInfo, bool>? propertyPredicate = null)
         where TEntity : class
     {
         if (entity is null) throw new ArgumentNullException(nameof(entity));
@@ -138,33 +242,9 @@ public static class FacetEfCoreExtensions
         if (context is null) throw new ArgumentNullException(nameof(context));
 
         var entry = context.Entry(entity);
-        var changedProperties = new List<string>();
-
-        // Get properties that exist in both Facet and Entity
-        var facetProperties = typeof(TFacet).GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.CanRead)
-            .ToDictionary(p => p.Name, p => p);
-
-        // Iterate through entity properties that can be modified
-        foreach (var entityProperty in entry.Properties)
-        {
-            var propertyName = entityProperty.Metadata.Name;
-            
-            if (facetProperties.TryGetValue(propertyName, out var facetProperty))
-            {
-                var facetValue = facetProperty.GetValue(facet);
-                var entityValue = entityProperty.CurrentValue;
-
-                // Only update if values are different
-                if (!Equals(facetValue, entityValue))
-                {
-                    entityProperty.CurrentValue = facetValue;
-                    entityProperty.IsModified = true;
-                    changedProperties.Add(propertyName);
-                }
-            }
-        }
-
+        var map = GetOrAddPropertyMap<TEntity, TFacet>(context);
+        var excluded = excludedProperties != null ? new HashSet<string>(excludedProperties, StringComparer.Ordinal) : null;
+        _ = ApplyFacetValues(entry, facet, map, skipKeys, skipConcurrency, skipNavigations, excluded, propertyPredicate);
         return entity;
     }
 
@@ -200,12 +280,15 @@ public static class FacetEfCoreExtensions
         this TEntity entity,
         TFacet facet,
         DbContext context,
+        bool skipKeys = true,
+        bool skipConcurrency = true,
+        bool skipNavigations = true,
+        IEnumerable<string>? excludedProperties = null,
+        Func<PropertyInfo, bool>? propertyPredicate = null,
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
-        // For now, this is just a synchronous operation wrapped in a completed task
-        // In the future, this could be enhanced to support async validation, logging, etc.
-        var result = entity.UpdateFromFacet(facet, context);
+        var result = entity.UpdateFromFacet(facet, context, skipKeys, skipConcurrency, skipNavigations, excludedProperties, propertyPredicate);
         return Task.FromResult(result);
     }
 
@@ -233,7 +316,12 @@ public static class FacetEfCoreExtensions
     public static FacetUpdateResult<TEntity> UpdateFromFacetWithChanges<TEntity, TFacet>(
         this TEntity entity,
         TFacet facet,
-        DbContext context)
+        DbContext context,
+        bool skipKeys = true,
+        bool skipConcurrency = true,
+        bool skipNavigations = true,
+        IEnumerable<string>? excludedProperties = null,
+        Func<PropertyInfo, bool>? propertyPredicate = null)
         where TEntity : class
     {
         if (entity is null) throw new ArgumentNullException(nameof(entity));
@@ -241,34 +329,10 @@ public static class FacetEfCoreExtensions
         if (context is null) throw new ArgumentNullException(nameof(context));
 
         var entry = context.Entry(entity);
-        var changedProperties = new List<string>();
-
-        // Get properties that exist in both Facet and Entity
-        var facetProperties = typeof(TFacet).GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.CanRead)
-            .ToDictionary(p => p.Name, p => p);
-
-        // Iterate through entity properties that can be modified
-        foreach (var entityProperty in entry.Properties)
-        {
-            var propertyName = entityProperty.Metadata.Name;
-            
-            if (facetProperties.TryGetValue(propertyName, out var facetProperty))
-            {
-                var facetValue = facetProperty.GetValue(facet);
-                var entityValue = entityProperty.CurrentValue;
-
-                // Only update if values are different
-                if (!Equals(facetValue, entityValue))
-                {
-                    entityProperty.CurrentValue = facetValue;
-                    entityProperty.IsModified = true;
-                    changedProperties.Add(propertyName);
-                }
-            }
-        }
-
-        return new FacetUpdateResult<TEntity>(entity, changedProperties);
+        var map = GetOrAddPropertyMap<TEntity, TFacet>(context);
+        var excluded = excludedProperties != null ? new HashSet<string>(excludedProperties, StringComparer.Ordinal) : null;
+        var changed = ApplyFacetValues(entry, facet, map, skipKeys, skipConcurrency, skipNavigations, excluded, propertyPredicate);
+        return new FacetUpdateResult<TEntity>(entity, changed);
     }
 }
 

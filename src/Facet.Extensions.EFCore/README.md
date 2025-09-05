@@ -13,6 +13,8 @@ EF Core async extension methods for the Facet library, enabling one-line async m
   - Selective entity updates: `UpdateFromFacet<TEntity,TFacet>()`
   - Async entity updates: `UpdateFromFacetAsync<TEntity,TFacet>()`
   - Update with change tracking: `UpdateFromFacetWithChanges<TEntity,TFacet>()`
+  - Advanced filtering with skip flags, exclusions, and predicates
+  - Property-level ignore attribute: `FacetUpdateIgnoreAttribute`
 
 All methods leverage your already generated ctor or Projection property and require EF Core 6+.
 
@@ -83,8 +85,26 @@ if (result.HasChanges)
         user.Id, string.Join(", ", result.ChangedProperties));
 }
 
+// Advanced filtering with skip flags
+user.UpdateFromFacet(dto, context, 
+    skipKeys: true,           // Skip primary keys (default)
+    skipConcurrency: true,    // Skip concurrency tokens (default)  
+    skipNavigations: true,    // Skip navigation properties (default)
+    excludedProperties: new[] { "CreatedBy", "LastModified" },
+    propertyPredicate: prop => prop.Name.StartsWith("Public"));
+
+// Using FacetUpdateIgnore attribute
+public class UserDto
+{
+    public string Name { get; set; }
+    
+    [FacetUpdateIgnore]  // This property will be ignored during updates
+    public string InternalNotes { get; set; }
+}
+
 // Async version (for future extensibility)
-await user.UpdateFromFacetAsync(dto, context);
+await user.UpdateFromFacetAsync(dto, context, 
+    excludedProperties: new[] { "Password" });
 ```
 
 ## Complete Example
@@ -174,9 +194,37 @@ public class ProductsController : ControllerBase
 | `FirstFacetAsync<TSource, TTarget>()` | Get first DTO or null (explicit types) | Legacy/explicit typing |
 | `SingleFacetAsync<TTarget>()` | Get single DTO (source inferred) | GET unique item |
 | `SingleFacetAsync<TSource, TTarget>()` | Get single DTO (explicit types) | Legacy/explicit typing |
-| `UpdateFromFacet<TEntity, TFacet>()` | Selective entity update | PUT/PATCH endpoints |
-| `UpdateFromFacetWithChanges<TEntity, TFacet>()` | Update with change tracking | Auditing scenarios |
-| `UpdateFromFacetAsync<TEntity, TFacet>()` | Async selective update | Future extensibility |
+| `UpdateFromFacet<TEntity, TFacet>()` | Selective entity update with advanced filtering | PUT/PATCH endpoints |
+| `UpdateFromFacetWithChanges<TEntity, TFacet>()` | Update with change tracking and advanced filtering | Auditing scenarios |
+| `UpdateFromFacetAsync<TEntity, TFacet>()` | Async selective update with advanced filtering | Future extensibility |
+
+### Advanced Update Parameters
+
+All `UpdateFromFacet*` methods support these optional parameters:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `skipKeys` | `bool` | `true` | Skip primary key properties |
+| `skipConcurrency` | `bool` | `true` | Skip concurrency token properties |
+| `skipNavigations` | `bool` | `true` | Skip navigation properties |
+| `excludedProperties` | `IEnumerable<string>?` | `null` | Specific property names to ignore |
+| `propertyPredicate` | `Func<PropertyInfo, bool>?` | `null` | Custom predicate for filtering properties |
+
+### Property-Level Control
+
+Use `FacetUpdateIgnoreAttribute` to mark specific DTO properties that should never be updated:
+
+```csharp
+using Facet.Extensions.EFCore;
+
+public class UpdateUserDto  
+{
+    public string FirstName { get; set; }
+    
+    [FacetUpdateIgnore]
+    public string InternalNotes { get; set; } // Will be ignored during updates
+}
+```
 
 ## Requirements
 
