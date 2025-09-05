@@ -6,6 +6,9 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
+    <NoWarn>$(NoWarn);MSB3277</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,8 +27,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Facet.Extensions.EFCore\Facet.Extensions.EFCore.csproj" />
+    <ProjectReference Include="..\..\src\Facet\Facet.csproj" />
+    <ProjectReference Include="..\..\src\Facet.Extensions.EFCore\Facet.Extensions.EFCore.csproj" OutputItemType="Analyzer" />
     <ProjectReference Include="..\..\src\Facet.Extensions\Facet.Extensions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Include="efmodel.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Generated/**/*.cs" />
   </ItemGroup>
 
 </Project>
