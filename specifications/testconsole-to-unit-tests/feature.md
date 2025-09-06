@@ -31,9 +31,6 @@ Convert the Facet.TestConsole project from a manual console application to a pro
 - **Snapshot validation**: Verify.SourceGenerators automatically detects changes in generated code
 - **Entity Framework validation**: Real database integration tests ensure projections work correctly
 
-## Important Context
-Note: all paths provided in this document are relative to the repository root at `/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/`.
-
 ### Current Implementation
 The current `test/Facet.TestConsole/` project is a console application that runs manual tests through static methods with console output. It contains comprehensive test scenarios but lacks proper assertions, test isolation, and CI/CD integration.
 
@@ -69,7 +66,7 @@ Tests will validate the same entities and DTOs currently in TestConsole:
 
 ### Source Generator Test Categories
 - **Facet Generator Tests**: Basic DTO generation using Verify.SourceGenerators snapshot testing
-- **GenerateDtos Tests**: Advanced DTO generation with attribute-based configuration 
+- **GenerateDtos Tests**: Advanced DTO generation with attribute-based configuration
 - **Inheritance Tests**: Complex inheritance chain validation (BaseEntity -> Person -> Employee -> Manager)
 - **Modern Record Tests**: Init-only properties, required properties, record structs
 - **Error Handling Tests**: Invalid entity scenarios with proper diagnostic verification
@@ -161,7 +158,7 @@ public Task FacetGenerator_WithBasicEntity_GeneratesExpectedDto()
     // Arrange
     var source = @"
         using Facet;
-        
+
         public class User
         {
             public int Id { get; set; }
