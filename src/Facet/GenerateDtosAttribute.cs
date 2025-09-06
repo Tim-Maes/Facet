@@ -56,6 +56,13 @@ public class GenerateDtosAttribute : Attribute
     public string[] ExcludeProperties { get; set; } = Array.Empty<string>();
 
     /// <summary>
+    /// Types whose members should be excluded from all generated DTOs.
+    /// Useful for excluding all properties from base classes or mixins.
+    /// Example: new[] { typeof(BaseEntity), typeof(IAuditableEntity) }
+    /// </summary>
+    public Type[] ExcludeMembersFromType { get; set; } = Array.Empty<Type>();
+
+    /// <summary>
     /// Custom prefix for generated DTO names (default: none).
     /// </summary>
     public string? Prefix { get; set; }
@@ -79,6 +86,19 @@ public class GenerateDtosAttribute : Attribute
     /// Whether to generate projection expressions for the DTOs (default: true).
     /// </summary>
     public bool GenerateProjections { get; set; } = true;
+
+    /// <summary>
+    /// Optional interface types the generated DTOs should implement.
+    /// Applies to all generated DTOs for this attribute instance.
+    /// Example: new[] { typeof(ICreateSchedulePayload) }
+    /// </summary>
+    public Type[] InterfaceContracts { get; set; } = Array.Empty<Type>();
+    
+    /// <summary>
+    /// TypeScript attributes to apply to generated shape interfaces.
+    /// Example: new[] { "[TsInterface]", "[TsExport]" }
+    /// </summary>
+    public string[] TypeScriptAttributes { get; set; } = Array.Empty<string>();
 }
 
 /// <summary>
@@ -110,6 +130,13 @@ public class GenerateAuditableDtosAttribute : Attribute
     public string[] ExcludeProperties { get; set; } = Array.Empty<string>();
 
     /// <summary>
+    /// Types whose members should be excluded from all generated DTOs.
+    /// Useful for excluding all properties from base classes or mixins.
+    /// Example: new[] { typeof(BaseEntity), typeof(IAuditableEntity) }
+    /// </summary>
+    public Type[] ExcludeMembersFromType { get; set; } = Array.Empty<Type>();
+
+    /// <summary>
     /// Custom prefix for generated DTO names (default: none).
     /// </summary>
     public string? Prefix { get; set; }
@@ -133,4 +160,17 @@ public class GenerateAuditableDtosAttribute : Attribute
     /// Whether to generate projection expressions for the DTOs (default: true).
     /// </summary>
     public bool GenerateProjections { get; set; } = true;
+
+    /// <summary>
+    /// Optional interface types the generated DTOs should implement.
+    /// Applies to all generated DTOs for this attribute instance.
+    /// Example: new[] { typeof(ICreateSchedulePayload) }
+    /// </summary>
+    public Type[] InterfaceContracts { get; set; } = Array.Empty<Type>();
+    
+    /// <summary>
+    /// TypeScript attributes to apply to generated shape interfaces.
+    /// Example: new[] { "[TsInterface]", "[TsExport]" }
+    /// </summary>
+    public string[] TypeScriptAttributes { get; set; } = Array.Empty<string>();
 }
