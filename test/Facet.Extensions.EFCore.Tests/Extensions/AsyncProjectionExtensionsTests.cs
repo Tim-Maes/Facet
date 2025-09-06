@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Facet.Extensions.EFCore.Tests.Fixtures;
 using Facet.Extensions.EFCore.Tests.TestData;
@@ -18,7 +19,18 @@ public record UserDto(
     string Email,
     bool IsActive,
     DateTime CreatedAt
-);
+)
+{
+    public static Expression<Func<User, UserDto>> Projection =>
+        user => new UserDto(
+            user.Id,
+            user.FirstName,
+            user.LastName,
+            user.Email,
+            user.IsActive,
+            user.CreatedAt
+        );
+}
 
 [Facet(typeof(Product))]
 public record ProductDto(
@@ -29,7 +41,19 @@ public record ProductDto(
     int CategoryId,
     bool IsAvailable,
     DateTime CreatedAt
-);
+)
+{
+    public static Expression<Func<Product, ProductDto>> Projection =>
+        product => new ProductDto(
+            product.Id,
+            product.Name,
+            product.Description,
+            product.Price,
+            product.CategoryId,
+            product.IsAvailable,
+            product.CreatedAt
+        );
+}
 
 public class AsyncProjectionExtensionsTests : IClassFixture<TestDbContextFixture>
 {

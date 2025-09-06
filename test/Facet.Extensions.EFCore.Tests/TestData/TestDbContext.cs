@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
+using Facet;
 
 namespace Facet.Extensions.EFCore.Tests.TestData;
 
 // Test entities with navigations
+[GenerateDtos]
 public class User
 {
     public int Id { get; set; }
@@ -30,6 +32,7 @@ public class User
     public virtual ICollection<Order> Orders { get; set; } = new List<Order>();
 }
 
+[GenerateDtos]
 public class Product
 {
     public int Id { get; set; }
@@ -55,6 +58,7 @@ public class Product
     public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
 }
 
+[GenerateDtos]
 public class Category
 {
     public int Id { get; set; }
@@ -72,6 +76,7 @@ public class Category
     public virtual ICollection<Product> Products { get; set; } = new List<Product>();
 }
 
+[GenerateDtos]
 public class Order
 {
     public int Id { get; set; }
@@ -90,6 +95,7 @@ public class Order
     public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
 }
 
+[GenerateDtos]
 public class OrderItem
 {
     public int Id { get; set; }
