@@ -30,4 +30,12 @@ internal static class Diagnostics
         category: "Facet.Extensions.EFCore", 
         defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ChainDepthExceeded = new(
+        id: "FACET_EF004",
+        title: "Chain depth exceeded",
+        messageFormat: "Chain '{0}' for entity '{1}' exceeds maximum depth of {2}. Chain will be truncated.",
+        category: "Facet.Extensions.EFCore",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 }

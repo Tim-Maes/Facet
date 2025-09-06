@@ -3,6 +3,9 @@ using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Collections.Generic;
 
 namespace Facet.Extensions.EFCore.Generators.Emission;
 
@@ -11,7 +14,8 @@ namespace Facet.Extensions.EFCore.Generators.Emission;
 /// </summary>
 internal static class SelectorsEmitter
 {
-    public static void Emit(SourceProductionContext context, ModelRoot efModel, ImmutableArray<FacetDtoInfo> facetDtos)
+    public static void Emit(SourceProductionContext context, ModelRoot efModel, ImmutableArray<FacetDtoInfo> facetDtos, 
+        ImmutableDictionary<string, ImmutableHashSet<string>> usedChains)
     {
         foreach (var contextModel in efModel.Contexts)
         {
@@ -23,12 +27,16 @@ internal static class SelectorsEmitter
 
                 if (matchingDto == null) continue;
 
-                GenerateSelectors(context, entity, matchingDto);
+                // Get used chains for this entity
+                var entityName = GetSimpleTypeName(entity.Clr ?? entity.Name);
+                var entityChains = usedChains.GetValueOrDefault(entityName, ImmutableHashSet<string>.Empty);
+
+                GenerateSelectors(context, entity, matchingDto, entityChains);
             }
         }
     }
 
-    private static void GenerateSelectors(SourceProductionContext context, EntityModel entity, FacetDtoInfo dtoInfo)
+    private static void GenerateSelectors(SourceProductionContext context, EntityModel entity, FacetDtoInfo dtoInfo, ImmutableHashSet<string> usedChains)
     {
         var entityName = GetSimpleTypeName(entity.Clr ?? entity.Name);
         var selectorsName = $"{entityName}Selectors";
@@ -53,13 +61,19 @@ internal static class SelectorsEmitter
         sb.AppendLine($"internal static class {selectorsName}");
         sb.AppendLine("{");
         
-        // Generate base shape selector
+        // Always generate base shape selector (baseline)
         GenerateBaseShapeSelector(sb, entity, dtoInfo);
         
-        // Generate navigation shape selectors
+        // Only generate navigation shape selectors for used chains
         foreach (var navigation in entity.Navigations)
         {
-            GenerateNavigationShapeSelector(sb, entity, navigation, dtoInfo);
+            var navigationPath = navigation.Name;
+            
+            // Check if this navigation is used in any chain
+            if (usedChains.Any(chain => chain.StartsWith(navigationPath, System.StringComparison.OrdinalIgnoreCase)))
+            {
+                GenerateNavigationShapeSelector(sb, entity, navigation, dtoInfo);
+            }
         }
         
         sb.AppendLine("}");
@@ -78,8 +92,11 @@ internal static class SelectorsEmitter
         sb.AppendLine($"    public static Expression<Func<{entity.Clr}, I{entityName}Shape>> BaseShape {{ get; }} =");
         sb.AppendLine($"        entity => new {dtoInfo.DtoTypeName}");
         sb.AppendLine("        {");
-        sb.AppendLine("            // Property mappings would be generated here");
-        sb.AppendLine("            // This requires analyzing the DTO's properties");
+        
+        // Generate property mappings for scalar properties only
+        // We'll focus on basic types and avoid navigation properties for the base shape
+        GenerateScalarPropertyMappings(sb, entity, dtoInfo);
+        
         sb.AppendLine("        };");
         sb.AppendLine();
     }
@@ -99,10 +116,14 @@ internal static class SelectorsEmitter
             sb.AppendLine($"    public static Expression<Func<{entity.Clr}, I{entityName}With{navName}<I{targetEntityName}Shape>>> With{navName}Shape {{ get; }} =");
             sb.AppendLine($"        entity => new {dtoInfo.DtoTypeName}With{navName}");
             sb.AppendLine("        {");
-            sb.AppendLine("            // Base properties would be mapped here");
+            
+            // Generate base properties for the main entity
+            GenerateScalarPropertyMappings(sb, entity, dtoInfo);
+            
             sb.AppendLine($"            {navName} = entity.{navName}.Select(nav => new {GetTargetDtoName(navigation.Target)}");
             sb.AppendLine("            {");
-            sb.AppendLine("                // Navigation properties would be mapped here");
+            sb.AppendLine("                // TODO: Generate target entity property mappings");
+            sb.AppendLine("                // This requires analyzing target entity properties");
             sb.AppendLine("            }).ToList()");
             sb.AppendLine("        };");
         }
@@ -111,10 +132,14 @@ internal static class SelectorsEmitter
             sb.AppendLine($"    public static Expression<Func<{entity.Clr}, I{entityName}With{navName}<I{targetEntityName}Shape>>> With{navName}Shape {{ get; }} =");
             sb.AppendLine($"        entity => new {dtoInfo.DtoTypeName}With{navName}");
             sb.AppendLine("        {");
-            sb.AppendLine("            // Base properties would be mapped here");
+            
+            // Generate base properties for the main entity
+            GenerateScalarPropertyMappings(sb, entity, dtoInfo);
+            
             sb.AppendLine($"            {navName} = entity.{navName} == null ? null : new {GetTargetDtoName(navigation.Target)}");
             sb.AppendLine("            {");
-            sb.AppendLine("                // Navigation properties would be mapped here");
+            sb.AppendLine("                // TODO: Generate target entity property mappings");
+            sb.AppendLine("                // This requires analyzing target entity properties");
             sb.AppendLine("            }");
             sb.AppendLine("        };");
         }
@@ -128,6 +153,30 @@ internal static class SelectorsEmitter
         return $"{simpleName}Dto"; // Assume DTO naming convention
     }
 
+    private static void GenerateScalarPropertyMappings(StringBuilder sb, EntityModel entity, FacetDtoInfo dtoInfo)
+    {
+        // Generate property mappings based on actual DTO property analysis
+        var scalarProperties = dtoInfo.Properties.Where(p => !p.IsNavigation).ToList();
+        
+        if (scalarProperties.Count == 0)
+        {
+            sb.AppendLine("            // No scalar properties found in DTO analysis");
+            return;
+        }
+        
+        foreach (var prop in scalarProperties)
+        {
+            // Generate property assignment - assuming entity has matching property
+            sb.AppendLine($"            {prop.Name} = entity.{prop.Name},");
+        }
+        
+        // Remove trailing comma from last property
+        if (scalarProperties.Count > 0)
+        {
+            // Note: We'll handle trailing commas by being consistent in generation
+        }
+    }
+    
     private static string GetSimpleTypeName(string fullTypeName)
     {
         var lastDot = fullTypeName.LastIndexOf('.');

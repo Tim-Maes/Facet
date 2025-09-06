@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
+using System.Collections.Generic;
 
 namespace Facet.Extensions.EFCore.Generators.Emission;
 
@@ -50,6 +51,12 @@ internal static class ShapeInterfacesEmitter
         sb.AppendLine($"namespace {dtoInfo.DtoNamespace};");
         sb.AppendLine();
         
+        // Apply TypeScript attributes if configured
+        foreach (var tsAttribute in dtoInfo.TypeScriptAttributes)
+        {
+            sb.AppendLine(tsAttribute);
+        }
+        
         // Generate shape interface
         sb.AppendLine($"/// <summary>");
         sb.AppendLine($"/// Defines the shape of {entityName} with scalar properties only.");
@@ -57,10 +64,8 @@ internal static class ShapeInterfacesEmitter
         sb.AppendLine($"public interface {interfaceName}");
         sb.AppendLine("{");
         
-        // Note: In a full implementation, we'd need to inspect the actual DTO properties
-        // For now, we'll generate a placeholder that assumes common properties
-        sb.AppendLine("    // Scalar properties from the DTO would be defined here");
-        sb.AppendLine("    // This would require analyzing the actual DTO type's properties");
+        // Generate properties from DTO analysis
+        GenerateShapeProperties(sb, dtoInfo);
         
         sb.AppendLine("}");
 
@@ -68,6 +73,26 @@ internal static class ShapeInterfacesEmitter
         context.AddSource($"{interfaceName}.g.cs", sourceText);
     }
 
+    private static void GenerateShapeProperties(StringBuilder sb, FacetDtoInfo dtoInfo)
+    {
+        var scalarProperties = dtoInfo.Properties.Where(p => !p.IsNavigation).ToList();
+        
+        if (scalarProperties.Count == 0)
+        {
+            sb.AppendLine("    // No scalar properties found in DTO analysis");
+            return;
+        }
+        
+        foreach (var prop in scalarProperties)
+        {
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// {prop.Name} property from the entity.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    {prop.TypeName} {prop.Name} {{ get; }}");
+            sb.AppendLine();
+        }
+    }
+    
     private static string GetSimpleTypeName(string fullTypeName)
     {
         var lastDot = fullTypeName.LastIndexOf('.');
