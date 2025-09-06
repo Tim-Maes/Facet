@@ -19,7 +19,8 @@
       "Read(//Users/darrenkattan/.nuget/packages/**)",
       "Bash(dotnet add:*)",
       "Bash(dotnet clean:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []
