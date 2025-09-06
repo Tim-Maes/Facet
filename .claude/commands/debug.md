@@ -1,6 +1,6 @@
 # Debug
 
-You are tasked with helping debug issues during manual testing or implementation. This command allows you to investigate problems by examining logs, database state, and git history without editing files. Think of this as a way to bootstrap a debugging session without using the primary window's context.
+You are tasked with helping debug issues during Facet development or testing. This command allows you to investigate problems by examining build logs, generated code, test outputs, and git history without editing files. Think of this as a way to bootstrap a debugging session without using the primary window's context.
 
 ## Initial Response
 
@@ -9,49 +9,48 @@ When invoked WITH a plan/ticket file:
 I'll help debug issues with [file name]. Let me understand the current state.
 
 What specific problem are you encountering?
-- What were you trying to test/implement?
-- What went wrong?
-- Any error messages?
+- What were you trying to build/test?
+- What went wrong during generation or compilation?
+- Any error messages or diagnostic codes?
 
-I'll investigate the logs, database, and git state to help figure out what's happening.
+I'll investigate the build logs, generated code, and git state to help figure out what's happening.
 ```
 
 When invoked WITHOUT parameters:
 ```
-I'll help debug your current issue.
+I'll help debug your current Facet issue.
 
 Please describe what's going wrong:
-- What are you working on?
-- What specific problem occurred?
+- What source generator feature are you working on?
+- What specific problem occurred during build/test?
 - When did it last work?
 
-I can investigate logs, database state, and recent changes to help identify the issue.
+I can investigate build outputs, generated code, test results, and recent changes to help identify the issue.
 ```
 
 ## Environment Information
 
 You have access to these key locations and tools:
 
-**Logs** (Next.js application logs):
-- Next.js dev server output (running on port 3000)
-- SST logs (when deployed): `sst logs`
-- Browser console logs for client-side errors
+**Build Outputs**:
+- MSBuild logs: `dotnet build -v d`
+- Source generator diagnostics: Look for FACET_EF001-004 codes
+- Generated code: `test/Facet.Extensions.EFCore.Tests/Generated/`
 
-**Database**:
-- Development: Local PostgreSQL or SQLite database
-- Production: PostgreSQL via Drizzle ORM
-- Tables: `organization`, `user`, `session`, `mcp_servers`, `mcp_oauth_application`, `mcp_oauth_user`, `support_requests`
-- Query with: Drizzle queries in the codebase or direct SQL
+**Test Results**:
+- xUnit test outputs: `dotnet test --logger "console;verbosity=detailed"`
+- Verify snapshot files: `*.received.*` and `*.verified.*`
+- Test databases: InMemory and SQLite test databases
 
 **Git State**:
 - Check current branch, recent commits, uncommitted changes
-- Main branch: `master`
+- Main branch: `main`
 
-**Service Status**:
-- Check if Next.js dev server is running: `ps aux | grep "next dev"`
-- Dev server URL: `http://localhost:3000`
-- Check if database is accessible
-- For production: SST deployment status
+**Source Generator Status**:
+- Check if build succeeds: `dotnet build`
+- Generated file count: `find . -name "*.g.cs" | wc -l`
+- MSBuild task execution: Check for ExportEfModelTask execution
+- Incremental compilation state: Check `bin/` and `obj/` folders
 
 ## Process Steps
 

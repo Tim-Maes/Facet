@@ -1,6 +1,6 @@
 # Validate Plan
 
-You are tasked with validating that an implementation plan was correctly executed, verifying all success criteria and identifying any deviations or issues.
+You are tasked with validating that an implementation plan was correctly executed for the Facet Source Generator project, verifying all success criteria and identifying any deviations or issues.
 
 ## Initial Setup
 
@@ -20,11 +20,10 @@ When invoked:
    git log --oneline -n 20
    git diff HEAD~N..HEAD  # Where N covers implementation commits
 
-   # Run MCPlatform checks
-   cd packages/dashboard && bun lint
-   cd packages/dashboard && bun run build
+   # Run Facet-specific checks
+   dotnet build --no-restore --verbosity normal
+   dotnet test --no-build --verbosity normal
    ```
-   IMPORTANT: make sure to ask the user to stop the dev server BEFORE doing this!!!
 
 ## Validation Process
 
@@ -37,32 +36,32 @@ If starting fresh or need more context:
    - List all files that should be modified
    - Note all success criteria (automated and manual)
    - Identify key functionality to verify
-   - Check if database migrations were specified
+   - Check if source generator patterns were specified
 
 3. **Spawn parallel research tasks** to discover implementation:
    ```
-   Task 1 - Verify database changes:
-   Research if migrations were added and schema changes match plan.
-   Check: packages/database/src/schema.ts, migration files in packages/database/migrations/
-   Look for: new tables, columns, indexes, foreign keys as specified in plan
-   Return: What was implemented vs what plan specified; (ask user to run migrations if desired)
+   Task 1 - Verify source generator implementation:
+   Research if source generators were added/modified according to plan.
+   Check: src/Facet.Extensions.EFCore/Generators/ directory, FacetEfGenerator.cs, emission files
+   Look for: new generators, incremental generation patterns, diagnostic implementations
+   Return: What was implemented vs what plan specified
 
-   Task 2 - Verify oRPC actions:
-   Find all oRPC actions that should have been added/modified.
-   Check: packages/dashboard/src/lib/orpc/actions.ts and router.ts
-   Look for: new actions, proper input validation, revalidatePath calls, error handling
-   Return: Action implementation vs plan specifications
+   Task 2 - Verify code emission patterns:
+   Find all emitter classes that should have been added/modified.
+   Check: FluentBuilderEmitter.cs, SelectorsEmitter.cs, ShapeInterfacesEmitter.cs
+   Look for: proper emission logic, usage-based generation, chain discovery integration
+   Return: Emitter implementation vs plan specifications
 
-   Task 3 - Verify UI components:
-   Check if shadcn/ui components were added/modified as specified.
-   Look in: packages/dashboard/src/components/ and src/app/
-   Check: server components, client components, proper use() hook usage, Suspense boundaries
-   Return: Component implementation vs plan requirements
+   Task 3 - Verify test implementations:
+   Check if test patterns using Verify.SourceGenerators were implemented as specified.
+   Look in: test/Facet.UnitTests/, test/Facet.Extensions.EFCore.Tests/
+   Check: snapshot tests, MSBuild task tests, integration tests with TestDbContext
+   Return: Test coverage vs plan requirements
 
-   Task 4 - Verify React 19 patterns:
-   Check if async server components and promise patterns were implemented correctly.
-   Look for: page.tsx with async functions, promises passed to client components
-   Return: Architecture conformance to MCPlatform patterns
+   Task 4 - Verify MSBuild integration:
+   Check if MSBuild targets and tasks were implemented correctly.
+   Look for: .targets files, ExportEfModelTask, analyzer references in .csproj files
+   Return: Build integration conformance to Facet patterns
    ```
 
 ### Step 2: Systematic Validation
@@ -75,26 +74,28 @@ For each phase in the implementation plan document
 
 2. **Run automated verification**:
    - Execute each command from "Automated Verification" section
-   - Use MCPlatform specific tools:
+   - Use Facet-specific validation tools:
      ```bash
-     bun run tests
+     dotnet build --configuration Release --no-restore
+     dotnet test --configuration Release --no-build --verbosity normal
+     dotnet pack --configuration Release --no-build --output ./artifacts
      ```
    - Document pass/fail status
    - If failures, investigate root cause
 
 3. **Assess manual criteria**:
-   - List what needs manual testing (especially UI with Puppeteer)
-   - Check if organization scoping is properly implemented
-   - Verify authentication patterns (platform vs sub-tenant)
-   - use playwright MCP to test user interface features & interactions.
+   - List what needs manual testing (especially test console validation)
+   - Check if generated code compiles without errors or warnings
+   - Verify incremental generation performance
+   - Run test console application: `cd test/Facet.TestConsole && dotnet run --configuration Release`
 
-4. **Think deeply about MCPlatform patterns**:
-   - Are oRPC actions properly wrapped with .actionable({})?
-   - Do server components, server actions and RPCs use requireSession() for auth?
-   - Are all database queries scoped to organizations?
-   - Do they use organization IDs directly from the _session_ for data fetching, rather than a passed parameter?
-   - Does the UI follow shadcn/ui component patterns?
-   - Is error handling robust with proper user feedback ( e.g. toast messages, fallback components for `<ErrorBoundary>` components)?
+4. **Think deeply about Facet source generator patterns**:
+   - Are source generators implementing IIncrementalGenerator correctly?
+   - Do emitters use proper incremental generation with IncrementalValueProvider?
+   - Are diagnostic descriptors properly categorized with unique IDs?
+   - Does chain discovery analyze actual usage patterns and avoid 2^N type explosion?
+   - Are generated files following Facet naming conventions and patterns?
+   - Is error handling robust with proper diagnostic reporting and graceful degradation?
 
 ### Step 3: Generate Validation Report
 
@@ -109,68 +110,70 @@ Create comprehensive validation summary:
 ⚠️ Phase 3: [Name] - Partially implemented (see issues)
 
 ### Automated Verification Results
-✅ Biome check passes: `bun lint`
-✅ Build succeeds: `cd packages/dashboard && bun run build`
-❌ Database tests fail: `cd packages/database && bun run tests` (2 failures)
+✅ Build succeeds: `dotnet build --configuration Release --no-restore`
+✅ Tests pass: `dotnet test --configuration Release --no-build --verbosity normal`
+✅ Package creation: `dotnet pack --configuration Release --no-build --output ./artifacts`
+❌ Test console validation fails: `cd test/Facet.TestConsole && dotnet run` (2 failures)
 
 ### Code Review Findings
 
 #### Matches Plan:
-- Database migration correctly adds [table] with proper foreign keys
-- oRPC actions implement specified methods with proper validation
-- UI components follow React 19 async patterns
-- Organization scoping implemented correctly
+- Source generator correctly implements incremental generation with IIncrementalGenerator
+- Emitters implement specified emission patterns with proper usage discovery
+- Test patterns follow Verify.SourceGenerators with snapshot validation
+- MSBuild integration properly exports EF models and integrates with analyzers
 
 #### Deviations from Plan:
-- Used different component name in [file:line] (cosmetic)
-- Added extra validation in [file:line] (improvement)
-- Skipped intermediate step in favor of more direct approach
+- Used different emitter organization in [file:line] (architectural improvement)
+- Added extra diagnostic reporting in [file:line] (enhancement)
+- Optimized chain discovery algorithm for better performance
 
-#### MCPlatform Pattern Compliance:
-✅ Server components are async and use requireSession()
-✅ Client components use 'use client' and use() hook properly
-✅ oRPC actions include revalidatePath calls
-✅ Database queries respect organization boundaries
-❌ Missing Suspense boundary in [component:line]
+#### Facet Source Generator Pattern Compliance:
+✅ Generators implement IIncrementalGenerator with proper caching
+✅ Emitters use IncrementalValueProvider for performance optimization
+✅ Diagnostics follow structured pattern with unique IDs (FACET_EF001, etc.)
+✅ Chain discovery prevents combinatorial explosion through usage analysis
+❌ Missing error recovery in [emitter:line] for malformed input
 
 #### Potential Issues:
-- Missing index on foreign key could impact performance
-- Error boundary not implemented for [component]
-- No loading state for async operation in [file]
+- Missing null checks in generated code could cause runtime exceptions
+- Chain discovery may not handle edge cases with generic types
+- Generated code doesn't include XML documentation comments
 
 ### Manual Testing Required:
-1. **Puppeteer UI Testing**:
-   - [ ] Navigate to localhost:3000/login-for-claude for auto-login
-   - [ ] Verify [feature] appears correctly at 1920x1080 resolution
-   - [ ] Test error states with invalid input
-   - [ ] Check responsive behavior on mobile viewport
+1. **Test Console Validation**:
+   - [ ] Run `cd test/Facet.TestConsole && dotnet run --configuration Release`
+   - [ ] Verify all test scenarios complete without exceptions
+   - [ ] Check generated fluent API methods work correctly
+   - [ ] Test error handling with invalid navigation chains
 
 2. **Integration Testing**:
-   - [ ] Confirm works with existing [component]
-   - [ ] Test organization isolation (create test data in different orgs)
-   - [ ] Verify authentication flows work correctly
+   - [ ] Confirm generated code compiles with target projects
+   - [ ] Test with different EF models and DTO configurations
+   - [ ] Verify incremental generation triggers only when needed
 
 3. **Performance Testing**:
-   - [ ] Check load times with large datasets
-   - [ ] Verify no memory leaks in React components
+   - [ ] Check compilation times with large EF models
+   - [ ] Verify generated code doesn't impact runtime query performance
+   - [ ] Test memory usage during design-time generation
 
-### Database Verification:
-- [ ] Migration [number] applied successfully
-- [ ] New tables/columns match schema definitions
-- [ ] Indexes created as specified
-- [ ] Foreign key constraints working
+### Source Generator Verification:
+- [ ] Generators registered correctly in .csproj as analyzers
+- [ ] Generated files appear in obj/Generated/ directory
+- [ ] MSBuild export task creates efmodel.json successfully
+- [ ] Chain discovery detects usage patterns accurately
 
-### Security Review:
-- [ ] All operations respect organization boundaries
-- [ ] No sensitive data exposed in client components
-- [ ] Authentication checks in place
-- [ ] Input validation prevents injection attacks
+### Code Quality Review:
+- [ ] All generated code follows established naming conventions
+- [ ] No compiler warnings or errors in generated output
+- [ ] Proper null handling in generated extension methods
+- [ ] Generated code includes appropriate using statements
 
 ### Recommendations:
-- Address Biome warnings before merge
-- Add missing Suspense boundaries for better UX
-- Consider adding integration tests for [scenario]
-- Update CLAUDE.md if new patterns were established
+- Address any compiler warnings before merge
+- Add missing diagnostic handlers for edge cases
+- Consider adding performance benchmarks for large models
+- Update documentation if new generation patterns were established
 ```
 
 ## Working with Existing Context
@@ -182,83 +185,119 @@ If you were part of the implementation:
 - Be honest about any shortcuts or incomplete items
 - Note any decisions that deviated from the plan and why
 
-## MCPlatform-Specific Checks
+## Facet Source Generator-Specific Checks
 
-Always verify MCPlatform patterns:
+Always verify Facet source generator patterns:
 
-### Database Layer (Drizzle ORM)
-- [ ] Schema changes in `packages/database/src/schema.ts`
-- [ ] Migrations generated with `bun run db:generate`
-- [ ] Foreign keys and indexes properly defined
-- [ ] Organization scoping in all queries
+### Source Generator Implementation
+- [ ] Generators implement `IIncrementalGenerator` interface
+- [ ] Use `IncrementalValueProvider` for performance optimization
+- [ ] Proper registration in `.csproj` files as analyzers
+- [ ] Generated files excluded from compilation
 
-### API Layer (oRPC)
-- [ ] Actions in `packages/dashboard/src/lib/orpc/actions.ts`
-- [ ] Proper input validation with Zod schemas
-- [ ] `revalidatePath()` called after mutations
-- [ ] Error handling with defined error types
-- [ ] Actions wrapped with `.actionable({})`
+### Code Emission Patterns
+- [ ] Emitters in `src/Facet.Extensions.EFCore/Generators/Emission/`
+- [ ] Consistent `Emit()` method signatures across emitters
+- [ ] Usage-based generation to prevent combinatorial explosion
+- [ ] Proper handling of generic type constraints
+- [ ] Generated code follows established naming conventions
 
-### UI Layer (React 19 + shadcn/ui)
-- [ ] Server components are async functions
-- [ ] Client components start with `'use client'`
-- [ ] Promises passed from server to client components
-- [ ] `use()` hook used to unwrap promises
-- [ ] Suspense boundaries around async content
-- [ ] Only shadcn/ui components used (no Radix direct)
+### Testing Infrastructure (Verify.SourceGenerators)
+- [ ] Tests use `Verify.SourceGenerators` with snapshot validation
+- [ ] `[ModuleInitializer]` properly initializes Verify framework
+- [ ] Test naming follows `MethodName_WithCondition_ExpectedResult` pattern
+- [ ] Snapshot files organized in dedicated directories
+- [ ] Generated test files excluded from source control
 
-### Authentication & Authorization
-- [ ] `requireSession()` used in server components
-- [ ] Organization boundaries respected
-- [ ] Proper auth system used (platform vs sub-tenant)
+### MSBuild Integration
+- [ ] `.targets` files properly configured for analyzer integration
+- [ ] `ExportEfModelTask` generates efmodel.json before compilation
+- [ ] Additional files registered for source generator consumption
+- [ ] Incremental build support with proper input/output tracking
+
+### Diagnostic System
+- [ ] Diagnostic descriptors with unique IDs (FACET_EF001, etc.)
+- [ ] Appropriate severity levels for different error types
+- [ ] Structured error messages with actionable guidance
+- [ ] Graceful degradation when encountering invalid input
 
 ## Important Guidelines
 
 1. **Be thorough but practical** - Focus on what matters for shipping
-2. **Run all automated checks** - Don't skip Biome/build verification
+2. **Run all automated checks** - Don't skip build/test verification
 3. **Document everything** - Both successes and issues
 4. **Think critically** - Question if implementation truly solves the problem
 5. **Consider maintenance** - Will this be maintainable long-term?
-6. **Respect the dev server** - Never run `bun run dev` or `bun run build`
+6. **Respect incremental generation** - Test performance with large models
 
 ## Validation Checklist
 
 Always verify:
-- [ ] All phases marked complete are actually done
-- [ ] Biome checks pass without errors
-- [ ] Build succeeds (dry-run only)
-- [ ] Code follows MCPlatform patterns
-- [ ] No regressions in existing functionality
-- [ ] Organization isolation maintained
-- [ ] Error handling is robust
-- [ ] Manual test steps are clear
-- [ ] Database changes are properly migrated
+- [ ] All phases marked complete are actually implemented
+- [ ] `dotnet build` succeeds without warnings or errors
+- [ ] `dotnet test` passes with comprehensive coverage
+- [ ] Code follows Facet source generator patterns
+- [ ] No regressions in existing generation functionality
+- [ ] Incremental generation performance maintained
+- [ ] Error handling provides meaningful diagnostics
+- [ ] Manual test steps with test console are clear
+- [ ] Generated code compiles correctly in target projects
 
 ## Common Issues to Check
 
-### Database Issues
-- Missing organization scoping in queries
-- Foreign key constraints not properly defined
-- Indexes missing on commonly queried columns
-- Migration not applied or generated incorrectly
+### Source Generator Issues
+- Generators not implementing `IIncrementalGenerator` correctly
+- Missing incremental value providers causing performance issues
+- Analyzer references not configured properly in project files
+- Generated files not excluded from compilation
 
-### oRPC Issues
-- Actions missing `.actionable({})` wrapper
-- No `revalidatePath()` calls after mutations
-- Input validation incomplete or missing
-- Error handling not following project patterns
+### Code Emission Issues
+- Emitters missing consistent `Emit()` method signatures
+- Combinatorial explosion due to lack of usage-based generation
+- Generic type constraints not handled properly
+- Generated code doesn't follow naming conventions
 
-### React Component Issues
-- Server components not async
-- Client components missing `'use client'`
-- Promises not properly passed/unwrapped
-- Missing Suspense boundaries
-- Direct Radix usage instead of shadcn/ui
+### Testing Infrastructure Issues
+- Tests not using `Verify.SourceGenerators` framework
+- Missing `[ModuleInitializer]` for Verify setup
+- Test naming not following established patterns
+- Snapshot files not organized properly
 
-### Authentication Issues
-- Missing `requireSession()` in server components
-- Organization boundaries not enforced
-- Wrong auth system used for context
+### MSBuild Integration Issues
+- Missing or misconfigured `.targets` files
+- EF model export task not running before compilation
+- Additional files not registered for analyzer consumption
+- Incremental build not working due to missing input/output tracking
+
+### Diagnostic Issues
+- Diagnostic descriptors missing unique IDs
+- Inappropriate severity levels for error types
+- Error messages not actionable or structured
+- No graceful degradation for invalid input
 
 ## Addenda:
-Remember: Good validation catches issues before they reach users. Be constructive but thorough in identifying gaps or improvements that align with MCPlatform's patterns and quality standards.
+Remember: Good validation catches issues before they reach users. Be constructive but thorough in identifying gaps or improvements that align with Facet's source generator patterns and quality standards.
+
+### Facet-Specific Validation Commands:
+```bash
+# Core validation commands
+dotnet build --configuration Release --no-restore
+dotnet test --configuration Release --no-build --verbosity normal
+dotnet pack --configuration Release --no-build --output ./artifacts
+
+# Test console validation
+cd test/Facet.TestConsole
+dotnet run --configuration Release --no-build
+
+# Check generated files
+ls -la test/Facet.UnitTests/Generated/
+ls -la test/Facet.Extensions.EFCore.Tests/Generated/
+```
+
+### Key Facet Patterns to Validate:
+1. **Incremental Generation**: Uses `IIncrementalGenerator` with proper caching
+2. **Usage-Based Emission**: Chain discovery prevents combinatorial explosion
+3. **Verify Testing**: Snapshot-based validation with `Verify.SourceGenerators`
+4. **MSBuild Integration**: Analyzer registration and EF model export
+5. **Structured Diagnostics**: Unique IDs and actionable error messages
+6. **Performance Optimization**: No significant overhead in generated code execution
