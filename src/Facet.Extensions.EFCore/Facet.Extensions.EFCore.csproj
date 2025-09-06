@@ -10,6 +10,8 @@
         <PackageProjectUrl>https://www.github.com/Tim-Maes/Facet</PackageProjectUrl>
         <Nullable>enable</Nullable>
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+        <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+        <NoWarn>$(NoWarn);NU1608;RS1035</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
@@ -53,5 +55,12 @@
     <ItemGroup>
         <Analyzer Include="$(OutputPath)$(AssemblyName).dll" />
     </ItemGroup>
+
+    <!-- Analyzer release tracking files -->
+    <ItemGroup>
+        <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
+        <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
+    </ItemGroup>
+
 
 </Project>

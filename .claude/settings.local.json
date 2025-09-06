@@ -6,7 +6,9 @@
       "Bash(dotnet test:*)",
       "WebFetch(domain:github.com)",
       "WebSearch",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(find:*)",
+      "Read(//Users/darrenkattan/Documents/GitHub/immybot/submodules/**)"
     ],
     "deny": [],
     "ask": []
