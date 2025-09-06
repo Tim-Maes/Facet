@@ -13,16 +13,31 @@ namespace Facet.Generators;
 [Generator(LanguageNames.CSharp)]
 public sealed class GenerateDtosGenerator : IIncrementalGenerator
 {
-  private static string GetTypeWithNullability(ITypeSymbol typeSymbol)
+  /// <summary>
+  /// Gets the type name with appropriate nullability annotation for code generation.
+  /// Handles the dual representation of nullable types in Roslyn's SymbolDisplayFormat.FullyQualifiedFormat:
+  /// - Value types (int?, DateTime?): Include '?' in the display string
+  /// - Reference types (string?, object?): Rely on NullableAnnotation metadata, display string omits '?'
+  /// </summary>
+  /// <param name="typeSymbol">The type symbol to get the nullable representation for</param>
+  /// <returns>A string representation of the type with appropriate nullable annotation</returns>
+  internal static string GetTypeWithNullability(ITypeSymbol typeSymbol)
   {
     var baseType = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-    // If already shows nullable (value type?) or contains '?' return
+    
+    // For nullable value types (int?, DateTime?, etc.), FullyQualifiedFormat includes the '?'
+    // Example: int? -> "int?", System.DateTime? -> "System.DateTime?"
     if (baseType.EndsWith("?")) return baseType;
-    // Respect annotated nullability for reference types
+    
+    // For nullable reference types (string?, object?, etc.), FullyQualifiedFormat omits the '?'
+    // and we must check the NullableAnnotation metadata to determine if '?' should be added
+    // Example: string? -> baseType="string", NullableAnnotation=Annotated -> "string?"
     if (typeSymbol is { IsReferenceType: true } && typeSymbol.NullableAnnotation == NullableAnnotation.Annotated)
     {
       return baseType + "?";
     }
+    
+    // Non-nullable types or types where nullability is not explicitly annotated
     return baseType;
   }
   private const string GenerateDtosAttributeName = "Facet.GenerateDtosAttribute";
@@ -69,7 +84,17 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         if (model != null)
         {
           spc.CancellationToken.ThrowIfCancellationRequested();
-          GenerateDtosForModel(spc, model);
+          try
+          {
+            GenerateDtosForModel(spc, model);
+          }
+          catch (Exception ex) when (ex is not OperationCanceledException)
+          {
+            spc.ReportDiagnostic(Diagnostic.Create(
+                Diagnostics.GenerateDtosError,
+                Location.None,
+                ex.Message));
+          }
         }
       }
     });
@@ -248,11 +273,14 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
           members.ToImmutableArray(),
           interfaceContracts.ToImmutableArray());
     }
-    catch (Exception)
+    catch (Exception ex) when (ex is not OperationCanceledException)
     {
-      // Swallow exceptions to prevent generator crashes
-      // In a real scenario, you might want to emit a diagnostic instead
-      return null;
+      // Store error information to be reported later in the pipeline
+      // We can't directly emit diagnostics here because we don't have SourceProductionContext
+      // The error will be handled by the RegisterSourceOutput exception handler
+      throw new InvalidOperationException(
+          $"Failed to process GenerateDtos attribute on type '{sourceSymbol.ToDisplayString()}': {ex.Message}", 
+          ex);
     }
   }
 

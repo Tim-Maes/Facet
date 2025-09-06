@@ -7,6 +7,8 @@
     <FacetEfModelJson Condition="'$(FacetEfModelJson)' == ''">$(IntermediateOutputPath)efmodel.json</FacetEfModelJson>
     <FacetEfContextAssemblyPath Condition="'$(FacetEfContextAssemblyPath)' == ''">$(TargetPath)</FacetEfContextAssemblyPath>
     <FacetEfContextTypes Condition="'$(FacetEfContextTypes)' == ''"></FacetEfContextTypes>
+    <FacetMaxChainDepth Condition="'$(FacetMaxChainDepth)' == ''">3</FacetMaxChainDepth>
+    <FacetEnableDebugOutput Condition="'$(FacetEnableDebugOutput)' == ''">false</FacetEnableDebugOutput>
   </PropertyGroup>
 
   <Target Name="Facet_ExportEfModel"

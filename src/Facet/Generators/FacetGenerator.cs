@@ -275,7 +275,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         if (string.IsNullOrWhiteSpace(documentationComment))
             return null;
 
-        return FormatXmlDocumentation(documentationComment);
+        return FormatXmlDocumentation(documentationComment!);
     }
 
     /// <summary>
@@ -449,7 +449,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 // Generate member XML documentation if available
                 if (!string.IsNullOrWhiteSpace(m.XmlDocumentation))
                 {
-                    sb.AppendLine($"    {m.XmlDocumentation.Replace("\n", "\n    ")}");
+                    sb.AppendLine($"    {m.XmlDocumentation!.Replace("\n", "\n    ")}");
                 }
 
                 if (m.Kind == FacetMemberKind.Property)
@@ -770,7 +770,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         var sourceTypeNamespace = ExtractNamespaceFromFullyQualifiedType(model.SourceTypeName);
         if (!string.IsNullOrWhiteSpace(sourceTypeNamespace))
         {
-            namespaces.Add(sourceTypeNamespace);
+            namespaces.Add(sourceTypeNamespace!);
         }
 
         foreach (var member in model.Members)
@@ -778,22 +778,22 @@ public sealed class FacetGenerator : IIncrementalGenerator
             var memberTypeNamespace = ExtractNamespaceFromFullyQualifiedType(member.TypeName);
             if (!string.IsNullOrWhiteSpace(memberTypeNamespace))
             {
-                namespaces.Add(memberTypeNamespace);
+                namespaces.Add(memberTypeNamespace!);
             }
         }
 
         if (!string.IsNullOrWhiteSpace(model.ConfigurationTypeName))
         {
-            var configNamespace = ExtractNamespaceFromFullyQualifiedType(model.ConfigurationTypeName);
+            var configNamespace = ExtractNamespaceFromFullyQualifiedType(model.ConfigurationTypeName!);
             if (!string.IsNullOrWhiteSpace(configNamespace))
             {
-                namespaces.Add(configNamespace);
+                namespaces.Add(configNamespace!);
             }
         }
 
         if (!string.IsNullOrWhiteSpace(model.Namespace))
         {
-            namespaces.Remove(model.Namespace);
+            namespaces.Remove(model.Namespace!);
         }
 
         namespaces.Remove("");

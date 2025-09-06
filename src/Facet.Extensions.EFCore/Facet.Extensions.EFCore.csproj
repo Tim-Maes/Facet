@@ -51,8 +51,8 @@
         <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="tasks\net8.0\$(AssemblyName).dll" Visible="false" />
     </ItemGroup>
 
-    <!-- Mark as analyzer -->
-    <ItemGroup>
+    <!-- Mark as analyzer - but don't self-reference during build -->
+    <ItemGroup Condition="'$(MSBuildProjectName)' != 'Facet.Extensions.EFCore'">
         <Analyzer Include="$(OutputPath)$(AssemblyName).dll" />
     </ItemGroup>
 

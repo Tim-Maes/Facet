@@ -11,7 +11,7 @@ You are tasked with writing a handoff document to hand off your work to another 
 2. **Create your document**
     - using the above conventions, write your document. use the defined filepath, and the following YAML frontmatter pattern:
     - Use the metadata gathered in step 1
-   - Structure the document with YAML frontmatter followed by content:
+    - Structure the document with YAML frontmatter followed by content:
 ```markdown
 ---
 date: [Current date and time with timezone in ISO format]

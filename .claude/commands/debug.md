@@ -73,39 +73,36 @@ After the user describes the issue:
 Spawn parallel Task agents for efficient investigation:
 
 ```
-Task 1 - Check Application State:
-Analyze the running application and logs:
-1. Use Puppeteer to check UI state at http://localhost:3000
-2. Check Next.js console output for errors
-3. Look for API route errors in terminal
-4. Check browser console for client-side errors
-5. Look for hydration mismatches or React errors
-Return: Key errors/warnings with context
+Task 1 - Check Build State:
+Analyze the current build and compilation status:
+1. Run dotnet build and check for compilation errors
+2. Look for source generator diagnostic codes (FACET_EF001-004)
+3. Check MSBuild task execution logs
+4. Verify generated files exist in Generated/ folders
+5. Look for incremental compilation issues
+Return: Key build errors/warnings with context
 ```
 
 ```
-Task 2 - Database State:
-Check the current database state:
-1. Query relevant tables based on the issue:
-   - Organizations: SELECT * FROM organization;
-   - MCP Servers: SELECT * FROM mcp_servers;
-   - Auth sessions: SELECT * FROM session ORDER BY created_at DESC LIMIT 5;
-   - Support requests: SELECT * FROM support_requests ORDER BY created_at DESC;
-2. Check for data integrity issues
-3. Verify foreign key relationships
-4. Look for stuck states or anomalies
-Return: Relevant database findings
+Task 2 - Generated Code Analysis:
+Check the current generated code state:
+1. Examine generated files in test/Facet.Extensions.EFCore.Tests/Generated/
+2. Look for compilation errors in generated .g.cs files
+3. Verify efmodel.json is properly generated and readable
+4. Check for missing or malformed generated methods
+5. Analyze chain discovery output and usage patterns
+Return: Generated code issues and patterns
 ```
 
 ```
-Task 3 - Git and File State:
-Understand what changed recently:
+Task 3 - Git and Test State:
+Understand what changed recently and test status:
 1. Check git status and current branch
 2. Look at recent commits: git log --oneline -10
 3. Check uncommitted changes: git diff
-4. Verify Next.js route files exist in src/app/
-5. Check for TypeScript errors: bun run typecheck (if available)
-Return: Git state and any file issues
+4. Run tests and check for failures: dotnet test
+5. Look for Verify snapshot conflicts (.received vs .verified files)
+Return: Git state and test failure information
 ```
 
 ### Step 3: Present Findings
@@ -146,30 +143,31 @@ Based on the investigation, present a focused debug report:
    ```
 
 2. **If That Doesn't Work**:
-   - Check the dev server is running on port 3000
-   - Clear Next.js cache: `rm -rf .next`
-   - Check for TypeScript errors: `bun run typecheck`
-   - Verify database migrations are up to date
-   - Try logging in at `/login-for-claude` if auth issues
+   - Clean and rebuild: `dotnet clean && dotnet build`
+   - Clear generated files: `rm -rf test/Facet.Extensions.EFCore.Tests/Generated/`
+   - Regenerate EF model: Check for `efmodel.json` generation
+   - Run specific tests: `dotnet test --filter "FluentBuilder"`
+   - Check MSBuild binary logs: `dotnet build -bl` then analyze with MSBuild Log Viewer
 
 ### Can't Access?
 Some issues might be outside my reach:
-- Browser console errors (F12 in browser)
-- SST deployment logs (production)
-- External service integrations
+- Visual Studio debugger sessions
+- IDE-specific error highlighting
+- External NuGet package compatibility issues
+- Platform-specific build issues (Windows vs macOS vs Linux)
 
 Would you like me to investigate something specific further?
 ```
 
 ## Important Notes
 
-- **Focus on manual testing scenarios** - This is for debugging during implementation
+- **Focus on source generator scenarios** - This is for debugging during Facet development
 - **Always require problem description** - Can't debug without knowing what's wrong
 - **Read files completely** - No limit/offset when reading context
-- **Understand the dual auth system** - Platform auth vs sub-tenant auth
-- **Check vhost routing** - MCP servers use subdomain-based routing
+- **Understand the generation pipeline** - Chain discovery → emission → compilation
+- **Check incremental compilation** - Source generators use incremental patterns
 - **No file editing** - Pure investigation only
-- **Dev server is always running** - Never run `bun run dev` or `bun run build`
+- **Build system is complex** - MSBuild, source generators, and EF model export
 
 ## Quick Reference
 
@@ -179,19 +177,28 @@ Would you like me to investigate something specific further?
 # Navigate to /login-for-claude if auth needed
 ```
 
-**Database Queries** (adjust for your DB setup):
-```sql
--- Check organizations
-SELECT * FROM organization;
+**Test Project Commands**:
+```bash
+# Run all Facet tests
+dotnet test
 
--- Check MCP servers and routing
-SELECT slug, domain FROM mcp_servers;
+# Run specific test projects
+dotnet test test/Facet.Extensions.EFCore.Tests/Facet.Extensions.EFCore.Tests.csproj
+dotnet test test/Facet.TestConsole/Facet.TestConsole.csproj
 
--- Check auth sessions
-SELECT * FROM session ORDER BY created_at DESC LIMIT 5;
+# Run tests with verbose output
+dotnet test --logger "console;verbosity=detailed"
 
--- Check sub-tenant users
-SELECT * FROM mcp_oauth_user ORDER BY created_at DESC LIMIT 5;
+# Run specific test categories or filters
+dotnet test --filter "FluentBuilder"
+dotnet test --filter "Category=Integration"
+dotnet test --filter "FullyQualifiedName~NavigationPropertyTests"
+
+# Run tests and update Verify snapshots
+dotnet test -- verify.autoverify=true
+
+# Run console integration tests
+dotnet run --project test/Facet.TestConsole/Facet.TestConsole.csproj
 ```
 
 **Service Check**:

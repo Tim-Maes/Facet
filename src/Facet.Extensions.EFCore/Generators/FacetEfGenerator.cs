@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Facet.Extensions.EFCore.Generators.Emission;
 
 namespace Facet.Extensions.EFCore.Generators;
@@ -14,6 +15,10 @@ public sealed class FacetEfGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
+        // Read configuration from MSBuild properties
+        var configProvider = context.AnalyzerConfigOptionsProvider
+            .Select(static (options, _) => new FacetConfiguration(options));
+
         // Read EF model from JSON
         var efModel = EfJsonReader.Configure(context);
 
@@ -46,14 +51,16 @@ public sealed class FacetEfGenerator : IIncrementalGenerator
         // Discover chain usage patterns in code
         var chainUses = ChainUseDiscovery.Configure(context);
 
-        // Combine EF model with discovered DTOs and chain usage
+        // Combine EF model with discovered DTOs, chain usage, and configuration
         var combined = efModel
             .Combine(allDtos)
             .Combine(chainUses.Collect())
+            .Combine(configProvider)
             .Select(static (pair, _) => new { 
-                Model = pair.Left.Left, 
-                Dtos = pair.Left.Right, 
-                ChainUses = pair.Right 
+                Model = pair.Left.Left.Left, 
+                Dtos = pair.Left.Left.Right, 
+                ChainUses = pair.Left.Right,
+                Configuration = pair.Right
             });
 
         // Generate code
@@ -62,10 +69,36 @@ public sealed class FacetEfGenerator : IIncrementalGenerator
             var efModel = data.Model;
             var facetDtos = data.Dtos;
             var chainUses = data.ChainUses;
+            var config = data.Configuration;
             if (efModel == null || facetDtos.Length == 0) return;
 
-            // Apply depth capping with diagnostics
-            var usedChains = ChainUseDiscovery.GroupAndNormalizeWithDepthCapping(chainUses, context);
+            // Apply depth capping with diagnostics using configured max depth
+            var usedChains = ChainUseDiscovery.GroupAndNormalizeWithDepthCapping(chainUses, context, config.MaxChainDepth);
+
+            // Guard against null or empty chain data
+            if (usedChains == null)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.InvalidModel,
+                    Location.None,
+                    "Chain discovery data is missing - fluent builders may not be generated correctly"));
+                usedChains = ImmutableDictionary<string, ImmutableHashSet<string>>.Empty;
+            }
+
+            // Emit debug information if enabled
+            if (config.EnableDebugOutput)
+            {
+                foreach (var entityChains in usedChains)
+                {
+                    var chainList = string.Join(", ", entityChains.Value.Select(c => $"'{c}'"));
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        Diagnostics.ChainDiscoveryDebug,
+                        Location.None,
+                        entityChains.Value.Count,
+                        entityChains.Key,
+                        chainList));
+                }
+            }
 
             try
             {
@@ -277,5 +310,30 @@ internal sealed class DtoPropertyInfo
         Name = name;
         TypeName = typeName;
         IsNavigation = isNavigation;
+    }
+}
+
+/// <summary>
+/// Configuration options for Facet EF Core generation.
+/// </summary>
+internal sealed class FacetConfiguration
+{
+    public int MaxChainDepth { get; }
+    public bool EnableDebugOutput { get; }
+
+    public FacetConfiguration(AnalyzerConfigOptionsProvider optionsProvider)
+    {
+        // Try to get MaxChainDepth from MSBuild properties
+        var maxChainDepthValue = TryGetGlobalOption(optionsProvider, "build_property.FacetMaxChainDepth");
+        MaxChainDepth = int.TryParse(maxChainDepthValue, out var depth) && depth > 0 ? depth : 3;
+
+        // Try to get EnableDebugOutput from MSBuild properties
+        var debugOutputValue = TryGetGlobalOption(optionsProvider, "build_property.FacetEnableDebugOutput");
+        EnableDebugOutput = bool.TryParse(debugOutputValue, out var enableDebug) && enableDebug;
+    }
+
+    private static string? TryGetGlobalOption(AnalyzerConfigOptionsProvider optionsProvider, string key)
+    {
+        return optionsProvider.GlobalOptions.TryGetValue(key, out var value) ? value : null;
     }
 }

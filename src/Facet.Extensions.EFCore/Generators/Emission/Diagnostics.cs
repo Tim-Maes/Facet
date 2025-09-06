@@ -38,4 +38,12 @@ internal static class Diagnostics
         category: "Facet.Extensions.EFCore",
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ChainDiscoveryDebug = new(
+        id: "FACET_EF005",
+        title: "Chain discovery debug information",
+        messageFormat: "Discovered {0} chain(s) for entity '{1}': {2}",
+        category: "Facet.Extensions.EFCore",
+        defaultSeverity: DiagnosticSeverity.Info,
+        isEnabledByDefault: true);
 }

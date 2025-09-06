@@ -14,9 +14,9 @@ namespace Facet.Extensions.EFCore.Generators;
 internal static class ChainUseDiscovery
 {
     /// <summary>
-    /// Maximum depth allowed for navigation chains to prevent infinite expansion.
+    /// Default maximum depth allowed for navigation chains to prevent infinite expansion.
     /// </summary>
-    private const int MaxChainDepth = 3;
+    private const int DefaultMaxChainDepth = 3;
     /// <summary>
     /// Configures the incremental provider for chain discovery.
     /// </summary>
@@ -262,7 +262,7 @@ internal static class ChainUseDiscovery
     /// Groups chain uses by entity name, normalizes paths, and applies depth capping with diagnostics.
     /// </summary>
     public static ImmutableDictionary<string, ImmutableHashSet<string>> GroupAndNormalizeWithDepthCapping(
-        ImmutableArray<ChainUse> chains, SourceProductionContext context)
+        ImmutableArray<ChainUse> chains, SourceProductionContext context, int maxChainDepth = DefaultMaxChainDepth)
     {
         var builder = ImmutableDictionary.CreateBuilder<string, ImmutableHashSet<string>>();
 
@@ -278,10 +278,10 @@ internal static class ChainUseDiscovery
                     if (string.IsNullOrEmpty(path))
                         continue;
 
-                    // Count depth by counting path separators
-                    var depth = path.Count(c => c == '/') + 1;
+                    // Count depth by counting path separators - optimized version
+                    var depth = CountPathSeparators(path) + 1;
 
-                    if (depth > MaxChainDepth)
+                    if (depth > maxChainDepth)
                     {
                         // Report diagnostic for excessive depth
                         context.ReportDiagnostic(Diagnostic.Create(
@@ -289,11 +289,11 @@ internal static class ChainUseDiscovery
                             Location.None,
                             path,
                             entityName,
-                            MaxChainDepth));
+                            maxChainDepth));
 
                         // Truncate the chain to max depth
                         var parts = path.Split('/');
-                        var truncatedPath = string.Join("/", parts.Take(MaxChainDepth));
+                        var truncatedPath = string.Join("/", parts.Take(maxChainDepth));
                         pathBuilder.Add(truncatedPath);
                     }
                     else
@@ -307,6 +307,23 @@ internal static class ChainUseDiscovery
         }
 
         return builder.ToImmutable();
+    }
+
+    /// <summary>
+    /// Optimized method to count path separators in a string.
+    /// More efficient than LINQ Count() for simple character counting.
+    /// </summary>
+    /// <param name="path">The path string to count separators in</param>
+    /// <returns>The number of '/' characters found</returns>
+    private static int CountPathSeparators(string path)
+    {
+        var count = 0;
+        for (int i = 0; i < path.Length; i++)
+        {
+            if (path[i] == '/')
+                count++;
+        }
+        return count;
     }
 }
 
