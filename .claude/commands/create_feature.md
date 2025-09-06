@@ -190,30 +190,32 @@ type: feature
 
 ## Business Value
 
-### For MCPlatform Customers
-- [How this helps our paying customers]
-- [Business problems this solves]
-- [Revenue/retention/satisfaction impacts]
+### For Facet Users
+- [How this helps developers using Facet]
+- [Development problems this solves]
+- [Productivity/maintainability impacts]
 
-### For End-Users
-- [How this helps end-users of customer products]
-- [User experience improvements]
-- [Developer workflow enhancements]
+### For .NET Developers
+- [How this helps .NET developers using Entity Framework]
+- [Code generation improvements]
+- [Development workflow enhancements]
 
 ## Important Context
-Note: all paths provided in this document are relative to `packages/dashboard`, the dashboard package in this monorepo.
-Exceptions: 
-* All database-related paths such as `schema.ts`, `auth-schema.ts` and `mcp-auth-schema.ts` are under `packages/database/src`, and are exported under `packages/database/index.ts`
-* Any paths beginning with `specification/` are at the top level of the repository and NOT under `packages/`; the `specification/` directory is at the SAME LEVEL as the `packages/` directory.
+Note: all paths provided in this document are relative to the repository root.
+Key directories:
+* Source generators: `src/Facet.Extensions.EFCore/Generators/`
+* Core attributes and types: `src/Facet/`
+* Tests: `test/Facet.Extensions.EFCore.Tests/`
+* Specifications: `specifications/` at the repository root
 
 ### Current Implementation
 [Description of what currently exists, with file paths and references]
 
-### Composition Pattern
-[Standard pattern for data fetching and component structure - typically the async server component pattern with promises passed to client components; oRPC server actions for mutations; non-server-action oRPC calls for client-side data fetches.]
+### Source Generation Pattern
+[Standard pattern for incremental source generation - typically IIncrementalGenerator with syntax receivers; emit patterns for different code types; diagnostic reporting for build-time feedback.]
 
-### Data Model
-[Reference to relevant schema files or data models]
+### Entity Framework Model
+[Reference to relevant Entity Framework configurations and entity definitions]
 
 ## User Stories
 (in given/when/then format)
@@ -385,11 +387,11 @@ Exceptions:
 - Question feature ideas that don't clearly solve user problems
 - Explore how users would discover and adopt the feature
 
-### Consider MCPlatform Context
-- How does this feature advance MCPlatform's mission?
-- Does this help with de-anonymization or engagement?
-- How does this fit with existing architecture patterns?
-- What authentication system applies (platform vs. sub-tenant)?
+### Consider Facet Context
+- How does this feature advance Facet's mission of simplifying EF Core development?
+- Does this help with code generation efficiency or developer experience?
+- How does this fit with existing source generator patterns?
+- What Entity Framework scenarios does this support?
 
 ## Quality Checklist
 
@@ -407,24 +409,25 @@ Before finalizing the feature specification:
 
 ## Common Patterns for MCPlatform
 
-### Authentication Context
-Always clarify which authentication system applies:
-- Platform auth (dashboard users/customers)
-- Sub-tenant auth (end-users of customer products)
+### Entity Framework Context
+Always clarify which EF scenarios apply:
+- DbContext configurations and entity relationships
+- Code generation targets (DTOs, projections, builders)
 
-### Data Fetching Pattern
-- Server components fetch data and pass promises to client components
-- Client components use `use()` hook with `<Suspense>` and `<ErrorBoundary>`
-- State management with `nuqs` or similar for URL state
+### Code Generation Pattern
+- Incremental source generators for performance
+- Syntax receivers for targeted analysis
+- Proper diagnostic reporting and error handling
 
-### Organization Scoping
-- All operations must respect organization boundaries
-- Include organization-level authorization in requirements
-- Consider multi-tenant implications
+### Entity Framework Integration
+- All generators must work with standard EF configurations
+- Support various entity relationship patterns
+- Consider performance implications for large models
 
-### UI Component Standards
-- Use shadcn/ui components exclusively
-- Follow responsive design patterns
+### Code Generation Standards
+- Follow C# coding conventions in generated code
+- Use proper nullable reference type annotations
+- Generate comprehensive XML documentation
 
 ## Guidelines for Success
 

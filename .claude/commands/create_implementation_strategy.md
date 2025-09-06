@@ -302,10 +302,10 @@ Then wait for the user's input.
 - Provide sufficient detail for implementation without including code snippets
 
 ### Follow Project Patterns
-- Use established oRPC patterns for data operations
-- Follow React 19 server/client component patterns
-- Use shadcn/ui components exclusively
-- Maintain organization scoping throughout
+- Use established source generator patterns
+- Follow Facet architecture conventions
+- Maintain Entity Framework integration patterns
+- Use consistent code generation approaches
 
 ### Be Thorough but Actionable
 - Every task should be specific enough to implement
@@ -336,31 +336,31 @@ Before finalizing:
 - [ ] File paths and references are accurate
 - [ ] Success criteria match requirements
 
-## Common MCPlatform Patterns
+## Common Facet Source Generator Patterns
 
-### Database Operations
-- Always use Drizzle ORM TypeScript schemas
-- Include proper organization scoping in all queries
-- Plan migrations separately from application logic
-- Use proper foreign key relationships
+### Source Generator Architecture
+- Follow incremental source generator patterns
+- Use IIncrementalGenerator interface for performance
+- Implement proper syntax receiver patterns
+- Handle compilation context correctly
 
-### oRPC Actions
-- Create actions for all data mutations
-- Use proper input validation with Zod schemas
-- Include revalidatePath for UI updates
-- Handle errors gracefully with proper user feedback
+### Entity Framework Integration
+- Use DbContext metadata for code generation
+- Handle navigation properties and relationships
+- Support complex entity configurations
+- Generate projection-optimized code
 
-### React Architecture
-- Server components fetch data and pass promises
-- Client components use `use()` hook with Suspense
-- State management with nuqs for URL state
-- Proper error boundaries throughout
+### Code Emission
+- Follow C# coding conventions in generated code
+- Use proper nullable reference type annotations
+- Generate XML documentation comments
+- Ensure generated code is debuggable
 
-### UI Components
-- Use shadcn/ui components exclusively
-- Plan responsive behavior from the start
-- Consider mobile experience
-- Include loading states and error handling
+### MSBuild Integration
+- Use AdditionalFiles for configuration
+- Handle build-time dependencies correctly
+- Support incremental compilation
+- Provide clear diagnostic messages
 
 ## Common Patterns
 
@@ -396,9 +396,9 @@ When spawning research sub-tasks:
    - What information to extract
    - Expected output format
 4. **Be EXTREMELY specific about directories**:
-   - If the ticket mentions "WUI", specify `humanlayer-wui/` directory
-   - If it mentions "daemon", specify `hld/` directory
-   - Never use generic terms like "UI" when you mean "WUI"
+   - If working on source generators, specify `src/Facet.Extensions.EFCore/Generators/`
+   - If working on core attributes, specify `src/Facet/`
+   - For tests, specify `test/Facet.Extensions.EFCore.Tests/`
    - Include the full path context in your prompts
 5. **Specify read-only tools** to use
 6. **Request specific file:line references** in responses
@@ -425,12 +425,12 @@ tasks = [
 User: /implementation_plan
 Assistant: I'll help you create a detailed implementation plan...
 
-User: We need to add parent-child tracking for Claude sub-tasks. See thoughts/allison/tickets/eng_1478.md
-Assistant: Let me read that ticket file completely first...
+User: We need to add support for generating DTOs with excluded properties. See specifications/dto-generation/feature.md
+Assistant: Let me read that feature file completely first...
 
 [Reads file fully]
 
-Based on the ticket, I understand we need to track parent-child relationships for Claude sub-task events in the hld daemon. Before I start planning, I have some questions...
+Based on the requirements, I understand we need to extend the GenerateDtos attribute to support property exclusion in the Facet source generator. Before I start planning, I have some questions...
 
 [Interactive process continues...]
 ```
