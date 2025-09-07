@@ -36,7 +36,7 @@ dotnet build 2>&1 | grep -i "error\|warning\|exception"
 # MSBuild diagnostic output for source generators
 dotnet build -v d | grep -i "facet\|generator"
 
-# Test output analysis
+# Test output analysis (solution-level - test projects are in .sln)
 dotnet test --logger "console;verbosity=detailed" | grep -i "fail\|error"
 
 # Search for compilation errors in generated code

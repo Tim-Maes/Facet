@@ -294,14 +294,19 @@ dotnet build --verbosity diagnostic 2>&1 | grep -i "elapsed.*generator"
 
 ### Test Verification
 ```bash
-# Run source generator tests with verbose output
+# Run all source generator tests (solution-level - test projects are in .sln)
+dotnet test -v detailed
+
+# Run specific test projects
 dotnet test test/Facet.Extensions.EFCore.Tests/ -v detailed
+dotnet test test/Facet.UnitTests/ -v detailed
 
 # Update Verify snapshots when patterns change
 dotnet test -- verify.autoverify=true
 
-# Run specific generator tests
+# Run specific generator tests by filter
 dotnet test --filter "FluentBuilderEmitter"
+dotnet test --filter "SourceGenerator"
 ```
 
 ## Best Practices

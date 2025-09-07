@@ -212,17 +212,19 @@ public class TestDbContext : DbContext
 
 ### Command Line
 ```bash
-# Run all tests
+# Run all tests (solution-level - test projects are in .sln)
 dotnet test
 
-# Run specific test project
+# Run specific test projects
 dotnet test test/Facet.Extensions.EFCore.Tests/
+dotnet test test/Facet.UnitTests/
 
 # Run with coverage
 dotnet test --collect:"XPlat Code Coverage"
 
-# Run specific test
+# Run specific tests by filter
 dotnet test --filter "FullyQualifiedName~FluentBuilderEmitterTests"
+dotnet test --filter "TestProject=Facet.Extensions.EFCore.Tests"
 ```
 
 ### Test Categories

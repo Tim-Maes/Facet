@@ -179,12 +179,16 @@ Would you like me to investigate something specific further?
 
 **Test Project Commands**:
 ```bash
-# Run all Facet tests
+# Run all Facet tests (solution-level - test projects are in .sln)
 dotnet test
 
-# Run specific test projects
-dotnet test test/Facet.Extensions.EFCore.Tests/Facet.Extensions.EFCore.Tests.csproj
-dotnet test test/Facet.TestConsole/Facet.TestConsole.csproj
+# Run specific test projects by name (since they're in solution)
+dotnet test --filter "TestProject=Facet.Extensions.EFCore.Tests"
+dotnet test --filter "TestProject=Facet.UnitTests"
+
+# Or run by explicit project path
+dotnet test test/Facet.Extensions.EFCore.Tests/
+dotnet test test/Facet.UnitTests/
 
 # Run tests with verbose output
 dotnet test --logger "console;verbosity=detailed"
@@ -197,7 +201,7 @@ dotnet test --filter "FullyQualifiedName~NavigationPropertyTests"
 # Run tests and update Verify snapshots
 dotnet test -- verify.autoverify=true
 
-# Run console integration tests
+# Run console integration tests (TestConsole is a console app, not a test project)
 dotnet run --project test/Facet.TestConsole/Facet.TestConsole.csproj
 ```
 

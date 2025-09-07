@@ -184,7 +184,8 @@ public class ComponentNameTests : IClassFixture<TestDbContextFixture>
 
 ### Running the Tests
 
-- **All tests**: `dotnet test`
+- **All tests**: `dotnet test` (solution-level - test projects are in .sln)
+- **Specific test projects**: `dotnet test test/Facet.Extensions.EFCore.Tests/` or `dotnet test test/Facet.UnitTests/`
 - **Specific test file**: `dotnet test --filter "ComponentNameTests"`
 - **Verbose output**: `dotnet test --logger "console;verbosity=detailed"`
 - **Update snapshots**: Run tests with environment variable to update Verify snapshots
