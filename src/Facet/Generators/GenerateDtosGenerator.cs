@@ -21,17 +21,121 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
   /// </summary>
   /// <param name="typeSymbol">The type symbol to get the nullable representation for</param>
   /// <returns>A string representation of the type with appropriate nullable annotation</returns>
+  private static string GetFullyQualifiedName(ITypeSymbol typeSymbol)
+  {
+    if (typeSymbol == null)
+    {
+      return "object"; // Safe fallback
+    }
+
+    // Handle special types for optimization and correctness - inspired by AArnott's approach
+    if (typeSymbol.SpecialType != SpecialType.None)
+    {
+      return typeSymbol.SpecialType switch
+      {
+        SpecialType.System_String => "System.String",
+        SpecialType.System_Int32 => "System.Int32", 
+        SpecialType.System_Boolean => "System.Boolean",
+        SpecialType.System_Object => "System.Object",
+        SpecialType.System_Byte => "System.Byte",
+        SpecialType.System_SByte => "System.SByte",
+        SpecialType.System_Int16 => "System.Int16",
+        SpecialType.System_UInt16 => "System.UInt16",
+        SpecialType.System_UInt32 => "System.UInt32",
+        SpecialType.System_Int64 => "System.Int64",
+        SpecialType.System_UInt64 => "System.UInt64",
+        SpecialType.System_Single => "System.Single",
+        SpecialType.System_Double => "System.Double",
+        SpecialType.System_Decimal => "System.Decimal",
+        SpecialType.System_Char => "System.Char",
+        SpecialType.System_DateTime => "System.DateTime",
+        SpecialType.System_Void => "void",
+        _ => BuildQualifiedName(typeSymbol)
+      };
+    }
+
+    return BuildQualifiedName(typeSymbol);
+  }
+
+  private static string BuildQualifiedName(ITypeSymbol typeSymbol)
+  {
+    // Handle array types - similar to AArnott's approach
+    if (typeSymbol is IArrayTypeSymbol arrayType)
+    {
+      var elementType = GetFullyQualifiedName(arrayType.ElementType);
+      var rankSpecifiers = new string(Enumerable.Repeat(',', arrayType.Rank - 1).ToArray());
+      return $"{elementType}[{rankSpecifiers}]";
+    }
+
+    // Handle pointer types
+    if (typeSymbol is IPointerTypeSymbol pointerType)
+    {
+      return GetFullyQualifiedName(pointerType.PointedAtType) + "*";
+    }
+
+    // Handle generic types recursively - improved version inspired by AArnott
+    if (typeSymbol is INamedTypeSymbol namedType)
+    {
+      var containingSymbol = namedType.ContainingType ?? (INamespaceOrTypeSymbol)namedType.ContainingNamespace;
+      var prefix = GetContainingSymbolName(containingSymbol);
+      
+      if (namedType.IsGenericType && namedType.TypeArguments.Length > 0)
+      {
+        var typeArguments = string.Join(", ", namedType.TypeArguments.Select(GetFullyQualifiedName));
+        var nameWithoutArity = namedType.Name;
+        return string.IsNullOrEmpty(prefix) 
+          ? $"{nameWithoutArity}<{typeArguments}>"
+          : $"{prefix}.{nameWithoutArity}<{typeArguments}>";
+      }
+      else
+      {
+        return string.IsNullOrEmpty(prefix) 
+          ? namedType.Name 
+          : $"{prefix}.{namedType.Name}";
+      }
+    }
+
+    // Handle error types gracefully
+    if (typeSymbol is IErrorTypeSymbol)
+    {
+      return "object"; // Safe fallback instead of "Unknown.Type" 
+    }
+
+    // Final fallback - should rarely be reached
+    return typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+  }
+
+  private static string GetContainingSymbolName(INamespaceOrTypeSymbol symbol)
+  {
+    if (symbol == null || (symbol is INamespaceSymbol ns && ns.IsGlobalNamespace))
+    {
+      return string.Empty;
+    }
+
+    var parentName = GetContainingSymbolName(symbol.ContainingNamespace);
+    var currentName = symbol.Name;
+    
+    if (string.IsNullOrEmpty(parentName))
+    {
+      return currentName;
+    }
+    
+    return $"{parentName}.{currentName}";
+  }
+
   internal static string GetTypeWithNullability(ITypeSymbol typeSymbol)
   {
-    var baseType = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+    var baseType = GetFullyQualifiedName(typeSymbol);
     
-    // For nullable value types (int?, DateTime?, etc.), FullyQualifiedFormat includes the '?'
-    // Example: int? -> "int?", System.DateTime? -> "System.DateTime?"
-    if (baseType.EndsWith("?")) return baseType;
+    // For nullable value types (int?, DateTime?, etc.), check if it's a nullable value type
+    if (typeSymbol is INamedTypeSymbol { IsValueType: true, OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
+    {
+      // For nullable value types, extract the underlying type and add '?'
+      var underlyingType = ((INamedTypeSymbol)typeSymbol).TypeArguments[0];
+      return GetFullyQualifiedName(underlyingType) + "?";
+    }
     
-    // For nullable reference types (string?, object?, etc.), FullyQualifiedFormat omits the '?'
-    // and we must check the NullableAnnotation metadata to determine if '?' should be added
-    // Example: string? -> baseType="string", NullableAnnotation=Annotated -> "string?"
+    // For nullable reference types, check the NullableAnnotation metadata
     if (typeSymbol is { IsReferenceType: true } && typeSymbol.NullableAnnotation == NullableAnnotation.Annotated)
     {
       return baseType + "?";

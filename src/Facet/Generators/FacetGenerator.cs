@@ -31,6 +31,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         });
     }
 
+
     private static FacetTargetModel? GetTargetModel(GeneratorAttributeSyntaxContext context, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -40,6 +41,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
         var attribute = context.Attributes[0];
         token.ThrowIfCancellationRequested();
 
+        if (attribute.ConstructorArguments.Length == 0) return null;
+        
         var sourceType = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
         if (sourceType == null) return null;
 

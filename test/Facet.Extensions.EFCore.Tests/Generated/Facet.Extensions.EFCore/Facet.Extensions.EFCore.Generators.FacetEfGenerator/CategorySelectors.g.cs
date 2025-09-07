@@ -2,10 +2,38 @@
 #nullable enable
 
 using System;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Collections.Generic;
 
 namespace Facet.Extensions.EFCore.Tests.TestData;
+
+/// <summary>
+/// Implementation of ICategoryShape for projection queries.
+/// </summary>
+internal sealed class CategoryShape : ICategoryShape
+{
+    /// <summary>
+    /// Id property from the entity.
+    /// </summary>
+    public int Id { get; set; }
+
+    /// <summary>
+    /// Name property from the entity.
+    /// </summary>
+    public string Name { get; set; }
+
+    /// <summary>
+    /// Description property from the entity.
+    /// </summary>
+    public string Description { get; set; }
+
+    /// <summary>
+    /// CreatedAt property from the entity.
+    /// </summary>
+    public System.DateTime CreatedAt { get; set; }
+
+}
 
 /// <summary>
 /// Projection selectors for Category to various shapes.
@@ -16,12 +44,12 @@ internal static class CategorySelectors
     /// Selector for base Category shape (scalar properties only).
     /// </summary>
     public static Expression<Func<Facet.Extensions.EFCore.Tests.TestData.Category, ICategoryShape>> BaseShape { get; } =
-        entity => new Category
+        entity => new CategoryShape
         {
             Id = entity.Id,
             Name = entity.Name,
             Description = entity.Description,
-            CreatedAt = entity.CreatedAt,
+            CreatedAt = entity.CreatedAt
         };
 
 }

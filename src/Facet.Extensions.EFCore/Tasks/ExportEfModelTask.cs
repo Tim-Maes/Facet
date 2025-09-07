@@ -38,6 +38,12 @@ public sealed class ExportEfModelTask : Task
     {
         try
         {
+            // Validate OutputPath
+            if (string.IsNullOrWhiteSpace(OutputPath))
+            {
+                throw new ArgumentException("OutputPath cannot be null or empty");
+            }
+
             if (!File.Exists(AssemblyPath))
             {
                 Log.LogMessage(MessageImportance.Low, $"Assembly not found at {AssemblyPath}, skipping EF model export");

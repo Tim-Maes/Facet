@@ -16,6 +16,7 @@ namespace Facet.Extensions.EFCore.Tests.TestData;
 /// Fluent builder for User with navigation inclusion.
 /// </summary>
 public sealed class FacetUserBuilder<TShape>
+    where TShape : class
 {
     private readonly IQueryable<Facet.Extensions.EFCore.Tests.TestData.User> _query;
     private readonly List<string> _includes = new();
@@ -42,6 +43,7 @@ public sealed class FacetUserBuilder<TShape>
     /// </summary>
     public FacetUserBuilder<IUserWithOrders<TNestedShape>> WithOrders<TNestedShape>(
         Func<FacetOrderBuilder<IOrderShape>, FacetOrderBuilder<TNestedShape>> configure)
+        where TNestedShape : class
     {
         // This would require more complex EF Include handling for nested paths
         throw new NotImplementedException("Nested navigation configuration not yet implemented");

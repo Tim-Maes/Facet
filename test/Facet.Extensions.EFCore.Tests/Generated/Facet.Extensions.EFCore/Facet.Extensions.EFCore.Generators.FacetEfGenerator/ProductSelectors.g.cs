@@ -2,10 +2,53 @@
 #nullable enable
 
 using System;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Collections.Generic;
 
 namespace Facet.Extensions.EFCore.Tests.TestData;
+
+/// <summary>
+/// Implementation of IProductShape for projection queries.
+/// </summary>
+internal sealed class ProductShape : IProductShape
+{
+    /// <summary>
+    /// Id property from the entity.
+    /// </summary>
+    public int Id { get; set; }
+
+    /// <summary>
+    /// Name property from the entity.
+    /// </summary>
+    public string Name { get; set; }
+
+    /// <summary>
+    /// Description property from the entity.
+    /// </summary>
+    public string Description { get; set; }
+
+    /// <summary>
+    /// Price property from the entity.
+    /// </summary>
+    public decimal Price { get; set; }
+
+    /// <summary>
+    /// CategoryId property from the entity.
+    /// </summary>
+    public int CategoryId { get; set; }
+
+    /// <summary>
+    /// IsAvailable property from the entity.
+    /// </summary>
+    public bool IsAvailable { get; set; }
+
+    /// <summary>
+    /// CreatedAt property from the entity.
+    /// </summary>
+    public System.DateTime CreatedAt { get; set; }
+
+}
 
 /// <summary>
 /// Projection selectors for Product to various shapes.
@@ -16,7 +59,7 @@ internal static class ProductSelectors
     /// Selector for base Product shape (scalar properties only).
     /// </summary>
     public static Expression<Func<Facet.Extensions.EFCore.Tests.TestData.Product, IProductShape>> BaseShape { get; } =
-        entity => new Product
+        entity => new ProductShape
         {
             Id = entity.Id,
             Name = entity.Name,
@@ -24,7 +67,7 @@ internal static class ProductSelectors
             Price = entity.Price,
             CategoryId = entity.CategoryId,
             IsAvailable = entity.IsAvailable,
-            CreatedAt = entity.CreatedAt,
+            CreatedAt = entity.CreatedAt
         };
 
 }

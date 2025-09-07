@@ -1,0 +1,76 @@
+﻿{
+  EntityCount: 5,
+  TotalNavigations: 8,
+  Entities: [
+    {
+      Entity: Category,
+      NavigationCount: 1,
+      Navigations: [
+        {
+          Name: Products,
+          Target: Product,
+          IsCollection: true
+        }
+      ]
+    },
+    {
+      Entity: Order,
+      NavigationCount: 2,
+      Navigations: [
+        {
+          Name: OrderItems,
+          Target: OrderItem,
+          IsCollection: true
+        },
+        {
+          Name: User,
+          Target: User,
+          IsCollection: false
+        }
+      ]
+    },
+    {
+      Entity: OrderItem,
+      NavigationCount: 2,
+      Navigations: [
+        {
+          Name: Order,
+          Target: Order,
+          IsCollection: false
+        },
+        {
+          Name: Product,
+          Target: Product,
+          IsCollection: false
+        }
+      ]
+    },
+    {
+      Entity: Product,
+      NavigationCount: 2,
+      Navigations: [
+        {
+          Name: Category,
+          Target: Category,
+          IsCollection: false
+        },
+        {
+          Name: OrderItems,
+          Target: OrderItem,
+          IsCollection: true
+        }
+      ]
+    },
+    {
+      Entity: User,
+      NavigationCount: 1,
+      Navigations: [
+        {
+          Name: Orders,
+          Target: Order,
+          IsCollection: true
+        }
+      ]
+    }
+  ]
+}

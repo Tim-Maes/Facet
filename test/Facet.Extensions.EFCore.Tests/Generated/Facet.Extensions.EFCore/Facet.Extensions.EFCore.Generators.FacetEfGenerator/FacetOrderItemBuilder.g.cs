@@ -16,6 +16,7 @@ namespace Facet.Extensions.EFCore.Tests.TestData;
 /// Fluent builder for OrderItem with navigation inclusion.
 /// </summary>
 public sealed class FacetOrderItemBuilder<TShape>
+    where TShape : class
 {
     private readonly IQueryable<Facet.Extensions.EFCore.Tests.TestData.OrderItem> _query;
     private readonly List<string> _includes = new();
@@ -42,6 +43,7 @@ public sealed class FacetOrderItemBuilder<TShape>
     /// </summary>
     public FacetOrderItemBuilder<IOrderItemWithOrder<TNestedShape>> WithOrder<TNestedShape>(
         Func<FacetOrderBuilder<IOrderShape>, FacetOrderBuilder<TNestedShape>> configure)
+        where TNestedShape : class
     {
         // This would require more complex EF Include handling for nested paths
         throw new NotImplementedException("Nested navigation configuration not yet implemented");
@@ -64,6 +66,7 @@ public sealed class FacetOrderItemBuilder<TShape>
     /// </summary>
     public FacetOrderItemBuilder<IOrderItemWithProduct<TNestedShape>> WithProduct<TNestedShape>(
         Func<FacetProductBuilder<IProductShape>, FacetProductBuilder<TNestedShape>> configure)
+        where TNestedShape : class
     {
         // This would require more complex EF Include handling for nested paths
         throw new NotImplementedException("Nested navigation configuration not yet implemented");

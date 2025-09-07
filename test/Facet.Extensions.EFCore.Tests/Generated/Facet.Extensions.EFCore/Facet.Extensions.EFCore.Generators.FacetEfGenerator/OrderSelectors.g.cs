@@ -2,10 +2,43 @@
 #nullable enable
 
 using System;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Collections.Generic;
 
 namespace Facet.Extensions.EFCore.Tests.TestData;
+
+/// <summary>
+/// Implementation of IOrderShape for projection queries.
+/// </summary>
+internal sealed class OrderShape : IOrderShape
+{
+    /// <summary>
+    /// Id property from the entity.
+    /// </summary>
+    public int Id { get; set; }
+
+    /// <summary>
+    /// UserId property from the entity.
+    /// </summary>
+    public int UserId { get; set; }
+
+    /// <summary>
+    /// OrderDate property from the entity.
+    /// </summary>
+    public System.DateTime OrderDate { get; set; }
+
+    /// <summary>
+    /// TotalAmount property from the entity.
+    /// </summary>
+    public decimal TotalAmount { get; set; }
+
+    /// <summary>
+    /// Status property from the entity.
+    /// </summary>
+    public string Status { get; set; }
+
+}
 
 /// <summary>
 /// Projection selectors for Order to various shapes.
@@ -16,13 +49,13 @@ internal static class OrderSelectors
     /// Selector for base Order shape (scalar properties only).
     /// </summary>
     public static Expression<Func<Facet.Extensions.EFCore.Tests.TestData.Order, IOrderShape>> BaseShape { get; } =
-        entity => new Order
+        entity => new OrderShape
         {
             Id = entity.Id,
             UserId = entity.UserId,
             OrderDate = entity.OrderDate,
             TotalAmount = entity.TotalAmount,
-            Status = entity.Status,
+            Status = entity.Status
         };
 
 }

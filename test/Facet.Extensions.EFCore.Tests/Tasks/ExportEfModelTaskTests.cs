@@ -207,9 +207,11 @@ public class ExportEfModelTaskTests : IClassFixture<TestDbContextFixture>
             BuildEngine = new TestBuildEngine(_output)
         };
 
-        // Act & Assert
-        var exception = Record.Exception(() => exportTask.Execute());
-        Assert.NotNull(exception);
+        // Act
+        var result = exportTask.Execute();
+        
+        // Assert - The task returns false when validation fails
+        Assert.False(result);
     }
 
     [Fact]

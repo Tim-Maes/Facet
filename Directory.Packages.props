@@ -51,7 +51,8 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.Common" Version="4.9.2" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.9.2" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.Common" Version="4.9.2" />
-    <PackageVersion Include="Verify.Xunit" Version="25.3.2" />
+    <PackageVersion Include="Verify" Version="26.5.0" />
+    <PackageVersion Include="Verify.Xunit" Version="26.5.0" />
     
     <!-- Benchmark Dependencies -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />

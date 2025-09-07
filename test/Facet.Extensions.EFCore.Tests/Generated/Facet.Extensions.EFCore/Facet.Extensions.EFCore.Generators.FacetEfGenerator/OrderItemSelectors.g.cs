@@ -2,10 +2,43 @@
 #nullable enable
 
 using System;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Collections.Generic;
 
 namespace Facet.Extensions.EFCore.Tests.TestData;
+
+/// <summary>
+/// Implementation of IOrderItemShape for projection queries.
+/// </summary>
+internal sealed class OrderItemShape : IOrderItemShape
+{
+    /// <summary>
+    /// Id property from the entity.
+    /// </summary>
+    public int Id { get; set; }
+
+    /// <summary>
+    /// OrderId property from the entity.
+    /// </summary>
+    public int OrderId { get; set; }
+
+    /// <summary>
+    /// ProductId property from the entity.
+    /// </summary>
+    public int ProductId { get; set; }
+
+    /// <summary>
+    /// Quantity property from the entity.
+    /// </summary>
+    public int Quantity { get; set; }
+
+    /// <summary>
+    /// UnitPrice property from the entity.
+    /// </summary>
+    public decimal UnitPrice { get; set; }
+
+}
 
 /// <summary>
 /// Projection selectors for OrderItem to various shapes.
@@ -16,13 +49,13 @@ internal static class OrderItemSelectors
     /// Selector for base OrderItem shape (scalar properties only).
     /// </summary>
     public static Expression<Func<Facet.Extensions.EFCore.Tests.TestData.OrderItem, IOrderItemShape>> BaseShape { get; } =
-        entity => new OrderItem
+        entity => new OrderItemShape
         {
             Id = entity.Id,
             OrderId = entity.OrderId,
             ProductId = entity.ProductId,
             Quantity = entity.Quantity,
-            UnitPrice = entity.UnitPrice,
+            UnitPrice = entity.UnitPrice
         };
 
 }

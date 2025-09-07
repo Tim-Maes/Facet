@@ -48,11 +48,23 @@ internal static class SelectorsEmitter
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
         sb.AppendLine("using System;");
+        sb.AppendLine("using System.Linq;");
         sb.AppendLine("using System.Linq.Expressions;");
         sb.AppendLine("using System.Collections.Generic;");
+        
+        // Add using for entity namespace if different from DTO namespace
+        var entityNamespace = GetNamespaceFromType(entity.Clr ?? entity.Name);
+        if (!string.IsNullOrEmpty(entityNamespace) && entityNamespace != dtoInfo.DtoNamespace)
+        {
+            sb.AppendLine($"using {entityNamespace};");
+        }
+        
         sb.AppendLine();
         sb.AppendLine($"namespace {dtoInfo.DtoNamespace};");
         sb.AppendLine();
+        
+        // Generate shape implementation class first
+        GenerateShapeImplementationClass(sb, entity, dtoInfo);
         
         // Generate selectors class
         sb.AppendLine($"/// <summary>");
@@ -85,12 +97,13 @@ internal static class SelectorsEmitter
     private static void GenerateBaseShapeSelector(StringBuilder sb, EntityModel entity, FacetDtoInfo dtoInfo)
     {
         var entityName = GetSimpleTypeName(entity.Clr ?? entity.Name);
+        var shapeClassName = $"{entityName}Shape";
         
         sb.AppendLine($"    /// <summary>");
         sb.AppendLine($"    /// Selector for base {entityName} shape (scalar properties only).");
         sb.AppendLine($"    /// </summary>");
         sb.AppendLine($"    public static Expression<Func<{entity.Clr}, I{entityName}Shape>> BaseShape {{ get; }} =");
-        sb.AppendLine($"        entity => new {dtoInfo.DtoTypeName}");
+        sb.AppendLine($"        entity => new {shapeClassName}");
         sb.AppendLine("        {");
         
         // Generate property mappings for scalar properties only
@@ -164,22 +177,53 @@ internal static class SelectorsEmitter
             return;
         }
         
+        for (int i = 0; i < scalarProperties.Count; i++)
+        {
+            var prop = scalarProperties[i];
+            var isLast = i == scalarProperties.Count - 1;
+            var comma = isLast ? "" : ",";
+            
+            // Generate property assignment - assuming entity has matching property
+            sb.AppendLine($"            {prop.Name} = entity.{prop.Name}{comma}");
+        }
+    }
+    
+    private static void GenerateShapeImplementationClass(StringBuilder sb, EntityModel entity, FacetDtoInfo dtoInfo)
+    {
+        var entityName = GetSimpleTypeName(entity.Clr ?? entity.Name);
+        var shapeClassName = $"{entityName}Shape";
+        
+        sb.AppendLine($"/// <summary>");
+        sb.AppendLine($"/// Implementation of I{entityName}Shape for projection queries.");
+        sb.AppendLine($"/// </summary>");
+        sb.AppendLine($"internal sealed class {shapeClassName} : I{entityName}Shape");
+        sb.AppendLine("{");
+        
+        // Generate properties that implement the interface
+        var scalarProperties = dtoInfo.Properties.Where(p => !p.IsNavigation).ToList();
+        
         foreach (var prop in scalarProperties)
         {
-            // Generate property assignment - assuming entity has matching property
-            sb.AppendLine($"            {prop.Name} = entity.{prop.Name},");
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// {prop.Name} property from the entity.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    public {prop.TypeName} {prop.Name} {{ get; set; }}");
+            sb.AppendLine();
         }
         
-        // Remove trailing comma from last property
-        if (scalarProperties.Count > 0)
-        {
-            // Note: We'll handle trailing commas by being consistent in generation
-        }
+        sb.AppendLine("}");
+        sb.AppendLine();
     }
     
     private static string GetSimpleTypeName(string fullTypeName)
     {
         var lastDot = fullTypeName.LastIndexOf('.');
         return lastDot >= 0 ? fullTypeName.Substring(lastDot + 1) : fullTypeName;
+    }
+    
+    private static string GetNamespaceFromType(string fullTypeName)
+    {
+        var lastDot = fullTypeName.LastIndexOf('.');
+        return lastDot >= 0 ? fullTypeName.Substring(0, lastDot) : string.Empty;
     }
 }

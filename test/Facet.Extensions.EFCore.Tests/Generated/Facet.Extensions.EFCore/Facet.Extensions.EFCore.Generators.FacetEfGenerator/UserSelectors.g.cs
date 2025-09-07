@@ -2,10 +2,48 @@
 #nullable enable
 
 using System;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Collections.Generic;
 
 namespace Facet.Extensions.EFCore.Tests.TestData;
+
+/// <summary>
+/// Implementation of IUserShape for projection queries.
+/// </summary>
+internal sealed class UserShape : IUserShape
+{
+    /// <summary>
+    /// Id property from the entity.
+    /// </summary>
+    public int Id { get; set; }
+
+    /// <summary>
+    /// FirstName property from the entity.
+    /// </summary>
+    public string FirstName { get; set; }
+
+    /// <summary>
+    /// LastName property from the entity.
+    /// </summary>
+    public string LastName { get; set; }
+
+    /// <summary>
+    /// Email property from the entity.
+    /// </summary>
+    public string Email { get; set; }
+
+    /// <summary>
+    /// IsActive property from the entity.
+    /// </summary>
+    public bool IsActive { get; set; }
+
+    /// <summary>
+    /// CreatedAt property from the entity.
+    /// </summary>
+    public System.DateTime CreatedAt { get; set; }
+
+}
 
 /// <summary>
 /// Projection selectors for User to various shapes.
@@ -16,14 +54,14 @@ internal static class UserSelectors
     /// Selector for base User shape (scalar properties only).
     /// </summary>
     public static Expression<Func<Facet.Extensions.EFCore.Tests.TestData.User, IUserShape>> BaseShape { get; } =
-        entity => new User
+        entity => new UserShape
         {
             Id = entity.Id,
             FirstName = entity.FirstName,
             LastName = entity.LastName,
             Email = entity.Email,
             IsActive = entity.IsActive,
-            CreatedAt = entity.CreatedAt,
+            CreatedAt = entity.CreatedAt
         };
 
 }

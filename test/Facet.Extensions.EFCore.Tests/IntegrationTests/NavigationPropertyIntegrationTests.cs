@@ -204,13 +204,13 @@ public class NavigationPropertyIntegrationTests : IClassFixture<TestWebApplicati
 
         if (!entityLookup.TryGetValue(entityName, out var entity))
         {
-            Assert.True(false, $"Entity '{entityName}' not found in lookup");
+            Assert.Fail($"Entity '{entityName}' not found in lookup");
             return;
         }
 
         if (!entity.TryGetProperty("Navigations", out var navigationsElement))
         {
-            Assert.True(false, $"Entity '{entityName}' has no Navigations property");
+            Assert.Fail($"Entity '{entityName}' has no Navigations property");
             return;
         }
 
@@ -284,12 +284,10 @@ public class NavigationPropertyIntegrationTests : IClassFixture<TestWebApplicati
 /// <summary>
 /// Custom WebApplicationFactory for integration tests.
 /// </summary>
-public class TestWebApplicationFactory : WebApplicationFactory<TestStartup>
+public class TestWebApplicationFactory : WebApplicationFactory<TestProgram>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseStartup<TestStartup>();
-        
         builder.ConfigureServices(services =>
         {
             // Override any services if needed for testing

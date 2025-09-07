@@ -16,6 +16,7 @@ namespace Facet.Extensions.EFCore.Tests.TestData;
 /// Fluent builder for Category with navigation inclusion.
 /// </summary>
 public sealed class FacetCategoryBuilder<TShape>
+    where TShape : class
 {
     private readonly IQueryable<Facet.Extensions.EFCore.Tests.TestData.Category> _query;
     private readonly List<string> _includes = new();
@@ -42,6 +43,7 @@ public sealed class FacetCategoryBuilder<TShape>
     /// </summary>
     public FacetCategoryBuilder<ICategoryWithProducts<TNestedShape>> WithProducts<TNestedShape>(
         Func<FacetProductBuilder<IProductShape>, FacetProductBuilder<TNestedShape>> configure)
+        where TNestedShape : class
     {
         // This would require more complex EF Include handling for nested paths
         throw new NotImplementedException("Nested navigation configuration not yet implemented");

@@ -174,8 +174,9 @@ public class EfJsonReaderTests
     [InlineData("C:\\Project\\efmodel.json")]
     public void GetFileName_WithVariousPaths_ExtractsCorrectFileName(string filePath)
     {
-        // Act
-        var fileName = Path.GetFileName(filePath);
+        // Act - normalize path separators for cross-platform compatibility
+        var normalizedPath = filePath.Replace('\\', Path.DirectorySeparatorChar);
+        var fileName = Path.GetFileName(normalizedPath);
 
         // Assert
         Assert.True(fileName.Equals("efmodel.json", StringComparison.OrdinalIgnoreCase), 

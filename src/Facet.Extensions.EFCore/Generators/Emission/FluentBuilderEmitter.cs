@@ -71,6 +71,7 @@ internal static class FluentBuilderEmitter
         sb.AppendLine($"/// Fluent builder for {entityName} with navigation inclusion.");
         sb.AppendLine($"/// </summary>");
         sb.AppendLine($"public sealed class {builderName}<TShape>");
+        sb.AppendLine("    where TShape : class");
         sb.AppendLine("{");
         sb.AppendLine($"    private readonly IQueryable<{entity.Clr}> _query;");
         sb.AppendLine($"    private readonly List<string> _includes = new();");
@@ -136,6 +137,7 @@ internal static class FluentBuilderEmitter
             sb.AppendLine($"    /// </summary>");
             sb.AppendLine($"    public {builderName}<I{entityName}With{navName}<TNestedShape>> With{navName}<TNestedShape>(");
             sb.AppendLine($"        Func<Facet{targetEntityName}Builder<I{targetEntityName}Shape>, Facet{targetEntityName}Builder<TNestedShape>> configure)");
+            sb.AppendLine("        where TNestedShape : class");
             sb.AppendLine("    {");
             sb.AppendLine($"        // This would require more complex EF Include handling for nested paths");
             sb.AppendLine($"        throw new NotImplementedException(\"Nested navigation configuration not yet implemented\");");
