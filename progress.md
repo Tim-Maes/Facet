@@ -119,7 +119,7 @@ usedPaths["Order"] = { "Customer", "Customer/ShippingAddress", "Lines" }
 
 All TDD tests pass, confirming:
 - ✅ Chain discovery detects simple chains (`.WithProducts()`)
-- ✅ Chain discovery detects nested patterns  
+- ✅ Chain discovery detects nested patterns
 - ✅ Only used paths generate additional methods
 - ✅ Baseline methods always available
 - ✅ Fallback behavior works for first build
@@ -149,7 +149,7 @@ var categories = await db.Facet<Category, CategoryDto>()
 
 // Triggers generation of:
 // - ICategoryShape (baseline)
-// - ICategoryWithProducts<T> (baseline) 
+// - ICategoryWithProducts<T> (baseline)
 // - WithProducts() method (baseline)
 // - WithProducts<T>(configure) method (conditional - because used)
 // - Nested Product->Category navigation (conditional - because used)
@@ -158,7 +158,7 @@ var categories = await db.Facet<Category, CategoryDto>()
 ## 🎉 Success Metrics
 
 - **Zero compilation errors** in FacetEfGenerator
-- **All TDD tests passing** 
+- **All TDD tests passing**
 - **Smart conditional generation** working
 - **Fallback behavior** implemented
 - **Type explosion eliminated** while maintaining full type safety

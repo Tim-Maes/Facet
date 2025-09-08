@@ -48,6 +48,11 @@ You can think of it like **carving out a specific facet** of a gem:
 - :white_check_mark: Full mapping support with custom mapping configurations
 - :white_check_mark: Preserves member and type XML documentation
 
+- :white_check_mark: Fluent navigation builders for EF Core (via Facet.Extensions.EFCore)
+  - Generated DbContext entry points per entity (e.g., `FacetUser()`)
+  - Chain `WithXxx()` navigations and execute with async terminal methods
+  - Strongly‑typed shape/capability interfaces (e.g., `IUserShape`, `IUserWithOrders<IOrderShape>`)
+
 ## :earth_americas: The Facet Ecosystem
 
 Facet is modular and consists of several NuGet packages:
@@ -196,6 +201,29 @@ var results = await dbContext.Products
     .SelectFacet<ProductDto>()
     .OrderBy(dto => dto.Name)
     .ToListAsync();
+```
+
+#### Fluent Navigation (NEW)
+```csharp
+// Start fluent, shape-safe queries from generated DbContext entry points
+var users = await db.FacetUser().ToListAsync(); // List<IUserShape>
+
+var usersWithOrders = await db
+    .FacetUser()
+    .WithOrders()                       // shape becomes IUserWithOrders<IOrderShape>
+    .ToListAsync();
+
+var order = await db
+    .FacetOrder()
+    .WithUser()                         // shape becomes IOrderWithUser<IUserShape>
+    .FirstOrDefaultAsync();
+
+// Fetch by key
+var user = await db.FacetUser().GetByIdAsync(id);
+
+// Generic entry point for validation/base query
+var q = db.Facet<User, UserResponse>();
+var projected = await q.SelectFacet<UserResponse>().ToListAsync();
 ```
 
 #### Reverse Mapping (Facet -> Entity)
@@ -369,6 +397,26 @@ public async Task<ActionResult<ScheduleResponse>> UpsertSchedule(int id, UpsertS
 }
 ```
 
+### TypeScript Integration
+
+Decorate generated shape interfaces for downstream TypeScript tooling using `GenerateDtosAttribute.TypeScriptAttributes`:
+
+```csharp
+[GenerateDtos(
+    Types = DtoTypes.Response,
+    TypeScriptAttributes = new[] { "[TsInterface]", "[TsExport]" })]
+public class User
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public string Email { get; set; }
+}
+
+// Generated shape interfaces are decorated with the provided attributes,
+// enabling smooth integration with TypeScript generators.
+```
+
 ## :chart_with_upwards_trend: Performance Benchmarks
 
 Facet delivers competitive performance across different mapping scenarios. Here's how it compares to popular alternatives:
@@ -394,4 +442,3 @@ Facet delivers competitive performance across different mapping scenarios. Here'
 > - **Collection mapping**: Mapster has a slight edge for bulk operations, while Facet and Mapperly are very close
 > - **Memory efficiency**: All libraries are within ~10% of each other for memory allocation
 > - **Compile-time generation**: Both Facet and Mapperly benefit from zero-runtime-cost source generation
-

@@ -1,6 +1,6 @@
 # Facet.Extensions.EFCore
 
-EF Core async extension methods for the Facet library, enabling one-line async mapping and projection between your domain entities and generated facet types.
+EF Core async extension methods and fluent navigation builders for the Facet library, enabling one-line async mapping/projection and compile‑time guided navigation between your entities and generated shapes/DTOs.
 
 ## Key Features
 
@@ -16,6 +16,13 @@ EF Core async extension methods for the Facet library, enabling one-line async m
   - Advanced filtering with skip flags, exclusions, and predicates
   - Property-level ignore attribute: `FacetUpdateIgnoreAttribute`
 
+- **Fluent Navigation (NEW!)**
+  - Generated `DbContext` entry points per entity: `FacetUser()`, `FacetOrder()`, etc.
+  - Chain navigations with `WithXxx()` methods (e.g., `WithOrders()`, `WithUser()`).
+  - Terminal methods: `ToListAsync()`, `FirstOrDefaultAsync()`, `GetByIdAsync(id)`.
+  - Strongly-typed shape/capability interfaces (e.g., `IUserShape`, `IUserWithOrders<IOrderShape>`).
+  - Generic entry: `DbContext.Facet<TEntity, TDto>()` for validation and query base.
+
 All methods leverage your already generated ctor or Projection property and require EF Core 6+.
 
 ## Getting Started
@@ -30,7 +37,43 @@ dotnet add package Facet.Extensions.EFCore
 
 ```csharp
 using Facet.Extensions.EFCore; // for async EF Core extension methods
+
+// Fluent navigation entry points live in your DbContext's namespace
+// once you reference Facet.Extensions.EFCore and build (source-generated).
 ```
+
+## Fluent Navigation
+
+Start fluent, shape-safe queries from generated `DbContext` entry points. Builders expose `WithXxx()` navigation methods that refine the returned shape, and terminal async methods to execute.
+
+```csharp
+// Simple listing (scalar shape)
+var users = await db.FacetUser().ToListAsync(); // returns List<IUserShape>
+
+// Include a collection navigation
+var usersWithOrders = await db
+    .FacetUser()
+    .WithOrders()                       // shape becomes IUserWithOrders<IOrderShape>
+    .ToListAsync();
+
+// Single entity with a reference navigation
+var order = await db
+    .FacetOrder()
+    .WithUser()                         // shape becomes IOrderWithUser<IUserShape>
+    .FirstOrDefaultAsync();
+
+// Fetch by key
+var user = await db.FacetUser().GetByIdAsync(id);
+
+// Advanced (generic) entry point – validates TDto has Projection and returns an IQueryable<TEntity>
+var query = db.Facet<User, UserResponse>();
+var results = await query.SelectFacet<UserResponse>().ToListAsync();
+```
+
+Notes
+- Shapes are interfaces generated for each entity (e.g., `IUserShape`, `IOrderShape`).
+- When you call `WithOrders()`, the builder’s type changes to a capability interface (e.g., `IUserWithOrders<IOrderShape>`) that adds a typed `Orders` property to the shape.
+- Nested navigation configuration (`WithOrders<TNestedShape>(...)`) is planned; the signature may be present but can be not yet implemented.
 
 ## Forward Mapping (Entity -> DTO)
 
@@ -105,6 +148,35 @@ public class UserDto
 // Async version (for future extensibility)
 await user.UpdateFromFacetAsync(dto, context, 
     excludedProperties: new[] { "Password" });
+```
+
+## Shapes, Selectors, and Projections
+
+Facet generates shape interfaces and internal selector classes that power fluent navigation and projection:
+
+```csharp
+// Scalar shape
+public interface IUserShape
+{
+    int Id { get; }
+    string FirstName { get; }
+    string LastName { get; }
+    string Email { get; }
+    bool IsActive { get; }
+    DateTime CreatedAt { get; }
+}
+
+// Capability interface when Orders are included via WithOrders()
+public interface IUserWithOrders<TOrder> : IUserShape
+{
+    IReadOnlyList<TOrder> Orders { get; }
+}
+
+// Internal selectors provide expressions used by SelectFacet<>()
+internal static class UserSelectors
+{
+    public static Expression<Func<User, IUserShape>> BaseShape { get; }
+}
 ```
 
 ## Complete Example
@@ -197,6 +269,18 @@ public class ProductsController : ControllerBase
 | `UpdateFromFacet<TEntity, TFacet>()` | Selective entity update with advanced filtering | PUT/PATCH endpoints |
 | `UpdateFromFacetWithChanges<TEntity, TFacet>()` | Update with change tracking and advanced filtering | Auditing scenarios |
 | `UpdateFromFacetAsync<TEntity, TFacet>()` | Async selective update with advanced filtering | Future extensibility |
+
+Fluent Navigation Builders
+
+- `DbContext.Facet{EntityName}()` → returns `Facet{EntityName}Builder<I{EntityName}Shape>`
+- `WithXxx()` → include navigation and refine shape (e.g., `IUserWithOrders<IOrderShape>`)
+- `ToListAsync()` → execute and return `List<TShape>`
+- `FirstOrDefaultAsync()` → execute and return `TShape?`
+- `GetByIdAsync(id)` → execute a keyed lookup and return `TShape?`
+
+Generic Entry Point
+
+- `DbContext.Facet<TEntity, TDto>()` → returns `IQueryable<TEntity>` and validates `TDto.Projection` exists
 
 ### Advanced Update Parameters
 
