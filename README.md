@@ -48,6 +48,11 @@ You can think of it like **carving out a specific facet** of a gem:
 - :white_check_mark: Full mapping support with custom mapping configurations
 - :white_check_mark: Preserves member and type XML documentation
 
+- :white_check_mark: Fluent navigation builders for EF Core (via Facet.Extensions.EFCore)
+  - Generated DbContext entry points per entity (e.g., `FacetUser()`)
+  - Chain `WithXxx()` navigations and execute with async terminal methods
+  - Strongly‑typed shape/capability interfaces (e.g., `IUserShape`, `IUserWithOrders<IOrderShape>`)
+
 ## :earth_americas: The Facet Ecosystem
 
 Facet is modular and consists of several NuGet packages:
@@ -198,6 +203,29 @@ var results = await dbContext.Products
     .ToListAsync();
 ```
 
+#### Fluent Navigation (NEW)
+```csharp
+// Start fluent, shape-safe queries from generated DbContext entry points
+var users = await db.FacetUser().ToListAsync(); // List<IUserShape>
+
+var usersWithOrders = await db
+    .FacetUser()
+    .WithOrders()                       // shape becomes IUserWithOrders<IOrderShape>
+    .ToListAsync();
+
+var order = await db
+    .FacetOrder()
+    .WithUser()                         // shape becomes IOrderWithUser<IUserShape>
+    .FirstOrDefaultAsync();
+
+// Fetch by key
+var user = await db.FacetUser().GetByIdAsync(id);
+
+// Generic entry point for validation/base query
+var q = db.Facet<User, UserResponse>();
+var projected = await q.SelectFacet<UserResponse>().ToListAsync();
+```
+
 #### Reverse Mapping (Facet -> Entity)
 ```csharp
 [Facet(typeof(User)]
@@ -249,12 +277,31 @@ public class User
 // - UpsertUserRequest (includes Id, for create/update operations)
 ```
 
+#### Interface Contracts
+Generate DTOs that implement specific interfaces for better type safety:
+
+```csharp
+// Generate DTOs that implement interfaces
+[GenerateDtos(
+    Types = DtoTypes.Create, 
+    InterfaceContracts = new[] { typeof(ICreateSchedulePayload) })]
+public class Schedule
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public DateTime StartTime { get; set; }
+}
+
+// Generates: CreateScheduleRequest : ICreateSchedulePayload
+```
+
 #### Auditable Entities with Smart Exclusions
 ```csharp
 [GenerateAuditableDtos(
     Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response,
     OutputType = OutputType.Record,
-    ExcludeProperties = new[] { "Password" })]
+    ExcludeProperties = new[] { "Password" },
+    InterfaceContracts = new[] { typeof(IProductDto) })]
 public class Product
 {
     public int Id { get; set; }
@@ -265,6 +312,40 @@ public class Product
 }
 
 // Auto-excludes audit fields: CreatedAt, UpdatedAt, CreatedBy, UpdatedBy
+// All generated DTOs implement IProductDto interface
+```
+
+#### Excluding Members from Base Types
+```csharp
+public abstract class BaseEntity
+{
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public string CreatedBy { get; set; }
+}
+
+public interface IAuditable 
+{
+    DateTime LastModified { get; set; }
+    string ModifiedBy { get; set; }
+}
+
+// Exclude all members from base class and interface
+[GenerateDtos(
+    Types = DtoTypes.Create,
+    ExcludeMembersFromType = new[] { typeof(BaseEntity), typeof(IAuditable) })]
+public class Product : BaseEntity, IAuditable
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public decimal Price { get; set; }
+    
+    // From BaseEntity - will be excluded
+    public DateTime LastModified { get; set; }
+    public string ModifiedBy { get; set; }
+}
+
+// Generates: CreateProductRequest with only Id, Name, Price
 ```
 
 #### Multiple Configurations for Fine-Grained Control
@@ -316,6 +397,26 @@ public async Task<ActionResult<ScheduleResponse>> UpsertSchedule(int id, UpsertS
 }
 ```
 
+### TypeScript Integration
+
+Decorate generated shape interfaces for downstream TypeScript tooling using `GenerateDtosAttribute.TypeScriptAttributes`:
+
+```csharp
+[GenerateDtos(
+    Types = DtoTypes.Response,
+    TypeScriptAttributes = new[] { "[TsInterface]", "[TsExport]" })]
+public class User
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public string Email { get; set; }
+}
+
+// Generated shape interfaces are decorated with the provided attributes,
+// enabling smooth integration with TypeScript generators.
+```
+
 ## :chart_with_upwards_trend: Performance Benchmarks
 
 Facet delivers competitive performance across different mapping scenarios. Here's how it compares to popular alternatives:
@@ -341,4 +442,3 @@ Facet delivers competitive performance across different mapping scenarios. Here'
 > - **Collection mapping**: Mapster has a slight edge for bulk operations, while Facet and Mapperly are very close
 > - **Memory efficiency**: All libraries are within ~10% of each other for memory allocation
 > - **Compile-time generation**: Both Facet and Mapperly benefit from zero-runtime-cost source generation
-

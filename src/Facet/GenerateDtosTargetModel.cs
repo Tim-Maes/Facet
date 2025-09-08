@@ -17,7 +17,9 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
     public bool GenerateConstructors { get; }
     public bool GenerateProjections { get; }
     public ImmutableArray<string> ExcludeProperties { get; }
+    public ImmutableArray<string> ExcludeMembersFromType { get; }
     public ImmutableArray<FacetMember> Members { get; }
+    public ImmutableArray<string> InterfaceContracts { get; }
 
     public GenerateDtosTargetModel(
         string sourceTypeName,
@@ -31,7 +33,9 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         bool generateConstructors,
         bool generateProjections,
         ImmutableArray<string> excludeProperties,
-        ImmutableArray<FacetMember> members)
+        ImmutableArray<string> excludeMembersFromType,
+    ImmutableArray<FacetMember> members,
+    ImmutableArray<string> interfaceContracts)
     {
         SourceTypeName = sourceTypeName;
         SourceNamespace = sourceNamespace;
@@ -44,7 +48,9 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         GenerateConstructors = generateConstructors;
         GenerateProjections = generateProjections;
         ExcludeProperties = excludeProperties;
+        ExcludeMembersFromType = excludeMembersFromType;
         Members = members;
+    InterfaceContracts = interfaceContracts;
     }
 
     public bool Equals(GenerateDtosTargetModel? other)
@@ -63,7 +69,9 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             && GenerateConstructors == other.GenerateConstructors
             && GenerateProjections == other.GenerateProjections
             && ExcludeProperties.SequenceEqual(other.ExcludeProperties)
-            && Members.SequenceEqual(other.Members);
+            && ExcludeMembersFromType.SequenceEqual(other.ExcludeMembersFromType)
+            && Members.SequenceEqual(other.Members)
+            && InterfaceContracts.SequenceEqual(other.InterfaceContracts);
     }
 
     public override bool Equals(object? obj) => obj is GenerateDtosTargetModel other && Equals(other);
@@ -87,8 +95,14 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             foreach (var prop in ExcludeProperties)
                 hash = hash * 31 + prop.GetHashCode();
 
+            foreach (var excludeType in ExcludeMembersFromType)
+                hash = hash * 31 + excludeType.GetHashCode();
+
             foreach (var member in Members)
                 hash = hash * 31 + member.GetHashCode();
+
+               foreach (var contract in InterfaceContracts)
+                   hash = hash * 31 + contract.GetHashCode();
 
             return hash;
         }

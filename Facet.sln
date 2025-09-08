@@ -18,6 +18,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Extensions", "src\Fac
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Extensions.EFCore", "src\Facet.Extensions.EFCore\Facet.Extensions.EFCore.csproj", "{4BBA34E9-E0B6-7300-A1C6-BFB7924C4C91}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.UnitTests", "test\Facet.UnitTests\Facet.UnitTests.csproj", "{0D200BA5-4019-474D-BB62-B111CD7CA348}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Extensions.EFCore.Tests", "test\Facet.Extensions.EFCore.Tests\Facet.Extensions.EFCore.Tests.csproj", "{D344B0B0-C26C-43AD-B2DA-389BD57B70A9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -40,6 +44,14 @@ Global
 		{4BBA34E9-E0B6-7300-A1C6-BFB7924C4C91}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4BBA34E9-E0B6-7300-A1C6-BFB7924C4C91}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4BBA34E9-E0B6-7300-A1C6-BFB7924C4C91}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0D200BA5-4019-474D-BB62-B111CD7CA348}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0D200BA5-4019-474D-BB62-B111CD7CA348}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0D200BA5-4019-474D-BB62-B111CD7CA348}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0D200BA5-4019-474D-BB62-B111CD7CA348}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D344B0B0-C26C-43AD-B2DA-389BD57B70A9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D344B0B0-C26C-43AD-B2DA-389BD57B70A9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D344B0B0-C26C-43AD-B2DA-389BD57B70A9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D344B0B0-C26C-43AD-B2DA-389BD57B70A9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
