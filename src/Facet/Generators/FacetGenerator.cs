@@ -528,7 +528,15 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 sb.AppendLine("    /// </code>");
                 sb.AppendLine("    /// </example>");
                 sb.AppendLine($"    public static Expression<Func<{model.SourceTypeName}, {model.Name}>> Projection =>");
-                sb.AppendLine($"        source => new {model.Name}(source);");
+                sb.AppendLine($"        source => new {model.Name}");
+                sb.AppendLine("        {");
+                // Emit member-wise initialization to enable nested mapping enhancements
+                foreach (var m in model.Members)
+                {
+                    var comma = m == model.Members.Last() ? "" : ",";
+                    sb.AppendLine($"            {m.Name} = source.{m.Name}{comma}");
+                }
+                sb.AppendLine("        };");
             }
         }
 
