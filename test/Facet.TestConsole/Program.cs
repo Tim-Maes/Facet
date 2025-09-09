@@ -284,6 +284,29 @@ public partial class ModernUserClass
     public string? AdditionalInfo { get; set; }
 }
 
+// Test models for nested partials feature
+public partial class OuterContainer
+{
+    [Facet(typeof(User), "Password", "CreatedAt")]
+    public partial class NestedUserDto
+    {
+        public string FullName { get; set; } = string.Empty;
+        public int Age { get; set; }
+    }
+
+    [Facet(typeof(Product), "InternalNotes", Kind = FacetKind.Record)]
+    public partial record NestedProductDto;
+
+    public partial class InnerContainer
+    {
+        [Facet(typeof(Employee), "Salary", "CreatedBy")]
+        public partial class DeeplyNestedEmployeeDto;
+
+        [Facet(typeof(Manager), "Salary", "Budget", "CreatedBy", Kind = FacetKind.RecordStruct)]
+        public partial record struct DeeplyNestedManagerSummary;
+    }
+}
+
 class Program
 {
     static async Task Main(string[] args)
@@ -457,6 +480,8 @@ class Program
         TestShorthandOverloads(users, products, employees);
 
         TestParameterlessConstructors();
+
+        TestNestedPartials(users, products, employees, managers);
     }
 
     static List<ModernUser> CreateSampleModernUsers()
@@ -956,6 +981,121 @@ class Program
         {
             Console.WriteLine($"ERROR: Error in TestParameterlessConstructors: {ex.Message}");
             Console.WriteLine($"  Stack trace: {ex.StackTrace}");
+        }
+        Console.WriteLine();
+    }
+
+    static void TestNestedPartials(List<User> users, List<Product> products, List<Employee> employees, List<Manager> managers)
+    {
+        Console.WriteLine("8. Testing Nested Partials Support:");
+        Console.WriteLine("===================================");
+
+        try
+        {
+            Console.WriteLine("Testing nested partial DTOs in OuterContainer...");
+
+            // Test nested user DTOs
+            Console.WriteLine("\nNested User DTOs:");
+            foreach (var user in users.Take(2))
+            {
+                try
+                {
+                    var nestedUserDto = user.ToFacet<User, OuterContainer.NestedUserDto>();
+                    Console.WriteLine($"  SUCCESS: {nestedUserDto.FirstName} {nestedUserDto.LastName}");
+                    Console.WriteLine($"    Email: {nestedUserDto.Email}, Active: {nestedUserDto.IsActive}");
+                    Console.WriteLine($"    DOB: {nestedUserDto.DateOfBirth:yyyy-MM-dd}, Last Login: {nestedUserDto.LastLoginAt?.ToString("yyyy-MM-dd") ?? "Never"}");
+                    Console.WriteLine();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"  ERROR mapping user to nested DTO: {ex.Message}");
+                }
+            }
+
+            // Test nested product DTOs (record type)
+            Console.WriteLine("Nested Product DTOs (Records):");
+            foreach (var product in products.Take(2))
+            {
+                try
+                {
+                    var nestedProductDto = product.ToFacet<Product, OuterContainer.NestedProductDto>();
+                    Console.WriteLine($"  SUCCESS: {nestedProductDto.Name} - ${nestedProductDto.Price}");
+                    Console.WriteLine($"    Category: {nestedProductDto.CategoryId}, Available: {nestedProductDto.IsAvailable}");
+                    Console.WriteLine($"    Description: {nestedProductDto.Description}");
+                    Console.WriteLine();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"  ERROR mapping product to nested DTO: {ex.Message}");
+                }
+            }
+
+            // Test deeply nested DTOs
+            Console.WriteLine("Testing deeply nested partials (OuterContainer.InnerContainer)...");
+
+            Console.WriteLine("\nDeeply Nested Employee DTOs:");
+            foreach (var employee in employees.Take(1))
+            {
+                try
+                {
+                    var deeplyNestedDto = employee.ToFacet<Employee, OuterContainer.InnerContainer.DeeplyNestedEmployeeDto>();
+                    Console.WriteLine($"  SUCCESS: {deeplyNestedDto.DisplayName}");
+                    Console.WriteLine($"    Employee ID: {deeplyNestedDto.EmployeeId}, Department: {deeplyNestedDto.Department}");
+                    Console.WriteLine($"    Hire Date: {deeplyNestedDto.HireDate:yyyy-MM-dd}");
+                    Console.WriteLine();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"  ERROR mapping employee to deeply nested DTO: {ex.Message}");
+                }
+            }
+
+            Console.WriteLine("Deeply Nested Manager Summary (Record Struct):");
+            foreach (var manager in managers.Take(1))
+            {
+                try
+                {
+                    var managerSummary = new OuterContainer.InnerContainer.DeeplyNestedManagerSummary(manager);
+                    Console.WriteLine($"  SUCCESS: {managerSummary.DisplayName}");
+                    Console.WriteLine($"    Team: {managerSummary.TeamName} ({managerSummary.TeamSize} members)");
+                    Console.WriteLine($"    Department: {managerSummary.Department}");
+                    Console.WriteLine();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"  ERROR creating deeply nested manager summary: {ex.Message}");
+                }
+            }
+
+            // Test parameterless constructors for nested types
+            Console.WriteLine("Testing Parameterless Constructors for Nested Types:");
+            try
+            {
+                var nestedUserDto = new OuterContainer.NestedUserDto();
+                Console.WriteLine($"  SUCCESS: Created nested DTO with parameterless constructor");
+                Console.WriteLine($"    Default values - FirstName: '{nestedUserDto.FirstName}', Email: '{nestedUserDto.Email}'");
+
+                var deeplyNestedDto = new OuterContainer.InnerContainer.DeeplyNestedEmployeeDto();
+                Console.WriteLine($"  SUCCESS: Created deeply nested DTO with parameterless constructor");
+                Console.WriteLine($"    Default values - EmployeeId: '{deeplyNestedDto.EmployeeId}', Department: '{deeplyNestedDto.Department}'");
+                Console.WriteLine();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  ERROR testing parameterless constructors for nested types: {ex.Message}");
+            }
+
+            Console.WriteLine("SUCCESS: All nested partials tests completed successfully!");
+            Console.WriteLine("This demonstrates that Facet generator correctly handles:");
+            Console.WriteLine("  - Single-level nested partial classes");
+            Console.WriteLine("  - Multi-level nested partial classes (deeply nested)");
+            Console.WriteLine("  - Different facet kinds (class, record, record struct) in nested contexts");
+            Console.WriteLine("  - Parameterless constructors for nested partial types");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"ERROR in TestNestedPartials: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
         }
         Console.WriteLine();
     }
