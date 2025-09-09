@@ -3,7 +3,8 @@ using Facet.Mapping;
 using Facet.TestConsole.Data;
 using Facet.TestConsole.Services;
 using Facet.TestConsole.Tests;
-using Facet.TestConsole.GenerateDtosTests; // Add this using
+using Facet.TestConsole.GenerateDtosTests;
+using Facet.TestConsole.TestInfrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +16,132 @@ using System.Linq;
 using System.Threading.Tasks;
 
 namespace Facet.TestConsole;
+
+public class TestResult
+{
+    public string TestName { get; set; } = string.Empty;
+    public bool Passed { get; set; }
+    public string? ErrorMessage { get; set; }
+    public TimeSpan Duration { get; set; }
+    public int TestCount { get; set; }
+    public int PassedCount { get; set; }
+    public int FailedCount { get; set; }
+}
+
+public static class TestLogger
+{
+    private static readonly List<TestResult> _testResults = new();
+    
+    public static void LogTestStart(string testName)
+    {
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine($"\n[RUNNING] {testName}");
+        Console.ResetColor();
+    }
+    
+    public static void LogTestResult(string testName, bool passed, string? errorMessage = null, TimeSpan? duration = null, int testCount = 0, int passedCount = 0, int failedCount = 0)
+    {
+        var result = new TestResult
+        {
+            TestName = testName,
+            Passed = passed,
+            ErrorMessage = errorMessage,
+            Duration = duration ?? TimeSpan.Zero,
+            TestCount = testCount,
+            PassedCount = passedCount,
+            FailedCount = failedCount
+        };
+        
+        _testResults.Add(result);
+        
+        if (passed)
+        {
+            Console.ForegroundColor = ConsoleColor.Green;
+            var details = testCount > 0 ? $" ({passedCount}/{testCount} passed)" : "";
+            Console.WriteLine($"[PASS] {testName}{details}");
+        }
+        else
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"[FAIL] {testName}: {errorMessage}");
+        }
+        Console.ResetColor();
+    }
+    
+    public static void PrintSummary()
+    {
+        Console.WriteLine();
+        Console.WriteLine("=".PadRight(80, '='));
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.WriteLine("TEST EXECUTION SUMMARY");
+        Console.ResetColor();
+        Console.WriteLine("=".PadRight(80, '='));
+        
+        var totalTests = _testResults.Count;
+        var passedTests = _testResults.Count(r => r.Passed);
+        var failedTests = totalTests - passedTests;
+        var totalDuration = _testResults.Sum(r => r.Duration.TotalMilliseconds);
+        var totalSubTests = _testResults.Sum(r => r.TestCount);
+        var totalSubPassed = _testResults.Sum(r => r.PassedCount);
+        var totalSubFailed = _testResults.Sum(r => r.FailedCount);
+        
+        // Overall status
+        if (failedTests == 0)
+        {
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"ALL TESTS PASSED!");
+        }
+        else
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"SOME TESTS FAILED!");
+        }
+        Console.ResetColor();
+        
+        Console.WriteLine();
+        Console.WriteLine($"Test Suites: {passedTests}/{totalTests} passed");
+        if (totalSubTests > 0)
+        {
+            Console.WriteLine($"Individual Tests: {totalSubPassed}/{totalSubTests} passed");
+        }
+        Console.WriteLine($"Total Duration: {totalDuration:F0}ms");
+        
+        // Detailed results
+        Console.WriteLine();
+        Console.WriteLine("DETAILED RESULTS:");
+        Console.WriteLine("-".PadRight(40, '-'));
+        
+        foreach (var result in _testResults)
+        {
+            var status = result.Passed ? "[PASS]" : "[FAIL]";
+            var details = result.TestCount > 0 ? $" ({result.PassedCount}/{result.TestCount})" : "";
+            var duration = result.Duration.TotalMilliseconds > 0 ? $" [{result.Duration.TotalMilliseconds:F0}ms]" : "";
+            
+            Console.WriteLine($"{status} {result.TestName}{details}{duration}");
+            
+            if (!result.Passed && !string.IsNullOrEmpty(result.ErrorMessage))
+            {
+                Console.ForegroundColor = ConsoleColor.DarkRed;
+                Console.WriteLine($"   Error: {result.ErrorMessage}");
+                Console.ResetColor();
+            }
+        }
+        
+        Console.WriteLine();
+        Console.WriteLine("=".PadRight(80, '='));
+        
+        // Exit code for CI/CD
+        if (failedTests > 0)
+        {
+            Environment.ExitCode = 1;
+        }
+    }
+    
+    public static void Reset()
+    {
+        _testResults.Clear();
+    }
+}
 
 public abstract class BaseEntity
 {
@@ -307,37 +434,14 @@ public partial class OuterContainer
     }
 }
 
-class Program
+public class Program
 {
-    static async Task Main(string[] args)
+    public static async Task Main(string[] args)
     {
         Console.WriteLine("=== Facet Generator Test Console ===\n");
-
         var host = CreateHostBuilder(args).Build();
-
-        try
-        {
-            await InitializeDatabaseAsync(host);
-
-            await RunGenerateDtosTests(host);
-
-            await RunTests();
-
-            await RunEfCoreTests(host);
-
-            RecordPrimaryConstructorTests.RunAllTests();
-
-            ParameterlessConstructorTests.RunAllTests();
-
-            EnumHandlingTests.RunAllTests();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error: {ex.Message}");
-            Console.WriteLine($"Stack trace: {ex.StackTrace}");
-        }
-
-        Console.WriteLine("\n=== All tests completed! ===");
+        
+        await TestRunner.RunAllTestsAsync(host);
         
         // Only try to read key if we have console input available
         if (IsConsoleInputAvailable())
@@ -351,7 +455,7 @@ class Program
         }
     }
 
-    static bool IsConsoleInputAvailable()
+    private static bool IsConsoleInputAvailable()
     {
         try
         {
@@ -364,7 +468,7 @@ class Program
         }
     }
 
-    static IHostBuilder CreateHostBuilder(string[] args) =>
+    private static IHostBuilder CreateHostBuilder(string[] args) =>
         Host.CreateDefaultBuilder(args)
             .ConfigureAppConfiguration((context, config) =>
             {
@@ -392,7 +496,7 @@ class Program
                 });
             });
 
-    static async Task InitializeDatabaseAsync(IHost host)
+    public static async Task InitializeDatabaseAsync(IHost host)
     {
         using var scope = host.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<FacetTestDbContext>();
@@ -409,694 +513,5 @@ class Program
             logger.LogError(ex, "Failed to initialize database");
             throw;
         }
-    }
-
-    static async Task RunEfCoreTests(IHost host)
-    {
-        Console.WriteLine("\n" + "=".PadRight(60, '='));
-        Console.WriteLine("EF CORE & UpdateFromFacet TESTS");
-        Console.WriteLine("=".PadRight(60, '='));
-
-        using var scope = host.Services.CreateScope();
-        
-        var updateFromFacetTests = scope.ServiceProvider.GetRequiredService<UpdateFromFacetTests>();
-        await updateFromFacetTests.RunAllTestsAsync();
-
-        var efCoreIntegrationTests = scope.ServiceProvider.GetRequiredService<EfCoreIntegrationTests>();
-        await efCoreIntegrationTests.RunAllTestsAsync();
-
-        var validationAndErrorTests = scope.ServiceProvider.GetRequiredService<ValidationAndErrorTests>();
-        await validationAndErrorTests.RunAllTestsAsync();
-    }
-
-    static async Task RunGenerateDtosTests(IHost host)
-    {
-        Console.WriteLine("\n" + "=".PadRight(60, '='));
-        Console.WriteLine("GENERATE DTOS FEATURE TESTS");
-        Console.WriteLine("=".PadRight(60, '='));
-
-        try
-        {
-            using var scope = host.Services.CreateScope();
-            
-            Console.WriteLine("Resolving GenerateDtosFeatureTests service...");
-            var generateDtosTests = scope.ServiceProvider.GetRequiredService<GenerateDtosFeatureTests>();
-            Console.WriteLine("Service resolved successfully. Running tests...");
-            
-            await generateDtosTests.RunAllTestsAsync();
-            
-            Console.WriteLine("GenerateDtos tests completed successfully.");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"ERROR in RunGenerateDtosTests: {ex.Message}");
-            Console.WriteLine($"Stack trace: {ex.StackTrace}");
-        }
-    }
-
-    static async Task RunTests()
-    {
-        Console.WriteLine("EXISTING IN-MEMORY TESTS");
-        Console.WriteLine("=".PadRight(40, '='));
-
-        var users = CreateSampleUsers();
-        var products = CreateSampleProducts();
-        var employees = CreateSampleEmployees();
-        var managers = CreateSampleManagers();
-        var modernUsers = CreateSampleModernUsers();
-
-        TestInheritanceSupport(employees, managers);
-
-        TestModernRecordFeatures(modernUsers);
-
-        TestBasicDtoMapping(users);
-
-        TestCustomMappingDto(users);
-
-        TestDifferentFacetKinds(users, products);
-
-        TestLinqProjections(users, products);
-
-        TestShorthandOverloads(users, products, employees);
-
-        TestParameterlessConstructors();
-
-        TestNestedPartials(users, products, employees, managers);
-    }
-
-    static List<ModernUser> CreateSampleModernUsers()
-    {
-        return new List<ModernUser>
-        {
-            new ModernUser
-            {
-                Id = "user_001",
-                FirstName = "Alice",
-                LastName = "Cooper",
-                Email = "alice.cooper@example.com",
-                Bio = "Software Engineer passionate about clean code",
-                PasswordHash = "hashed_password_123"
-            },
-            new ModernUser
-            {
-                Id = "user_002", 
-                FirstName = "Bob",
-                LastName = "Dylan",
-                Email = "bob.dylan@example.com",
-                Bio = null,
-                PasswordHash = "hashed_password_456"
-            }
-        };
-    }
-
-    static void TestInheritanceSupport(List<Employee> employees, List<Manager> managers)
-    {
-        Console.WriteLine("1. Testing Inheritance Support:");
-        Console.WriteLine("===============================");
-
-        Console.WriteLine("Employee DTOs (inherits from Person -> BaseEntity):");
-        foreach (var employee in employees)
-        {
-            var employeeDto = employee.ToFacet<Employee, EmployeeDto>();
-            Console.WriteLine($"  {employeeDto.DisplayName}");
-            Console.WriteLine($"    ID: {employeeDto.Id}, Employee ID: {employeeDto.EmployeeId}");
-            Console.WriteLine($"    Department: {employeeDto.Department}, Hire Date: {employeeDto.HireDate:yyyy-MM-dd}");
-            Console.WriteLine($"    Created: {employeeDto.CreatedAt:yyyy-MM-dd}, Updated: {employeeDto.UpdatedAt:yyyy-MM-dd}");
-            Console.WriteLine();
-        }
-
-        Console.WriteLine("Manager DTOs (inherits from Employee -> Person -> BaseEntity):");
-        foreach (var manager in managers)
-        {
-            var managerDto = manager.ToFacet<Manager, ManagerDto>();
-            Console.WriteLine($"  {managerDto.DisplayName}");
-            Console.WriteLine($"    ID: {managerDto.Id}, Employee ID: {managerDto.EmployeeId}");
-            Console.WriteLine($"    Department: {managerDto.Department}, Team: {managerDto.TeamName} ({managerDto.TeamSize} members)");
-            Console.WriteLine($"    Hire Date: {managerDto.HireDate:yyyy-MM-dd}");
-            Console.WriteLine($"    Created: {managerDto.CreatedAt:yyyy-MM-dd}, Updated: {managerDto.UpdatedAt:yyyy-MM-dd}");
-            Console.WriteLine();
-        }
-    }
-
-    static List<User> CreateSampleUsers()
-    {
-        return new List<User>
-        {
-            new User
-            {
-                Id = 1,
-                FirstName = "John",
-                LastName = "Doe",
-                Email = "john.doe@example.com",
-                DateOfBirth = new DateTime(1990, 5, 15),
-                Password = "secret123",
-                IsActive = true,
-                CreatedAt = DateTime.Now.AddDays(-30),
-                LastLoginAt = DateTime.Now.AddHours(-2)
-            },
-            new User
-            {
-                Id = 2,
-                FirstName = "Jane",
-                LastName = "Smith",
-                Email = "jane.smith@example.com",
-                DateOfBirth = new DateTime(1985, 12, 3),
-                Password = "password456",
-                IsActive = true,
-                CreatedAt = DateTime.Now.AddDays(-60),
-                LastLoginAt = DateTime.Now.AddDays(-1)
-            },
-            new User
-            {
-                Id = 3,
-                FirstName = "Bob",
-                LastName = "Johnson",
-                Email = "bob.johnson@example.com",
-                DateOfBirth = new DateTime(1992, 8, 22),
-                Password = "mypassword",
-                IsActive = false,
-                CreatedAt = DateTime.Now.AddDays(-90),
-                LastLoginAt = null
-            }
-        };
-    }
-
-    static List<Product> CreateSampleProducts()
-    {
-        return new List<Product>
-        {
-            new Product
-            {
-                Id = 1,
-                Name = "Laptop",
-                Description = "High-performance laptop for professionals",
-                Price = 1299.99m,
-                CategoryId = 1,
-                IsAvailable = true,
-                CreatedAt = DateTime.Now.AddDays(-20),
-                InternalNotes = "Supplier: TechCorp, Margin: 25%"
-            },
-            new Product
-            {
-                Id = 2,
-                Name = "Smartphone",
-                Description = "Latest smartphone with advanced features",
-                Price = 899.99m,
-                CategoryId = 2,
-                IsAvailable = true,
-                CreatedAt = DateTime.Now.AddDays(-15),
-                InternalNotes = "Supplier: MobileTech, Margin: 30%"
-            },
-            new Product
-            {
-                Id = 3,
-                Name = "Tablet",
-                Description = "Lightweight tablet for entertainment",
-                Price = 449.99m,
-                CategoryId = 2,
-                IsAvailable = false,
-                CreatedAt = DateTime.Now.AddDays(-10),
-                InternalNotes = "Supplier: TabletInc, Margin: 20%"
-            }
-        };
-    }
-
-    static List<Employee> CreateSampleEmployees()
-    {
-        return new List<Employee>
-        {
-            new Employee
-            {
-                Id = 1,
-                FirstName = "Alice",
-                LastName = "Johnson",
-                EmployeeId = "EMP001",
-                Department = "Engineering",
-                Salary = 85000m,
-                HireDate = new DateTime(2020, 3, 15),
-                CreatedAt = DateTime.Now.AddDays(-365),
-                UpdatedAt = DateTime.Now.AddDays(-10),
-                CreatedBy = "HR System"
-            },
-            new Employee
-            {
-                Id = 2,
-                FirstName = "Bob",
-                LastName = "Wilson",
-                EmployeeId = "EMP002",
-                Department = "Marketing",
-                Salary = 72000m,
-                HireDate = new DateTime(2019, 8, 22),
-                CreatedAt = DateTime.Now.AddDays(-400),
-                UpdatedAt = DateTime.Now.AddDays(-5),
-                CreatedBy = "HR System"
-            }
-        };
-    }
-
-    static List<Manager> CreateSampleManagers()
-    {
-        return new List<Manager>
-        {
-            new Manager
-            {
-                Id = 3,
-                FirstName = "Carol",
-                LastName = "Davis",
-                EmployeeId = "MGR001",
-                Department = "Engineering",
-                Salary = 120000m,
-                HireDate = new DateTime(2018, 1, 10),
-                TeamName = "Backend Team",
-                TeamSize = 8,
-                Budget = 500000m,
-                CreatedAt = DateTime.Now.AddDays(-500),
-                UpdatedAt = DateTime.Now.AddDays(-2),
-                CreatedBy = "HR System"
-            },
-            new Manager
-            {
-                Id = 4,
-                FirstName = "David",
-                LastName = "Brown",
-                EmployeeId = "MGR002",
-                Department = "Sales",
-                Salary = 110000m,
-                HireDate = new DateTime(2017, 6, 5),
-                TeamName = "Regional Sales",
-                TeamSize = 12,
-                Budget = 750000m,
-                CreatedAt = DateTime.Now.AddDays(-600),
-                UpdatedAt = DateTime.Now.AddDays(-1),
-                CreatedBy = "HR System"
-            }
-        };
-    }
-
-    static void TestBasicDtoMapping(List<User> users)
-    {
-        Console.WriteLine("2. Testing Basic DTO Mapping:");
-        Console.WriteLine("==============================");
-
-        foreach (var user in users)
-        {
-            var userDto = user.ToFacet<User, UserDto>();
-            Console.WriteLine($"User: {userDto.FirstName} {userDto.LastName} ({userDto.Email})");
-            Console.WriteLine($"  Active: {userDto.IsActive}, DOB: {userDto.DateOfBirth:yyyy-MM-dd}");
-            Console.WriteLine($"  Last Login: {userDto.LastLoginAt?.ToString("yyyy-MM-dd HH:mm") ?? "Never"}");
-            Console.WriteLine();
-        }
-    }
-
-    static void TestCustomMappingDto(List<User> users)
-    {
-        Console.WriteLine("3. Testing DTO with Custom Mapping:");
-        Console.WriteLine("====================================");
-
-        foreach (var user in users)
-        {
-            var userDto = user.ToFacet<User, UserDtoWithMapping>();
-            Console.WriteLine($"User: {userDto.FullName} (Age: {userDto.Age})");
-            Console.WriteLine($"  Email: {userDto.Email}, Active: {userDto.IsActive}");
-            Console.WriteLine();
-        }
-    }
-
-    static void TestDifferentFacetKinds(List<User> users, List<Product> products)
-    {
-        Console.WriteLine("4. Testing Different Facet Kinds:");
-        Console.WriteLine("==================================");
-
-        Console.WriteLine("Record DTOs:");
-        foreach (var product in products)
-        {
-            var productDto = product.ToFacet<Product, ProductDto>();
-            Console.WriteLine($"  {productDto.Name}: ${productDto.Price} (Available: {productDto.IsAvailable})");
-        }
-        Console.WriteLine();
-
-        Console.WriteLine("Struct DTOs:");
-        foreach (var product in products)
-        {
-            var productSummary = new ProductSummary(product);
-            Console.WriteLine($"  {productSummary.Name}: ${productSummary.Price}");
-        }
-        Console.WriteLine();
-
-        Console.WriteLine("Record Struct DTOs:");
-        foreach (var user in users)
-        {
-            var userSummary = new UserSummary(user);
-            Console.WriteLine($"  {userSummary.FirstName} {userSummary.LastName} ({userSummary.Email})");
-        }
-        Console.WriteLine();
-    }
-
-    static void TestLinqProjections(List<User> users, List<Product> products)
-    {
-        Console.WriteLine("5. Testing LINQ Projections:");
-        Console.WriteLine("=============================");
-
-        Console.WriteLine("Active users (via SelectFacets):");
-        var activeUserDtos = users
-            .Where(u => u.IsActive)
-            .SelectFacets<User, UserDtoWithMapping>()
-            .ToList();
-
-        foreach (var dto in activeUserDtos)
-        {
-            Console.WriteLine($"  {dto.FullName} (Age: {dto.Age}) - {dto.Email}");
-        }
-        Console.WriteLine();
-
-        Console.WriteLine("Available products (via SelectFacet):");
-        var availableProducts = products
-            .AsQueryable()
-            .Where(p => p.IsAvailable)
-            .SelectFacet<Product, ProductDto>()
-            .ToList();
-
-        foreach (var dto in availableProducts)
-        {
-            Console.WriteLine($"  {dto.Name}: ${dto.Price} - {dto.Description}");
-        }
-        Console.WriteLine();
-    }
-
-    static void TestModernRecordFeatures(List<ModernUser> modernUsers)
-    {
-        Console.WriteLine("1.5 Testing Modern Record Features:");
-        Console.WriteLine("===================================");
-
-        Console.WriteLine("Modern User DTOs (with auto-detected record, init-only & required properties):");
-        foreach (var user in modernUsers)
-        {
-            try
-            {
-                var userDto = user.ToFacet<ModernUser, ModernUserDto>();
-                Console.WriteLine($"  {userDto.FirstName} {userDto.LastName}");
-                Console.WriteLine($"    ID: {userDto.Id} (required init-only)");
-                Console.WriteLine($"    Email: {userDto.Email ?? "N/A"}");
-                Console.WriteLine($"    Created: {userDto.CreatedAt:yyyy-MM-dd}");
-                Console.WriteLine($"    Full Name: {userDto.FullName}");
-                Console.WriteLine($"    Display: {userDto.DisplayName}");
-                Console.WriteLine();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"  Error mapping {user.FirstName} {user.LastName}: {ex.Message}");
-                Console.WriteLine();
-            }
-        }
-
-        Console.WriteLine("Compact User DTOs (auto-detected record struct - using constructor):");
-        var compactUsers = modernUsers.Select(u => new CompactUser(u.Id, $"{u.FirstName} {u.LastName}", u.CreatedAt)).ToList();
-        foreach (var compact in compactUsers)
-        {
-            try
-            {
-                var compactDto = new CompactUserDto(compact);
-                Console.WriteLine($"  {compactDto.Name} (ID: {compactDto.Id}, Created: {compactDto.CreatedAt:yyyy-MM-dd})");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"  Error mapping compact user: {ex.Message}");
-            }
-        }
-        Console.WriteLine();
-
-        Console.WriteLine("Modern User Classes (mutable by default for classes):");
-        foreach (var user in modernUsers)
-        {
-            try
-            {
-                var userClass = user.ToFacet<ModernUser, ModernUserClass>();
-                Console.WriteLine($"  {userClass.FirstName} {userClass.LastName}");
-                Console.WriteLine($"    ID: {userClass.Id} (mutable in class)");
-                Console.WriteLine($"    Created: {userClass.CreatedAt:yyyy-MM-dd}");
-                Console.WriteLine();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"  Error mapping {user.FirstName} {user.LastName} to class: {ex.Message}");
-                Console.WriteLine();
-            }
-        }
-    }
-
-    private static void TestShorthandOverloads(List<User> users, List<Product> products, List<Employee> employees)
-    {
-        Console.WriteLine("6. Testing Shorthand Overloads (omit TSource):");
-        Console.WriteLine("===============================");
-
-        Console.WriteLine("Single item (inheritance):");
-        foreach (var e in employees)
-        {
-            try
-            {
-                var dto = e.ToFacet<EmployeeDto>();
-                Console.WriteLine($"  EmployeeDto: {dto.DisplayName} | Dept: {dto.Department} | Hire: {dto.HireDate:yyyy-MM-dd}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"  Error mapping employee to EmployeeDto: {ex.Message}");
-            }
-        }
-        Console.WriteLine();
-
-        Console.WriteLine("Single item (basic & custom mapping):");
-        foreach (var u in users)
-        {
-            try
-            {
-                var dtoBasic = u.ToFacet<UserDto>();
-                var dtoCustom = u.ToFacet<UserDtoWithMapping>();
-                Console.WriteLine($"  Basic:  {dtoBasic.FirstName} {dtoBasic.LastName} | Active: {dtoBasic.IsActive}");
-                Console.WriteLine($"  Custom: {dtoCustom.FullName} (Age: {dtoCustom.Age}) | Email: {dtoCustom.Email}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"  Error mapping user to UserDto: {ex.Message}");
-            }
-        }
-        Console.WriteLine();
-        
-        Console.WriteLine("IEnumerable.SelectFacets<TTarget>:");
-        var activeUsers = users.Where(u => u.IsActive).SelectFacets<UserDtoWithMapping>().ToList();
-        foreach (var dto in activeUsers)
-        {
-            try
-            {
-                Console.WriteLine($"  {dto.FullName} (Age: {dto.Age})");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"  Error mapping user to UserDtoWithMapping: {ex.Message}");
-            }
-        }
-        Console.WriteLine();
-
-        Console.WriteLine("IQueryable.SelectFacet<TTarget> (simulated):");
-        var availableProducts =
-            products.AsQueryable()
-                    .Where(p => p.IsAvailable)
-                    .SelectFacet<ProductDto>()
-                    .ToList();
-
-        foreach (var p in availableProducts)
-        {
-            try
-            {
-                Console.WriteLine($"  {p.Name}: ${p.Price} - {p.Description}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"  Error mapping product to ProductDto: {ex.Message}");
-            }
-        }
-        Console.WriteLine();
-    }    
-
-    private static void TestParameterlessConstructors()
-    {
-        Console.WriteLine("7. Testing Parameterless Constructors:");
-        Console.WriteLine("=====================================================");
-
-        try
-        {
-            // Test that parameterless constructors work by default
-            var userDto = new UserDto();
-            Console.WriteLine($"SUCCESS: Successfully created UserDto() - parameterless constructor enabled by default!");
-            Console.WriteLine($"  Properties initialized with defaults:");
-            Console.WriteLine($"    Id: {userDto.Id}");
-            Console.WriteLine($"    FirstName: '{userDto.FirstName}'");
-            Console.WriteLine($"    LastName: '{userDto.LastName}'");
-            Console.WriteLine($"    Email: '{userDto.Email}'");
-            Console.WriteLine($"    FullName: '{userDto.FullName}'");
-            Console.WriteLine($"    Age: {userDto.Age}");
-            Console.WriteLine($"    IsActive: {userDto.IsActive}");
-            Console.WriteLine();
-
-            // Test setting properties after construction
-            userDto.FirstName = "Test";
-            userDto.LastName = "User";
-            userDto.Email = "test@example.com";
-            userDto.FullName = "Test User";
-            userDto.Age = 25;
-            userDto.IsActive = true;
-
-            Console.WriteLine($"SUCCESS: Successfully set properties after parameterless construction:");
-            Console.WriteLine($"    FirstName: '{userDto.FirstName}'");
-            Console.WriteLine($"    LastName: '{userDto.LastName}'");
-            Console.WriteLine($"    Email: '{userDto.Email}'");
-            Console.WriteLine($"    FullName: '{userDto.FullName}'");
-            Console.WriteLine($"    Age: {userDto.Age}");
-            Console.WriteLine($"    IsActive: {userDto.IsActive}");
-            Console.WriteLine();
-
-            // Test record with parameterless constructor 
-            var productDto = new ProductDto(); // Record also gets parameterless constructor
-            Console.WriteLine($"SUCCESS: Successfully created ProductDto() record - parameterless constructor enabled by default!");
-            Console.WriteLine($"  Properties initialized with defaults:");
-            Console.WriteLine($"    Id: {productDto.Id}");
-            Console.WriteLine($"    Name: '{productDto.Name}'");
-            Console.WriteLine($"    Description: '{productDto.Description}'");
-            Console.WriteLine($"    Price: {productDto.Price}");
-            Console.WriteLine($"    CategoryId: {productDto.CategoryId}");
-            Console.WriteLine($"    IsAvailable: {productDto.IsAvailable}");
-            Console.WriteLine();
-
-            // Test unit testing scenario
-            Console.WriteLine("SUCCESS: Unit Testing Scenario:");
-            var testDto = new UserDto(); // Simple!
-            testDto.FirstName = "Unit";
-            testDto.LastName = "Test";
-            testDto.IsActive = true;
-            Console.WriteLine($"    Created and populated DTO for testing: {testDto.FirstName} {testDto.LastName}, Active: {testDto.IsActive}");
-            Console.WriteLine();
-
-            Console.WriteLine("SUCCESS: Parameterless constructor feature tests completed successfully!");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"ERROR: Error in TestParameterlessConstructors: {ex.Message}");
-            Console.WriteLine($"  Stack trace: {ex.StackTrace}");
-        }
-        Console.WriteLine();
-    }
-
-    static void TestNestedPartials(List<User> users, List<Product> products, List<Employee> employees, List<Manager> managers)
-    {
-        Console.WriteLine("8. Testing Nested Partials Support:");
-        Console.WriteLine("===================================");
-
-        try
-        {
-            Console.WriteLine("Testing nested partial DTOs in OuterContainer...");
-
-            // Test nested user DTOs
-            Console.WriteLine("\nNested User DTOs:");
-            foreach (var user in users.Take(2))
-            {
-                try
-                {
-                    var nestedUserDto = user.ToFacet<User, OuterContainer.NestedUserDto>();
-                    Console.WriteLine($"  SUCCESS: {nestedUserDto.FirstName} {nestedUserDto.LastName}");
-                    Console.WriteLine($"    Email: {nestedUserDto.Email}, Active: {nestedUserDto.IsActive}");
-                    Console.WriteLine($"    DOB: {nestedUserDto.DateOfBirth:yyyy-MM-dd}, Last Login: {nestedUserDto.LastLoginAt?.ToString("yyyy-MM-dd") ?? "Never"}");
-                    Console.WriteLine();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"  ERROR mapping user to nested DTO: {ex.Message}");
-                }
-            }
-
-            // Test nested product DTOs (record type)
-            Console.WriteLine("Nested Product DTOs (Records):");
-            foreach (var product in products.Take(2))
-            {
-                try
-                {
-                    var nestedProductDto = product.ToFacet<Product, OuterContainer.NestedProductDto>();
-                    Console.WriteLine($"  SUCCESS: {nestedProductDto.Name} - ${nestedProductDto.Price}");
-                    Console.WriteLine($"    Category: {nestedProductDto.CategoryId}, Available: {nestedProductDto.IsAvailable}");
-                    Console.WriteLine($"    Description: {nestedProductDto.Description}");
-                    Console.WriteLine();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"  ERROR mapping product to nested DTO: {ex.Message}");
-                }
-            }
-
-            // Test deeply nested DTOs
-            Console.WriteLine("Testing deeply nested partials (OuterContainer.InnerContainer)...");
-
-            Console.WriteLine("\nDeeply Nested Employee DTOs:");
-            foreach (var employee in employees.Take(1))
-            {
-                try
-                {
-                    var deeplyNestedDto = employee.ToFacet<Employee, OuterContainer.InnerContainer.DeeplyNestedEmployeeDto>();
-                    Console.WriteLine($"  SUCCESS: {deeplyNestedDto.DisplayName}");
-                    Console.WriteLine($"    Employee ID: {deeplyNestedDto.EmployeeId}, Department: {deeplyNestedDto.Department}");
-                    Console.WriteLine($"    Hire Date: {deeplyNestedDto.HireDate:yyyy-MM-dd}");
-                    Console.WriteLine();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"  ERROR mapping employee to deeply nested DTO: {ex.Message}");
-                }
-            }
-
-            Console.WriteLine("Deeply Nested Manager Summary (Record Struct):");
-            foreach (var manager in managers.Take(1))
-            {
-                try
-                {
-                    var managerSummary = new OuterContainer.InnerContainer.DeeplyNestedManagerSummary(manager);
-                    Console.WriteLine($"  SUCCESS: {managerSummary.DisplayName}");
-                    Console.WriteLine($"    Team: {managerSummary.TeamName} ({managerSummary.TeamSize} members)");
-                    Console.WriteLine($"    Department: {managerSummary.Department}");
-                    Console.WriteLine();
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"  ERROR creating deeply nested manager summary: {ex.Message}");
-                }
-            }
-
-            // Test parameterless constructors for nested types
-            Console.WriteLine("Testing Parameterless Constructors for Nested Types:");
-            try
-            {
-                var nestedUserDto = new OuterContainer.NestedUserDto();
-                Console.WriteLine($"  SUCCESS: Created nested DTO with parameterless constructor");
-                Console.WriteLine($"    Default values - FirstName: '{nestedUserDto.FirstName}', Email: '{nestedUserDto.Email}'");
-
-                var deeplyNestedDto = new OuterContainer.InnerContainer.DeeplyNestedEmployeeDto();
-                Console.WriteLine($"  SUCCESS: Created deeply nested DTO with parameterless constructor");
-                Console.WriteLine($"    Default values - EmployeeId: '{deeplyNestedDto.EmployeeId}', Department: '{deeplyNestedDto.Department}'");
-                Console.WriteLine();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"  ERROR testing parameterless constructors for nested types: {ex.Message}");
-            }
-
-            Console.WriteLine("SUCCESS: All nested partials tests completed successfully!");
-            Console.WriteLine("This demonstrates that Facet generator correctly handles:");
-            Console.WriteLine("  - Single-level nested partial classes");
-            Console.WriteLine("  - Multi-level nested partial classes (deeply nested)");
-            Console.WriteLine("  - Different facet kinds (class, record, record struct) in nested contexts");
-            Console.WriteLine("  - Parameterless constructors for nested partial types");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"ERROR in TestNestedPartials: {ex.Message}");
-            Console.WriteLine($"Stack trace: {ex.StackTrace}");
-        }
-        Console.WriteLine();
     }
 }
