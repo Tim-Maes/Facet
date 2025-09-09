@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
+  <PropertyGroup>
         <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
         <IsPackable>true</IsPackable>
         <PackageId>Facet.Extensions.EFCore</PackageId>
@@ -10,9 +10,11 @@
         <PackageProjectUrl>https://www.github.com/Tim-Maes/Facet</PackageProjectUrl>
         <Nullable>enable</Nullable>
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-        <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-        <NoWarn>$(NoWarn);NU1608;RS1035</NoWarn>
-    </PropertyGroup>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <NoWarn>$(NoWarn);NU1608;RS1035</NoWarn>
+    <!-- Copy all referenced assemblies to output so MSBuild task can load dependencies when used via UsingTask -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
 
     <ItemGroup>
         <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">

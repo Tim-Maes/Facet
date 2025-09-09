@@ -1,4 +1,5 @@
-﻿using Microsoft.CodeAnalysis;
+﻿using System;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System.Collections.Generic;
@@ -16,19 +17,116 @@ public sealed class FacetGenerator : IIncrementalGenerator
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var facets = context.SyntaxProvider
+        var facetModels = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 FacetAttributeName,
                 predicate: static (node, _) => node is TypeDeclarationSyntax,
                 transform: static (ctx, token) => GetTargetModel(ctx, token))
-            .Where(static m => m is not null);
+            .Where(static m => m is not null)
+            .Collect();
 
-        context.RegisterSourceOutput(facets, static (spc, model) =>
+        context.RegisterSourceOutput(facetModels, static (spc, models) =>
         {
             spc.CancellationToken.ThrowIfCancellationRequested();
-            var code = Generate(model!);
-            spc.AddSource($"{model!.Name}.g.cs", SourceText.From(code, Encoding.UTF8));
+
+            // Build a lookup of SourceType -> DTO full name for nested composition
+            var nestedMap = models!
+                .ToImmutableDictionary(
+                    k => Normalize(k!.SourceTypeName),
+                    v => GetFullTypeName(v!),
+                    StringComparer.Ordinal);
+
+            // Build a lookup of DTO full name -> DTO model for nested mapping emission
+            var dtoByDtoFullName = models!
+                .ToImmutableDictionary(
+                    k => GetFullTypeName(k!),
+                    v => v!,
+                    StringComparer.Ordinal);
+
+            foreach (var model in models!)
+            {
+                var adjusted = AdjustForNestedDtos(model!, nestedMap);
+                var code = Generate(adjusted, nestedMap, dtoByDtoFullName);
+                spc.AddSource($"{adjusted.Name}.g.cs", SourceText.From(code, Encoding.UTF8));
+            }
         });
+    }
+
+    private static string Normalize(string typeName)
+    {
+        return typeName.Replace("global::", string.Empty);
+    }
+
+    private static string GetFullTypeName(FacetTargetModel model)
+    {
+        return string.IsNullOrWhiteSpace(model.Namespace) ? model.Name : $"{model.Namespace}.{model.Name}";
+    }
+
+    private static FacetTargetModel AdjustForNestedDtos(FacetTargetModel model, ImmutableDictionary<string, string> nestedMap)
+    {
+        // Replace member types with DTO types when a nested DTO exists for the source member type (including collections)
+        var updated = ImmutableArray.CreateBuilder<FacetMember>();
+        foreach (var m in model.Members)
+        {
+            var typeName = m.TypeName.Replace("global::", string.Empty);
+            string newType = m.TypeName; // default
+
+            // Detect collections like ICollection<T>, IList<T>, IEnumerable<T>, List<T>
+            if (TryGetCollectionElementType(typeName, out var outerPrefix, out var elementType, out var outerSuffix))
+            {
+                if (nestedMap.TryGetValue(elementType, out var dtoFullName))
+                {
+                    newType = $"{outerPrefix}{dtoFullName}{outerSuffix}";
+                }
+            }
+            else
+            {
+                // Reference nav: replace entity type with DTO type if available
+                if (nestedMap.TryGetValue(typeName, out var dtoFullName))
+                {
+                    newType = dtoFullName;
+                }
+            }
+
+            if (newType != m.TypeName)
+            {
+                updated.Add(new FacetMember(m.Name, newType, m.Kind, m.IsInitOnly, m.IsRequired, m.XmlDocumentation));
+            }
+            else
+            {
+                updated.Add(m);
+            }
+        }
+
+        return new FacetTargetModel(
+            model.Name,
+            model.Namespace,
+            model.Kind,
+            model.GenerateConstructor,
+            model.GenerateParameterlessConstructor,
+            model.GenerateExpressionProjection,
+            model.SourceTypeName,
+            model.ConfigurationTypeName,
+            updated.ToImmutable(),
+            model.HasExistingPrimaryConstructor,
+            model.TypeXmlDocumentation);
+    }
+
+    private static bool TryGetCollectionElementType(string typeName, out string outerPrefix, out string elementType, out string outerSuffix)
+    {
+        outerPrefix = string.Empty;
+        elementType = string.Empty;
+        outerSuffix = string.Empty;
+        var lt = typeName.IndexOf('<');
+        var gt = typeName.LastIndexOf('>');
+        if (lt > 0 && gt > lt)
+        {
+            outerPrefix = typeName.Substring(0, lt + 1);
+            elementType = typeName.Substring(lt + 1, gt - lt - 1).Trim().Replace("global::", string.Empty);
+            outerSuffix = typeName.Substring(gt);
+            return !string.IsNullOrWhiteSpace(elementType);
+        }
+        return false;
     }
 
 
@@ -385,7 +483,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         return fullyQualifiedTypeName;
     }
 
-    private static string Generate(FacetTargetModel model)
+    private static string Generate(FacetTargetModel model, ImmutableDictionary<string, string> nestedMap, ImmutableDictionary<string, FacetTargetModel> dtoByDtoFullName)
     {
         var sb = new StringBuilder();
         GenerateFileHeader(sb);
@@ -527,13 +625,58 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 sb.AppendLine("    ///     .ToList();");
                 sb.AppendLine("    /// </code>");
                 sb.AppendLine("    /// </example>");
+
                 sb.AppendLine($"    public static Expression<Func<{model.SourceTypeName}, {model.Name}>> Projection =>");
                 sb.AppendLine($"        source => new {model.Name}");
                 sb.AppendLine("        {");
-                // Emit member-wise initialization to enable nested mapping enhancements
-                foreach (var m in model.Members)
+                for (int i = 0; i < model.Members.Length; i++)
                 {
-                    var comma = m == model.Members.Last() ? "" : ",";
+                    var m = model.Members[i];
+                    var isLast = i == model.Members.Length - 1;
+                    var comma = isLast ? "" : ",";
+                    var memberType = m.TypeName.Replace("global::", string.Empty);
+
+                    // Try collection nested DTO mapping
+                    if (TryGetCollectionElementType(memberType, out var outerPrefix, out var elementType, out var outerSuffix)
+                        && dtoByDtoFullName.ContainsKey(elementType))
+                    {
+                        sb.AppendLine($"            {m.Name} = source.{m.Name}.Select({elementType}.Projection).ToList(){comma}");
+                        continue;
+                    }
+
+                    // Try reference nested DTO mapping
+                    if (dtoByDtoFullName.TryGetValue(memberType, out var nestedModel))
+                    {
+                        sb.AppendLine($"            {m.Name} = source.{m.Name} == null ? null : new {memberType}");
+                        sb.AppendLine("            {");
+                        for (int j = 0; j < nestedModel.Members.Length; j++)
+                        {
+                            var nm = nestedModel.Members[j];
+                            var nLast = j == nestedModel.Members.Length - 1;
+                            var nComma = nLast ? "" : ",";
+
+                            // Nested collection of DTOs
+                            var nType = nm.TypeName.Replace("global::", string.Empty);
+                            if (TryGetCollectionElementType(nType, out var nOuterPre, out var nElemType, out var nOuterSuf)
+                                && dtoByDtoFullName.ContainsKey(nElemType))
+                            {
+                                sb.AppendLine($"                {nm.Name} = source.{m.Name}.{nm.Name}.Select({nElemType}.Projection).ToList(){nComma}");
+                            }
+                            else if (dtoByDtoFullName.ContainsKey(nType))
+                            {
+                                // One level nested reference; null-protect
+                                sb.AppendLine($"                {nm.Name} = source.{m.Name}.{nm.Name} == null ? null : new {nType}(source.{m.Name}.{nm.Name}){nComma}");
+                            }
+                            else
+                            {
+                                sb.AppendLine($"                {nm.Name} = source.{m.Name}.{nm.Name}{nComma}");
+                            }
+                        }
+                        sb.AppendLine($"            }}{comma}");
+                        continue;
+                    }
+
+                    // Scalar/direct member
                     sb.AppendLine($"            {m.Name} = source.{m.Name}{comma}");
                 }
                 sb.AppendLine("        };");

@@ -50,6 +50,17 @@ public sealed class FacetUserBuilder<TShape>
     }
 
     /// <summary>
+    /// Apply an entity predicate to the underlying User query without changing the current shape.
+    /// </summary>
+    public FacetUserBuilder<TShape> Where(System.Linq.Expressions.Expression<Func<Facet.Extensions.EFCore.Tests.TestData.User, bool>> predicate)
+    {
+        if (predicate == null) throw new ArgumentNullException(nameof(predicate));
+        var newQuery = _query.Where(predicate);
+        var newBuilder = new FacetUserBuilder<TShape>(newQuery);
+        newBuilder._includes.AddRange(_includes);
+        return newBuilder;
+    }
+    /// <summary>
     /// Get a single User by ID.
     /// </summary>
     public async Task<TShape?> GetByIdAsync(object id, CancellationToken cancellationToken = default)
@@ -78,5 +89,29 @@ public sealed class FacetUserBuilder<TShape>
     {
         // Use SelectFacet to project to TShape and execute query
         return await _query.SelectFacet<TShape>().FirstOrDefaultAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Project the current query to a DTO using Facet Projection.
+    /// </summary>
+    public IQueryable<TDto> ProjectTo<TDto>() where TDto : class
+    {
+        return _query.SelectFacet<TDto>();
+    }
+
+    /// <summary>
+    /// Execute the query and return DTOs using Facet Projection.
+    /// </summary>
+    public async Task<List<TDto>> ToListDtoAsync<TDto>(CancellationToken cancellationToken = default) where TDto : class
+    {
+        return await _query.SelectFacet<TDto>().ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Execute the query and return the first DTO or default using Facet Projection.
+    /// </summary>
+    public async Task<TDto?> FirstOrDefaultDtoAsync<TDto>(CancellationToken cancellationToken = default) where TDto : class
+    {
+        return await _query.SelectFacet<TDto>().FirstOrDefaultAsync(cancellationToken);
     }
 }

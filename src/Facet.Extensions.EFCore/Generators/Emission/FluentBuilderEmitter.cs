@@ -93,8 +93,47 @@ internal static class FluentBuilderEmitter
             GenerateWithNavigationMethod(sb, navigation, entity, dtoInfo, entityChains);
         }
         
+        // Generate Where predicate composition on the entity type
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine($"    /// Apply an entity predicate to the underlying {entityName} query without changing the current shape.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine($"    public {builderName}<TShape> Where(System.Linq.Expressions.Expression<Func<{entity.Clr}, bool>> predicate)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        if (predicate == null) throw new ArgumentNullException(nameof(predicate));");
+        sb.AppendLine($"        var newQuery = _query.Where(predicate);");
+        sb.AppendLine($"        var newBuilder = new {builderName}<TShape>(newQuery);");
+        sb.AppendLine("        newBuilder._includes.AddRange(_includes);");
+        sb.AppendLine("        return newBuilder;");
+        sb.AppendLine("    }");
+
         // Generate query execution methods
         GenerateQueryMethods(sb, entity, dtoInfo);
+
+        // Generate DTO projection helpers
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Project the current query to a DTO using Facet Projection.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    public IQueryable<TDto> ProjectTo<TDto>() where TDto : class");
+        sb.AppendLine("    {");
+        sb.AppendLine("        return _query.SelectFacet<TDto>();");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Execute the query and return DTOs using Facet Projection.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    public async Task<List<TDto>> ToListDtoAsync<TDto>(CancellationToken cancellationToken = default) where TDto : class");
+        sb.AppendLine("    {");
+        sb.AppendLine("        return await _query.SelectFacet<TDto>().ToListAsync(cancellationToken);");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Execute the query and return the first DTO or default using Facet Projection.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    public async Task<TDto?> FirstOrDefaultDtoAsync<TDto>(CancellationToken cancellationToken = default) where TDto : class");
+        sb.AppendLine("    {");
+        sb.AppendLine("        return await _query.SelectFacet<TDto>().FirstOrDefaultAsync(cancellationToken);");
+        sb.AppendLine("    }");
         
         sb.AppendLine("}");
 
