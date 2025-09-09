@@ -18,6 +18,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public ImmutableArray<FacetMember> Members { get; }
     public bool HasExistingPrimaryConstructor { get; }
     public string? TypeXmlDocumentation { get; }
+    public ImmutableArray<string> ContainingTypes { get; }
 
     public FacetTargetModel(
         string name,
@@ -30,7 +31,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         string? configurationTypeName,
         ImmutableArray<FacetMember> members,
         bool hasExistingPrimaryConstructor = false,
-        string? typeXmlDocumentation = null)
+        string? typeXmlDocumentation = null,
+        ImmutableArray<string> containingTypes = default)
     {
         Name = name;
         Namespace = @namespace;
@@ -43,6 +45,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         Members = members;
         HasExistingPrimaryConstructor = hasExistingPrimaryConstructor;
         TypeXmlDocumentation = typeXmlDocumentation;
+        ContainingTypes = containingTypes.IsDefault ? ImmutableArray<string>.Empty : containingTypes;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -60,7 +63,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && ConfigurationTypeName == other.ConfigurationTypeName
             && HasExistingPrimaryConstructor == other.HasExistingPrimaryConstructor
             && TypeXmlDocumentation == other.TypeXmlDocumentation
-            && Members.SequenceEqual(other.Members);
+            && Members.SequenceEqual(other.Members)
+            && ContainingTypes.SequenceEqual(other.ContainingTypes);
     }
 
     public override bool Equals(object? obj) => obj is FacetTargetModel other && Equals(other);
@@ -83,6 +87,9 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
 
             foreach (var member in Members)
                 hash = hash * 31 + member.GetHashCode();
+
+            foreach (var containingType in ContainingTypes)
+                hash = hash * 31 + (containingType?.GetHashCode() ?? 0);
 
             return hash;
         }
