@@ -388,7 +388,7 @@ public sealed class ExportEfModelTask : Task
         return Render(ex);
     }
 
-    private object? CreateDbContext(Assembly assembly, Type contextType)
+    private object? CreateDbContext(Assembly assembly, Type contextType, string? providerHint)
     {
         var alc = AssemblyLoadContext.GetLoadContext(assembly);
         // 1) Try IDesignTimeDbContextFactory<TContext>
@@ -443,6 +443,19 @@ public sealed class ExportEfModelTask : Task
         catch { /* fall through */ }
 
         // 2) Try with InMemoryDatabase options using the same ALC as the context assembly (preferred over parameterless)
+        var preferInMemory = string.Equals(providerHint, "inmemory", StringComparison.OrdinalIgnoreCase);
+        var preferNpgsql = string.Equals(providerHint, "npgsql", StringComparison.OrdinalIgnoreCase) || string.Equals(providerHint, "postgres", StringComparison.OrdinalIgnoreCase);
+
+        bool triedInMemory = false;
+        bool triedNpgsql = false;
+
+        if (preferInMemory)
+        {
+            var r = TryCreateWithInMemory(alc, contextType, out var created);
+            triedInMemory = true;
+            if (r && created != null) return created;
+        }
+
         try
         {
             if (alc != null)
@@ -528,6 +541,12 @@ public sealed class ExportEfModelTask : Task
         }
 
         // 3) Try Npgsql provider if present (model building does not require a live connection)
+        if (preferNpgsql)
+        {
+            var rn = TryCreateWithNpgsql(alc, contextType, out var created);
+            triedNpgsql = true;
+            if (rn && created != null) return created;
+        }
         try
         {
             if (alc != null)
@@ -610,6 +629,93 @@ public sealed class ExportEfModelTask : Task
 
         // 4) Give up – return null rather than a providerless context to avoid opaque runtime failures
         return null;
+    }
+
+    private static bool TryCreateWithInMemory(AssemblyLoadContext? alc, Type contextType, out object? created)
+    {
+        created = null;
+        try
+        {
+            if (alc == null) return false;
+            var efAsm = alc.LoadFromAssemblyName(new AssemblyName("Microsoft.EntityFrameworkCore"));
+            var inMemAsm = alc.LoadFromAssemblyName(new AssemblyName("Microsoft.EntityFrameworkCore.InMemory"));
+            var extensionsType = inMemAsm?.GetType("Microsoft.EntityFrameworkCore.InMemoryDbContextOptionsExtensions");
+            var genericBuilderOpen = efAsm.GetType("Microsoft.EntityFrameworkCore.DbContextOptionsBuilder`1");
+            if (genericBuilderOpen != null)
+            {
+                var typedBuilderType = genericBuilderOpen.MakeGenericType(contextType);
+                var typedBuilder = Activator.CreateInstance(typedBuilderType);
+                if (typedBuilder != null && extensionsType != null)
+                {
+                    var useInMemoryGeneric = extensionsType.GetMethods()
+                        .FirstOrDefault(m => m.Name == "UseInMemoryDatabase" && m.IsGenericMethodDefinition && m.GetParameters().Length == 2);
+                    if (useInMemoryGeneric != null)
+                    {
+                        var closed = useInMemoryGeneric.MakeGenericMethod(contextType);
+                        closed.Invoke(null, new object[] { typedBuilder, "FacetDesignTime" });
+                        var optionsProp = typedBuilderType.GetProperty("Options");
+                        var options = optionsProp?.GetValue(typedBuilder);
+                        if (options != null)
+                        {
+                            created = Activator.CreateInstance(contextType, options);
+                            return created != null;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryCreateWithNpgsql(AssemblyLoadContext? alc, Type contextType, out object? created)
+    {
+        created = null;
+        try
+        {
+            if (alc == null) return false;
+            var efAsm = alc.LoadFromAssemblyName(new AssemblyName("Microsoft.EntityFrameworkCore"));
+            Assembly? npgsqlAsm = null;
+            try { npgsqlAsm = alc.LoadFromAssemblyName(new AssemblyName("Aspire.Npgsql.EntityFrameworkCore.PostgreSQL")); } catch { }
+            if (npgsqlAsm == null) { try { npgsqlAsm = alc.LoadFromAssemblyName(new AssemblyName("Npgsql.EntityFrameworkCore.PostgreSQL")); } catch { } }
+            if (npgsqlAsm == null) return false;
+
+            var builderOpen = efAsm.GetType("Microsoft.EntityFrameworkCore.DbContextOptionsBuilder`1");
+            if (builderOpen != null)
+            {
+                var typedBuilderType = builderOpen.MakeGenericType(contextType);
+                var typedBuilder = Activator.CreateInstance(typedBuilderType);
+                if (typedBuilder != null)
+                {
+                    var candidates = npgsqlAsm.GetTypes()
+                        .SelectMany(t => t.GetMethods(BindingFlags.Static | BindingFlags.Public))
+                        .Where(m => m.Name == "UseNpgsql")
+                        .ToList();
+                    var cs = "Host=localhost;Database=FacetDesignTime;Username=facet;Password=facet";
+                    var methodGen = candidates.FirstOrDefault(m => m.IsGenericMethodDefinition && m.GetParameters().Length >= 2);
+                    if (methodGen != null)
+                    {
+                        var closed = methodGen.MakeGenericMethod(contextType);
+                        closed.Invoke(null, new object[] { typedBuilder, cs });
+                        var optionsProp = typedBuilderType.GetProperty("Options");
+                        var options = optionsProp?.GetValue(typedBuilder);
+                        if (options != null)
+                        {
+                            created = Activator.CreateInstance(contextType, options);
+                            return created != null;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static MethodInfo? FindExtensionMethod(string name, params string[] firstParamTypeFullNames)
