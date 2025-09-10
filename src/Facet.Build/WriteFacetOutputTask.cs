@@ -73,11 +73,11 @@ namespace Facet.Build.Tasks
                 }
 
                 // Ensure the directory exists
-                var directory = Path.GetDirectoryName(finalFilePath);
-                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                var targetDirectory = Path.GetDirectoryName(finalFilePath);
+                if (!string.IsNullOrEmpty(targetDirectory) && !Directory.Exists(targetDirectory))
                 {
-                    Log.LogMessage(MessageImportance.Normal, $"Creating directory: {directory}");
-                    Directory.CreateDirectory(directory);
+                    Log.LogMessage(MessageImportance.Normal, $"Creating directory: {targetDirectory}");
+                    Directory.CreateDirectory(targetDirectory);
                 }
 
                 // Write the file with UTF-8 encoding
