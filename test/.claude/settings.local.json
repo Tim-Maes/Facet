@@ -6,7 +6,8 @@
       "Bash(chmod:*)",
       "Bash(dotnet build:*)",
       "Read(//c/Users/timma/source/repos/Facet/**)",
-      "Bash(dotnet test:*)"
+      "Bash(dotnet test:*)",
+      "Bash(dotnet sln remove:*)"
     ],
     "deny": [],
     "ask": []

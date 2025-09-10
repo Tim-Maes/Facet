@@ -104,6 +104,6 @@ public class BasicMappingTests
         dtos[0].FirstName.Should().Be("Alice");
         dtos[1].FirstName.Should().Be("Bob");
         dtos[2].FirstName.Should().Be("Charlie");
-        dtos[2].IsActive.Should().BeFalse(); // Charlie is inactive
+        dtos[2].IsActive.Should().BeFalse();
     }
 }

@@ -67,8 +67,8 @@ public class FacetKindsTests
 
         // Assert
         modifiedDto.Name.Should().Be("Modified Name");
-        modifiedDto.Price.Should().Be(100m); // Other properties unchanged
-        dto.Name.Should().Be("Original Name"); // Original unchanged
+        modifiedDto.Price.Should().Be(100m);
+        dto.Name.Should().Be("Original Name");
     }
 
     [Fact]

@@ -31,7 +31,6 @@ public class LinqProjectionTests : IDisposable
         userDtos.All(dto => !string.IsNullOrEmpty(dto.FirstName)).Should().BeTrue();
         userDtos.All(dto => !string.IsNullOrEmpty(dto.Email)).Should().BeTrue();
         
-        // Excluded properties should not be accessible
         var dtoType = userDtos.First().GetType();
         dtoType.GetProperty("Password").Should().BeNull();
         dtoType.GetProperty("CreatedAt").Should().BeNull();
@@ -47,7 +46,7 @@ public class LinqProjectionTests : IDisposable
             .ToList();
 
         // Assert
-        activeDtos.Should().HaveCount(2); // Only Alice and Bob are active
+        activeDtos.Should().HaveCount(2);
         activeDtos.All(dto => dto.IsActive).Should().BeTrue();
         activeDtos.Select(dto => dto.FirstName).Should().BeEquivalentTo(new[] { "Alice", "Bob" });
     }
@@ -97,7 +96,7 @@ public class LinqProjectionTests : IDisposable
             .ToList();
 
         // Assert
-        groupedResults.Should().HaveCount(2); // Active and inactive groups
+        groupedResults.Should().HaveCount(2);
         
         var activeGroup = groupedResults.First(g => g.IsActive);
         var inactiveGroup = groupedResults.First(g => !g.IsActive);
@@ -118,7 +117,7 @@ public class LinqProjectionTests : IDisposable
         var joinResults = _context.Set<User>()
             .Join(_context.Set<Product>(),
                 user => user.Id,
-                product => product.CategoryId, // Using CategoryId as a mock foreign key
+                product => product.CategoryId,
                 (user, product) => new
                 {
                     User = user.ToFacet<User, UserDto>(),
@@ -192,7 +191,6 @@ public class LinqProjectionTests : IDisposable
             TestDataFactory.CreateProduct("Product 3")
         };
         
-        // Set CategoryId to match User IDs for join tests
         for (int i = 0; i < products.Count && i < users.Count; i++)
         {
             products[i].CategoryId = users[i].Id;
@@ -208,7 +206,6 @@ public class LinqProjectionTests : IDisposable
     }
 }
 
-// Test DbContext for integration tests
 public class TestDbContext : DbContext
 {
     public TestDbContext(DbContextOptions<TestDbContext> options) : base(options) { }

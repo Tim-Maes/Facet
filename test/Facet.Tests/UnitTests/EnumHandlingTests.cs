@@ -96,7 +96,7 @@ public class EnumHandlingTests
 
         // Assert
         ((int)dto.Status).Should().Be((int)UserStatus.Pending);
-        ((int)dto.Status).Should().Be(2); // Assuming Pending is the 3rd enum value (0-based)
+        ((int)dto.Status).Should().Be(2);
     }
 
     [Fact]

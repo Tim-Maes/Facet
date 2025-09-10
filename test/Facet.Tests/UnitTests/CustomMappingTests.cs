@@ -24,7 +24,7 @@ public class CustomMappingTests
     public void ToFacet_ShouldCalculateAge_BasedOnCurrentDate()
     {
         // Arrange
-        var birthDate = DateTime.Today.AddYears(-25); // 25 years old
+        var birthDate = DateTime.Today.AddYears(-25);
         var user = TestDataFactory.CreateUser("Jane", "Smith", dateOfBirth: birthDate);
 
         // Act
