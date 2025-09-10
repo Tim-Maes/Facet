@@ -42,11 +42,19 @@ jobs:
       - name: Build Solution
         run: dotnet build --configuration Release --no-restore
 
-      - name: Run Tests
-        run: dotnet test --configuration Release --no-build --verbosity normal
+      - name: Run Unit Tests
+        run: dotnet test test/Facet.Tests --configuration Release --no-build --verbosity normal --logger trx --results-directory TestResults
 
       - name: Pack NuGet Packages
         run: dotnet pack --configuration Release --no-build --output ${{ env.NuGetDirectory }}
+
+      - name: Publish Test Results
+        uses: dorny/test-reporter@v1
+        if: success() || failure()
+        with:
+          name: Unit Test Results
+          path: TestResults/*.trx
+          reporter: dotnet-trx
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -55,27 +63,3 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           path: ${{ env.NuGetDirectory }}/*.nupkg
-
-  test-console:
-    runs-on: ubuntu-latest
-    needs: [build]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: |
-            8.0.x
-            9.0.x
-
-      - name: Restore dependencies
-        run: dotnet restore
-
-      - name: Build test console
-        run: dotnet build test/Facet.TestConsole --configuration Release
-
-      - name: Run test console
-        run: |
-          cd test/Facet.TestConsole
-          timeout 30s dotnet run --configuration Release --no-build || true
