@@ -25,6 +25,7 @@ public class GenerateDtosFeatureTests
         TestNewUpsertFeature();
         TestAllowMultipleFeature();
         TestImprovedRecordFormatting();
+        TestGeneratedTypesFullName();
 
         Console.WriteLine("\n=== All GenerateDtos tests completed! ===");
     }
@@ -267,6 +268,43 @@ public class GenerateDtosFeatureTests
         catch (Exception ex)
         {
             Console.WriteLine($"ERROR: Error testing record formatting: {ex.Message}");
+        }
+
+        Console.WriteLine();
+    }
+
+    private void TestGeneratedTypesFullName()
+    {
+        Console.WriteLine("6. Testing Generated Types with UseFullName = true:");
+        Console.WriteLine("===================================================");
+
+        try
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            var allTypes = assembly.GetTypes();
+
+            // Search for types that should have UseFullName = true
+            var testAnimalTypes = allTypes.Where(t => t.Name.Contains("TestAnimal")).ToArray();
+
+            Console.WriteLine($"Found {testAnimalTypes.Length} TestAnimal types:");
+            foreach (var t in testAnimalTypes) Console.WriteLine($"  - {t.FullName}");
+
+            // Verify if name differs
+            var userFullNames = testAnimalTypes.Select(t => t.FullName).ToArray();
+
+            if (userFullNames.Distinct().Count() == userFullNames.Length)
+            {
+                Console.WriteLine("All generated types have unique full names (no conflicts).");
+            }
+            else
+            {
+                Console.WriteLine("Conflict detected: Some generated types share the same full name!");
+            }
+
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"ERROR: {ex.Message}");
         }
 
         Console.WriteLine();

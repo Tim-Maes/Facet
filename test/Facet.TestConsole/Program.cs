@@ -434,6 +434,19 @@ public partial class OuterContainer
     }
 }
 
+// Test models for FullName output feature
+public partial class CreateUser
+{
+    [Facet(typeof(User), "Password", "CreatedAt", UseFullName = true)]
+    public partial class Request;
+}
+public partial class UpdateUser
+{
+    [Facet(typeof(User), UseFullName = true)]
+    public partial class Request;
+}
+
+
 public class Program
 {
     public static async Task Main(string[] args)

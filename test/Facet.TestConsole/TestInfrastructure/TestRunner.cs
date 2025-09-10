@@ -89,7 +89,8 @@ public class TestRunner
                 new LinqProjectionTests(),
                 new ShorthandOverloadTests(),
                 new InMemoryTests.ParameterlessConstructorTests(),
-                new NestedPartialsTests()
+                new NestedPartialsTests(),
+                new UseFullNameFeatureTests()
             };
 
             var allResults = new List<(string name, bool passed)>();
