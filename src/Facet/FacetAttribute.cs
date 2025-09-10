@@ -75,6 +75,20 @@ public sealed class FacetAttribute : Attribute
     public bool PreserveRequiredProperties { get; set; } = false;
 
     /// <summary>
+    /// Optional path where the generated file should be written to disk.
+    /// When specified, the generated code will be written to this path in addition to being included in compilation.
+    /// The path can be relative (to the project directory) or absolute.
+    /// If the directory doesn't exist, it will be created.
+    /// </summary>
+    /// <remarks>
+    /// This property allows you to generate files to specific folders or projects, similar to T4 template behavior.
+    /// The generated file will still be included in the compilation context.
+    /// Use forward slashes (/) for cross-platform compatibility.
+    /// Example: "Generated/Dtos/UserDto.cs" or "/path/to/shared/project/Dtos/"
+    /// </remarks>
+    public string? OutputPath { get; set; }
+
+    /// <summary>
     /// Creates a new FacetAttribute that targets a given source type and excludes specified members.
     /// </summary>
     /// <param name="sourceType">The type to generate from.</param>

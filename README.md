@@ -47,6 +47,7 @@ You can think of it like **carving out a specific facet** of a gem:
 - :white_check_mark: LINQ projection expressions
 - :white_check_mark: Full mapping support with custom mapping configurations
 - :white_check_mark: Preserves member and type XML documentation
+- :white_check_mark: **NEW**: Output generated files to specified folders/projects
 
 ## :earth_americas: The Facet Ecosystem
 
@@ -114,6 +115,21 @@ public partial struct PointDto;
 // Generate as record struct (immutable value type)
 [Facet(typeof(Coordinates))]
 public partial record struct CoordinatesDto; // Preserves required/init-only
+```
+
+### Generate Files to Specific Locations
+```csharp
+// Generate to a specific directory
+[Facet(typeof(User), "Password", OutputPath = "Generated/Dtos")]
+public partial class UserDto; // → Generated/Dtos/UserDto.g.cs
+
+// Generate to a specific file path
+[Facet(typeof(User), "Password", OutputPath = "Shared/Models/SafeUser.cs")]
+public partial class SafeUserDto; // → Shared/Models/SafeUser.cs
+
+// Generate to a different project (useful for shared DTOs)
+[Facet(typeof(User), "Password", OutputPath = "../Shared.Models/Dtos/")]
+public partial class SharedUserDto; // → ../Shared.Models/Dtos/SharedUserDto.g.cs
 ```
 
 ### Custom Sync Mapping

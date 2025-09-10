@@ -1,0 +1,34 @@
+<Project>
+
+  <!-- 
+    MSBuild targets for Facet output path functionality.
+    This file is automatically imported when the Facet.Build package is referenced.
+  -->
+
+  <PropertyGroup>
+    <FacetBuildTasksAssembly Condition="'$(FacetBuildTasksAssembly)' == ''">$(MSBuildThisFileDirectory)..\lib\netstandard2.0\Facet.Build.dll</FacetBuildTasksAssembly>
+  </PropertyGroup>
+
+  <!-- Define the custom task -->
+  <UsingTask TaskName="Facet.Build.Tasks.WriteFacetOutputTask" AssemblyFile="$(FacetBuildTasksAssembly)" />
+
+  <!-- 
+    This target processes compiler output to find facet output path diagnostics
+    and writes the generated files to the specified locations.
+  -->
+  <Target Name="WriteFacetOutputFiles" AfterTargets="CoreCompile" Condition="'@(Analyzer)' != ''">
+    
+    <!-- This is a placeholder target. In a full implementation, this would:
+         1. Parse the compiler output for FACET_OUTPUT_PATH diagnostics
+         2. Extract the generated source code from the compilation
+         3. Call WriteFacetOutputTask for each facet with an output path
+         
+         For now, this serves as the integration point where external tooling
+         can hook in to process facet output paths.
+    -->
+    
+    <Message Text="Facet: Checking for facet output path requirements..." Importance="low" />
+    
+  </Target>
+
+</Project>

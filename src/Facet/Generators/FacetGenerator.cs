@@ -1,8 +1,10 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -28,6 +30,24 @@ public sealed class FacetGenerator : IIncrementalGenerator
             spc.CancellationToken.ThrowIfCancellationRequested();
             var code = Generate(model!);
             spc.AddSource($"{model!.Name}.g.cs", SourceText.From(code, Encoding.UTF8));
+            
+            // If OutputPath is specified, emit a diagnostic with the path information
+            // This can be used by external tooling to write files to the specified location
+            if (!string.IsNullOrWhiteSpace(model.OutputPath))
+            {
+                var diagnostic = Microsoft.CodeAnalysis.Diagnostic.Create(
+                    new DiagnosticDescriptor(
+                        "FACET_OUTPUT_PATH", 
+                        "Facet output path specified",
+                        "Generated code for '{0}' should be written to: {1}",
+                        "Facet",
+                        DiagnosticSeverity.Info,
+                        isEnabledByDefault: true),
+                    Location.None,
+                    model.Name,
+                    model.OutputPath);
+                spc.ReportDiagnostic(diagnostic);
+            }
         });
     }
 
@@ -55,6 +75,11 @@ public sealed class FacetGenerator : IIncrementalGenerator
 
         var configurationTypeName = attribute.NamedArguments
             .FirstOrDefault(kvp => kvp.Key == "Configuration")
+            .Value.Value?
+            .ToString();
+
+        var outputPath = attribute.NamedArguments
+            .FirstOrDefault(kvp => kvp.Key == "OutputPath")
             .Value.Value?
             .ToString();
 
@@ -145,7 +170,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
             members.ToImmutableArray(),
             hasExistingPrimaryConstructor,
             typeXmlDocumentation,
-            containingTypes);
+            containingTypes,
+            outputPath);
     }
 
     /// <summary>

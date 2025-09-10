@@ -19,6 +19,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public bool HasExistingPrimaryConstructor { get; }
     public string? TypeXmlDocumentation { get; }
     public ImmutableArray<string> ContainingTypes { get; }
+    public string? OutputPath { get; }
 
     public FacetTargetModel(
         string name,
@@ -32,7 +33,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         ImmutableArray<FacetMember> members,
         bool hasExistingPrimaryConstructor = false,
         string? typeXmlDocumentation = null,
-        ImmutableArray<string> containingTypes = default)
+        ImmutableArray<string> containingTypes = default,
+        string? outputPath = null)
     {
         Name = name;
         Namespace = @namespace;
@@ -46,6 +48,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         HasExistingPrimaryConstructor = hasExistingPrimaryConstructor;
         TypeXmlDocumentation = typeXmlDocumentation;
         ContainingTypes = containingTypes.IsDefault ? ImmutableArray<string>.Empty : containingTypes;
+        OutputPath = outputPath;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -63,6 +66,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && ConfigurationTypeName == other.ConfigurationTypeName
             && HasExistingPrimaryConstructor == other.HasExistingPrimaryConstructor
             && TypeXmlDocumentation == other.TypeXmlDocumentation
+            && OutputPath == other.OutputPath
             && Members.SequenceEqual(other.Members)
             && ContainingTypes.SequenceEqual(other.ContainingTypes);
     }
@@ -84,6 +88,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + (ConfigurationTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + HasExistingPrimaryConstructor.GetHashCode();
             hash = hash * 31 + (TypeXmlDocumentation?.GetHashCode() ?? 0);
+            hash = hash * 31 + (OutputPath?.GetHashCode() ?? 0);
 
             foreach (var member in Members)
                 hash = hash * 31 + member.GetHashCode();
