@@ -79,6 +79,12 @@ public class GenerateDtosAttribute : Attribute
     /// Whether to generate projection expressions for the DTOs (default: true).
     /// </summary>
     public bool GenerateProjections { get; set; } = true;
+
+    /// <summary>
+    /// If true, generated files will use the full type name (namespace + containing types)
+    /// to avoid collisions. Default is false (shorter file names).
+    /// </summary>
+    public bool UseFullName { get; set; } = false;
 }
 
 /// <summary>
@@ -133,4 +139,10 @@ public class GenerateAuditableDtosAttribute : Attribute
     /// Whether to generate projection expressions for the DTOs (default: true).
     /// </summary>
     public bool GenerateProjections { get; set; } = true;
+
+    /// <summary>
+    /// If true, generated files will use the full type name (namespace + containing types)
+    /// to avoid collisions. Default is false (shorter file names).
+    /// </summary>
+    public bool UseFullName { get; set; } = false;
 }

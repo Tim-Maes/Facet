@@ -27,7 +27,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
         {
             spc.CancellationToken.ThrowIfCancellationRequested();
             var code = Generate(model!);
-            spc.AddSource($"{model!.Name}.g.cs", SourceText.From(code, Encoding.UTF8));
+
+            spc.AddSource($"{model!.FullName}.g.cs", SourceText.From(code, Encoding.UTF8));
         });
     }
 
@@ -123,6 +124,21 @@ public sealed class FacetGenerator : IIncrementalGenerator
             }
         }
 
+        var useFullName = GetNamedArg(attribute.NamedArguments, "UseFullName", false);
+
+        string fullName = string.Empty;
+
+        if (useFullName)
+        {
+            fullName = targetSymbol
+                .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                .GetSafeName();
+        }
+        else
+        {
+            fullName = targetSymbol.Name;
+        }
+
         var ns = targetSymbol.ContainingNamespace.IsGlobalNamespace
             ? null
             : targetSymbol.ContainingNamespace.ToDisplayString();
@@ -136,6 +152,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         return new FacetTargetModel(
             targetSymbol.Name,
             ns,
+            fullName,
             kind,
             generateConstructor,
             generateParameterlessConstructor,
@@ -145,7 +162,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
             members.ToImmutableArray(),
             hasExistingPrimaryConstructor,
             typeXmlDocumentation,
-            containingTypes);
+            containingTypes,
+            useFullName);
     }
 
     /// <summary>
@@ -155,13 +173,13 @@ public sealed class FacetGenerator : IIncrementalGenerator
     {
         var containingTypes = new List<string>();
         var current = targetSymbol.ContainingType;
-        
+
         while (current != null)
         {
             containingTypes.Insert(0, current.Name); // Insert at beginning to maintain order
             current = current.ContainingType;
         }
-        
+
         return containingTypes.ToImmutableArray();
     }
 
@@ -308,12 +326,12 @@ public sealed class FacetGenerator : IIncrementalGenerator
             return string.Empty;
 
         var lines = new List<string>();
-        
+
         try
         {
             var doc = System.Xml.Linq.XDocument.Parse(xmlDoc);
             var root = doc.Root;
-            
+
             if (root == null)
                 return string.Empty;
 
@@ -407,10 +425,10 @@ public sealed class FacetGenerator : IIncrementalGenerator
     {
         var sb = new StringBuilder();
         GenerateFileHeader(sb);
-        
+
         // Collect all namespaces from referenced types
         var namespacesToImport = CollectNamespaces(model);
-        
+
         // Generate using statements for all required namespaces
         foreach (var ns in namespacesToImport.OrderBy(x => x))
         {
@@ -473,7 +491,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         sb.AppendLine($"{containingTypeIndent}{{");
 
         var memberIndent = containingTypeIndent + "    ";
-        
+
         // Generate properties if not positional OR if there's an existing primary constructor
         if (!isPositional || model.HasExistingPrimaryConstructor)
         {
@@ -586,7 +604,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
     private static void GenerateConstructor(StringBuilder sb, FacetTargetModel model, bool isPositional, bool hasInitOnlyProperties, bool hasCustomMapping)
     {
         var indent = GetIndentation(model);
-        
+
         // If the target has an existing primary constructor, skip constructor generation
         // and provide only a factory method
         if (model.HasExistingPrimaryConstructor && model.Kind is FacetKind.Record or FacetKind.RecordStruct)
@@ -760,7 +778,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         {
             var defaultValues = model.Members.Select(m => GetDefaultValue(m.TypeName)).ToArray();
             var defaultArgs = string.Join(", ", defaultValues);
-            
+
             sb.AppendLine($"    public {model.Name}() : this({defaultArgs})");
             sb.AppendLine("    {");
             sb.AppendLine("    }");
@@ -883,6 +901,6 @@ public sealed class FacetGenerator : IIncrementalGenerator
             return typeName.Substring(0, lastDotIndex);
         }
 
-        return null; 
+        return null;
     }
 }

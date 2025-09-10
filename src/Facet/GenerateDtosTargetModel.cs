@@ -18,6 +18,7 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
     public bool GenerateProjections { get; }
     public ImmutableArray<string> ExcludeProperties { get; }
     public ImmutableArray<FacetMember> Members { get; }
+    public bool UseFullName { get; }
 
     public GenerateDtosTargetModel(
         string sourceTypeName,
@@ -31,7 +32,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         bool generateConstructors,
         bool generateProjections,
         ImmutableArray<string> excludeProperties,
-        ImmutableArray<FacetMember> members)
+        ImmutableArray<FacetMember> members,
+        bool useFullName)
     {
         SourceTypeName = sourceTypeName;
         SourceNamespace = sourceNamespace;
@@ -45,6 +47,7 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         GenerateProjections = generateProjections;
         ExcludeProperties = excludeProperties;
         Members = members;
+        UseFullName = useFullName;
     }
 
     public bool Equals(GenerateDtosTargetModel? other)
@@ -63,7 +66,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             && GenerateConstructors == other.GenerateConstructors
             && GenerateProjections == other.GenerateProjections
             && ExcludeProperties.SequenceEqual(other.ExcludeProperties)
-            && Members.SequenceEqual(other.Members);
+            && Members.SequenceEqual(other.Members)
+            && UseFullName == other.UseFullName;
     }
 
     public override bool Equals(object? obj) => obj is GenerateDtosTargetModel other && Equals(other);
@@ -83,6 +87,7 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             hash = hash * 31 + IncludeFields.GetHashCode();
             hash = hash * 31 + GenerateConstructors.GetHashCode();
             hash = hash * 31 + GenerateProjections.GetHashCode();
+            hash = hash * 31 + UseFullName.GetHashCode();
 
             foreach (var prop in ExcludeProperties)
                 hash = hash * 31 + prop.GetHashCode();

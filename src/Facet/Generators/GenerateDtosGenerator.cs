@@ -111,6 +111,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             var includeFields = GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
             var generateConstructors = GetNamedArg(attribute.NamedArguments, "GenerateConstructors", true);
             var generateProjections = GetNamedArg(attribute.NamedArguments, "GenerateProjections", true);
+            var useFullName = GetNamedArg(attribute.NamedArguments, "UseFullName", false);
 
             // Fix the ExcludeProperties handling
             var userExcludeProperties = new List<string>();
@@ -128,7 +129,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
             // Build exclusion list
             var excludeProperties = new HashSet<string>(userExcludeProperties, System.StringComparer.OrdinalIgnoreCase);
-            
+
             if (isAuditable)
             {
                 foreach (var field in DefaultAuditFields)
@@ -188,7 +189,8 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 generateConstructors,
                 generateProjections,
                 excludeProperties.ToImmutableArray(),
-                members.ToImmutableArray());
+                members.ToImmutableArray(),
+                useFullName);
         }
         catch (Exception)
         {
@@ -215,9 +217,10 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
             var createMembers = model.Members.Where(m => !createExclusions.Contains(m.Name)).ToImmutableArray();
             var createDtoName = BuildDtoName(sourceTypeName, "Create", "Request", model.Prefix, model.Suffix);
-            
+
             var createCode = GenerateDtoCode(model, createDtoName, createMembers, "Create");
-            context.AddSource($"{createDtoName}.g.cs", SourceText.From(createCode, Encoding.UTF8));
+
+            context.AddSource($"{GenerateFileDtoFullName(model, createDtoName)}", SourceText.From(createCode, Encoding.UTF8));
         }
 
         // Generate Update DTO
@@ -228,9 +231,9 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
             var updateMembers = model.Members.Where(m => !updateExclusions.Contains(m.Name)).ToImmutableArray();
             var updateDtoName = BuildDtoName(sourceTypeName, "Update", "Request", model.Prefix, model.Suffix);
-            
+
             var updateCode = GenerateDtoCode(model, updateDtoName, updateMembers, "Update");
-            context.AddSource($"{updateDtoName}.g.cs", SourceText.From(updateCode, Encoding.UTF8));
+            context.AddSource($"{GenerateFileDtoFullName(model, updateDtoName)}", SourceText.From(updateCode, Encoding.UTF8));
         }
 
         // Generate Upsert DTO
@@ -241,9 +244,9 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
             var upsertMembers = model.Members.Where(m => !upsertExclusions.Contains(m.Name)).ToImmutableArray();
             var upsertDtoName = BuildDtoName(sourceTypeName, "Upsert", "Request", model.Prefix, model.Suffix);
-            
+
             var upsertCode = GenerateDtoCode(model, upsertDtoName, upsertMembers, "Upsert");
-            context.AddSource($"{upsertDtoName}.g.cs", SourceText.From(upsertCode, Encoding.UTF8));
+            context.AddSource($"{GenerateFileDtoFullName(model, upsertDtoName)}", SourceText.From(upsertCode, Encoding.UTF8));
         }
 
         // Generate Response DTO
@@ -254,46 +257,62 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
             var responseMembers = model.Members.Where(m => !responseExclusions.Contains(m.Name)).ToImmutableArray();
             var responseDtoName = BuildDtoName(sourceTypeName, "", "Response", model.Prefix, model.Suffix);
-            
+
             var responseCode = GenerateDtoCode(model, responseDtoName, responseMembers, "Response");
-            context.AddSource($"{responseDtoName}.g.cs", SourceText.From(responseCode, Encoding.UTF8));
+            context.AddSource($"{GenerateFileDtoFullName(model, responseDtoName)}", SourceText.From(responseCode, Encoding.UTF8));
         }
 
         // Generate Query DTO
         if ((model.Types & DtoTypes.Query) != 0)
         {
             var queryMembers = model.Members.Select(m => new FacetMember(
-                m.Name, 
-                MakeNullable(m.TypeName), 
-                m.Kind, 
-                m.IsInitOnly, 
+                m.Name,
+                MakeNullable(m.TypeName),
+                m.Kind,
+                m.IsInitOnly,
                 false)) // Make all properties optional in Query DTOs
                 .ToImmutableArray();
-            
+
             var queryDtoName = BuildDtoName(sourceTypeName, "", "Query", model.Prefix, model.Suffix);
-            
+
             var queryCode = GenerateDtoCode(model, queryDtoName, queryMembers, "Query");
-            context.AddSource($"{queryDtoName}.g.cs", SourceText.From(queryCode, Encoding.UTF8));
+            context.AddSource($"{GenerateFileDtoFullName(model, queryDtoName)}", SourceText.From(queryCode, Encoding.UTF8));
         }
     }
 
     private static string BuildDtoName(string sourceTypeName, string prefix, string suffix, string? customPrefix, string? customSuffix)
     {
         var name = sourceTypeName;
-        
+
         if (!string.IsNullOrWhiteSpace(customPrefix))
             name = customPrefix + name;
-        
+
         if (!string.IsNullOrWhiteSpace(prefix))
             name = prefix + name;
-            
+
         if (!string.IsNullOrWhiteSpace(suffix))
             name = name + suffix;
-            
+
         if (!string.IsNullOrWhiteSpace(customSuffix))
             name = name + customSuffix;
-            
+
         return name;
+    }
+
+    private static string GenerateFileDtoFullName(GenerateDtosTargetModel model, string dtoName)
+    {
+        if (!model.UseFullName)
+        {
+            return $"{dtoName}.g.cs";
+        }
+
+        var ns = string.IsNullOrEmpty(model.SourceNamespace) ? "Global" : model.SourceNamespace;
+
+        var baseName = $"{ns}.{dtoName}";
+
+        var safeName = baseName.GetSafeName();
+
+        return $"{safeName}.g.cs";
     }
 
     private static string GetSimpleTypeName(string fullyQualifiedName)
@@ -307,11 +326,11 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         // Don't make already nullable types more nullable
         if (typeName.EndsWith("?") || typeName.StartsWith("System.Nullable<"))
             return typeName;
-            
+
         // Handle value types
         if (IsValueType(typeName))
             return typeName + "?";
-            
+
         // Reference types are already nullable in modern C#
         return typeName + "?";
     }
@@ -366,7 +385,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         };
 
         var sourceTypeName = GetSimpleTypeName(model.SourceTypeName);
-        
+
         sb.AppendLine($"/// <summary>");
         sb.AppendLine($"/// Generated {purpose} DTO for {sourceTypeName}.");
         sb.AppendLine($"/// </summary>");
@@ -377,26 +396,26 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         if (isPositional)
         {
             sb.AppendLine($"public {keyword} {dtoName}(");
-            
+
             for (int i = 0; i < members.Length; i++)
             {
                 var member = members[i];
                 var param = $"    {member.TypeName} {member.Name}";
-                
+
                 if (member.IsRequired && model.OutputType == OutputType.RecordStruct)
                 {
                     param = $"    required {member.TypeName} {member.Name}";
                 }
-                
+
                 // Add comma for all but the last parameter
                 if (i < members.Length - 1)
                 {
                     param += ",";
                 }
-                
+
                 sb.AppendLine(param);
             }
-            
+
             sb.AppendLine(");");
         }
         else
@@ -474,7 +493,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             {
                 sb.AppendLine();
                 sb.AppendLine($"    public static Expression<Func<{model.SourceTypeName}, {dtoName}>> Projection =>");
-                
+
                 if (hasInitOnlyProperties)
                 {
                     sb.AppendLine($"        source => new {dtoName}");

@@ -75,6 +75,12 @@ public sealed class FacetAttribute : Attribute
     public bool PreserveRequiredProperties { get; set; } = false;
 
     /// <summary>
+    /// If true, generated files will use the full type name (namespace + containing types)
+    /// to avoid collisions. Default is false (shorter file names).
+    /// </summary>
+    public bool UseFullName { get; set; } = false;
+
+    /// <summary>
     /// Creates a new FacetAttribute that targets a given source type and excludes specified members.
     /// </summary>
     /// <param name="sourceType">The type to generate from.</param>
