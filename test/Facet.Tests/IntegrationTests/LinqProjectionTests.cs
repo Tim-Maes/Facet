@@ -181,7 +181,21 @@ public class LinqProjectionTests : IDisposable
 
     private void SeedTestData()
     {
-        var users = TestDataFactory.CreateUsers();
+        // Create users with unique IDs for this test instance
+        var baseId = Random.Shared.Next(1000, 9999);
+        var users = new List<User>
+        {
+            TestDataFactory.CreateUser("Alice", "Johnson", "alice.johnson@example.com", new DateTime(1985, 3, 22), true),
+            TestDataFactory.CreateUser("Bob", "Smith", "bob.smith@example.com", new DateTime(1992, 8, 10), true),
+            TestDataFactory.CreateUser("Charlie", "Brown", "charlie.brown@example.com", new DateTime(1988, 12, 5), false)
+        };
+        
+        // Ensure unique IDs to avoid EF tracking conflicts
+        for (int i = 0; i < users.Count; i++)
+        {
+            users[i].Id = baseId + i;
+        }
+        
         _context.Set<User>().AddRange(users);
 
         var products = new List<Product>
@@ -191,8 +205,10 @@ public class LinqProjectionTests : IDisposable
             TestDataFactory.CreateProduct("Product 3")
         };
         
+        // Ensure unique product IDs and link to users
         for (int i = 0; i < products.Count && i < users.Count; i++)
         {
+            products[i].Id = baseId + 100 + i;
             products[i].CategoryId = users[i].Id;
         }
         
