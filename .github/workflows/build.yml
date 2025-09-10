@@ -43,7 +43,7 @@ jobs:
         run: dotnet build --configuration Release --no-restore
 
       - name: Run Unit Tests
-        run: dotnet test test/Facet.Tests --configuration Release --no-build --verbosity normal --logger trx --results-directory TestResults
+        run: dotnet test --configuration Release --no-build --verbosity normal --logger trx --results-directory TestResults
 
       - name: Pack NuGet Packages
         run: dotnet pack --configuration Release --no-build --output ${{ env.NuGetDirectory }}
