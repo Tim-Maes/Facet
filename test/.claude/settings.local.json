@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/timma/source/repos/Facet/src/Facet/**)",
+      "Bash(dotnet sln add:*)",
+      "Bash(chmod:*)",
+      "Bash(dotnet build:*)",
+      "Read(//c/Users/timma/source/repos/Facet/**)",
+      "Bash(dotnet test:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
