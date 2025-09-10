@@ -19,8 +19,4 @@ echo "Running unit tests..."
 dotnet test test/Facet.Tests --configuration Release --no-build --verbosity normal
 
 echo
-echo "Running console tests (for comparison)..."
-dotnet run --project test/Facet.TestConsole --configuration Release --no-build
-
-echo
 echo "All tests completed!"

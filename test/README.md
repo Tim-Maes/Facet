@@ -2,10 +2,10 @@
 
 This directory contains comprehensive tests for the Facet source generator library using modern testing best practices.
 
-## Test Projects
+## Test Project
 
-### Facet.Tests (Recommended - Unit Tests)
-Modern xUnit-based test suite with proper assertions and isolated test scenarios.
+### Facet.Tests - Modern Unit Test Suite
+xUnit-based test suite with proper assertions and isolated test scenarios.
 
 **Features:**
 - ✅ xUnit testing framework
@@ -26,9 +26,6 @@ Modern xUnit-based test suite with proper assertions and isolated test scenarios
   - EnumHandlingTests.cs - Enum property handling
 - **IntegrationTests/**: EF Core and LINQ integration
   - LinqProjectionTests.cs - LINQ query projection testing
-
-### Facet.TestConsole (Legacy - Console Tests)
-Original console-based test runner for comparison and migration reference.
 
 ## Running Tests
 
@@ -51,10 +48,6 @@ run-tests.bat
 dotnet test test/Facet.Tests --verbosity normal
 ```
 
-**Run console tests:**
-```bash
-dotnet run --project test/Facet.TestConsole
-```
 
 **Build and run all:**
 ```bash
@@ -140,45 +133,33 @@ var users = TestDataFactory.CreateUsers(); // Creates 3 sample users
 - ✅ Age calculation edge cases (birthdays)
 - ✅ Record equality and with expressions
 
-## Migration from Console Tests
+## Test Best Practices
 
-If you're migrating from the console test approach:
+The test suite follows modern .NET testing conventions:
 
-1. **Replace Console.WriteLine with Assertions:**
+1. **Descriptive Test Names:**
    ```csharp
-   // Old
-   Console.WriteLine($"Name: {dto.Name}");
-   
-   // New  
-   dto.Name.Should().Be("Expected Name");
-   ```
-
-2. **Replace Try-Catch with Proper Test Structure:**
-   ```csharp
-   // Old
-   try { 
-       TestMethod(); 
-       Console.WriteLine("PASS");
-   } catch { 
-       Console.WriteLine("FAIL"); 
-   }
-   
-   // New
    [Fact]
-   public void TestMethod_Should_Work()
-   {
-       // Arrange, Act, Assert
-       result.Should().NotThrow();
-   }
+   public void ToFacet_ShouldMapBasicProperties_WhenMappingUserToDto()
    ```
 
-3. **Use Test Data Factory:**
+2. **Arrange-Act-Assert Pattern:**
    ```csharp
-   // Old
-   var user = new User { Name = "Test", Email = "test@test.com" };
+   // Arrange
+   var user = TestDataFactory.CreateUser("John", "Doe");
    
-   // New
-   var user = TestDataFactory.CreateUser("Test", "User", "test@test.com");
+   // Act
+   var dto = user.ToFacet<User, UserDto>();
+   
+   // Assert
+   dto.FirstName.Should().Be("John");
+   ```
+
+3. **FluentAssertions for Readability:**
+   ```csharp
+   dto.FirstName.Should().Be("John");
+   dto.IsActive.Should().BeTrue();
+   dtos.Should().HaveCount(3);
    ```
 
 ## Continuous Integration
@@ -210,4 +191,4 @@ The test suite is designed to work with standard CI/CD pipelines:
 7. **Maintainability**: Clear test structure makes maintenance easier
 8. **Coverage Reports**: Integration with code coverage tools
 
-This modern testing approach replaces manual console validation with automated, reliable, and maintainable test verification.
+This modern testing approach provides automated, reliable, and maintainable test verification with excellent developer tooling integration.
