@@ -93,12 +93,6 @@ public class GenerateDtosAttribute : Attribute
     /// Example: new[] { typeof(ICreateSchedulePayload) }
     /// </summary>
     public Type[] InterfaceContracts { get; set; } = Array.Empty<Type>();
-    
-    /// <summary>
-    /// TypeScript attributes to apply to generated shape interfaces.
-    /// Example: new[] { "[TsInterface]", "[TsExport]" }
-    /// </summary>
-    public string[] TypeScriptAttributes { get; set; } = Array.Empty<string>();
 }
 
 /// <summary>
@@ -167,10 +161,4 @@ public class GenerateAuditableDtosAttribute : Attribute
     /// Example: new[] { typeof(ICreateSchedulePayload) }
     /// </summary>
     public Type[] InterfaceContracts { get; set; } = Array.Empty<Type>();
-    
-    /// <summary>
-    /// TypeScript attributes to apply to generated shape interfaces.
-    /// Example: new[] { "[TsInterface]", "[TsExport]" }
-    /// </summary>
-    public string[] TypeScriptAttributes { get; set; } = Array.Empty<string>();
 }

@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Text.Json;
@@ -9,6 +11,7 @@ using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Facet.Extensions.EFCore.Tasks;
 
@@ -17,6 +20,8 @@ namespace Facet.Extensions.EFCore.Tasks;
 /// </summary>
 public sealed class ExportEfModelTask : Task
 {
+    // Cache for compiled constructor delegates
+    private static readonly ConcurrentDictionary<Type, Func<object, object>> ConstructorCache = new();
     // Intentionally avoid global Resolving hooks; we attach a scoped handler during Execute()
     static ExportEfModelTask() { }
     /// <summary>
@@ -130,12 +135,25 @@ public sealed class ExportEfModelTask : Task
 
                 var contexts = new List<object>();
                 var failures = new List<string>();
-            foreach (var contextType in resolvedList)
-            {
+                Log.LogMessage(MessageImportance.High, $"Facet.Export: About to iterate through {resolvedList.Count} contexts");
+                foreach (var contextType in resolvedList)
+                {
                 try
                 {
                     Log.LogMessage(MessageImportance.High, $"Facet.Export: Creating DbContext for '{contextType.FullName}'...");
-                    var ctx = CreateDbContext(assembly, contextType, Provider);
+                    object? ctx = null;
+                    try
+                    {
+                        ctx = CreateDbContext(assembly, contextType, Provider);
+                    }
+                    catch (Exception createEx)
+                    {
+                        var createMsg = $"Exception creating DbContext {contextType.FullName}: {createEx.Message}";
+                        Log.LogError($"Facet.Export: {createMsg}");
+                        failures.Add(createMsg);
+                        continue;
+                    }
+                    
                     if (ctx == null)
                     {
                         var msg = $"Could not create instance of DbContext: {contextType.FullName}";
@@ -146,17 +164,19 @@ public sealed class ExportEfModelTask : Task
 
                     try
                     {
-                        var modelProp = ctx.GetType().GetProperty("Model", BindingFlags.Public | BindingFlags.Instance);
-                        if (modelProp == null)
+                        Log.LogMessage(MessageImportance.High, $"Facet.Export: Accessing Model for '{contextType.FullName}'...");
+                        
+                        // Direct cast to DbContext and access Model property
+                        var dbContext = ctx as DbContext;
+                        if (dbContext == null)
                         {
-                            var msg = $"Context {contextType.FullName} does not expose a Model property.";
+                            var msg = $"Context {contextType.FullName} is not a DbContext.";
                             Log.LogError($"Facet.Export: {msg}");
                             failures.Add(msg);
                             continue;
                         }
 
-                        Log.LogMessage(MessageImportance.High, $"Facet.Export: Accessing Model for '{contextType.FullName}'...");
-                        var model = modelProp.GetValue(ctx);
+                        var model = dbContext.Model as IReadOnlyModel;
                         if (model == null)
                         {
                             var msg = $"Context {contextType.FullName} returned null Model.";
@@ -166,63 +186,28 @@ public sealed class ExportEfModelTask : Task
                         }
 
                         var entityList = new List<object>();
-                        // Prefer interface methods; RuntimeModel implements IReadOnlyModel/IModel explicitly
-                        var modelIface = model.GetType().GetInterface("Microsoft.EntityFrameworkCore.Metadata.IReadOnlyModel")
-                                         ?? model.GetType().GetInterface("Microsoft.EntityFrameworkCore.Metadata.IModel");
-                        var getEntitiesMi = modelIface?.GetMethod("GetEntityTypes", BindingFlags.Public | BindingFlags.Instance);
-                        var entitiesEnumerable = getEntitiesMi?.Invoke(model, null) as System.Collections.IEnumerable;
-                        if (entitiesEnumerable != null)
+                        
+                        // Direct interface usage - no reflection needed
+                        foreach (var entity in model.GetEntityTypes())
                         {
-                            foreach (var entity in entitiesEnumerable)
+                            var entName = entity.Name;
+                            var clrName = entity.ClrType?.FullName ?? entName;
+
+                            var keysList = new List<string[]>();
+                            foreach (var key in entity.GetKeys())
                             {
-                                var entType = entity.GetType();
-                                var entName = entType.GetProperty("Name")?.GetValue(entity) as string ?? "<unknown>";
-                                var clrType = entType.GetProperty("ClrType")?.GetValue(entity) as Type;
-                                var clrName = clrType?.FullName ?? entName;
-
-                                var keysList = new List<string[]>();
-                                var entityIface = entType.GetInterface("Microsoft.EntityFrameworkCore.Metadata.IReadOnlyEntityType")
-                                               ?? entType.GetInterface("Microsoft.EntityFrameworkCore.Metadata.IEntityType");
-                                var getKeysMi = entityIface?.GetMethod("GetKeys", BindingFlags.Public | BindingFlags.Instance);
-                                var keysEnum = getKeysMi?.Invoke(entity, null) as System.Collections.IEnumerable;
-                                if (keysEnum != null)
-                                {
-                                    foreach (var key in keysEnum)
-                                    {
-                                        var propsProp = key.GetType().GetProperty("Properties");
-                                        var propsEnum = propsProp?.GetValue(key) as System.Collections.IEnumerable;
-                                        var names = new List<string>();
-                                        if (propsEnum != null)
-                                        {
-                                            foreach (var prop in propsEnum)
-                                            {
-                                                var pName = prop.GetType().GetProperty("Name")?.GetValue(prop) as string;
-                                                if (!string.IsNullOrEmpty(pName)) names.Add(pName!);
-                                            }
-                                        }
-                                        keysList.Add(names.ToArray());
-                                    }
-                                }
-
-                                var navs = new List<object>();
-                                var getNavsMi = entityIface?.GetMethod("GetNavigations", BindingFlags.Public | BindingFlags.Instance);
-                                var navsEnum = getNavsMi?.Invoke(entity, null) as System.Collections.IEnumerable;
-                                if (navsEnum != null)
-                                {
-                                    foreach (var nav in navsEnum)
-                                    {
-                                        var nType = nav.GetType();
-                                        var nName = nType.GetProperty("Name")?.GetValue(nav) as string ?? "<nav>";
-                                        var isCollection = nType.GetProperty("IsCollection")?.GetValue(nav) as bool? ?? false;
-                                        var targetEntityType = nType.GetProperty("TargetEntityType")?.GetValue(nav);
-                                        var targetClr = targetEntityType?.GetType().GetProperty("ClrType")?.GetValue(targetEntityType) as Type;
-                                        var targetName = targetClr?.FullName ?? targetEntityType?.GetType().GetProperty("Name")?.GetValue(targetEntityType) as string ?? "<unknown>";
-                                        navs.Add(new { Name = nName, Target = targetName, IsCollection = isCollection });
-                                    }
-                                }
-
-                                entityList.Add(new { Name = entName, Clr = clrName, Keys = keysList.ToArray(), Navigations = navs.ToArray() });
+                                var names = key.Properties.Select(p => p.Name).ToArray();
+                                keysList.Add(names);
                             }
+
+                            var navs = new List<object>();
+                            foreach (var nav in entity.GetNavigations())
+                            {
+                                var targetName = nav.TargetEntityType.ClrType?.FullName ?? nav.TargetEntityType.Name;
+                                navs.Add(new { Name = nav.Name, Target = targetName, IsCollection = nav.IsCollection });
+                            }
+
+                            entityList.Add(new { Name = entName, Clr = clrName, Keys = keysList.ToArray(), Navigations = navs.ToArray() });
                         }
 
                         var contextData = new { Context = contextType.FullName ?? contextType.Name, Entities = entityList.ToArray() };
@@ -240,9 +225,9 @@ public sealed class ExportEfModelTask : Task
                     Log.LogError($"Facet.Export: Failed to export model for context {contextType.FullName}: {details}");
                     failures.Add($"{contextType.FullName}: {details}");
                 }
-            }
+                }
 
-            var rootModel = new { Contexts = contexts };
+                var rootModel = new { Contexts = contexts };
             var json = JsonSerializer.Serialize(rootModel, new JsonSerializerOptions
             {
                 WriteIndented = true
@@ -390,6 +375,7 @@ public sealed class ExportEfModelTask : Task
 
     private object? CreateDbContext(Assembly assembly, Type contextType, string? providerHint)
     {
+        try { Log.LogMessage(MessageImportance.High, $"Facet.Export: CreateDbContext called for {contextType.FullName} with provider hint: {providerHint ?? "none"}"); } catch { }
         var alc = AssemblyLoadContext.GetLoadContext(assembly);
         // 1) Try IDesignTimeDbContextFactory<TContext>
         try
@@ -405,7 +391,7 @@ public sealed class ExportEfModelTask : Task
                 {
                     try
                     {
-                        var factory = Activator.CreateInstance(factoryType);
+                        var factory = CreateInstance(factoryType);
                         var createMethod = factoryInterfaceType.GetMethod("CreateDbContext");
                         var created = createMethod?.Invoke(factory, new object[] { Array.Empty<string>() });
                         if (created != null)
@@ -430,7 +416,7 @@ public sealed class ExportEfModelTask : Task
                 .ToList();
             foreach (var altFactory in altFactories)
             {
-                var instance = Activator.CreateInstance(altFactory);
+                var instance = CreateInstance(altFactory);
                 var m = altFactory.GetMethod("CreateDbContext", new[] { typeof(string[]) });
                 var created = m?.Invoke(instance, new object[] { Array.Empty<string>() });
                 if (created != null && contextType.IsInstanceOfType(created))
@@ -442,192 +428,43 @@ public sealed class ExportEfModelTask : Task
         }
         catch { /* fall through */ }
 
-        // 2) Try with InMemoryDatabase options using the same ALC as the context assembly (preferred over parameterless)
+        // 2) Try with provider options based on hint or defaults
         var preferInMemory = string.Equals(providerHint, "inmemory", StringComparison.OrdinalIgnoreCase);
         var preferNpgsql = string.Equals(providerHint, "npgsql", StringComparison.OrdinalIgnoreCase) || string.Equals(providerHint, "postgres", StringComparison.OrdinalIgnoreCase);
 
-        bool triedInMemory = false;
-        bool triedNpgsql = false;
-
+        // Try preferred provider first
         if (preferInMemory)
         {
-            var r = TryCreateWithInMemory(alc, contextType, out var created);
-            triedInMemory = true;
-            if (r && created != null) return created;
-        }
-
-        try
-        {
-            if (alc != null)
+            if (TryCreateWithInMemory(alc, contextType, out var created) && created != null)
             {
-                var efAsm = alc.LoadFromAssemblyName(new AssemblyName("Microsoft.EntityFrameworkCore"));
-                var inMemAsm = alc.LoadFromAssemblyName(new AssemblyName("Microsoft.EntityFrameworkCore.InMemory"));
-                var extensionsType = inMemAsm?.GetType("Microsoft.EntityFrameworkCore.InMemoryDbContextOptionsExtensions");
-
-                // Try generic builder first to get strongly-typed DbContextOptions<TContext>
-                var genericBuilderOpen = efAsm.GetType("Microsoft.EntityFrameworkCore.DbContextOptionsBuilder`1");
-                if (genericBuilderOpen != null)
-                {
-                    var typedBuilderType = genericBuilderOpen.MakeGenericType(contextType);
-                    var typedBuilder = Activator.CreateInstance(typedBuilderType);
-                    if (typedBuilder != null && extensionsType != null)
-                    {
-                        // Try generic overload: UseInMemoryDatabase<TContext>(DbContextOptionsBuilder<TContext>, string)
-                        var useInMemoryGeneric = extensionsType.GetMethods()
-                            .FirstOrDefault(m => m.Name == "UseInMemoryDatabase" && m.IsGenericMethodDefinition && m.GetParameters().Length == 2);
-                        if (useInMemoryGeneric != null)
-                        {
-                            var closed = useInMemoryGeneric.MakeGenericMethod(contextType);
-                            closed.Invoke(null, new object[] { typedBuilder, "FacetDesignTime" });
-                            var optionsProp = typedBuilderType.GetProperty("Options");
-                            var options = optionsProp?.GetValue(typedBuilder);
-                            if (options != null)
-                            {
-                                try { Log.LogMessage(MessageImportance.Normal, $"Facet.Export: Using InMemory provider (generic builder) for {contextType.FullName}"); } catch { }
-                                return Activator.CreateInstance(contextType, options);
-                            }
-                        }
-
-                        // Fallback: non-generic overload with typed builder instance (assignable to base builder)
-                        var builderBaseType = efAsm.GetType("Microsoft.EntityFrameworkCore.DbContextOptionsBuilder");
-                        var useInMemoryNonGeneric = extensionsType.GetMethods()
-                            .FirstOrDefault(m => m.Name == "UseInMemoryDatabase"
-                                                 && !m.IsGenericMethodDefinition
-                                                 && m.GetParameters().Length == 2
-                                                 && m.GetParameters()[0].ParameterType == builderBaseType);
-                        if (useInMemoryNonGeneric != null && builderBaseType != null && builderBaseType.IsAssignableFrom(typedBuilderType))
-                        {
-                            useInMemoryNonGeneric.Invoke(null, new object[] { typedBuilder, "FacetDesignTime" });
-                            var optionsProp = typedBuilderType.GetProperty("Options");
-                            var options = optionsProp?.GetValue(typedBuilder);
-                            if (options != null)
-                            {
-                            try { Log.LogMessage(MessageImportance.Normal, $"Facet.Export: Using InMemory provider (non-generic ext + typed builder) for {contextType.FullName}"); } catch { }
-                                return Activator.CreateInstance(contextType, options);
-                            }
-                        }
-                    }
-                }
-
-                // Fallback: non-generic builder path
-                var builderType = efAsm.GetType("Microsoft.EntityFrameworkCore.DbContextOptionsBuilder");
-                var builder = builderType != null ? Activator.CreateInstance(builderType) : null;
-                if (builderType != null && builder != null && extensionsType != null)
-                {
-                    var useInMemoryMethod = extensionsType.GetMethods()
-                        .FirstOrDefault(m => m.Name == "UseInMemoryDatabase"
-                                             && !m.IsGenericMethodDefinition
-                                             && m.GetParameters().Length == 2
-                                             && m.GetParameters()[0].ParameterType == builderType);
-
-                    if (useInMemoryMethod != null)
-                    {
-                        useInMemoryMethod.Invoke(null, new object[] { builder, "FacetDesignTime" });
-                        var optionsProperty = builderType.GetProperty("Options");
-                        var options = optionsProperty?.GetValue(builder);
-                        if (options != null)
-                        {
-                            try { Log.LogMessage(MessageImportance.Normal, $"Facet.Export: Using InMemory provider (non-generic builder) for {contextType.FullName}"); } catch { }
-                            return Activator.CreateInstance(contextType, options);
-                        }
-                    }
-                }
+                try { Log.LogMessage(MessageImportance.Normal, $"Facet.Export: Using InMemory provider for {contextType.FullName}"); } catch { }
+                return created;
             }
         }
-        catch (Exception ex)
+        else if (preferNpgsql)
         {
-            try { Log.LogMessage(MessageImportance.Low, $"Facet.Export: InMemory options path failed for {contextType.FullName}: {ex.Message}"); } catch { }
-            // Final fallback failed
-        }
-
-        // 3) Try Npgsql provider if present (model building does not require a live connection)
-        if (preferNpgsql)
-        {
-            var rn = TryCreateWithNpgsql(alc, contextType, out var created);
-            triedNpgsql = true;
-            if (rn && created != null) return created;
-        }
-        try
-        {
-            if (alc != null)
+            if (TryCreateWithNpgsql(alc, contextType, out var created) && created != null)
             {
-                var efAsm = alc.LoadFromAssemblyName(new AssemblyName("Microsoft.EntityFrameworkCore"));
-                // Load any Npgsql EFCore provider assembly name variant (Aspire or standard)
-                Assembly? npgsqlAsm = null;
-                try { npgsqlAsm = alc.LoadFromAssemblyName(new AssemblyName("Aspire.Npgsql.EntityFrameworkCore.PostgreSQL")); } catch { }
-                if (npgsqlAsm == null) { try { npgsqlAsm = alc.LoadFromAssemblyName(new AssemblyName("Npgsql.EntityFrameworkCore.PostgreSQL")); } catch { } }
-                if (npgsqlAsm != null)
-                {
-                    // Find a static method named 'UseNpgsql' with first parameter DbContextOptionsBuilder or generic variant
-                    var builderOpen = efAsm.GetType("Microsoft.EntityFrameworkCore.DbContextOptionsBuilder`1");
-                    var nonGenericBuilderType = efAsm.GetType("Microsoft.EntityFrameworkCore.DbContextOptionsBuilder");
-                    var candidates = npgsqlAsm.GetTypes()
-                        .SelectMany(t => t.GetMethods(BindingFlags.Static | BindingFlags.Public))
-                        .Where(m => m.Name == "UseNpgsql")
-                        .ToList();
-
-                    // Prefer generic builder
-                    if (builderOpen != null)
-                    {
-                        var typedBuilderType = builderOpen.MakeGenericType(contextType);
-                        var typedBuilder = Activator.CreateInstance(typedBuilderType);
-                        if (typedBuilder != null)
-                        {
-                            // dummy connection string; provider just needs to be wired for model building
-                            var cs = "Host=localhost;Database=FacetDesignTime;Username=facet;Password=facet";
-                            // Try generic extension first
-                            var methodGen = candidates.FirstOrDefault(m => m.IsGenericMethodDefinition && m.GetParameters().Length >= 2);
-                            if (methodGen != null)
-                            {
-                                var closed = methodGen.MakeGenericMethod(contextType);
-                                closed.Invoke(null, new object[] { typedBuilder, cs });
-                            }
-                            else if (nonGenericBuilderType != null)
-                            {
-                                // Try non-generic overload with base builder parameter
-                                var methodNg = candidates.FirstOrDefault(m => !m.IsGenericMethodDefinition && m.GetParameters().Length >= 2 && m.GetParameters()[0].ParameterType == nonGenericBuilderType);
-                                if (methodNg != null)
-                                {
-                                    methodNg.Invoke(null, new object[] { typedBuilder, cs });
-                                }
-                            }
-                            var optionsProp = typedBuilderType.GetProperty("Options");
-                            var options = optionsProp?.GetValue(typedBuilder);
-                            if (options != null)
-                            {
-                                try { Log.LogMessage(MessageImportance.Normal, $"Facet.Export: Using Npgsql provider (generic/typed builder) for {contextType.FullName}"); } catch { }
-                                return Activator.CreateInstance(contextType, options);
-                            }
-                        }
-                    }
-
-                    // Fallback: non-generic builder
-                    if (nonGenericBuilderType != null)
-                    {
-                        var builder = Activator.CreateInstance(nonGenericBuilderType);
-                        var method = candidates.FirstOrDefault(m => !m.IsGenericMethodDefinition && m.GetParameters().Length >= 2 && m.GetParameters()[0].ParameterType == nonGenericBuilderType);
-                        if (builder != null && method != null)
-                        {
-                            var cs = "Host=localhost;Database=FacetDesignTime;Username=facet;Password=facet";
-                            method.Invoke(null, new object[] { builder, cs });
-                            var optionsProp = nonGenericBuilderType.GetProperty("Options");
-                            var options = optionsProp?.GetValue(builder);
-                            if (options != null)
-                            {
-                                try { Log.LogMessage(MessageImportance.Normal, $"Facet.Export: Using Npgsql provider (non-generic builder) for {contextType.FullName}"); } catch { }
-                                return Activator.CreateInstance(contextType, options);
-                            }
-                        }
-                    }
-                }
+                try { Log.LogMessage(MessageImportance.Normal, $"Facet.Export: Using Npgsql provider for {contextType.FullName}"); } catch { }
+                return created;
             }
         }
-        catch (Exception ex)
+        
+        // Try default fallback order: InMemory first, then Npgsql
+        if (!preferInMemory && TryCreateWithInMemory(alc, contextType, out var inmemCreated) && inmemCreated != null)
         {
-            try { Log.LogMessage(MessageImportance.Low, $"Facet.Export: Npgsql options path failed for {contextType.FullName}: {ex.Message}"); } catch { }
+            try { Log.LogMessage(MessageImportance.Normal, $"Facet.Export: Using InMemory provider (fallback) for {contextType.FullName}"); } catch { }
+            return inmemCreated;
+        }
+        
+        if (!preferNpgsql && TryCreateWithNpgsql(alc, contextType, out var npgsqlCreated) && npgsqlCreated != null)
+        {
+            try { Log.LogMessage(MessageImportance.Normal, $"Facet.Export: Using Npgsql provider (fallback) for {contextType.FullName}"); } catch { }
+            return npgsqlCreated;
         }
 
         // 4) Give up – return null rather than a providerless context to avoid opaque runtime failures
+        try { Log.LogMessage(MessageImportance.High, $"Facet.Export: Failed to create DbContext for {contextType.FullName} - all provider attempts failed"); } catch { }
         return null;
     }
 
@@ -644,20 +481,22 @@ public sealed class ExportEfModelTask : Task
             if (genericBuilderOpen != null)
             {
                 var typedBuilderType = genericBuilderOpen.MakeGenericType(contextType);
-                var typedBuilder = Activator.CreateInstance(typedBuilderType);
+                var typedBuilder = CreateInstance(typedBuilderType);
                 if (typedBuilder != null && extensionsType != null)
                 {
-                    var useInMemoryGeneric = extensionsType.GetMethods()
+                    // Find the provider method
+                    var useInMemoryMethod = extensionsType.GetMethods()
                         .FirstOrDefault(m => m.Name == "UseInMemoryDatabase" && m.IsGenericMethodDefinition && m.GetParameters().Length == 2);
-                    if (useInMemoryGeneric != null)
+                    
+                    if (useInMemoryMethod != null)
                     {
-                        var closed = useInMemoryGeneric.MakeGenericMethod(contextType);
+                        var closed = useInMemoryMethod.MakeGenericMethod(contextType);
                         closed.Invoke(null, new object[] { typedBuilder, "FacetDesignTime" });
                         var optionsProp = typedBuilderType.GetProperty("Options");
                         var options = optionsProp?.GetValue(typedBuilder);
                         if (options != null)
                         {
-                            created = Activator.CreateInstance(contextType, options);
+                            created = CreateInstance(contextType, options);
                             return created != null;
                         }
                     }
@@ -687,24 +526,26 @@ public sealed class ExportEfModelTask : Task
             if (builderOpen != null)
             {
                 var typedBuilderType = builderOpen.MakeGenericType(contextType);
-                var typedBuilder = Activator.CreateInstance(typedBuilderType);
+                var typedBuilder = CreateInstance(typedBuilderType);
                 if (typedBuilder != null)
                 {
+                    // Find the provider method
                     var candidates = npgsqlAsm.GetTypes()
                         .SelectMany(t => t.GetMethods(BindingFlags.Static | BindingFlags.Public))
                         .Where(m => m.Name == "UseNpgsql")
                         .ToList();
-                    var cs = "Host=localhost;Database=FacetDesignTime;Username=facet;Password=facet";
                     var methodGen = candidates.FirstOrDefault(m => m.IsGenericMethodDefinition && m.GetParameters().Length >= 2);
+                    
                     if (methodGen != null)
                     {
+                        var cs = "Host=localhost;Database=FacetDesignTime;Username=facet;Password=facet";
                         var closed = methodGen.MakeGenericMethod(contextType);
                         closed.Invoke(null, new object[] { typedBuilder, cs });
                         var optionsProp = typedBuilderType.GetProperty("Options");
                         var options = optionsProp?.GetValue(typedBuilder);
                         if (options != null)
                         {
-                            created = Activator.CreateInstance(contextType, options);
+                            created = CreateInstance(contextType, options);
                             return created != null;
                         }
                     }
@@ -718,59 +559,28 @@ public sealed class ExportEfModelTask : Task
         }
     }
 
-    private static MethodInfo? FindExtensionMethod(string name, params string[] firstParamTypeFullNames)
-    {
-        static IEnumerable<Type> SafeGetTypes(Assembly asm)
-        {
-            try { return asm.GetTypes(); }
-            catch (ReflectionTypeLoadException rtle) { return rtle.Types.Where(t => t != null)!; }
-            catch { return Array.Empty<Type>(); }
-        }
-
-        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            foreach (var type in SafeGetTypes(asm))
-            {
-                if (!(type.IsSealed && type.IsAbstract)) continue; // static classes only
-                foreach (var m in type.GetMethods(BindingFlags.Public | BindingFlags.Static))
-                {
-                    if (!string.Equals(m.Name, name, StringComparison.Ordinal)) continue;
-                    var pars = m.GetParameters();
-                    if (pars.Length >= 1)
-                    {
-                        var p0 = pars[0].ParameterType;
-                        var p0Name = p0.FullName ?? p0.Name;
-                        if (firstParamTypeFullNames.Any(n => string.Equals(n, p0Name, StringComparison.Ordinal)))
-                            return m;
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    private static MethodInfo? FindExtensionMethod(string name, Type firstParamType)
-    {
-        static IEnumerable<Type> SafeGetTypes(Assembly asm)
-        {
-            try { return asm.GetTypes(); }
-            catch (ReflectionTypeLoadException rtle) { return rtle.Types.Where(t => t != null)!; }
-            catch { return Array.Empty<Type>(); }
-        }
-        var asm = firstParamType.Assembly;
-        foreach (var type in SafeGetTypes(asm))
-        {
-            if (!(type.IsSealed && type.IsAbstract)) continue; // static classes only
-            foreach (var m in type.GetMethods(BindingFlags.Public | BindingFlags.Static))
-            {
-                if (!string.Equals(m.Name, name, StringComparison.Ordinal)) continue;
-                var pars = m.GetParameters();
-                if (pars.Length >= 1 && pars[0].ParameterType == firstParamType)
-                    return m;
-            }
-        }
-        return null;
-    }
 
     
+    // Helper method to create instances using compiled delegates
+    private static object CreateInstance(Type type, params object[] args)
+    {
+        if (args.Length == 0)
+        {
+            // Cache parameterless constructor
+            var factory = ConstructorCache.GetOrAdd(type, t =>
+            {
+                var ctor = t.GetConstructor(Type.EmptyTypes);
+                if (ctor == null) throw new InvalidOperationException($"No parameterless constructor found for {t}");
+                
+                var newExpr = Expression.New(ctor);
+                var lambda = Expression.Lambda<Func<object, object>>(Expression.Convert(newExpr, typeof(object)), Expression.Parameter(typeof(object), "_"));
+                return lambda.Compile();
+            });
+            return factory(null!);
+        }
+        
+        // For all other cases, just use Activator.CreateInstance
+        // The optimization for single-arg constructors was causing issues with DbContext options
+        return Activator.CreateInstance(type, args)!;
+    }
 }

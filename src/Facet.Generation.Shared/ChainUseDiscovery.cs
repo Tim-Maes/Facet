@@ -332,4 +332,4 @@ internal static class ChainUseDiscovery
 /// </summary>
 /// <param name="EntityName">The entity name (e.g., "Order")</param>
 /// <param name="Paths">The navigation paths used (e.g., ["Customer", "Customer/ShippingAddress", "Lines"])</param>
-internal sealed record ChainUse(string EntityName, ImmutableArray<string> Paths);
+public sealed record ChainUse(string EntityName, ImmutableArray<string> Paths);

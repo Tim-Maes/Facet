@@ -7,6 +7,8 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using Facet.Extensions.EFCore.Generators; // added
+using Facet.Extensions.EFCore.Generators.Emission; // added
 
 namespace Facet.Generators;
 
@@ -34,7 +36,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
       return typeSymbol.SpecialType switch
       {
         SpecialType.System_String => "System.String",
-        SpecialType.System_Int32 => "System.Int32", 
+        SpecialType.System_Int32 => "System.Int32",
         SpecialType.System_Boolean => "System.Boolean",
         SpecialType.System_Object => "System.Object",
         SpecialType.System_Byte => "System.Byte",
@@ -78,19 +80,19 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     {
       var containingSymbol = namedType.ContainingType ?? (INamespaceOrTypeSymbol)namedType.ContainingNamespace;
       var prefix = GetContainingSymbolName(containingSymbol);
-      
+
       if (namedType.IsGenericType && namedType.TypeArguments.Length > 0)
       {
         var typeArguments = string.Join(", ", namedType.TypeArguments.Select(GetFullyQualifiedName));
         var nameWithoutArity = namedType.Name;
-        return string.IsNullOrEmpty(prefix) 
+        return string.IsNullOrEmpty(prefix)
           ? $"{nameWithoutArity}<{typeArguments}>"
           : $"{prefix}.{nameWithoutArity}<{typeArguments}>";
       }
       else
       {
-        return string.IsNullOrEmpty(prefix) 
-          ? namedType.Name 
+        return string.IsNullOrEmpty(prefix)
+          ? namedType.Name
           : $"{prefix}.{namedType.Name}";
       }
     }
@@ -98,7 +100,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     // Handle error types gracefully
     if (typeSymbol is IErrorTypeSymbol)
     {
-      return "object"; // Safe fallback instead of "Unknown.Type" 
+      return "object"; // Safe fallback instead of "Unknown.Type"
     }
 
     // Final fallback - should rarely be reached
@@ -114,19 +116,19 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
     var parentName = GetContainingSymbolName(symbol.ContainingNamespace);
     var currentName = symbol.Name;
-    
+
     if (string.IsNullOrEmpty(parentName))
     {
       return currentName;
     }
-    
+
     return $"{parentName}.{currentName}";
   }
 
   internal static string GetTypeWithNullability(ITypeSymbol typeSymbol)
   {
     var baseType = GetFullyQualifiedName(typeSymbol);
-    
+
     // For nullable value types (int?, DateTime?, etc.), check if it's a nullable value type
     if (typeSymbol is INamedTypeSymbol { IsValueType: true, OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
     {
@@ -134,13 +136,13 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
       var underlyingType = ((INamedTypeSymbol)typeSymbol).TypeArguments[0];
       return GetFullyQualifiedName(underlyingType) + "?";
     }
-    
+
     // For nullable reference types, check the NullableAnnotation metadata
     if (typeSymbol is { IsReferenceType: true } && typeSymbol.NullableAnnotation == NullableAnnotation.Annotated)
     {
       return baseType + "?";
     }
-    
+
     // Non-nullable types or types where nullability is not explicitly annotated
     return baseType;
   }
@@ -179,11 +181,26 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         .SelectMany(static (models, _) => models!);
 
     var allTargets = generateDtosTargets.Collect().Combine(generateAuditableDtosTargets.Collect())
-        .Select(static (combined, _) => combined.Left.Concat(combined.Right));
+        .Select(static (combined, _) => combined.Left.Concat(combined.Right).ToImmutableArray());
 
-    context.RegisterSourceOutput(allTargets, static (spc, models) =>
+    // Configuration + EF model + chain discovery (for optional builder emission)
+    var configProvider = context.AnalyzerConfigOptionsProvider
+      .Select(static (options, _) => new FacetConfiguration(options));
+    var efModel = EfJsonReader.Configure(context);
+    var chainUses = ChainUseDiscovery.Configure(context).Collect();
+
+    var combined = allTargets.Combine(configProvider).Combine(efModel).Combine(chainUses)
+      .Select(static (x, _) => new {
+        Models = x.Left.Left.Left,
+        Config = x.Left.Left.Right,
+        EfModel = x.Left.Right,
+        ChainUses = x.Right
+      });
+
+    context.RegisterSourceOutput(combined, static (spc, data) =>
     {
-      foreach (var model in models)
+      // First emit DTOs
+      foreach (var model in data.Models)
       {
         if (model != null)
         {
@@ -200,6 +217,48 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 ex.Message));
           }
         }
+      }
+
+      // Optionally emit fluent builders (requires config flag, ef model and at least one Response DTO)
+      try
+      {
+        if (data.Config.EmitBuildersFromGenerateDtos && data.EfModel != null)
+        {
+          // Build FacetDtoInfo list from models that include Response DTOs
+          var dtoInfosBuilder = ImmutableArray.CreateBuilder<FacetDtoInfo>();
+          foreach (var model in data.Models)
+          {
+            if ((model.Types & DtoTypes.Response) == 0) continue;
+            var sourceTypeName = model.SourceTypeName.Replace("global::", "");
+            var simpleName = GetSimpleTypeName(sourceTypeName);
+            var responseName = BuildDtoName(simpleName, "", "Response", model.Prefix, model.Suffix);
+            var ns = model.TargetNamespace ?? model.SourceNamespace ?? string.Empty;
+            // Only scalar properties (ignore heuristic collection navs) -> treat IsNavigation false for all here; EF emitters rely on shape for scalar mapping only currently
+            var props = model.Members
+              .Where(m => !IsCollectionNavigation(m))
+              .Select(m => new DtoPropertyInfo(m.Name, m.TypeName, false))
+              .ToImmutableArray();
+            dtoInfosBuilder.Add(new FacetDtoInfo(sourceTypeName, responseName, ns, props));
+          }
+          var facetDtos = dtoInfosBuilder.ToImmutable();
+          if (facetDtos.Length > 0)
+          {
+            // Derive used chains (if any chainVisits discovered) else empty dictionary
+            var usedChains = ChainUseDiscovery.GroupAndNormalizeWithDepthCapping(data.ChainUses, spc, data.Config.MaxChainDepth);
+            var modelRoot = data.EfModel!;
+            ShapeInterfacesEmitter.Emit(spc, modelRoot, facetDtos);
+            CapabilityInterfacesEmitter.Emit(spc, modelRoot, facetDtos);
+            FluentBuilderEmitter.Emit(spc, modelRoot, facetDtos, usedChains);
+            SelectorsEmitter.Emit(spc, modelRoot, facetDtos, usedChains);
+          }
+        }
+      }
+      catch (Exception ex) when (ex is not OperationCanceledException)
+      {
+        spc.ReportDiagnostic(Diagnostic.Create(
+          Facet.Extensions.EFCore.Generators.Emission.Diagnostics.GenerationError,
+          Location.None,
+          $"Builder emission failure: {ex.Message}"));
       }
     });
   }
@@ -383,7 +442,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
       // We can't directly emit diagnostics here because we don't have SourceProductionContext
       // The error will be handled by the RegisterSourceOutput exception handler
       throw new InvalidOperationException(
-          $"Failed to process GenerateDtos attribute on type '{sourceSymbol.ToDisplayString()}': {ex.Message}", 
+          $"Failed to process GenerateDtos attribute on type '{sourceSymbol.ToDisplayString()}': {ex.Message}",
           ex);
     }
   }
@@ -441,8 +500,10 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     {
       var responseExclusions = new HashSet<string>(model.ExcludeProperties, System.StringComparer.OrdinalIgnoreCase);
       // Include all non-excluded properties for Response DTOs
-
-      var responseMembers = model.Members.Where(m => !responseExclusions.Contains(m.Name)).ToImmutableArray();
+      var responseMembers = model.Members
+        .Where(m => !responseExclusions.Contains(m.Name))
+        .Where(m => !IsCollectionNavigation(m))
+        .ToImmutableArray();
       var responseDtoName = BuildDtoName(sourceTypeName, "", "Response", model.Prefix, model.Suffix);
 
       var responseCode = GenerateDtoCode(model, responseDtoName, responseMembers, "Response");
@@ -536,8 +597,8 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
   {
     var sb = new StringBuilder();
     GenerateFileHeader(sb);
-    sb.AppendLine("using System;");
-    sb.AppendLine("using System.Linq.Expressions;");
+  sb.AppendLine("using System;");
+  sb.AppendLine("using System.Linq.Expressions;");
     sb.AppendLine();
 
     if (!string.IsNullOrWhiteSpace(model.TargetNamespace))
@@ -604,14 +665,13 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
           var propDef = $"public {member.TypeName} {member.Name}";
 
-          if (member.IsInitOnly)
-          {
-            propDef += " { get; init; }";
-          }
-          else
-          {
-            propDef += " { get; set; }";
-          }
+          var accessor = member.IsInitOnly ? " { get; init; }" : " { get; set; }";
+
+          // If it's a non-nullable string property (no '?'), give it a default to satisfy nullable analysis
+          var needsStringInit = member.TypeName == "System.String"; // generator already emits fully-qualified strings
+          var defaultInitializer = needsStringInit ? " = string.Empty;" : string.Empty;
+
+          propDef += accessor + defaultInitializer;
 
           if (member.IsRequired)
           {
@@ -697,6 +757,14 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     return sb.ToString();
   }
 
+  private static bool IsCollectionNavigation(FacetMember member)
+  {
+    // Heuristic: collection whose element type is a domain model (namespace contains Immybot.Backend.Domain.Models)
+    var t = member.TypeName;
+    if (!(t.Contains("ICollection<") || t.Contains("IEnumerable<") || t.Contains("List<") || t.Contains("IReadOnlyCollection<"))) return false;
+    return t.Contains("Immybot.Backend.Domain.Models.");
+  }
+
   private static void GenerateFileHeader(StringBuilder sb)
   {
     sb.AppendLine("// <auto-generated>");
@@ -769,6 +837,42 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     catch
     {
       return defaultValue;
+    }
+  }
+
+  // Internal target model record (added for clarity and future extension flags like ExcludeNavigations)
+  private sealed class GenerateDtosTargetModel
+  {
+    public string SourceTypeName { get; }
+    public string? SourceNamespace { get; }
+    public string? TargetNamespace { get; }
+    public DtoTypes Types { get; }
+    public OutputType OutputType { get; }
+    public string? Prefix { get; }
+    public string? Suffix { get; }
+    public bool IncludeFields { get; }
+    public bool GenerateConstructors { get; }
+    public bool GenerateProjections { get; }
+    public ImmutableArray<string> ExcludeProperties { get; }
+    public ImmutableArray<string> ExcludeMembersFromType { get; }
+    public ImmutableArray<FacetMember> Members { get; }
+    public ImmutableArray<string> InterfaceContracts { get; }
+    public GenerateDtosTargetModel(string sourceTypeName, string? sourceNamespace, string? targetNamespace, DtoTypes types, OutputType outputType, string? prefix, string? suffix, bool includeFields, bool generateConstructors, bool generateProjections, ImmutableArray<string> excludeProperties, ImmutableArray<string> excludeMembersFromType, ImmutableArray<FacetMember> members, ImmutableArray<string> interfaceContracts)
+    {
+      SourceTypeName = sourceTypeName;
+      SourceNamespace = sourceNamespace;
+      TargetNamespace = targetNamespace;
+      Types = types;
+      OutputType = outputType;
+      Prefix = prefix;
+      Suffix = suffix;
+      IncludeFields = includeFields;
+      GenerateConstructors = generateConstructors;
+      GenerateProjections = generateProjections;
+      ExcludeProperties = excludeProperties;
+      ExcludeMembersFromType = excludeMembersFromType;
+      Members = members;
+      InterfaceContracts = interfaceContracts;
     }
   }
 }

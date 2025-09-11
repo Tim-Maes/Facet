@@ -3,9 +3,9 @@ using Microsoft.CodeAnalysis;
 namespace Facet.Extensions.EFCore.Generators.Emission;
 
 /// <summary>
-/// Diagnostic descriptors for the Facet EF Core generator.
+/// Diagnostic descriptors for the Facet EF Core generator (shared).
 /// </summary>
-internal static class Diagnostics
+public static class Diagnostics
 {
     public static readonly DiagnosticDescriptor GenerationError = new(
         id: "FACET_EF001",
@@ -16,7 +16,7 @@ internal static class Diagnostics
         isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor InvalidModel = new(
-        id: "FACET_EF002", 
+        id: "FACET_EF002",
         title: "Invalid EF model",
         messageFormat: "Invalid EF model data: {0}",
         category: "Facet.Extensions.EFCore",
@@ -27,7 +27,7 @@ internal static class Diagnostics
         id: "FACET_EF003",
         title: "DTO not found",
         messageFormat: "Could not find DTO type '{0}' for entity '{1}'",
-        category: "Facet.Extensions.EFCore", 
+        category: "Facet.Extensions.EFCore",
         defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true);
 
@@ -47,3 +47,4 @@ internal static class Diagnostics
         defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true);
 }
+

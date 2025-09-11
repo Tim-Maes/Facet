@@ -5,7 +5,7 @@ namespace Facet.Extensions.EFCore.Generators;
 /// <summary>
 /// Root model containing all EF contexts and their entities.
 /// </summary>
-internal sealed class ModelRoot
+public sealed class ModelRoot
 {
     public List<ContextModel> Contexts { get; set; } = new();
 }
@@ -13,7 +13,7 @@ internal sealed class ModelRoot
 /// <summary>
 /// Represents an EF DbContext and its entities.
 /// </summary>
-internal sealed class ContextModel
+public sealed class ContextModel
 {
     public string Context { get; set; } = string.Empty;
     public List<EntityModel> Entities { get; set; } = new();
@@ -22,7 +22,7 @@ internal sealed class ContextModel
 /// <summary>
 /// Represents an EF entity type with its properties and navigations.
 /// </summary>
-internal sealed class EntityModel
+public sealed class EntityModel
 {
     public string Name { get; set; } = string.Empty;
     public string? Clr { get; set; }
@@ -33,9 +33,10 @@ internal sealed class EntityModel
 /// <summary>
 /// Represents a navigation property in an EF entity.
 /// </summary>
-internal sealed class NavigationModel
+public sealed class NavigationModel
 {
     public string Name { get; set; } = string.Empty;
     public string Target { get; set; } = string.Empty;
     public bool IsCollection { get; set; }
 }
+
