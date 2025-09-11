@@ -1492,6 +1492,7 @@
       "projectStyle": "PackageReference",
       "centralPackageVersionsManagementEnabled": true,
       "configFilePaths": [
+        "/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/NuGet.Config",
         "/Users/darrenkattan/Documents/GitHub/immybot/NuGet.Config",
         "/Users/darrenkattan/.nuget/NuGet/NuGet.Config"
       ],

@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("Provider-agnostic extension methods for Facet.")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("2.6.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("2.6.0+1105af14708be0d86d16bfd563e1c04653b75d35")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("2.6.0+a3d98b55e715ea80b6a77d9f6fc53e653d497f51")]
 [assembly: System.Reflection.AssemblyProductAttribute("Facet.Extensions")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Facet.Extensions")]
 [assembly: System.Reflection.AssemblyVersionAttribute("2.6.0.0")]
