@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "N95vq8qs8Do=",
+  "success": true,
+  "projectFilePath": "/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions/Facet.Extensions.csproj",
+  "expectedPackageFiles": [
+    "/Users/darrenkattan/.nuget/packages/newtonsoft.json/13.0.3/newtonsoft.json.13.0.3.nupkg.sha512",
+    "/Users/darrenkattan/.nuget/packages/microsoft.netcore.app.ref/8.0.17/microsoft.netcore.app.ref.8.0.17.nupkg.sha512",
+    "/Users/darrenkattan/.nuget/packages/microsoft.aspnetcore.app.ref/8.0.17/microsoft.aspnetcore.app.ref.8.0.17.nupkg.sha512"
+  ],
+  "logs": []
+}

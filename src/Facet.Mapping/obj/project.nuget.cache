@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "9vimo7XcrU8=",
+  "success": true,
+  "projectFilePath": "/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Mapping/Facet.Mapping.csproj",
+  "expectedPackageFiles": [
+    "/Users/darrenkattan/.nuget/packages/microsoft.netcore.app.ref/8.0.17/microsoft.netcore.app.ref.8.0.17.nupkg.sha512",
+    "/Users/darrenkattan/.nuget/packages/microsoft.aspnetcore.app.ref/8.0.17/microsoft.aspnetcore.app.ref.8.0.17.nupkg.sha512"
+  ],
+  "logs": []
+}

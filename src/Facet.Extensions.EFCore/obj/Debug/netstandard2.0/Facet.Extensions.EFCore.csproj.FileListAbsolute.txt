@@ -1,0 +1,16 @@
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions.EFCore/obj/Debug/netstandard2.0/Facet.Extensions.EFCore.csproj.AssemblyReference.cache
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions.EFCore/obj/Debug/netstandard2.0/Facet.Extensions.EFCore.GeneratedMSBuildEditorConfig.editorconfig
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions.EFCore/obj/Debug/netstandard2.0/Facet.Extensions.EFCore.AssemblyInfoInputs.cache
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions.EFCore/obj/Debug/netstandard2.0/Facet.Extensions.EFCore.AssemblyInfo.cs
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions.EFCore/obj/Debug/netstandard2.0/Facet.Extensions.EFCore.csproj.CoreCompileInputs.cache
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions.EFCore/obj/Debug/netstandard2.0/Facet.Extensions.EFCore.sourcelink.json
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions.EFCore/bin/Debug/netstandard2.0/Facet.Extensions.EFCore.deps.json
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions.EFCore/bin/Debug/netstandard2.0/Facet.Extensions.EFCore.dll
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions.EFCore/bin/Debug/netstandard2.0/Facet.Extensions.EFCore.pdb
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions.EFCore/bin/Debug/netstandard2.0/Facet.dll
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions.EFCore/bin/Debug/netstandard2.0/Facet.Extensions.dll
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions.EFCore/bin/Debug/netstandard2.0/Facet.Extensions.pdb
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions.EFCore/bin/Debug/netstandard2.0/Facet.pdb
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions.EFCore/obj/Debug/netstandard2.0/Facet.Ex.7D9E5D7E.Up2Date
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions.EFCore/obj/Debug/netstandard2.0/Facet.Extensions.EFCore.dll
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions.EFCore/obj/Debug/netstandard2.0/Facet.Extensions.EFCore.pdb

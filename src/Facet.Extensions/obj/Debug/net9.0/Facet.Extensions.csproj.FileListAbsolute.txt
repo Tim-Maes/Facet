@@ -1,0 +1,16 @@
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions/bin/Debug/net9.0/Facet.Extensions.deps.json
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions/bin/Debug/net9.0/Facet.Extensions.dll
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions/bin/Debug/net9.0/Facet.Extensions.pdb
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions/bin/Debug/net9.0/Facet.dll
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions/bin/Debug/net9.0/Facet.pdb
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions/obj/Debug/net9.0/Facet.Extensions.csproj.AssemblyReference.cache
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions/obj/Debug/net9.0/Facet.Extensions.GeneratedMSBuildEditorConfig.editorconfig
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions/obj/Debug/net9.0/Facet.Extensions.AssemblyInfoInputs.cache
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions/obj/Debug/net9.0/Facet.Extensions.AssemblyInfo.cs
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions/obj/Debug/net9.0/Facet.Extensions.csproj.CoreCompileInputs.cache
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions/obj/Debug/net9.0/Facet.Extensions.sourcelink.json
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions/obj/Debug/net9.0/Facet.Ex.09C9265C.Up2Date
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions/obj/Debug/net9.0/Facet.Extensions.dll
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions/obj/Debug/net9.0/refint/Facet.Extensions.dll
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions/obj/Debug/net9.0/Facet.Extensions.pdb
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions/obj/Debug/net9.0/ref/Facet.Extensions.dll

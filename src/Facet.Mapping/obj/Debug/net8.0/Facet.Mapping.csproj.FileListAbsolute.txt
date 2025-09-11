@@ -1,0 +1,12 @@
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Mapping/bin/Debug/net8.0/Facet.Mapping.deps.json
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Mapping/bin/Debug/net8.0/Facet.Mapping.dll
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Mapping/bin/Debug/net8.0/Facet.Mapping.pdb
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Mapping/obj/Debug/net8.0/Facet.Mapping.GeneratedMSBuildEditorConfig.editorconfig
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Mapping/obj/Debug/net8.0/Facet.Mapping.AssemblyInfoInputs.cache
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Mapping/obj/Debug/net8.0/Facet.Mapping.AssemblyInfo.cs
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Mapping/obj/Debug/net8.0/Facet.Mapping.csproj.CoreCompileInputs.cache
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Mapping/obj/Debug/net8.0/Facet.Mapping.sourcelink.json
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Mapping/obj/Debug/net8.0/Facet.Mapping.dll
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Mapping/obj/Debug/net8.0/refint/Facet.Mapping.dll
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Mapping/obj/Debug/net8.0/Facet.Mapping.pdb
+/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Mapping/obj/Debug/net8.0/ref/Facet.Mapping.dll

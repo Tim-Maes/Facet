@@ -1,0 +1,8 @@
+is_global = true
+build_property.RootNamespace = Facet.Extensions
+build_property.ProjectDir = /Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Extensions/
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.CsWinRTUseWindowsUIXamlProjections = false
+build_property.EffectiveAnalysisLevelStyle = 
+build_property.EnableCodeStyleSeverity = 
