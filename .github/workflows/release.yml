@@ -83,6 +83,12 @@ jobs:
               --api-key "${{ secrets.NUGET_API_KEY_EXTENSIONS }}" `
               --source https://api.nuget.org/v3/index.json `
               --skip-duplicate
+              } elseif ($file.Name -like "Facet.Mapping.Expressions.*.nupkg") {
+            Write-Host "Publishing Facet.Mapping.Expressions package..."
+            dotnet nuget push $file `
+              --api-key "${{ secrets.NUGET_API_KEY_EXPRESSIONS }}" `
+              --source https://api.nuget.org/v3/index.json `
+              --skip-duplicate
           } elseif ($file.Name -like "Facet.*.nupkg") {
             Write-Host "Publishing Facet package..."
             dotnet nuget push $file `
