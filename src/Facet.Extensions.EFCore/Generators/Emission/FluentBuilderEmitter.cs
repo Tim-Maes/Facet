@@ -4,13 +4,14 @@ using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
+using Facet.Extensions.EFCore.Generators.Shared;
 
 namespace Facet.Extensions.EFCore.Generators.Emission;
 
 /// <summary>
 /// Emits fluent builder classes that provide the With{Navigation}() API.
 /// </summary>
-internal static class FluentBuilderEmitter
+public static class FluentBuilderEmitter
 {
     public static void Emit(SourceProductionContext context, ModelRoot efModel, ImmutableArray<FacetDtoInfo> facetDtos, ImmutableDictionary<string, ImmutableHashSet<string>> usedChains)
     {
@@ -191,6 +192,6 @@ internal static class FluentBuilderEmitter
     private static string GetSimpleTypeName(string fullTypeName)
     {
         var lastDot = fullTypeName.LastIndexOf('.');
-        return lastDot >= 0 ? fullTypeName[(lastDot + 1)..] : fullTypeName;
+        return lastDot >= 0 ? fullTypeName.Substring(lastDot + 1) : fullTypeName;
     }
 }

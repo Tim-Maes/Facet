@@ -23,6 +23,10 @@
     </ItemGroup>
 
     <ItemGroup>
+        <PackageReference Include="ILRepack.Lib.MSBuild.Task">
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+          <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
         <PackageReference Include="Microsoft.EntityFrameworkCore" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
@@ -31,7 +35,6 @@
         <PackageReference Include="Microsoft.Build.Utilities.Core" PrivateAssets="all" />
         <PackageReference Include="System.Text.Json" />
         <ProjectReference Include="..\Facet.Extensions\Facet.Extensions.csproj" />
-        <ProjectReference Include="..\Facet.Generation.Shared\Facet.Generation.Shared.csproj" />
     </ItemGroup>
 
     <ItemGroup>
@@ -42,9 +45,11 @@
         <None Include="README.md" Pack="true" PackagePath="" />
     </ItemGroup>
 
-    <!-- Pack the source generator -->
+    <!-- Pack the source generator and its dependencies -->
     <ItemGroup>
         <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs/$(AssemblyName).dll" Visible="false" />
+        <!-- Include Newtonsoft.Json dependency for EfJsonReader -->
+        <None Include="$(OutputPath)Newtonsoft.Json.dll" Pack="true" PackagePath="analyzers/dotnet/cs/Newtonsoft.Json.dll" Visible="false" />
     </ItemGroup>
 
     <!-- Pack MSBuild targets and tasks -->
@@ -64,6 +69,39 @@
         <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
         <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
     </ItemGroup>
+
+    <!-- Ensure Facet.Generation.Shared.dll is copied to output directory for source generator -->
+    <Target Name="CopyFacetGenerationShared" AfterTargets="Build">
+        <ItemGroup>
+            <FacetGenerationSharedFiles Include="../Facet.Generation.Shared/bin/$(Configuration)/net9.0/Facet.Generation.Shared.dll" Condition="'$(TargetFramework)' == 'net9.0'" />
+            <FacetGenerationSharedFiles Include="../Facet.Generation.Shared/bin/$(Configuration)/net8.0/Facet.Generation.Shared.dll" Condition="'$(TargetFramework)' == 'net8.0'" />
+        </ItemGroup>
+        <Copy SourceFiles="@(FacetGenerationSharedFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" ContinueOnError="true" />
+        <Message Text="[Facet.Extensions.EFCore] Copied Facet.Generation.Shared.dll to $(OutputPath)" Importance="low" Condition="@(FacetGenerationSharedFiles-&gt;Count()) &gt; 0" />
+    </Target>
+
+    <!-- ILRepack target using cross-platform MSBuild task to merge analyzer dependencies -->
+    <!-- Workaround for GitHub Issue #79272: https://github.com/dotnet/roslyn/issues/79272 -->
+    <!-- "Allow Analyzer ProjectReference Dependencies to Be Loaded Automatically (Parity with NuGet/VSIX)" -->
+    <!-- This merges all dependencies into a single self-contained analyzer DLL to avoid assembly loading context issues -->
+    <Target Name="MergeAnalyzerDependencies" AfterTargets="CopyFacetGenerationShared" Condition="'$(Configuration)' == 'Debug'">
+        <ItemGroup>
+            <InputAssemblies Include="$(OutputPath)$(AssemblyName).dll" />
+            <InputAssemblies Include="$(OutputPath)Facet.Generation.Shared.dll" Condition="Exists('$(OutputPath)Facet.Generation.Shared.dll')" />
+            <InputAssemblies Include="$(OutputPath)Newtonsoft.Json.dll" Condition="Exists('$(OutputPath)Newtonsoft.Json.dll')" />
+        </ItemGroup>
+
+        <ILRepack
+            OutputFile="$(OutputPath)$(AssemblyName).dll"
+            InputAssemblies="@(InputAssemblies)"
+            LibraryPath="$(OutputPath)"
+            Internalize="true"
+            AllowDuplicateResources="true"
+            Condition="'@(InputAssemblies-&gt;Count())' &gt; 1" />
+
+        <Message Text="[Facet.Extensions.EFCore] ILRepack: Merged analyzer and dependencies into $(OutputPath)$(AssemblyName).dll" Importance="high" Condition="'@(InputAssemblies-&gt;Count())' &gt; 1" />
+        <Message Text="[Facet.Extensions.EFCore] No dependencies to merge" Importance="normal" Condition="'@(InputAssemblies-&gt;Count())' &lt;= 1" />
+    </Target>
 
 
 </Project>

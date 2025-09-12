@@ -1,10 +1,14 @@
+using System;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Reflection;
+using System.Runtime.Loader;
+using System.IO;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using Facet.Extensions.EFCore.Generators.Emission;
-using Facet.Generation.Shared;
+using Facet.Extensions.EFCore.Generators.Shared;
 
 namespace Facet.Extensions.EFCore.Generators;
 
@@ -14,6 +18,73 @@ namespace Facet.Extensions.EFCore.Generators;
 [Generator(LanguageNames.CSharp)]
 public sealed class FacetEfGenerator : IIncrementalGenerator
 {
+    private static readonly object _lockObject = new object();
+    private static bool _assemblyResolverInstalled = false;
+
+    static FacetEfGenerator()
+    {
+        // Install assembly resolver for dependencies (fixes assembly loading context issues)
+        InstallAssemblyResolver();
+    }
+
+    private static void InstallAssemblyResolver()
+    {
+        lock (_lockObject)
+        {
+            if (_assemblyResolverInstalled)
+                return;
+
+            AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
+            {
+                try
+                {
+                    var assemblyName = new AssemblyName(args.Name);
+                    var fileName = assemblyName.Name + ".dll";
+
+                    // For known dependencies, look in the analyzer directory
+                    if (IsKnownDependency(assemblyName.Name))
+                    {
+                        // Get the directory where the analyzer assembly is located
+                        var analyzerPath = typeof(FacetEfGenerator).Assembly.Location;
+                        var analyzerDirectory = Path.GetDirectoryName(analyzerPath);
+
+                        if (analyzerDirectory != null)
+                        {
+                            var dependencyPath = Path.Combine(analyzerDirectory, fileName);
+
+                            // Try to load the assembly
+                            if (File.Exists(dependencyPath))
+                            {
+                                return Assembly.LoadFrom(dependencyPath);
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // Ignore errors and fall back to default resolution
+                }
+
+                return null;
+            };
+
+            _assemblyResolverInstalled = true;
+        }
+    }
+
+    // Define which assemblies the resolver should handle
+    private static bool IsKnownDependency(string assemblyName)
+    {
+        return assemblyName switch
+        {
+            "Facet.Generation.Shared" => true,
+            "Newtonsoft.Json" => true,
+            "System.Text.Json" => true,
+            "System.Memory" => true,
+            _ => false
+        };
+    }
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         // Read configuration from MSBuild properties

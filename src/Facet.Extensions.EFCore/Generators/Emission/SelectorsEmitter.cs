@@ -6,13 +6,14 @@ using Microsoft.CodeAnalysis.Text;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
+using Facet.Extensions.EFCore.Generators.Shared;
 
 namespace Facet.Extensions.EFCore.Generators.Emission;
 
 /// <summary>
 /// Emits selectors and projection expressions for EF Core queries.
 /// </summary>
-internal static class SelectorsEmitter
+public static class SelectorsEmitter
 {
     public static void Emit(SourceProductionContext context, ModelRoot efModel, ImmutableArray<FacetDtoInfo> facetDtos,
         ImmutableDictionary<string, ImmutableHashSet<string>> usedChains)
@@ -166,17 +167,18 @@ internal static class SelectorsEmitter
             return;
         }
 
-        // For now, only map Id property to avoid compilation errors
-        // TODO: Properly analyze which properties exist on both entity and DTO
-        if (scalarProperties.Any(p => p.Name == "Id"))
+        // Map all scalar properties to avoid nullable reference warnings
+        var mappedAny = false;
+        foreach (var prop in scalarProperties)
         {
-            sb.AppendLine($"            Id = entity.Id");
+            if (mappedAny) sb.AppendLine(",");
+            sb.Append($"            {prop.Name} = entity.{prop.Name}");
+            mappedAny = true;
         }
-        else if (scalarProperties.Count > 0)
+
+        if (mappedAny)
         {
-            // If no Id, just use the first property as a placeholder
-            var firstProp = scalarProperties[0];
-            sb.AppendLine($"            // {firstProp.Name} = entity.{firstProp.Name} // TODO: Verify property exists");
+            sb.AppendLine();
         }
     }
 
@@ -199,7 +201,17 @@ internal static class SelectorsEmitter
             sb.AppendLine($"    /// <summary>");
             sb.AppendLine($"    /// {prop.Name} property from the entity.");
             sb.AppendLine($"    /// </summary>");
-            sb.AppendLine($"    public {prop.TypeName} {prop.Name} {{ get; set; }}");
+
+            // Add default value for non-nullable reference types to avoid CS8618
+            var defaultValue = GetDefaultValueForType(prop.TypeName);
+            if (!string.IsNullOrEmpty(defaultValue))
+            {
+                sb.AppendLine($"    public {prop.TypeName} {prop.Name} {{ get; set; }} = {defaultValue};");
+            }
+            else
+            {
+                sb.AppendLine($"    public {prop.TypeName} {prop.Name} {{ get; set; }}");
+            }
             sb.AppendLine();
         }
 
@@ -240,5 +252,49 @@ internal static class SelectorsEmitter
     {
         var lastDot = fullTypeName.LastIndexOf('.');
         return lastDot >= 0 ? fullTypeName.Substring(0, lastDot) : string.Empty;
+    }
+
+    private static string GetDefaultValueForType(string typeName)
+    {
+        // Handle nullable types
+        if (typeName.EndsWith("?"))
+            return string.Empty; // nullable types don't need default values
+
+        // Handle common non-nullable reference types
+        if (typeName == "string" || typeName == "System.String")
+            return "string.Empty";
+
+        // Handle enums (assume they need default(EnumType))
+        if (typeName.Contains("Behavior") || typeName.Contains("Status") || typeName.Contains("Type") ||
+            (typeName.Contains(".") && char.IsUpper(typeName.Split('.').Last()[0]) && !typeName.StartsWith("System.")))
+            return $"default({typeName})";
+
+        // Handle other reference types (assume they need null! or default constructor)
+        if (typeName.Contains(".") && !typeName.StartsWith("System.") ||
+            char.IsUpper(typeName[0]) && !IsValueType(typeName))
+            return "null!";
+
+        return string.Empty; // Value types and others don't need explicit defaults
+    }
+
+    private static bool IsValueType(string typeName)
+    {
+        return typeName switch
+        {
+            "int" or "System.Int32" => true,
+            "bool" or "System.Boolean" => true,
+            "long" or "System.Int64" => true,
+            "double" or "System.Double" => true,
+            "float" or "System.Single" => true,
+            "decimal" or "System.Decimal" => true,
+            "byte" or "System.Byte" => true,
+            "short" or "System.Int16" => true,
+            "char" or "System.Char" => true,
+            "System.Guid" => true,
+            "System.DateTime" => true,
+            "System.DateTimeOffset" => true,
+            "System.TimeSpan" => true,
+            _ => false
+        };
     }
 }
