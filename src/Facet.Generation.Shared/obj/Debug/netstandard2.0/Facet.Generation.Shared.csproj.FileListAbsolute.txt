@@ -1,6 +1,0 @@
-/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Generation.Shared/obj/Debug/netstandard2.0/Facet.Generation.Shared.csproj.AssemblyReference.cache
-/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Generation.Shared/obj/Debug/netstandard2.0/Facet.Generation.Shared.GeneratedMSBuildEditorConfig.editorconfig
-/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Generation.Shared/obj/Debug/netstandard2.0/Facet.Generation.Shared.AssemblyInfoInputs.cache
-/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Generation.Shared/obj/Debug/netstandard2.0/Facet.Generation.Shared.AssemblyInfo.cs
-/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Generation.Shared/obj/Debug/netstandard2.0/Facet.Generation.Shared.csproj.CoreCompileInputs.cache
-/Users/darrenkattan/Documents/GitHub/immybot/submodules/Facet/src/Facet.Generation.Shared/obj/Debug/netstandard2.0/Facet.Generation.Shared.sourcelink.json
