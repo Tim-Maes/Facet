@@ -30,6 +30,23 @@ Facet supports custom mapping logic for advanced scenarios via multiple interfac
 - **Benefits**: Full dependency injection support, easier testing, better separation of concerns
 - **Usage**: Pass mapper instances with injected dependencies
 
+## Facet.Mapping Extension Methods
+
+The following extension methods are available for async mapping scenarios:
+
+| Method | Description |
+|--------|-------------|
+| `ToFacetAsync<TSource, TTarget, TMapper>()` | Map single instance with explicit type parameters (compile-time) |
+| `ToFacetAsync<TTarget, TMapper>()` | Map single instance with inferred source type (runtime reflection) |
+| `ToFacetsAsync<TSource, TTarget, TMapper>()` | Map collection sequentially with explicit types |
+| `ToFacetsAsync<TTarget, TMapper>()` | Map collection sequentially with inferred source type |
+| `ToFacetsParallelAsync<TSource, TTarget, TMapper>()` | Map collection in parallel with explicit types |
+| `ToFacetsParallelAsync<TTarget, TMapper>()` | Map collection in parallel with inferred source type |
+| `ToFacetHybridAsync<TSource, TTarget, TMapper>()` | Hybrid sync/async mapping with explicit types |
+| `ToFacetHybridAsync<TTarget, TMapper>()` | Hybrid sync/async mapping with inferred source type |
+
+> **Performance Note**: Methods with explicit type parameters (`<TSource, TTarget, TMapper>`) offer better compile-time performance, while simplified methods (`<TTarget, TMapper>`) use runtime reflection for improved developer experience.
+
 ## Static Mapping (No DI)
 
 ### 1. Implement the Interface
