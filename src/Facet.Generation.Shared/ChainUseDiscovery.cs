@@ -6,12 +6,20 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Facet.Extensions.EFCore.Generators.Emission;
 
-namespace Facet.Extensions.EFCore.Generators;
+#if NETSTANDARD2_0
+namespace System.Runtime.CompilerServices
+{
+    internal static class IsExternalInit { }
+}
+#endif
+
+namespace Facet.Extensions.EFCore.Generators
+{
 
 /// <summary>
 /// Discovers actual .WithX().WithY() chains used in code to emit only needed composite types.
 /// </summary>
-internal static class ChainUseDiscovery
+public static class ChainUseDiscovery
 {
     /// <summary>
     /// Default maximum depth allowed for navigation chains to prevent infinite expansion.
@@ -333,3 +341,5 @@ internal static class ChainUseDiscovery
 /// <param name="EntityName">The entity name (e.g., "Order")</param>
 /// <param name="Paths">The navigation paths used (e.g., ["Customer", "Customer/ShippingAddress", "Lines"])</param>
 public sealed record ChainUse(string EntityName, ImmutableArray<string> Paths);
+
+}

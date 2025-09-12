@@ -104,10 +104,9 @@ public sealed class FacetDtoInfo
             return new FacetDtoInfo(entityTypeName, responseDtoName, dtoNamespace, properties, tsAttributes);
         }
 
-        // Fallback: attempt baseline Get{Entity}Response naming with scalar properties
-        var fallbackName = "Get" + entityName + "Response";
-        var fallbackProperties = AnalyzeEntityProperties(entitySymbol);
-        return new FacetDtoInfo(entityTypeName, fallbackName, entityNamespace, fallbackProperties, ImmutableArray<string>.Empty);
+        // No fallback - if no Response DTO is configured, return null
+        // This ensures explicit configuration and prevents silent generation of unexpected DTOs
+        return null;
     }
 
     private static string BuildDtoName(string sourceTypeName, string prefix, string suffix, string? customPrefix, string? customSuffix)

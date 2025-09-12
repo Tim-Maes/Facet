@@ -85,14 +85,22 @@ public sealed class ExportEfModelTask : Task
 
             Assembly? ResolveHandler(AssemblyLoadContext context, AssemblyName name)
             {
+                Log.LogMessage(MessageImportance.High, $"Facet.Export: Resolving dependency '{name.FullName}'");
+
                 var path = resolver.ResolveAssemblyToPath(name);
                 if (path != null && File.Exists(path))
+                {
+                    Log.LogMessage(MessageImportance.High, $"Facet.Export: Found dependency via resolver at '{path}'");
                     return AssemblyLoadContext.Default.LoadFromAssemblyPath(path);
+                }
 
                 // Fallback: probe next to the context assembly
                 var local = Path.Combine(ctxDir, name.Name + ".dll");
                 if (File.Exists(local))
+                {
+                    Log.LogMessage(MessageImportance.High, $"Facet.Export: Found dependency locally at '{local}'");
                     return AssemblyLoadContext.Default.LoadFromAssemblyPath(local);
+                }
 
                 // Fallback: probe an optional directory with richer transitive outputs
                 if (!string.IsNullOrWhiteSpace(ProbeDirectory))
@@ -103,7 +111,10 @@ public sealed class ExportEfModelTask : Task
                         try { probe = Path.GetFullPath(probe); } catch { }
                     }
                     if (File.Exists(probe))
+                    {
+                        Log.LogMessage(MessageImportance.High, $"Facet.Export: Found dependency in probe directory at '{probe}'");
                         return AssemblyLoadContext.Default.LoadFromAssemblyPath(probe);
+                    }
                 }
 
                 // Fallback: probe the task assembly directory (contains EFCore + InMemory via CopyLocalLockFileAssemblies)
@@ -111,9 +122,66 @@ public sealed class ExportEfModelTask : Task
                 {
                     var taskLocal = Path.Combine(taskAsmDir!, name.Name + ".dll");
                     if (File.Exists(taskLocal))
+                    {
+                        Log.LogMessage(MessageImportance.High, $"Facet.Export: Found dependency in task directory at '{taskLocal}'");
                         return AssemblyLoadContext.Default.LoadFromAssemblyPath(taskLocal);
+                    }
                 }
 
+                // Special handling for Identity assemblies - try common NuGet locations
+                if (name.Name?.Contains("Identity") == true || name.Name?.Contains("HealthChecks") == true)
+                {
+                    Log.LogMessage(MessageImportance.High, $"Facet.Export: Attempting special resolution for Identity/HealthChecks assembly '{name.Name}'");
+
+                    var nugetPaths = new[]
+                    {
+                        // Try the runtime directory first
+                        Path.Combine(Path.GetDirectoryName(typeof(object).Assembly.Location) ?? "", name.Name + ".dll"),
+                        // Try common NuGet package cache locations
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "packages", name.Name.ToLowerInvariant(), "*", "lib", "net9.0", name.Name + ".dll"),
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "packages", name.Name.ToLowerInvariant(), "*", "lib", "net8.0", name.Name + ".dll"),
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "packages", name.Name.ToLowerInvariant(), "*", "lib", "netstandard2.0", name.Name + ".dll")
+                    };
+
+                    foreach (var nugetPath in nugetPaths)
+                    {
+                        try
+                        {
+                            // Handle wildcard paths for NuGet packages
+                            if (nugetPath.Contains("*"))
+                            {
+                                var directory = Path.GetDirectoryName(nugetPath);
+                                var pattern = Path.GetFileName(Path.GetDirectoryName(nugetPath));
+                                var fileName = Path.GetFileName(nugetPath);
+
+                                if (Directory.Exists(Path.GetDirectoryName(directory)))
+                                {
+                                    var matchingDirs = Directory.GetDirectories(Path.GetDirectoryName(directory), pattern);
+                                    foreach (var matchingDir in matchingDirs.OrderByDescending(d => d)) // Get latest version
+                                    {
+                                        var fullPath = Path.Combine(matchingDir, Path.GetFileName(directory), fileName);
+                                        if (File.Exists(fullPath))
+                                        {
+                                            Log.LogMessage(MessageImportance.High, $"Facet.Export: Found Identity/HealthChecks dependency at '{fullPath}'");
+                                            return AssemblyLoadContext.Default.LoadFromAssemblyPath(fullPath);
+                                        }
+                                    }
+                                }
+                            }
+                            else if (File.Exists(nugetPath))
+                            {
+                                Log.LogMessage(MessageImportance.High, $"Facet.Export: Found Identity/HealthChecks dependency at '{nugetPath}'");
+                                return AssemblyLoadContext.Default.LoadFromAssemblyPath(nugetPath);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.LogMessage(MessageImportance.High, $"Facet.Export: Failed to load from '{nugetPath}': {ex.Message}");
+                        }
+                    }
+                }
+
+                Log.LogMessage(MessageImportance.High, $"Facet.Export: Could not resolve dependency '{name.FullName}' - exhausted all resolution paths");
                 return null;
             }
 
@@ -153,7 +221,7 @@ public sealed class ExportEfModelTask : Task
                         failures.Add(createMsg);
                         continue;
                     }
-                    
+
                     if (ctx == null)
                     {
                         var msg = $"Could not create instance of DbContext: {contextType.FullName}";
@@ -165,19 +233,20 @@ public sealed class ExportEfModelTask : Task
                     try
                     {
                         Log.LogMessage(MessageImportance.High, $"Facet.Export: Accessing Model for '{contextType.FullName}'...");
-                        
-                        // Direct cast to DbContext and access Model property
-                        var dbContext = ctx as DbContext;
-                        if (dbContext == null)
+
+                        // Use reflection to access Model property and cast to interface
+                        // This avoids assembly loading context issues where DbContext types don't match
+                        var modelProperty = ctx.GetType().GetProperty("Model");
+                        if (modelProperty == null)
                         {
-                            var msg = $"Context {contextType.FullName} is not a DbContext.";
+                            var msg = $"Context {contextType.FullName} does not have a Model property.";
                             Log.LogError($"Facet.Export: {msg}");
                             failures.Add(msg);
                             continue;
                         }
 
-                        var model = dbContext.Model as IReadOnlyModel;
-                        if (model == null)
+                        var modelValue = modelProperty.GetValue(ctx);
+                        if (modelValue == null)
                         {
                             var msg = $"Context {contextType.FullName} returned null Model.";
                             Log.LogError($"Facet.Export: {msg}");
@@ -185,8 +254,168 @@ public sealed class ExportEfModelTask : Task
                             continue;
                         }
 
+                        // Try to cast to IReadOnlyModel interface - this should work across assembly loading contexts
+                        IReadOnlyModel? model = null;
+                        try
+                        {
+                            model = modelValue as IReadOnlyModel;
+                        }
+                        catch (Exception castEx)
+                        {
+                            Log.LogMessage(MessageImportance.High, $"Facet.Export: Failed to cast Model to IReadOnlyModel: {castEx.Message}");
+                        }
+
+                        if (model == null)
+                        {
+                            // If direct cast fails, try using reflection to access the interface methods
+                            Log.LogMessage(MessageImportance.High, $"Facet.Export: Direct cast to IReadOnlyModel failed, attempting reflection-based access...");
+                            
+                            // Check if the object implements the interface methods we need
+                            var modelType = modelValue.GetType();
+                            Log.LogMessage(MessageImportance.High, $"Facet.Export: Model type: {modelType.FullName}");
+                            
+                            // List all available methods for debugging
+                            var allMethods = modelType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
+                            var entityMethods = allMethods.Where(m => m.Name.Contains("Entity")).ToArray();
+                            Log.LogMessage(MessageImportance.High, $"Facet.Export: Available entity-related methods: {string.Join(", ", entityMethods.Select(m => $"{m.Name}({string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name))})"))}");
+                            
+                            var getEntityTypesMethod = modelType.GetMethod("GetEntityTypes", Type.EmptyTypes);
+                            if (getEntityTypesMethod == null)
+                            {
+                                // Try alternative method signatures
+                                getEntityTypesMethod = modelType.GetMethod("GetEntityTypes");
+                                if (getEntityTypesMethod == null)
+                                {
+                                    // Try on interfaces
+                                    foreach (var iface in modelType.GetInterfaces())
+                                    {
+                                        Log.LogMessage(MessageImportance.High, $"Facet.Export: Checking interface: {iface.FullName}");
+                                        getEntityTypesMethod = iface.GetMethod("GetEntityTypes", Type.EmptyTypes);
+                                        if (getEntityTypesMethod == null)
+                                            getEntityTypesMethod = iface.GetMethod("GetEntityTypes");
+                                        if (getEntityTypesMethod != null)
+                                        {
+                                            Log.LogMessage(MessageImportance.High, $"Facet.Export: Found GetEntityTypes on interface: {iface.FullName}");
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            if (getEntityTypesMethod == null)
+                            {
+                                var msg = $"Context {contextType.FullName} Model (type: {modelType.FullName}) does not have GetEntityTypes method.";
+                                Log.LogError($"Facet.Export: {msg}");
+                                failures.Add(msg);
+                                continue;
+                            }
+
+                            // Use reflection to call GetEntityTypes
+                            var entityTypesResult = getEntityTypesMethod.Invoke(modelValue, null);
+                            if (entityTypesResult == null)
+                            {
+                                var msg = $"Context {contextType.FullName} GetEntityTypes returned null.";
+                                Log.LogError($"Facet.Export: {msg}");
+                                failures.Add(msg);
+                                continue;
+                            }
+
+                            // Process entities using reflection
+                            var reflectionEntityList = new List<object>();
+                            foreach (var entity in (System.Collections.IEnumerable)entityTypesResult)
+                            {
+                                try
+                                {
+                                    var entityType = entity.GetType();
+                                    var nameProperty = entityType.GetProperty("Name");
+                                    var clrTypeProperty = entityType.GetProperty("ClrType");
+                                    var getKeysMethod = entityType.GetMethod("GetKeys", Type.EmptyTypes);
+                                    var getNavigationsMethod = entityType.GetMethod("GetNavigations", Type.EmptyTypes);
+
+                                    var entName = nameProperty?.GetValue(entity)?.ToString() ?? "Unknown";
+                                    var clrType = clrTypeProperty?.GetValue(entity) as Type;
+                                    var clrName = clrType?.FullName ?? entName;
+
+                                    var keysList = new List<string[]>();
+                                    if (getKeysMethod != null)
+                                    {
+                                        var keysResult = getKeysMethod.Invoke(entity, null);
+                                        if (keysResult != null)
+                                        {
+                                            foreach (var key in (System.Collections.IEnumerable)keysResult)
+                                            {
+                                                var propertiesProperty = key.GetType().GetProperty("Properties");
+                                                if (propertiesProperty != null)
+                                                {
+                                                    var properties = propertiesProperty.GetValue(key);
+                                                    if (properties != null)
+                                                    {
+                                                        var names = new List<string>();
+                                                        foreach (var prop in (System.Collections.IEnumerable)properties)
+                                                        {
+                                                            var propNameProperty = prop.GetType().GetProperty("Name");
+                                                            var propName = propNameProperty?.GetValue(prop)?.ToString();
+                                                            if (!string.IsNullOrEmpty(propName))
+                                                                names.Add(propName);
+                                                        }
+                                                        keysList.Add(names.ToArray());
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    var navs = new List<object>();
+                                    if (getNavigationsMethod != null)
+                                    {
+                                        var navsResult = getNavigationsMethod.Invoke(entity, null);
+                                        if (navsResult != null)
+                                        {
+                                            foreach (var nav in (System.Collections.IEnumerable)navsResult)
+                                            {
+                                                var navType = nav.GetType();
+                                                var navNameProperty = navType.GetProperty("Name");
+                                                var targetEntityTypeProperty = navType.GetProperty("TargetEntityType");
+                                                var isCollectionProperty = navType.GetProperty("IsCollection");
+
+                                                var navName = navNameProperty?.GetValue(nav)?.ToString() ?? "Unknown";
+                                                var isCollection = isCollectionProperty?.GetValue(nav) as bool? ?? false;
+                                                
+                                                var targetName = "Unknown";
+                                                if (targetEntityTypeProperty != null)
+                                                {
+                                                    var targetEntityType = targetEntityTypeProperty.GetValue(nav);
+                                                    if (targetEntityType != null)
+                                                    {
+                                                        var targetClrTypeProperty = targetEntityType.GetType().GetProperty("ClrType");
+                                                        var targetNameProperty = targetEntityType.GetType().GetProperty("Name");
+                                                        
+                                                        var targetClrType = targetClrTypeProperty?.GetValue(targetEntityType) as Type;
+                                                        targetName = targetClrType?.FullName ?? targetNameProperty?.GetValue(targetEntityType)?.ToString() ?? "Unknown";
+                                                    }
+                                                }
+
+                                                navs.Add(new { Name = navName, Target = targetName, IsCollection = isCollection });
+                                            }
+                                        }
+                                    }
+
+                                    reflectionEntityList.Add(new { Name = entName, Clr = clrName, Keys = keysList.ToArray(), Navigations = navs.ToArray() });
+                                }
+                                catch (Exception entityEx)
+                                {
+                                    Log.LogMessage(MessageImportance.High, $"Facet.Export: Error processing entity via reflection: {entityEx.Message}");
+                                }
+                            }
+
+                            var reflectionContextData = new { Context = contextType.FullName ?? contextType.Name, Entities = reflectionEntityList.ToArray() };
+                            contexts.Add(reflectionContextData);
+                            Log.LogMessage(MessageImportance.Normal, $"Facet.Export: Exported EF model for context via reflection: {contextType.FullName} (Entities={reflectionEntityList.Count})");
+                            continue;
+                        }
+
                         var entityList = new List<object>();
-                        
+
                         // Direct interface usage - no reflection needed
                         foreach (var entity in model.GetEntityTypes())
                         {
@@ -265,56 +494,118 @@ public sealed class ExportEfModelTask : Task
 
     private IEnumerable<Type> ResolveDbContextTypes(Assembly assembly, string? contextTypeNames)
     {
+        Log.LogMessage(MessageImportance.High, $"Facet.Export: ResolveDbContextTypes called with contextTypeNames='{contextTypeNames}'");
+
+        // Always get all types first to avoid Assembly.GetType() dependency issues
+        Log.LogMessage(MessageImportance.High, $"Facet.Export: Getting all types from assembly '{assembly.FullName}'...");
+        var allTypes = GetLoadableTypes(assembly);
+        Log.LogMessage(MessageImportance.High, $"Facet.Export: GetLoadableTypes returned {allTypes.Count()} types");
+
+        // Log all discovered types for debugging, specifically looking for ImmybotDbContext
+        Log.LogMessage(MessageImportance.High, $"Facet.Export: All discovered types:");
+        var immybotDbContextFound = false;
+        foreach (var type in allTypes.Take(50)) // Limit to first 50 to avoid log spam
+        {
+            Log.LogMessage(MessageImportance.High, $"Facet.Export:   - {type.FullName} (Namespace: {type.Namespace}, IsAbstract: {type.IsAbstract})");
+            if (string.Equals(type.FullName, "Immybot.Backend.Persistence.ImmybotDbContext", StringComparison.OrdinalIgnoreCase))
+            {
+                immybotDbContextFound = true;
+                Log.LogMessage(MessageImportance.High, $"Facet.Export:   *** FOUND ImmybotDbContext in type enumeration! ***");
+            }
+        }
+        if (allTypes.Count() > 50)
+        {
+            Log.LogMessage(MessageImportance.High, $"Facet.Export:   ... and {allTypes.Count() - 50} more types");
+            // Check remaining types for ImmybotDbContext
+            foreach (var type in allTypes.Skip(50))
+            {
+                if (string.Equals(type.FullName, "Immybot.Backend.Persistence.ImmybotDbContext", StringComparison.OrdinalIgnoreCase))
+                {
+                    immybotDbContextFound = true;
+                    Log.LogMessage(MessageImportance.High, $"Facet.Export:   *** FOUND ImmybotDbContext in remaining types! ***");
+                    break;
+                }
+            }
+        }
+
+        if (!immybotDbContextFound)
+        {
+            Log.LogMessage(MessageImportance.High, $"Facet.Export: *** ImmybotDbContext was NOT found in type enumeration - this is the root cause! ***");
+        }
+
+        // Find all DbContext types in the assembly
+        var dbContextTypes = new List<Type>();
+        foreach (var type in allTypes)
+        {
+            try
+            {
+                if (!type.IsAbstract && IsDbContextByName(type))
+                {
+                    dbContextTypes.Add(type);
+                    Log.LogMessage(MessageImportance.High, $"Facet.Export: Found DbContext type: '{type.FullName}'");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.LogMessage(MessageImportance.High, $"Facet.Export: Exception checking type '{type.FullName}': {ex.Message}");
+            }
+        }
+
+        Log.LogMessage(MessageImportance.High, $"Facet.Export: Found {dbContextTypes.Count} total DbContext types: [{string.Join(", ", dbContextTypes.Select(t => t.FullName))}]");
+
         if (!string.IsNullOrWhiteSpace(contextTypeNames))
         {
             var requestedNames = contextTypeNames.Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(name => name.Trim())
                 .ToArray();
 
-            // Try to resolve by full name first to avoid scanning all types
-            var resolved = new List<Type>();
-            foreach (var name in requestedNames)
-            {
-                var type = assembly.GetType(name, throwOnError: false, ignoreCase: false)
-                           ?? assembly.GetType(name, throwOnError: false, ignoreCase: true);
+            Log.LogMessage(MessageImportance.High, $"Facet.Export: Requested names: [{string.Join(", ", requestedNames)}]");
 
-                if (type == null)
+            // Match requested names against found DbContext types
+            var matches = new List<Type>();
+            foreach (var requestedName in requestedNames)
+            {
+                Log.LogMessage(MessageImportance.High, $"Facet.Export: Looking for requested type '{requestedName}'...");
+
+                var matchedType = dbContextTypes.FirstOrDefault(t =>
+                    string.Equals(t.FullName, requestedName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(t.Name, requestedName, StringComparison.OrdinalIgnoreCase));
+
+                if (matchedType != null)
                 {
-                    Log.LogMessage(MessageImportance.High, $"Facet.Export: Could not resolve type by name '{name}' in assembly '{assembly.FullName}'.");
-                    continue;
+                    Log.LogMessage(MessageImportance.High, $"Facet.Export: Matched '{requestedName}' to '{matchedType.FullName}'");
+                    matches.Add(matchedType);
+
+                    // Log detailed analysis
+                    var baseName = matchedType.BaseType?.FullName ?? "<null>";
+                    var isAbstract = matchedType.IsAbstract;
+                    var nameBasedDbContext = IsDbContextByName(matchedType);
+
+                    bool assignableDefault = false;
+                    try
+                    {
+                        assignableDefault = typeof(DbContext).IsAssignableFrom(matchedType);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.LogMessage(MessageImportance.High, $"Facet.Export: Exception checking IsAssignableFrom for '{matchedType.FullName}': {ex.Message}");
+                    }
+
+                    Log.LogMessage(MessageImportance.High, $"Facet.Export: Type '{matchedType.FullName}' analysis: BaseType='{baseName}', IsAbstract={isAbstract}, NameBasedDbContext={nameBasedDbContext}, AssignableToDefaultDbContext={assignableDefault}");
                 }
-
-                var baseName = type.BaseType?.FullName ?? "<null>";
-                var isAbstract = type.IsAbstract;
-                var nameBasedDbContext = IsDbContextByName(type);
-                var assignableDefault = typeof(DbContext).IsAssignableFrom(type);
-                Log.LogMessage(MessageImportance.High, $"Facet.Export: Candidate '{type.FullName}' BaseType='{baseName}', IsAbstract={isAbstract}, NameBasedDbContext={nameBasedDbContext}, AssignableToDefaultDbContext={assignableDefault}");
-
-                // Accept explicit type if it's not abstract and looks like a DbContext by name-based inheritance
-                if (!isAbstract && nameBasedDbContext)
-                    resolved.Add(type);
+                else
+                {
+                    Log.LogMessage(MessageImportance.High, $"Facet.Export: Could not find requested type '{requestedName}' among available DbContext types");
+                }
             }
 
-            if (resolved.Count > 0)
-                return resolved;
-
-            // Fallback: scan for matches by simple name if full name resolution failed
-            var allTypes = GetLoadableTypes(assembly);
-            var matches = allTypes.Where(t => !t.IsAbstract && IsDbContextByName(t))
-                                  .Where(t => requestedNames.Any(r => string.Equals(r, t.Name, StringComparison.OrdinalIgnoreCase)
-                                                            || string.Equals(r, t.FullName, StringComparison.OrdinalIgnoreCase)))
-                                  .ToList();
-            foreach (var m in matches)
-            {
-                Log.LogMessage(MessageImportance.High, $"Facet.Export: Fallback matched '{m.FullName}'.");
-            }
+            Log.LogMessage(MessageImportance.High, $"Facet.Export: Matched {matches.Count} requested types");
             return matches;
         }
 
-        // No explicit names provided: scan for all DbContext types (may require additional dependencies loaded)
-        return GetLoadableTypes(assembly)
-            .Where(type => !type.IsAbstract && IsDbContextByName(type))
-            .ToList();
+        // No explicit names provided: return all DbContext types
+        Log.LogMessage(MessageImportance.High, $"Facet.Export: No explicit names provided, returning all {dbContextTypes.Count} DbContext types");
+        return dbContextTypes;
     }
 
     private static IEnumerable<Type> GetLoadableTypes(Assembly assembly)
@@ -329,24 +620,77 @@ public sealed class ExportEfModelTask : Task
         }
     }
 
-    private static bool IsDbContextByName(Type type)
+    private bool IsDbContextByName(Type type)
     {
         try
         {
-            var current = type;
-            while (current != null)
+            // Special case: if this is the ImmybotDbContext type we're looking for, check it more thoroughly
+            if (string.Equals(type.FullName, "Immybot.Backend.Persistence.ImmybotDbContext", StringComparison.OrdinalIgnoreCase))
             {
+                Log.LogMessage(MessageImportance.High, $"Facet.Export: *** Found ImmybotDbContext type! Checking inheritance chain... ***");
+            }
+
+            Log.LogMessage(MessageImportance.High, $"Facet.Export: IsDbContextByName checking type '{type.FullName}'");
+
+            var current = type;
+            var depth = 0;
+            while (current != null && depth < 10) // Prevent infinite loops
+            {
+                Log.LogMessage(MessageImportance.High, $"Facet.Export:   Depth {depth}: Checking '{current.FullName}' (Name: '{current.Name}', Namespace: '{current.Namespace}')");
+
                 if (string.Equals(current.FullName, "Microsoft.EntityFrameworkCore.DbContext", StringComparison.Ordinal))
+                {
+                    Log.LogMessage(MessageImportance.High, $"Facet.Export:   Found DbContext by FullName match at depth {depth}");
                     return true;
+                }
                 if (string.Equals(current.Name, "DbContext", StringComparison.Ordinal)
                     && string.Equals(current.Namespace, "Microsoft.EntityFrameworkCore", StringComparison.Ordinal))
+                {
+                    Log.LogMessage(MessageImportance.High, $"Facet.Export:   Found DbContext by Name+Namespace match at depth {depth}");
                     return true;
-                current = current.BaseType;
+                }
+
+                // Also check for IdentityDbContext which is a common base for DbContext
+                if (current.Name.Contains("IdentityDbContext") &&
+                    (current.Namespace?.Contains("Microsoft.AspNetCore.Identity.EntityFrameworkCore") == true ||
+                     current.Namespace?.Contains("Microsoft.EntityFrameworkCore") == true))
+                {
+                    Log.LogMessage(MessageImportance.High, $"Facet.Export:   Found IdentityDbContext (which inherits from DbContext) at depth {depth}");
+                    return true;
+                }
+
+                try
+                {
+                    current = current.BaseType;
+                    Log.LogMessage(MessageImportance.High, $"Facet.Export:   Moving to base type: {current?.FullName ?? "null"}");
+                }
+                catch (Exception ex)
+                {
+                    Log.LogMessage(MessageImportance.High, $"Facet.Export:   Exception getting BaseType at depth {depth}: {ex.Message}");
+
+                    // If we can't load the base type but this looks like a DbContext by name, assume it is
+                    if (type.Name.Contains("DbContext") || type.FullName?.Contains("DbContext") == true)
+                    {
+                        Log.LogMessage(MessageImportance.High, $"Facet.Export:   Type name contains 'DbContext', assuming it's a DbContext despite BaseType loading failure");
+                        return true;
+                    }
+                    break;
+                }
+                depth++;
             }
+
+            Log.LogMessage(MessageImportance.High, $"Facet.Export:   No DbContext found in inheritance chain for '{type.FullName}' (checked {depth} levels)");
         }
-        catch
+        catch (Exception ex)
         {
-            // ignore type load issues, treat as not a DbContext
+            Log.LogMessage(MessageImportance.High, $"Facet.Export: Exception in IsDbContextByName for '{type.FullName}': {ex.Message}");
+
+            // If we can't check the inheritance chain but this looks like a DbContext by name, assume it is
+            if (type.Name.Contains("DbContext") || type.FullName?.Contains("DbContext") == true)
+            {
+                Log.LogMessage(MessageImportance.High, $"Facet.Export: Type name contains 'DbContext', assuming it's a DbContext despite exception");
+                return true;
+            }
         }
         return false;
     }
@@ -449,14 +793,14 @@ public sealed class ExportEfModelTask : Task
                 return created;
             }
         }
-        
+
         // Try default fallback order: InMemory first, then Npgsql
         if (!preferInMemory && TryCreateWithInMemory(alc, contextType, out var inmemCreated) && inmemCreated != null)
         {
             try { Log.LogMessage(MessageImportance.Normal, $"Facet.Export: Using InMemory provider (fallback) for {contextType.FullName}"); } catch { }
             return inmemCreated;
         }
-        
+
         if (!preferNpgsql && TryCreateWithNpgsql(alc, contextType, out var npgsqlCreated) && npgsqlCreated != null)
         {
             try { Log.LogMessage(MessageImportance.Normal, $"Facet.Export: Using Npgsql provider (fallback) for {contextType.FullName}"); } catch { }
@@ -487,7 +831,7 @@ public sealed class ExportEfModelTask : Task
                     // Find the provider method
                     var useInMemoryMethod = extensionsType.GetMethods()
                         .FirstOrDefault(m => m.Name == "UseInMemoryDatabase" && m.IsGenericMethodDefinition && m.GetParameters().Length == 2);
-                    
+
                     if (useInMemoryMethod != null)
                     {
                         var closed = useInMemoryMethod.MakeGenericMethod(contextType);
@@ -535,7 +879,7 @@ public sealed class ExportEfModelTask : Task
                         .Where(m => m.Name == "UseNpgsql")
                         .ToList();
                     var methodGen = candidates.FirstOrDefault(m => m.IsGenericMethodDefinition && m.GetParameters().Length >= 2);
-                    
+
                     if (methodGen != null)
                     {
                         var cs = "Host=localhost;Database=FacetDesignTime;Username=facet;Password=facet";
@@ -560,7 +904,7 @@ public sealed class ExportEfModelTask : Task
     }
 
 
-    
+
     // Helper method to create instances using compiled delegates
     private static object CreateInstance(Type type, params object[] args)
     {
@@ -571,14 +915,14 @@ public sealed class ExportEfModelTask : Task
             {
                 var ctor = t.GetConstructor(Type.EmptyTypes);
                 if (ctor == null) throw new InvalidOperationException($"No parameterless constructor found for {t}");
-                
+
                 var newExpr = Expression.New(ctor);
                 var lambda = Expression.Lambda<Func<object, object>>(Expression.Convert(newExpr, typeof(object)), Expression.Parameter(typeof(object), "_"));
                 return lambda.Compile();
             });
             return factory(null!);
         }
-        
+
         // For all other cases, just use Activator.CreateInstance
         // The optimization for single-arg constructors was causing issues with DbContext options
         return Activator.CreateInstance(type, args)!;

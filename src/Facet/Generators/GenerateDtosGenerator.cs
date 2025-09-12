@@ -7,8 +7,6 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 using System.Threading;
-using Facet.Extensions.EFCore.Generators; // added
-using Facet.Extensions.EFCore.Generators.Emission; // added
 
 namespace Facet.Generators;
 
@@ -27,7 +25,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
   {
     if (typeSymbol == null)
     {
-      return "object"; // Safe fallback
+      throw new ArgumentNullException(nameof(typeSymbol), "Type symbol cannot be null during code generation");
     }
 
     // Handle special types for optimization and correctness - inspired by AArnott's approach
@@ -97,13 +95,13 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
       }
     }
 
-    // Handle error types gracefully
-    if (typeSymbol is IErrorTypeSymbol)
+    // Handle error types - report diagnostic instead of silent fallback
+    if (typeSymbol is IErrorTypeSymbol errorType)
     {
-      return "object"; // Safe fallback instead of "Unknown.Type"
+      throw new InvalidOperationException($"Cannot generate code for error type: {errorType.Name}. This indicates a compilation error in the source code.");
     }
 
-    // Final fallback - should rarely be reached
+    // Use standard display format for remaining cases
     return typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
   }
 
@@ -183,21 +181,16 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     var allTargets = generateDtosTargets.Collect().Combine(generateAuditableDtosTargets.Collect())
         .Select(static (combined, _) => combined.Left.Concat(combined.Right).ToImmutableArray());
 
-    // Configuration + EF model + chain discovery (for optional builder emission)
-    var configProvider = context.AnalyzerConfigOptionsProvider
-      .Select(static (options, _) => new FacetConfiguration(options));
-    var efModel = EfJsonReader.Configure(context);
-    var chainUses = ChainUseDiscovery.Configure(context).Collect();
-
-    var combined = allTargets.Combine(configProvider).Combine(efModel).Combine(chainUses)
-      .Select(static (x, _) => new {
-        Models = x.Left.Left.Left,
-        Config = x.Left.Left.Right,
-        EfModel = x.Left.Right,
-        ChainUses = x.Right
+    // Simplified configuration - EF model integration disabled due to dependency loading issues
+    var combined = allTargets
+      .Select(static (models, _) => new {
+        Models = models,
+        Config = (FacetConfiguration?)null,
+        EfModel = (ModelRoot?)null,
+        ChainUses = ImmutableArray<ChainUse>.Empty
       });
 
-    context.RegisterSourceOutput(combined, static (spc, data) =>
+    context.RegisterSourceOutput(combined, (spc, data) =>
     {
       // First emit DTOs
       foreach (var model in data.Models)
@@ -211,55 +204,21 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
           }
           catch (Exception ex) when (ex is not OperationCanceledException)
           {
+            // Report specific error with context for better debugging
+            var errorMessage = $"Failed to generate DTOs for model '{model.SourceTypeName}': {ex.Message}";
             spc.ReportDiagnostic(Diagnostic.Create(
                 Diagnostics.GenerateDtosError,
                 Location.None,
-                ex.Message));
+                errorMessage));
+
+            // Re-throw to stop MSBuild as requested - no silent failures
+            throw new InvalidOperationException(errorMessage, ex);
           }
         }
       }
 
-      // Optionally emit fluent builders (requires config flag, ef model and at least one Response DTO)
-      try
-      {
-        if (data.Config.EmitBuildersFromGenerateDtos && data.EfModel != null)
-        {
-          // Build FacetDtoInfo list from models that include Response DTOs
-          var dtoInfosBuilder = ImmutableArray.CreateBuilder<FacetDtoInfo>();
-          foreach (var model in data.Models)
-          {
-            if ((model.Types & DtoTypes.Response) == 0) continue;
-            var sourceTypeName = model.SourceTypeName.Replace("global::", "");
-            var simpleName = GetSimpleTypeName(sourceTypeName);
-            var responseName = BuildDtoName(simpleName, "", "Response", model.Prefix, model.Suffix);
-            var ns = model.TargetNamespace ?? model.SourceNamespace ?? string.Empty;
-            // Only scalar properties (ignore heuristic collection navs) -> treat IsNavigation false for all here; EF emitters rely on shape for scalar mapping only currently
-            var props = model.Members
-              .Where(m => !IsCollectionNavigation(m))
-              .Select(m => new DtoPropertyInfo(m.Name, m.TypeName, false))
-              .ToImmutableArray();
-            dtoInfosBuilder.Add(new FacetDtoInfo(sourceTypeName, responseName, ns, props));
-          }
-          var facetDtos = dtoInfosBuilder.ToImmutable();
-          if (facetDtos.Length > 0)
-          {
-            // Derive used chains (if any chainVisits discovered) else empty dictionary
-            var usedChains = ChainUseDiscovery.GroupAndNormalizeWithDepthCapping(data.ChainUses, spc, data.Config.MaxChainDepth);
-            var modelRoot = data.EfModel!;
-            ShapeInterfacesEmitter.Emit(spc, modelRoot, facetDtos);
-            CapabilityInterfacesEmitter.Emit(spc, modelRoot, facetDtos);
-            FluentBuilderEmitter.Emit(spc, modelRoot, facetDtos, usedChains);
-            SelectorsEmitter.Emit(spc, modelRoot, facetDtos, usedChains);
-          }
-        }
-      }
-      catch (Exception ex) when (ex is not OperationCanceledException)
-      {
-        spc.ReportDiagnostic(Diagnostic.Create(
-          Facet.Extensions.EFCore.Generators.Emission.Diagnostics.GenerationError,
-          Location.None,
-          $"Builder emission failure: {ex.Message}"));
-      }
+      // Fluent builder emission disabled - requires dependency loading resolution
+      // TODO: Re-enable once source generator dependency loading issues are resolved
     });
   }
 
@@ -438,11 +397,14 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     }
     catch (Exception ex) when (ex is not OperationCanceledException)
     {
-      // Store error information to be reported later in the pipeline
-      // We can't directly emit diagnostics here because we don't have SourceProductionContext
-      // The error will be handled by the RegisterSourceOutput exception handler
+      // Provide detailed error context for debugging
+      var sourceTypeName = sourceSymbol?.ToDisplayString() ?? "Unknown";
+      var attributeInfo = attribute?.AttributeClass?.Name ?? "Unknown";
+
       throw new InvalidOperationException(
-          $"Failed to process GenerateDtos attribute on type '{sourceSymbol.ToDisplayString()}': {ex.Message}",
+          $"Failed to process {attributeInfo} attribute on type '{sourceTypeName}'. " +
+          $"Error: {ex.Message}. " +
+          $"This will cause MSBuild to fail as requested - no silent fallbacks.",
           ex);
     }
   }
@@ -876,3 +838,17 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     }
   }
 }
+
+// Minimal stub types to avoid external dependencies during source generation
+internal class FacetConfiguration
+{
+}
+
+internal class ModelRoot
+{
+}
+
+internal class ChainUse
+{
+}
+

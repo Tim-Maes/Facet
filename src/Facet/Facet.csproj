@@ -28,10 +28,18 @@
 
     <ItemGroup>
         <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+        <None Include="$(OutputPath)\Facet.Generation.Shared.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+        <None Include="$(OutputPath)\Newtonsoft.Json.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
         <None Include="..\..\README.md" Pack="true" PackagePath="" />
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Facet.Generation.Shared\Facet.Generation.Shared.csproj" />
+        <ProjectReference Include="..\Facet.Generation.Shared\Facet.Generation.Shared.csproj" PrivateAssets="none" />
     </ItemGroup>
+
+    <Target Name="CopyDependenciesToOutput" AfterTargets="Build">
+        <Copy SourceFiles="..\Facet.Generation.Shared\bin\Debug\netstandard2.0\Facet.Generation.Shared.dll" DestinationFolder="$(OutputPath)" />
+        <Copy SourceFiles="$(NuGetPackageRoot)newtonsoft.json\13.0.3\lib\netstandard2.0\Newtonsoft.Json.dll" DestinationFolder="$(OutputPath)" />
+    </Target>
+
 </Project>
