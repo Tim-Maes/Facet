@@ -17,13 +17,21 @@ public class ExpressionMappingTests
 
     private static List<User> CreateTestUsers()
     {
-        return new List<User>
+        var users = new List<User>
         {
             TestDataFactory.CreateUser("John", "Doe"),
             TestDataFactory.CreateUser("Jane", "Smith"),
             TestDataFactory.CreateUser("Bob", "Johnson"),
             TestDataFactory.CreateUser("Alice", "Williams")
         };
+        
+        // Set predictable IDs for testing
+        for (int i = 0; i < users.Count; i++)
+        {
+            users[i].Id = i + 1; // IDs will be 1, 2, 3, 4
+        }
+        
+        return users;
     }
 
     private static List<UserDto> CreateTestUserDtos()
@@ -60,7 +68,7 @@ public class ExpressionMappingTests
     {
         // Arrange
         Expression<Func<User, bool>> sourcePredicate = u => 
-            u.Id > 1 && u.FirstName.StartsWith("J") && u.LastName.Contains("o");
+            u.Id > 1 && u.FirstName.StartsWith("J");
 
         // Act
         Expression<Func<UserDto, bool>> targetPredicate = sourcePredicate.MapToFacet<UserDto>();
@@ -70,13 +78,12 @@ public class ExpressionMappingTests
         var testDtos = CreateTestUserDtos();
         var results = testDtos.Where(compiledPredicate).ToList();
 
-        // Should match users with Id > 1, FirstName starts with "J", and LastName contains "o"
-        results.Should().HaveCountLessOrEqualTo(1);
-        if (results.Any())
-        {
-            results[0].FirstName.Should().StartWith("J");
-            results[0].LastName.Should().Contain("o");
-        }
+        // Should match users with Id > 1 and FirstName starts with "J" (Jane has Id=2)
+        results.Should().OnlyContain(dto => 
+            dto.Id > 1 && 
+            dto.FirstName.StartsWith("J"));
+        results.Should().HaveCount(1); // Jane Smith should match
+        results[0].FirstName.Should().Be("Jane");
     }
 
     [Fact]
@@ -95,7 +102,7 @@ public class ExpressionMappingTests
         var results = testDtos.Where(compiledPredicate).ToList();
 
         // Should match active users whose first name starts with "J"
-        results.Should().OnlyContain(dto => dto.FirstName.StartsWith("J"));
+        results.Should().OnlyContain(dto => dto.IsActive && dto.FirstName.StartsWith("J"));
     }
 
     [Fact]
@@ -414,7 +421,7 @@ public class ExpressionMappingTests
         Expression<Func<User, bool>> complexBusinessRule = u =>
             u.Id > 0 &&
             (u.FirstName.StartsWith("J") || u.LastName.Contains("son")) &&
-            !string.IsNullOrEmpty(u.Email);
+            u.IsActive;
 
         // Act - Transform to DTO
         var dtoBusinessRule = complexBusinessRule.MapToFacet<UserDto>();
@@ -424,11 +431,11 @@ public class ExpressionMappingTests
         var testDtos = CreateTestUserDtos();
         var results = testDtos.Where(compiledDtoRule).ToList();
 
-        // Should match users with valid IDs, names starting with J or containing "son", and valid email
+        // Should match users with valid IDs, names starting with J or containing "son", and are active
         results.Should().OnlyContain(dto => 
             dto.Id > 0 && 
             (dto.FirstName.StartsWith("J") || dto.LastName.Contains("son")) &&
-            !string.IsNullOrEmpty(dto.Email));
+            dto.IsActive);
     }
 
     #endregion

@@ -33,14 +33,15 @@ public static class FacetExpressionExtensions
         var sourceType = sourcePredicate.Parameters[0].Type;
         var targetType = typeof(TTarget);
         
-        var mapper = new ExpressionMapper(sourceType, targetType);
-        var transformedBody = mapper.Transform(sourcePredicate.Body);
-        var targetParameter = Expression.Parameter(targetType, sourcePredicate.Parameters[0].Name);
+        if (sourceType == targetType)
+        {
+            return (Expression<Func<TTarget, bool>>)sourcePredicate;
+        }
         
-        var transformedBodyWithParameter = new ParameterReplacer(
-            sourcePredicate.Parameters[0], targetParameter).Visit(transformedBody);
+        var mapper = new ExpressionMapper(sourceType, targetType);
+        var transformedLambda = mapper.Transform(sourcePredicate);
             
-        return Expression.Lambda<Func<TTarget, bool>>(transformedBodyWithParameter!, targetParameter);
+        return (Expression<Func<TTarget, bool>>)transformedLambda;
     }
 
     /// <summary>
@@ -65,14 +66,15 @@ public static class FacetExpressionExtensions
         var sourceType = sourceSelector.Parameters[0].Type;
         var targetType = typeof(TTarget);
         
-        var mapper = new ExpressionMapper(sourceType, targetType);
-        var transformedBody = mapper.Transform(sourceSelector.Body);
-        var targetParameter = Expression.Parameter(targetType, sourceSelector.Parameters[0].Name);
+        if (sourceType == targetType)
+        {
+            return (Expression<Func<TTarget, TResult>>)sourceSelector;
+        }
         
-        var transformedBodyWithParameter = new ParameterReplacer(
-            sourceSelector.Parameters[0], targetParameter).Visit(transformedBody);
+        var mapper = new ExpressionMapper(sourceType, targetType);
+        var transformedLambda = mapper.Transform(sourceSelector);
             
-        return Expression.Lambda<Func<TTarget, TResult>>(transformedBodyWithParameter!, targetParameter);
+        return (Expression<Func<TTarget, TResult>>)transformedLambda;
     }
 
     /// <summary>
@@ -97,14 +99,15 @@ public static class FacetExpressionExtensions
         var sourceType = sourceExpression.Parameters[0].Type;
         var targetType = typeof(TTarget);
         
-        var mapper = new ExpressionMapper(sourceType, targetType);
-        var transformedBody = mapper.Transform(sourceExpression.Body);
-        var targetParameter = Expression.Parameter(targetType, sourceExpression.Parameters[0].Name);
+        if (sourceType == targetType)
+        {
+            return sourceExpression;
+        }
         
-        var transformedBodyWithParameter = new ParameterReplacer(
-            sourceExpression.Parameters[0], targetParameter).Visit(transformedBody);
+        var mapper = new ExpressionMapper(sourceType, targetType);
+        var transformedLambda = mapper.Transform(sourceExpression);
             
-        return Expression.Lambda(transformedBodyWithParameter, targetParameter);
+        return (LambdaExpression)transformedLambda;
     }
 
     /// <summary>

@@ -11,12 +11,11 @@ namespace Facet.Mapping.Expressions;
 /// Core engine for transforming expression trees between source types and their Facet projections.
 /// Handles property mapping, method calls, and complex expression patterns.
 /// </summary>
-internal class ExpressionMapper : ExpressionVisitor
+internal class ExpressionMapper
 {
     private readonly Type _sourceType;
     private readonly Type _targetType;
     private readonly PropertyPathMapper _propertyMapper;
-    private readonly Dictionary<ParameterExpression, ParameterExpression> _parameterMap;
 
     // Cache for reflected property information to improve performance
     private static readonly ConcurrentDictionary<(Type Source, Type Target), PropertyPathMapper> 
@@ -29,7 +28,6 @@ internal class ExpressionMapper : ExpressionVisitor
         _propertyMapper = _propertyMapperCache.GetOrAdd(
             (sourceType, targetType), 
             key => new PropertyPathMapper(key.Source, key.Target));
-        _parameterMap = new Dictionary<ParameterExpression, ParameterExpression>();
     }
 
     /// <summary>
@@ -39,163 +37,293 @@ internal class ExpressionMapper : ExpressionVisitor
     /// <returns>The transformed expression</returns>
     public Expression Transform(Expression expression)
     {
-        return Visit(expression);
-    }
-
-    /// <summary>
-    /// Handles parameter expressions by mapping them to the target type.
-    /// </summary>
-    protected override Expression VisitParameter(ParameterExpression node)
-    {
-        // If we already have a mapping for this parameter, use it
-        if (_parameterMap.TryGetValue(node, out var mappedParameter))
+        if (expression is LambdaExpression lambda)
         {
-            return mappedParameter;
+            return TransformLambda(lambda);
         }
-
-        // If this parameter is of the source type, map it to the target type
-        if (node.Type == _sourceType)
-        {
-            var targetParameter = Expression.Parameter(_targetType, node.Name);
-            _parameterMap[node] = targetParameter;
-            return targetParameter;
-        }
-
-        return base.VisitParameter(node);
-    }
-
-    /// <summary>
-    /// Handles member access expressions (property access) by mapping between source and target properties.
-    /// </summary>
-    protected override Expression VisitMember(MemberExpression node)
-    {
-        // Visit the expression that the member is accessed on
-        var expression = Visit(node.Expression);
         
-        // If we're accessing a member on the source type, map it to the target type
-        if (node.Expression?.Type == _sourceType && expression?.Type == _targetType)
+        return TransformExpression(expression, new Dictionary<ParameterExpression, ParameterExpression>());
+    }
+
+    /// <summary>
+    /// Transforms a lambda expression by replacing parameters and transforming the body.
+    /// </summary>
+    private LambdaExpression TransformLambda(LambdaExpression lambda)
+    {
+        var parameterMap = new Dictionary<ParameterExpression, ParameterExpression>();
+        var newParameters = new ParameterExpression[lambda.Parameters.Count];
+
+        // Create new parameters and build the mapping
+        for (int i = 0; i < lambda.Parameters.Count; i++)
         {
-            var sourceMember = node.Member;
-            var targetMember = _propertyMapper.MapProperty(sourceMember);
+            var oldParam = lambda.Parameters[i];
+            if (oldParam.Type == _sourceType)
+            {
+                var newParam = Expression.Parameter(_targetType, oldParam.Name);
+                newParameters[i] = newParam;
+                parameterMap[oldParam] = newParam;
+            }
+            else
+            {
+                newParameters[i] = oldParam;
+            }
+        }
+
+        // Transform the lambda body
+        var newBody = TransformExpression(lambda.Body, parameterMap);
+        
+        // Create the new lambda
+        return Expression.Lambda(newBody, newParameters);
+    }
+
+    /// <summary>
+    /// Transforms an expression tree recursively.
+    /// </summary>
+    private Expression TransformExpression(Expression expression, Dictionary<ParameterExpression, ParameterExpression> parameterMap)
+    {
+        if (expression == null)
+            return null!;
+
+        switch (expression.NodeType)
+        {
+            case ExpressionType.Parameter:
+                return TransformParameter((ParameterExpression)expression, parameterMap);
+                
+            case ExpressionType.MemberAccess:
+                return TransformMemberAccess((MemberExpression)expression, parameterMap);
+                
+            case ExpressionType.Call:
+                return TransformMethodCall((MethodCallExpression)expression, parameterMap);
+                
+            case ExpressionType.Equal:
+            case ExpressionType.NotEqual:
+            case ExpressionType.GreaterThan:
+            case ExpressionType.GreaterThanOrEqual:
+            case ExpressionType.LessThan:
+            case ExpressionType.LessThanOrEqual:
+            case ExpressionType.AndAlso:
+            case ExpressionType.OrElse:
+            case ExpressionType.Add:
+            case ExpressionType.Subtract:
+            case ExpressionType.Multiply:
+            case ExpressionType.Divide:
+                return TransformBinary((BinaryExpression)expression, parameterMap);
+                
+            case ExpressionType.Not:
+            case ExpressionType.Convert:
+            case ExpressionType.ConvertChecked:
+                return TransformUnary((UnaryExpression)expression, parameterMap);
+                
+            case ExpressionType.Constant:
+                return expression; // Constants don't need transformation
+                
+            case ExpressionType.New:
+                return TransformNew((NewExpression)expression, parameterMap);
+                
+            case ExpressionType.MemberInit:
+                return TransformMemberInit((MemberInitExpression)expression, parameterMap);
+                
+            case ExpressionType.Conditional:
+                return TransformConditional((ConditionalExpression)expression, parameterMap);
+                
+            default:
+                // For any other expression type, try to handle it generically
+                return expression;
+        }
+    }
+
+    private Expression TransformParameter(ParameterExpression parameter, Dictionary<ParameterExpression, ParameterExpression> parameterMap)
+    {
+        if (parameterMap.TryGetValue(parameter, out var mapped))
+        {
+            return mapped;
+        }
+        return parameter;
+    }
+
+    private Expression TransformMemberAccess(MemberExpression memberExpression, Dictionary<ParameterExpression, ParameterExpression> parameterMap)
+    {
+        var transformedExpression = TransformExpression(memberExpression.Expression, parameterMap);
+        
+        // If the member access is on a source type parameter, map to target type
+        if (memberExpression.Expression?.Type == _sourceType && transformedExpression?.Type == _targetType)
+        {
+            var sourceMember = memberExpression.Member;
+            
+            // Always look for the property directly on the target type by name
+            // This ensures we get the correct PropertyInfo that belongs to the target type
+            var targetProperty = _targetType.GetProperty(sourceMember.Name, BindingFlags.Public | BindingFlags.Instance);
+            var targetField = _targetType.GetField(sourceMember.Name, BindingFlags.Public | BindingFlags.Instance);
+            
+            MemberInfo? targetMember = targetProperty ?? (MemberInfo?)targetField;
             
             if (targetMember != null)
             {
-                return Expression.MakeMemberAccess(expression, targetMember);
+                // Verify type compatibility
+                var sourceType = GetMemberType(sourceMember);
+                var targetType = GetMemberType(targetMember);
+                
+                if (sourceType != null && targetType != null && IsCompatibleType(sourceType, targetType))
+                {
+                    return Expression.MakeMemberAccess(transformedExpression, targetMember);
+                }
             }
             
-            // If we can't map the property, throw an informative error
             throw new InvalidOperationException(
                 $"Property '{sourceMember.Name}' on type '{_sourceType.Name}' " +
                 $"could not be mapped to type '{_targetType.Name}'. " +
                 $"Ensure the property exists in the Facet projection.");
         }
-
-        // For nested member access, handle recursively
-        if (expression != node.Expression)
+        
+        // If the expression changed, create new member access
+        if (transformedExpression != memberExpression.Expression)
         {
-            return Expression.MakeMemberAccess(expression, node.Member);
+            return Expression.MakeMemberAccess(transformedExpression, memberExpression.Member);
         }
-
-        return base.VisitMember(node);
+        
+        return memberExpression;
     }
 
-    /// <summary>
-    /// Handles method call expressions, attempting to preserve method calls where possible.
-    /// </summary>
-    protected override Expression VisitMethodCall(MethodCallExpression node)
+    private Expression TransformMethodCall(MethodCallExpression methodCall, Dictionary<ParameterExpression, ParameterExpression> parameterMap)
     {
+        var transformedObject = methodCall.Object != null 
+            ? TransformExpression(methodCall.Object, parameterMap) 
+            : null;
+            
+        var transformedArguments = methodCall.Arguments
+            .Select(arg => TransformExpression(arg, parameterMap))
+            .ToArray();
+
         // Handle static method calls
-        if (node.Object == null)
+        if (methodCall.Object == null)
         {
-            var args = node.Arguments.Select(Visit).Where(a => a != null).ToArray();
-            if (args.SequenceEqual(node.Arguments))
-            {
-                return node; // No change needed
-            }
-            return Expression.Call(node.Method, args);
+            if (transformedArguments.SequenceEqual(methodCall.Arguments))
+                return methodCall;
+            return Expression.Call(methodCall.Method, transformedArguments);
         }
 
         // Handle instance method calls
-        var obj = Visit(node.Object);
-        var arguments = node.Arguments.Select(Visit).Where(a => a != null).ToArray();
-
-        // If the object type changed, we need to find the equivalent method on the new type
-        if (obj.Type != node.Object.Type)
+        if (transformedObject!.Type != methodCall.Object!.Type)
         {
-            var equivalentMethod = FindEquivalentMethod(node.Method, obj.Type);
+            // Try to find equivalent method on the new type
+            var equivalentMethod = FindEquivalentMethod(methodCall.Method, transformedObject.Type);
             if (equivalentMethod != null)
             {
-                return Expression.Call(obj, equivalentMethod, arguments);
+                return Expression.Call(transformedObject, equivalentMethod, transformedArguments);
             }
         }
 
-        if (obj != node.Object || !arguments.SequenceEqual(node.Arguments))
+        if (transformedObject != methodCall.Object || !transformedArguments.SequenceEqual(methodCall.Arguments))
         {
-            return Expression.Call(obj, node.Method, arguments);
+            return Expression.Call(transformedObject, methodCall.Method, transformedArguments);
         }
 
-        return base.VisitMethodCall(node);
+        return methodCall;
     }
 
-    /// <summary>
-    /// Handles lambda expressions by creating new parameters and mapping the body.
-    /// </summary>
-    protected override Expression VisitLambda<T>(Expression<T> node)
+    private Expression TransformBinary(BinaryExpression binary, Dictionary<ParameterExpression, ParameterExpression> parameterMap)
     {
-        var parameters = new List<ParameterExpression>();
+        var left = TransformExpression(binary.Left, parameterMap);
+        var right = TransformExpression(binary.Right, parameterMap);
+
+        if (left != binary.Left || right != binary.Right)
+        {
+            return Expression.MakeBinary(binary.NodeType, left, right, binary.IsLiftedToNull, binary.Method);
+        }
+
+        return binary;
+    }
+
+    private Expression TransformUnary(UnaryExpression unary, Dictionary<ParameterExpression, ParameterExpression> parameterMap)
+    {
+        var operand = TransformExpression(unary.Operand, parameterMap);
         
-        foreach (var param in node.Parameters)
+        if (operand != unary.Operand)
         {
-            if (param.Type == _sourceType)
-            {
-                var targetParam = Expression.Parameter(_targetType, param.Name);
-                _parameterMap[param] = targetParam;
-                parameters.Add(targetParam);
-            }
-            else
-            {
-                parameters.Add(param);
-            }
+            return Expression.MakeUnary(unary.NodeType, operand, unary.Type, unary.Method);
         }
 
-        var body = Visit(node.Body);
-        return Expression.Lambda(body, parameters);
+        return unary;
+    }
+
+    private Expression TransformNew(NewExpression newExpression, Dictionary<ParameterExpression, ParameterExpression> parameterMap)
+    {
+        var transformedArguments = newExpression.Arguments
+            .Select(arg => TransformExpression(arg, parameterMap))
+            .ToArray();
+
+        if (!transformedArguments.SequenceEqual(newExpression.Arguments))
+        {
+            return newExpression.Members != null
+                ? Expression.New(newExpression.Constructor!, transformedArguments, newExpression.Members)
+                : Expression.New(newExpression.Constructor!, transformedArguments);
+        }
+
+        return newExpression;
+    }
+
+    private Expression TransformMemberInit(MemberInitExpression memberInit, Dictionary<ParameterExpression, ParameterExpression> parameterMap)
+    {
+        var transformedNew = (NewExpression)TransformExpression(memberInit.NewExpression, parameterMap);
+        var transformedBindings = memberInit.Bindings.Select(binding =>
+        {
+            if (binding is MemberAssignment assignment)
+            {
+                var transformedValue = TransformExpression(assignment.Expression, parameterMap);
+                return transformedValue != assignment.Expression
+                    ? Expression.Bind(assignment.Member, transformedValue)
+                    : assignment;
+            }
+            return binding;
+        });
+
+        return Expression.MemberInit(transformedNew, transformedBindings);
+    }
+
+    private Expression TransformConditional(ConditionalExpression conditional, Dictionary<ParameterExpression, ParameterExpression> parameterMap)
+    {
+        var test = TransformExpression(conditional.Test, parameterMap);
+        var ifTrue = TransformExpression(conditional.IfTrue, parameterMap);
+        var ifFalse = TransformExpression(conditional.IfFalse, parameterMap);
+
+        if (test != conditional.Test || ifTrue != conditional.IfTrue || ifFalse != conditional.IfFalse)
+        {
+            return Expression.Condition(test, ifTrue, ifFalse);
+        }
+
+        return conditional;
     }
 
     /// <summary>
-    /// Handles binary expressions (comparisons, arithmetic, logical operations).
+    /// Gets the type of a member (property or field).
     /// </summary>
-    protected override Expression VisitBinary(BinaryExpression node)
+    private static Type? GetMemberType(MemberInfo member)
     {
-        var left = Visit(node.Left);
-        var right = Visit(node.Right);
-
-        if (left != node.Left || right != node.Right)
+        return member switch
         {
-            // Handle type mismatches that might occur during transformation
-            if (left.Type != node.Left.Type || right.Type != node.Right.Type)
-            {
-                return CreateCompatibleBinaryExpression(node.NodeType, left, right);
-            }
-            return Expression.MakeBinary(node.NodeType, left, right);
-        }
-
-        return base.VisitBinary(node);
+            PropertyInfo property => property.PropertyType,
+            FieldInfo field => field.FieldType,
+            _ => null
+        };
     }
 
     /// <summary>
-    /// Handles unary expressions (negation, conversion, etc.).
+    /// Checks if two types are compatible for expression mapping.
     /// </summary>
-    protected override Expression VisitUnary(UnaryExpression node)
+    private static bool IsCompatibleType(Type sourceType, Type targetType)
     {
-        var operand = Visit(node.Operand);
+        // Exact type match
+        if (sourceType == targetType) return true;
         
-        if (operand != node.Operand)
-        {
-            return Expression.MakeUnary(node.NodeType, operand, node.Type);
-        }
-
-        return base.VisitUnary(node);
+        // Check if types are assignable
+        if (sourceType.IsAssignableFrom(targetType) || targetType.IsAssignableFrom(sourceType))
+            return true;
+            
+        // Handle nullable/non-nullable variations
+        var sourceNonNullable = Nullable.GetUnderlyingType(sourceType) ?? sourceType;
+        var targetNonNullable = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        
+        return sourceNonNullable == targetNonNullable;
     }
 
     /// <summary>
@@ -219,27 +347,5 @@ internal class ExpressionMapper : ExpressionVisitor
                 .FirstOrDefault(m => m.Name == originalMethod.Name && 
                                    m.GetParameters().Length == originalMethod.GetParameters().Length);
         }
-    }
-
-    /// <summary>
-    /// Creates a binary expression handling type compatibility issues.
-    /// </summary>
-    private static Expression CreateCompatibleBinaryExpression(ExpressionType nodeType, Expression left, Expression right)
-    {
-        // Handle common type mismatches by inserting appropriate conversions
-        if (left.Type != right.Type)
-        {
-            // Try to convert to a common type
-            if (left.Type.IsAssignableFrom(right.Type))
-            {
-                right = Expression.Convert(right, left.Type);
-            }
-            else if (right.Type.IsAssignableFrom(left.Type))
-            {
-                left = Expression.Convert(left, right.Type);
-            }
-        }
-
-        return Expression.MakeBinary(nodeType, left, right);
     }
 }
