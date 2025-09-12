@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\src\Facet.Extensions\Facet.Extensions.csproj" />
     <ProjectReference Include="..\..\src\Facet.Mapping\Facet.Mapping.csproj" />
     <ProjectReference Include="..\..\src\Facet.Extensions.EFCore\Facet.Extensions.EFCore.csproj" />
+    <ProjectReference Include="..\..\src\Facet.Mapping.Expressions\Facet.Mapping.Expressions.csproj" />
   </ItemGroup>
 
 </Project>

@@ -7,9 +7,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet", "src\Facet\Facet.cs
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
 	ProjectSection(SolutionItems) = preProject
-		README.md = README.md
 		Directory.Packages.props = Directory.Packages.props
 		NuGet.Config = NuGet.Config
+		README.md = README.md
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Mapping", "src\Facet.Mapping\Facet.Mapping.csproj", "{CEF12992-4DB3-4770-B291-FF5FD67FDB01}"
@@ -21,6 +21,8 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{0C88DD14-F956-CE84-757C-A364CCF449FC}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Tests", "test\Facet.Tests\Facet.Tests.csproj", "{519E7976-7BE4-4E93-9A45-01A160AA1684}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Mapping.Expressions", "src\Facet.Mapping.Expressions\Facet.Mapping.Expressions.csproj", "{538881BB-5006-4D97-8D73-7C73979AE7C3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -92,6 +94,18 @@ Global
 		{519E7976-7BE4-4E93-9A45-01A160AA1684}.Release|x64.Build.0 = Release|Any CPU
 		{519E7976-7BE4-4E93-9A45-01A160AA1684}.Release|x86.ActiveCfg = Release|Any CPU
 		{519E7976-7BE4-4E93-9A45-01A160AA1684}.Release|x86.Build.0 = Release|Any CPU
+		{538881BB-5006-4D97-8D73-7C73979AE7C3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{538881BB-5006-4D97-8D73-7C73979AE7C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{538881BB-5006-4D97-8D73-7C73979AE7C3}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{538881BB-5006-4D97-8D73-7C73979AE7C3}.Debug|x64.Build.0 = Debug|Any CPU
+		{538881BB-5006-4D97-8D73-7C73979AE7C3}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{538881BB-5006-4D97-8D73-7C73979AE7C3}.Debug|x86.Build.0 = Debug|Any CPU
+		{538881BB-5006-4D97-8D73-7C73979AE7C3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{538881BB-5006-4D97-8D73-7C73979AE7C3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{538881BB-5006-4D97-8D73-7C73979AE7C3}.Release|x64.ActiveCfg = Release|Any CPU
+		{538881BB-5006-4D97-8D73-7C73979AE7C3}.Release|x64.Build.0 = Release|Any CPU
+		{538881BB-5006-4D97-8D73-7C73979AE7C3}.Release|x86.ActiveCfg = Release|Any CPU
+		{538881BB-5006-4D97-8D73-7C73979AE7C3}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

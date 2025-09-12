@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+        <IsPackable>true</IsPackable>
+        <PackageId>Facet.Mapping.Expressions</PackageId>
+        <Description>Expression tree transformation and mapping utilities for Facet DTOs. Transform predicates, selectors, and other expressions between source entities and their Facet projections.</Description>
+        <PackageTags>facet expressions linq predicates mapping source-generator dto compile-time</PackageTags>
+        <Title>Facet.Mapping.Expressions</Title>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageProjectUrl>https://www.github.com/Tim-Maes/Facet</PackageProjectUrl>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Facet.Extensions\Facet.Extensions.csproj" />
+        <ProjectReference Include="..\Facet.Mapping\Facet.Mapping.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="README.md" Pack="true" PackagePath="" />
+        <None Update="Examples.cs">
+            <Pack>True</Pack>
+            <PackagePath>content\</PackagePath>
+        </None>
+    </ItemGroup>
+
+</Project>

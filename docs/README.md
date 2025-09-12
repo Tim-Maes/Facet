@@ -13,8 +13,10 @@ Welcome to the Facet documentation! This index will help you navigate all availa
 - [What is Being Generated?](07_WhatIsBeingGenerated.md): Before/After Examples
 - [Async Mapping Guide](08_AsyncMapping.md): Asynchronous Mapping with Facet.Mapping
 - [GenerateDtos Attribute](09_GenerateDtosAttribute.md): Auto-generate CRUD DTOs with GenerateDtos & GenerateAuditableDtos
+- [Expression Mapping](10_ExpressionMapping.md): Transform business logic expressions between entities and DTOs with Facet.Mapping.Expressions
 - [Facet.Extensions.EFCore](../src/Facet.Extensions.EFCore/README.md): EF Core Async Extension Methods
 - [Facet.Mapping Reference](../src/Facet.Mapping/README.md): Complete Facet.Mapping Documentation
+- [Facet.Mapping.Expressions Reference](../src/Facet.Mapping.Expressions/README.md): Complete Expression Mapping Documentation
 
 ## Quick Reference
 
@@ -48,3 +50,16 @@ public class UserAsyncMapper : IFacetMapConfigurationAsync<User, UserDto>
 }
 
 var userDto = await user.ToFacetAsync<UserDto, UserAsyncMapper>();
+```
+
+### Expression Mapping
+```csharp
+// Define business logic once for entities
+Expression<Func<User, bool>> activeUsers = u => u.IsActive && !u.IsDeleted;
+
+// Transform to work with DTOs
+Expression<Func<UserDto, bool>> activeDtoUsers = activeUsers.MapToFacet<UserDto>();
+
+// Use with collections
+var filteredDtos = dtoCollection.Where(activeDtoUsers.Compile()).ToList();
+```

@@ -59,6 +59,7 @@ You can think of it like **carving out a specific facet** of a gem:
 - :white_check_mark: LINQ projection expressions
 - :white_check_mark: Full mapping support with custom mapping configurations
 - :white_check_mark: Auto-generate complete CRUD DTO sets with `[GenerateDtos]`
+- :white_check_mark: **Expression transformation and mapping utilities** for reusing business logic across entities and DTOs
 - :white_check_mark: Preserves member and type XML documentation
 
 ## :earth_americas: The Facet Ecosystem
@@ -70,6 +71,8 @@ Facet is modular and consists of several NuGet packages:
 - **Facet.Extensions**: Provider-agnostic extension methods for mapping and projecting (works with any LINQ provider, no EF Core dependency).
 
 - **Facet.Mapping**: Advanced static mapping configuration support with async capabilities and dependency injection for complex mapping scenarios.
+
+- **Facet.Mapping.Expressions**: Expression tree transformation utilities for transforming predicates, selectors, and business logic between source entities and their Facet projections.
 
 - **Facet.Extensions.EFCore**: Async extension methods for Entity Framework Core (requires EF Core 6+).
 
@@ -89,6 +92,11 @@ dotnet add package Facet.Extensions
 For EF Core support:
 ```
 dotnet add package Facet.Extensions.EFCore
+```
+
+For expression transformation utilities:
+```
+dotnet add package Facet.Mapping.Expressions
 ```
 
 ### Basic Projection
