@@ -269,16 +269,16 @@ public sealed class ExportEfModelTask : Task
                         {
                             // If direct cast fails, try using reflection to access the interface methods
                             Log.LogMessage(MessageImportance.High, $"Facet.Export: Direct cast to IReadOnlyModel failed, attempting reflection-based access...");
-                            
+
                             // Check if the object implements the interface methods we need
                             var modelType = modelValue.GetType();
                             Log.LogMessage(MessageImportance.High, $"Facet.Export: Model type: {modelType.FullName}");
-                            
+
                             // List all available methods for debugging
                             var allMethods = modelType.GetMethods(BindingFlags.Public | BindingFlags.Instance);
                             var entityMethods = allMethods.Where(m => m.Name.Contains("Entity")).ToArray();
                             Log.LogMessage(MessageImportance.High, $"Facet.Export: Available entity-related methods: {string.Join(", ", entityMethods.Select(m => $"{m.Name}({string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name))})"))}");
-                            
+
                             var getEntityTypesMethod = modelType.GetMethod("GetEntityTypes", Type.EmptyTypes);
                             if (getEntityTypesMethod == null)
                             {
@@ -301,7 +301,7 @@ public sealed class ExportEfModelTask : Task
                                     }
                                 }
                             }
-                            
+
                             if (getEntityTypesMethod == null)
                             {
                                 var msg = $"Context {contextType.FullName} Model (type: {modelType.FullName}) does not have GetEntityTypes method.";
@@ -380,7 +380,7 @@ public sealed class ExportEfModelTask : Task
 
                                                 var navName = navNameProperty?.GetValue(nav)?.ToString() ?? "Unknown";
                                                 var isCollection = isCollectionProperty?.GetValue(nav) as bool? ?? false;
-                                                
+
                                                 var targetName = "Unknown";
                                                 if (targetEntityTypeProperty != null)
                                                 {
@@ -389,7 +389,7 @@ public sealed class ExportEfModelTask : Task
                                                     {
                                                         var targetClrTypeProperty = targetEntityType.GetType().GetProperty("ClrType");
                                                         var targetNameProperty = targetEntityType.GetType().GetProperty("Name");
-                                                        
+
                                                         var targetClrType = targetClrTypeProperty?.GetValue(targetEntityType) as Type;
                                                         targetName = targetClrType?.FullName ?? targetNameProperty?.GetValue(targetEntityType)?.ToString() ?? "Unknown";
                                                     }
@@ -721,6 +721,21 @@ public sealed class ExportEfModelTask : Task
     {
         try { Log.LogMessage(MessageImportance.High, $"Facet.Export: CreateDbContext called for {contextType.FullName} with provider hint: {providerHint ?? "none"}"); } catch { }
         var alc = AssemblyLoadContext.GetLoadContext(assembly);
+        // Additional diagnostics: enumerate any design-time factories in the assembly BEFORE attempts
+        try
+        {
+            var allTypes = GetLoadableTypes(assembly).Where(t => !t.IsAbstract).ToList();
+            var factoryCandidates = allTypes.Where(t => t.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition().FullName == "Microsoft.EntityFrameworkCore.Design.IDesignTimeDbContextFactory`1" && i.GenericTypeArguments.First() == contextType)).ToList();
+            if (factoryCandidates.Count > 0)
+            {
+                try { Log.LogMessage(MessageImportance.High, $"Facet.Export: Found {factoryCandidates.Count} design-time factory candidate(s): {string.Join(", ", factoryCandidates.Select(f => f.FullName))}"); } catch { }
+            }
+            else
+            {
+                try { Log.LogMessage(MessageImportance.High, $"Facet.Export: No IDesignTimeDbContextFactory candidates found in assembly for {contextType.FullName}"); } catch { }
+            }
+        }
+        catch { /* ignore diagnostic failures */ }
         // 1) Try IDesignTimeDbContextFactory<TContext>
         try
         {
@@ -808,7 +823,7 @@ public sealed class ExportEfModelTask : Task
         }
 
         // 4) Give up – return null rather than a providerless context to avoid opaque runtime failures
-        try { Log.LogMessage(MessageImportance.High, $"Facet.Export: Failed to create DbContext for {contextType.FullName} - all provider attempts failed"); } catch { }
+        try { Log.LogMessage(MessageImportance.High, $"Facet.Export: Failed to create DbContext for {contextType.FullName} - all provider attempts failed (returning null)"); } catch { }
         return null;
     }
 

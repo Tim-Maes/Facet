@@ -11,23 +11,23 @@ namespace Facet.Extensions.EFCore.Tests.TestData;
 public class User
 {
     public int Id { get; set; }
-    
+
     [Required]
     [MaxLength(100)]
     public string FirstName { get; set; } = string.Empty;
-    
+
     [Required]
     [MaxLength(100)]
     public string LastName { get; set; } = string.Empty;
-    
+
     [Required]
     [MaxLength(255)]
     public string Email { get; set; } = string.Empty;
-    
+
     public bool IsActive { get; set; } = true;
-    
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    
+
     // Navigation properties
     public virtual ICollection<Order> Orders { get; set; } = new List<Order>();
 }
@@ -36,23 +36,23 @@ public class User
 public class Product
 {
     public int Id { get; set; }
-    
+
     [Required]
     [MaxLength(200)]
     public string Name { get; set; } = string.Empty;
-    
+
     [MaxLength(2000)]
     public string Description { get; set; } = string.Empty;
-    
+
     [Required]
     public decimal Price { get; set; }
-    
+
     public int CategoryId { get; set; }
-    
+
     public bool IsAvailable { get; set; } = true;
-    
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    
+
     // Navigation properties
     public virtual Category Category { get; set; } = null!;
     public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
@@ -62,16 +62,16 @@ public class Product
 public class Category
 {
     public int Id { get; set; }
-    
+
     [Required]
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty;
-    
+
     [MaxLength(500)]
     public string Description { get; set; } = string.Empty;
-    
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    
+
     // Navigation properties
     public virtual ICollection<Product> Products { get; set; } = new List<Product>();
 }
@@ -80,16 +80,16 @@ public class Category
 public class Order
 {
     public int Id { get; set; }
-    
+
     public int UserId { get; set; }
-    
+
     public DateTime OrderDate { get; set; } = DateTime.UtcNow;
-    
+
     public decimal TotalAmount { get; set; }
-    
+
     [MaxLength(50)]
     public string Status { get; set; } = "Pending";
-    
+
     // Navigation properties
     public virtual User User { get; set; } = null!;
     public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
@@ -99,15 +99,15 @@ public class Order
 public class OrderItem
 {
     public int Id { get; set; }
-    
+
     public int OrderId { get; set; }
-    
+
     public int ProductId { get; set; }
-    
+
     public int Quantity { get; set; }
-    
+
     public decimal UnitPrice { get; set; }
-    
+
     // Navigation properties
     public virtual Order Order { get; set; } = null!;
     public virtual Product Product { get; set; } = null!;
@@ -135,7 +135,7 @@ public class TestDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.Email).IsUnique();
-            
+
             // Configure User -> Orders relationship
             entity.HasMany(u => u.Orders)
                   .WithOne(o => o.User)
@@ -147,13 +147,13 @@ public class TestDbContext : DbContext
         modelBuilder.Entity<Product>(entity =>
         {
             entity.HasKey(e => e.Id);
-            
+
             // Configure Product -> Category relationship
             entity.HasOne(p => p.Category)
                   .WithMany(c => c.Products)
                   .HasForeignKey(p => p.CategoryId)
                   .OnDelete(DeleteBehavior.Restrict);
-                  
+
             // Configure Product -> OrderItems relationship
             entity.HasMany(p => p.OrderItems)
                   .WithOne(oi => oi.Product)
@@ -171,7 +171,7 @@ public class TestDbContext : DbContext
         modelBuilder.Entity<Order>(entity =>
         {
             entity.HasKey(e => e.Id);
-            
+
             // Configure Order -> OrderItems relationship
             entity.HasMany(o => o.OrderItems)
                   .WithOne(oi => oi.Order)

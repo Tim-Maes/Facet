@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Facet\Facet.csproj" />
+    <!-- Ensure the EFCore extensions (which contain the MSBuild task assembly) are built before this project -->
+    <ProjectReference Include="..\..\src\Facet.Extensions.EFCore\Facet.Extensions.EFCore.csproj" />
+  </ItemGroup>
+
+  <!-- Import Facet.Extensions.EFCore targets for efmodel.json generation -->
+  <Import Project="..\..\src\Facet.Extensions.EFCore\build\Facet.Extensions.EFCore.targets" />
+
+  <!-- Configure EF model export for this DbContext -->
+  <PropertyGroup>
+    <FacetEfContextTypes>Facet.Extensions.EFCore.Tests.TestData.TestDbContext</FacetEfContextTypes>
+    <FacetEnableDebugOutput>true</FacetEnableDebugOutput>
+    <FacetEfProvider>inmemory</FacetEfProvider>
+  </PropertyGroup>
+
+</Project>

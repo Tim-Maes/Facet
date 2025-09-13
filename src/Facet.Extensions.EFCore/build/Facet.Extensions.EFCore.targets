@@ -1,26 +1,75 @@
 <Project>
   <UsingTask TaskName="ExportEfModelTask"
-             AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\net8.0\Facet.Extensions.EFCore.dll" />
+             AssemblyFile="$(MSBuildThisFileDirectory)..\bin\Debug\net8.0\Facet.Extensions.EFCore.dll" />
 
   <PropertyGroup>
     <FacetEfExportEnabled Condition="'$(FacetEfExportEnabled)' == ''">true</FacetEfExportEnabled>
-    <FacetEfModelJson Condition="'$(FacetEfModelJson)' == ''">$(IntermediateOutputPath)efmodel.json</FacetEfModelJson>
-    <FacetEfContextAssemblyPath Condition="'$(FacetEfContextAssemblyPath)' == ''">$(TargetPath)</FacetEfContextAssemblyPath>
     <FacetEfContextTypes Condition="'$(FacetEfContextTypes)' == ''"></FacetEfContextTypes>
+    <FacetEfProvider Condition="'$(FacetEfProvider)' == ''"></FacetEfProvider>
     <FacetMaxChainDepth Condition="'$(FacetMaxChainDepth)' == ''">3</FacetMaxChainDepth>
     <FacetEnableDebugOutput Condition="'$(FacetEnableDebugOutput)' == ''">false</FacetEnableDebugOutput>
   </PropertyGroup>
 
+  <!-- Resolve paths in target when MSBuild properties are fully available -->
+  <Target Name="Facet_ResolveProperties" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <FacetEfModelJson Condition="'$(FacetEfModelJson)' == ''">$(IntermediateOutputPath)efmodel.json</FacetEfModelJson>
+      <FacetEfContextAssemblyPath Condition="'$(FacetEfContextAssemblyPath)' == ''">$(TargetPath)</FacetEfContextAssemblyPath>
+    </PropertyGroup>
+
+    <Message Text="=== FACET EF PROPERTIES (RESOLVED) ===" Importance="high" />
+    <Message Text="FacetEfExportEnabled: $(FacetEfExportEnabled)" Importance="high" />
+    <Message Text="FacetEfModelJson: $(FacetEfModelJson)" Importance="high" />
+    <Message Text="FacetEfContextAssemblyPath: $(FacetEfContextAssemblyPath)" Importance="high" />
+    <Message Text="FacetEfContextTypes: $(FacetEfContextTypes)" Importance="high" />
+    <Message Text="FacetMaxChainDepth: $(FacetMaxChainDepth)" Importance="high" />
+    <Message Text="FacetEnableDebugOutput: $(FacetEnableDebugOutput)" Importance="high" />
+    <Message Text="TargetPath: $(TargetPath)" Importance="high" />
+    <Message Text="IntermediateOutputPath: $(IntermediateOutputPath)" Importance="high" />
+    <Message Text="Assembly exists: $([System.IO.File]::Exists('$(FacetEfContextAssemblyPath)'))" Importance="high" />
+    <Message Text="UsingTask AssemblyFile: $(MSBuildThisFileDirectory)..\bin\Debug\net8.0\Facet.Extensions.EFCore.dll" Importance="high" />
+    <Message Text="Task assembly exists: $([System.IO.File]::Exists('$(MSBuildThisFileDirectory)..\bin\Debug\net8.0\Facet.Extensions.EFCore.dll'))" Importance="high" />
+    <Message Text="=======================================" Importance="high" />
+
+    <!-- Only validate if export is enabled and we have context types configured -->
+  <Warning Condition="'$(FacetEfExportEnabled)' == 'true' AND '$(FacetEfContextTypes)' == ''"
+       Text="FACET EF WARNING: FacetEfContextTypes is empty while export is enabled. Set &lt;FacetEfContextTypes&gt;YourNamespace.YourDbContext&lt;/FacetEfContextTypes&gt; to enable efmodel.json generation, or disable export with &lt;FacetEfExportEnabled&gt;false&lt;/FacetEfExportEnabled&gt;." />
+  </Target>
+
+  <!-- Run export after Build so that the target assembly actually exists (CoreCompile fires before the main assembly is written) -->
   <Target Name="Facet_ExportEfModel"
-          Condition="'$(FacetEfExportEnabled)' == 'true'"
-          BeforeTargets="CoreCompile"
-          Inputs="$(FacetEfContextAssemblyPath)"
-          Outputs="$(FacetEfModelJson)">
+    Condition="'$(FacetEfExportEnabled)' == 'true' AND Exists('$(FacetEfContextAssemblyPath)')"
+    AfterTargets="Build"
+    Inputs="$(FacetEfContextAssemblyPath);$(MSBuildProjectFile)"
+    Outputs="$(FacetEfModelJson)">
+
+    <Message Text="=== FACET EXPORT TASK STARTING ===" Importance="high" />
+    <Message Text="AssemblyPath: $(FacetEfContextAssemblyPath)" Importance="high" />
+    <Message Text="ContextTypes: $(FacetEfContextTypes)" Importance="high" />
+    <Message Text="OutputPath: $(FacetEfModelJson)" Importance="high" />
+
     <ExportEfModelTask AssemblyPath="$(FacetEfContextAssemblyPath)"
                        ContextTypes="$(FacetEfContextTypes)"
+                       Provider="$(FacetEfProvider)"
                        OutputPath="$(FacetEfModelJson)" />
     <ItemGroup>
       <AdditionalFiles Include="$(FacetEfModelJson)" />
     </ItemGroup>
+    <Message Text="Generated efmodel.json for source generation" Importance="high" />
+  </Target>
+
+  <!-- Diagnostic target to explain why export didn't run -->
+  <Target Name="Facet_ExportEfModel_Skipped" AfterTargets="Build" Condition="'$(FacetEfExportEnabled)' == 'true' AND !Exists('$(FacetEfContextAssemblyPath)')">
+    <Message Text="FACET EXPORT SKIPPED: Assembly path '$(FacetEfContextAssemblyPath)' not found at export time." Importance="high" />
+  </Target>
+
+  <!-- Ensure efmodel.json is available for source generators on subsequent builds -->
+  <Target Name="Facet_IncludeEfModelForSourceGen"
+          BeforeTargets="GenerateSourceFiles"
+          Condition="Exists('$(FacetEfModelJson)')">
+    <ItemGroup>
+      <AdditionalFiles Include="$(FacetEfModelJson)" />
+    </ItemGroup>
+    <Message Text="Including existing efmodel.json: $(FacetEfModelJson)" Importance="high" />
   </Target>
 </Project>

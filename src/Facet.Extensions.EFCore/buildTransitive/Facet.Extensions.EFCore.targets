@@ -1,6 +1,6 @@
 <Project>
   <UsingTask TaskName="ExportEfModelTask"
-             AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\net8.0\Facet.Extensions.EFCore.dll" />
+             AssemblyFile="$(MSBuildThisFileDirectory)..\bin\Debug\net8.0\Facet.Extensions.EFCore.dll" />
 
   <PropertyGroup>
     <FacetEfExportEnabled Condition="'$(FacetEfExportEnabled)' == ''">true</FacetEfExportEnabled>
@@ -12,13 +12,23 @@
   </PropertyGroup>
 
   <Target Name="Facet_ExportEfModel"
-          Condition="'$(FacetEfExportEnabled)' == 'true'"
-          BeforeTargets="CoreCompile"
+          Condition="'$(FacetEfExportEnabled)' == 'true' AND Exists('$(FacetEfContextAssemblyPath)')"
+          AfterTargets="CoreCompile"
           Inputs="$(FacetEfContextAssemblyPath)"
           Outputs="$(FacetEfModelJson)">
     <ExportEfModelTask AssemblyPath="$(FacetEfContextAssemblyPath)"
                        ContextTypes="$(FacetEfContextTypes)"
                        OutputPath="$(FacetEfModelJson)" />
+    <ItemGroup>
+      <AdditionalFiles Include="$(FacetEfModelJson)" />
+    </ItemGroup>
+    <Message Text="Generated efmodel.json for source generation" Importance="high" />
+  </Target>
+
+  <!-- Ensure efmodel.json is available for source generators on subsequent builds -->
+  <Target Name="Facet_IncludeEfModelForSourceGen"
+          BeforeTargets="GenerateSourceFiles"
+          Condition="Exists('$(FacetEfModelJson)')">
     <ItemGroup>
       <AdditionalFiles Include="$(FacetEfModelJson)" />
     </ItemGroup>

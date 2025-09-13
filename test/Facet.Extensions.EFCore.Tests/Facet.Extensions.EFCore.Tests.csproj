@@ -9,7 +9,8 @@
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
     <NoWarn>$(NoWarn);MSB3277;NU1608;CS8618</NoWarn>
-    <FacetEnableDebugOutput>true</FacetEnableDebugOutput>
+  <FacetEnableDebugOutput>false</FacetEnableDebugOutput>
+  <FacetEfExportEnabled>false</FacetEfExportEnabled>
     <OutputType>Library</OutputType>
     <GenerateProgramFile>false</GenerateProgramFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -34,16 +35,38 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Facet\Facet.csproj" />
-    <ProjectReference Include="..\..\src\Facet.Extensions.EFCore\Facet.Extensions.EFCore.csproj" OutputItemType="Analyzer" />
+    <ProjectReference Include="..\..\src\Facet.Extensions.EFCore\Facet.Extensions.EFCore.csproj" />
     <ProjectReference Include="..\..\src\Facet.Extensions\Facet.Extensions.csproj" />
+    <!-- Reference DbContext project to trigger efmodel.json generation -->
+    <ProjectReference Include="..\Facet.Extensions.EFCore.Tests.DbContext\Facet.Extensions.EFCore.Tests.DbContext.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <AdditionalFiles Include="efmodel.json" />
+    <AdditionalFiles Include="$(IntermediateOutputPath)efmodel.json" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Remove="Generated/**/*.cs" />
   </ItemGroup>
+
+  <!-- Import Facet.Extensions.EFCore targets for efmodel.json generation -->
+  <Import Project="..\..\src\Facet.Extensions.EFCore\build\Facet.Extensions.EFCore.targets" />
+
+  <!-- Copy efmodel.json from DbContext project to this project -->
+  <Target Name="CopyEfModelFromDbContextProject" BeforeTargets="CoreCompile" DependsOnTargets="ResolveProjectReferences">
+    <PropertyGroup>
+      <SourceEfModelPath>..\Facet.Extensions.EFCore.Tests.DbContext\obj\Debug\net8.0\efmodel.json</SourceEfModelPath>
+      <TargetEfModelPath>$(IntermediateOutputPath)efmodel.json</TargetEfModelPath>
+    </PropertyGroup>
+
+    <Message Text="Copying efmodel.json from DbContext project..." Importance="high" Condition="Exists('$(SourceEfModelPath)')" />
+    <Copy SourceFiles="$(SourceEfModelPath)"
+          DestinationFiles="$(TargetEfModelPath)"
+          SkipUnchangedFiles="true"
+          Condition="Exists('$(SourceEfModelPath)')" />
+
+    <Message Text="efmodel.json copied successfully" Importance="high" Condition="Exists('$(SourceEfModelPath)')" />
+    <Warning Text="efmodel.json not found at $(SourceEfModelPath) - DbContext project may not have built yet" Condition="!Exists('$(SourceEfModelPath)')" />
+  </Target>
 
 </Project>

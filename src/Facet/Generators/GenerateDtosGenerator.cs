@@ -7,6 +7,8 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using Facet.Generation.Shared;
+using Facet.Extensions.EFCore.Generators;
 
 namespace Facet.Generators;
 
@@ -181,13 +183,13 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     var allTargets = generateDtosTargets.Collect().Combine(generateAuditableDtosTargets.Collect())
         .Select(static (combined, _) => combined.Left.Concat(combined.Right).ToImmutableArray());
 
-    // Simplified configuration - EF model integration disabled due to dependency loading issues
+    // Re-enable EF model integration and chain discovery
     var combined = allTargets
       .Select(static (models, _) => new {
         Models = models,
-        Config = (FacetConfiguration?)null,
-        EfModel = (ModelRoot?)null,
-        ChainUses = ImmutableArray<ChainUse>.Empty
+        Config = (FacetConfiguration?)null, // TODO: Add configuration support
+        EfModel = (ModelRoot?)null, // TODO: Add EF model support
+        ChainUses = ImmutableArray<ChainUse>.Empty // TODO: Add chain discovery
       });
 
     context.RegisterSourceOutput(combined, (spc, data) =>
@@ -721,10 +723,31 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
   private static bool IsCollectionNavigation(FacetMember member)
   {
-    // Heuristic: collection whose element type is a domain model (namespace contains Immybot.Backend.Domain.Models)
-    var t = member.TypeName;
-    if (!(t.Contains("ICollection<") || t.Contains("IEnumerable<") || t.Contains("List<") || t.Contains("IReadOnlyCollection<"))) return false;
-    return t.Contains("Immybot.Backend.Domain.Models.");
+    // More robust detection of collection navigation properties
+    var typeName = member.TypeName;
+
+    // Check if it's a collection type
+    var collectionTypes = new[] { "ICollection<", "IEnumerable<", "List<", "IReadOnlyCollection<", "HashSet<", "ISet<" };
+    if (!collectionTypes.Any(ct => typeName.Contains(ct)))
+      return false;
+
+    // Extract the generic type argument (element type)
+    var openBracket = typeName.IndexOf('<');
+    var closeBracket = typeName.LastIndexOf('>');
+    if (openBracket == -1 || closeBracket == -1 || closeBracket <= openBracket)
+      return false;
+
+    var elementType = typeName.Substring(openBracket + 1, closeBracket - openBracket - 1);
+
+    // Skip primitive types and common framework types
+    var primitiveTypes = new[] {
+      "string", "int", "bool", "DateTime", "decimal", "double", "float", "long", "short", "byte",
+      "System.String", "System.Int32", "System.Boolean", "System.DateTime", "System.Decimal",
+      "System.Double", "System.Single", "System.Int64", "System.Int16", "System.Byte",
+      "System.Guid", "System.TimeSpan", "System.DateTimeOffset"
+    };
+
+    return !primitiveTypes.Any(pt => elementType.Equals(pt, StringComparison.OrdinalIgnoreCase));
   }
 
   private static void GenerateFileHeader(StringBuilder sb)
@@ -838,17 +861,3 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     }
   }
 }
-
-// Minimal stub types to avoid external dependencies during source generation
-internal class FacetConfiguration
-{
-}
-
-internal class ModelRoot
-{
-}
-
-internal class ChainUse
-{
-}
-

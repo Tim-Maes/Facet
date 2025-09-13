@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using Facet.Extensions.EFCore.Generators.Emission;
-using Facet.Extensions.EFCore.Generators.Shared;
+using Facet.Generation.Shared;
 
 namespace Facet.Extensions.EFCore.Generators;
 
@@ -223,17 +223,16 @@ public sealed class FacetEfGenerator : IIncrementalGenerator
 
             try
             {
-                // Generate shape interfaces (base properties only - always linear)
+                // Generate in dependency order to avoid circular references:
+
+                // 1. Generate consolidated shape and capability interfaces (no dependencies)
                 ShapeInterfacesEmitter.Emit(context, nonNullModel, facetDtos);
 
-                // Generate capability interfaces (for navigation inclusion - always linear)
-                CapabilityInterfacesEmitter.Emit(context, nonNullModel, facetDtos);
-
-                // Generate fluent builders (conditional on discovered chains)
-                FluentBuilderEmitter.Emit(context, nonNullModel, facetDtos, usedChains);
-
-                // Generate selectors with EF includes (conditional on discovered chains)
+                // 2. Generate selectors (depend on consolidated interfaces)
                 SelectorsEmitter.Emit(context, nonNullModel, facetDtos, usedChains);
+
+                // 3. Generate fluent builders last (depend on selectors and interfaces)
+                FluentBuilderEmitter.Emit(context, nonNullModel, facetDtos, usedChains);
             }
             catch (System.Exception ex)
             {

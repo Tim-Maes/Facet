@@ -59,7 +59,15 @@ public static class FluentBuilderEmitter
         sb.AppendLine("using System.Threading;");
         sb.AppendLine("using System.Threading.Tasks;");
         sb.AppendLine("using Microsoft.EntityFrameworkCore;");
-    sb.AppendLine("using Facet.Extensions;");
+        sb.AppendLine("using Facet.Extensions;");
+
+        // Add using for the consolidated shape interfaces namespace
+        var shapeNamespace = "Facet.Extensions.EFCore.Tests.Extensions"; // TODO: Make this dynamic
+        if (shapeNamespace != dtoInfo.DtoNamespace)
+        {
+            sb.AppendLine($"using {shapeNamespace};");
+        }
+
         sb.AppendLine();
         sb.AppendLine($"namespace {dtoInfo.DtoNamespace};");
         sb.AppendLine();
@@ -159,8 +167,9 @@ public static class FluentBuilderEmitter
         }
         sb.AppendLine();
         var firstEntity = efModel.Contexts.FirstOrDefault()?.Entities.FirstOrDefault();
-    // Force namespace to Persistence so extensions appear on ImmybotDbContext (derives from DbContext in that namespace)
-    sb.AppendLine("namespace Immybot.Backend.Persistence;");
+    // Force namespace to Persistence so extensions appear on the DbContext
+    var contextNamespace = efModel.Contexts.FirstOrDefault()?.Context.Split('.').Take(2).FirstOrDefault() ?? "Application";
+    sb.AppendLine($"namespace {contextNamespace}.Persistence;");
         sb.AppendLine();
         sb.AppendLine("public static class FacetDbContextExtensions");
         sb.AppendLine("{");

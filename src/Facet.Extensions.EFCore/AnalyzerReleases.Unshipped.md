@@ -4,4 +4,5 @@
 ### New Rules
 Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
-FACET_EF005 | Facet.Extensions.EFCore | Info | Chain discovery debug information
+
+
