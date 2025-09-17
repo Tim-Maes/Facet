@@ -63,7 +63,8 @@ jobs:
 
       - name: Publish Test Results
         uses: dorny/test-reporter@v1
-        if: success() || failure()
+        # Only run on push events or pull requests from the same repository (not forks)
+        if: (success() || failure()) && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
         with:
           name: Unit Test Results
           path: TestResults/*.trx
