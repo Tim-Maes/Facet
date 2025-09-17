@@ -39,7 +39,7 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
         description: "When using BackTo<TFacetSource>(this object facet), the object must be of a type annotated with [Facet] attribute.");
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
-        ImmutableArray.Create(ToFacetTargetNotFacetRule, BackToFacetNotFacetRule, BackToObjectNotFacetRule);
+        [ToFacetTargetNotFacetRule, BackToFacetNotFacetRule, BackToObjectNotFacetRule];
 
     public override void Initialize(AnalysisContext context)
     {
