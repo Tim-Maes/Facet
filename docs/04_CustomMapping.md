@@ -30,6 +30,23 @@ Facet supports custom mapping logic for advanced scenarios via multiple interfac
 - **Benefits**: Full dependency injection support, easier testing, better separation of concerns
 - **Usage**: Pass mapper instances with injected dependencies
 
+## Facet.Mapping Extension Methods
+
+The following extension methods are available for async mapping scenarios:
+
+| Method | Description |
+|--------|-------------|
+| `ToFacetAsync<TSource, TTarget, TMapper>()` | Map single instance with explicit type parameters (compile-time) |
+| `ToFacetAsync<TTarget, TMapper>()` | Map single instance with inferred source type (runtime reflection) |
+| `ToFacetsAsync<TSource, TTarget, TMapper>()` | Map collection sequentially with explicit types |
+| `ToFacetsAsync<TTarget, TMapper>()` | Map collection sequentially with inferred source type |
+| `ToFacetsParallelAsync<TSource, TTarget, TMapper>()` | Map collection in parallel with explicit types |
+| `ToFacetsParallelAsync<TTarget, TMapper>()` | Map collection in parallel with inferred source type |
+| `ToFacetHybridAsync<TSource, TTarget, TMapper>()` | Hybrid sync/async mapping with explicit types |
+| `ToFacetHybridAsync<TTarget, TMapper>()` | Hybrid sync/async mapping with inferred source type |
+
+> **Performance Note**: Methods with explicit type parameters (`<TSource, TTarget, TMapper>`) offer better compile-time performance, while simplified methods (`<TTarget, TMapper>`) use runtime reflection for improved developer experience.
+
 ## Static Mapping (No DI)
 
 ### 1. Implement the Interface
@@ -222,13 +239,13 @@ public partial class UserDto
 
 ```csharp
 // Single instance async mapping (static)
-var userDto = await user.ToFacetAsync<User, UserDto, UserAsyncMapper>();
+var userDto = await user.ToFacetAsync<UserDto, UserAsyncMapper>();
 
 // Collection async mapping (sequential, static)
-var userDtos = await users.ToFacetsAsync<User, UserDto, UserAsyncMapper>();
+var userDtos = await users.ToFacetsAsync<UserDto, UserAsyncMapper>();
 
 // Collection async mapping (parallel for better performance, static)
-var userDtosParallel = await users.ToFacetsParallelAsync<User, UserDto, UserAsyncMapper>(
+var userDtosParallel = await users.ToFacetsParallelAsync<UserDto, UserAsyncMapper>(
     maxDegreeOfParallelism: 4);
 ```
 
@@ -269,7 +286,7 @@ public class UserHybridMapper : IFacetMapConfigurationHybrid<User, UserDto>
 }
 
 // Usage
-var userDto = await user.ToFacetHybridAsync<User, UserDto, UserHybridMapper>();
+var userDto = await user.ToFacetHybridAsync<UserDto, UserHybridMapper>();
 ```
 
 ### Instance Hybrid Mapper (With DI)
@@ -322,13 +339,13 @@ var userDto = await user.ToFacetHybridAsync(hybridMapperWithDI);
 ### Before (Static Only)
 ```csharp
 // Limited to static methods, no DI support
-var userDto = await user.ToFacetAsync<User, UserDto, UserAsyncMapper>();
+var userDto = await user.ToFacetAsync<UserDto, UserAsyncMapper>();
 ```
 
 ### After (Both Static and Instance Support)
 ```csharp
 // Option 1: Static approach (existing, unchanged)
-var userDto1 = await user.ToFacetAsync<User, UserDto, UserAsyncMapper>();
+var userDto1 = await user.ToFacetAsync<UserDto, UserAsyncMapper>();
 
 // Option 2: Instance approach (NEW, with DI support)
 var mapper = new UserAsyncMapperWithDI(profilePictureService, reputationService);
@@ -415,7 +432,7 @@ Your existing static mappers continue to work unchanged:
 
 ```csharp
 // This continues to work exactly as before
-var result = await user.ToFacetAsync<User, UserDto, ExistingAsyncMapper>();
+var result = await user.ToFacetAsync<UserDto, ExistingAsyncMapper>();
 ```
 
 ### Adding DI Support

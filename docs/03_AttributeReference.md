@@ -20,6 +20,7 @@ public partial class MyFacet { }
 | `Configuration`      | `Type?`   | Custom mapping config type (see [Custom Mapping](04_CustomMapping.md)).      |
 | `GenerateProjection` | `bool`    | Generate a static LINQ projection (default: true).                          |
 | `Kind`               | `FacetKind`| Output type: Class, Record, Struct, RecordStruct (default: Class).          |
+| `UseFullName`        | `bool`    | Use full type name in generated file names to avoid collisions (default: false). |
 
 ## Example
 

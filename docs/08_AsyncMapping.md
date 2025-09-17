@@ -165,7 +165,7 @@ public class UserProfileAsyncMapper : IFacetMapConfigurationAsync<User, UserProf
 
 // Usage
 var user = await dbContext.Users.FindAsync(userId);
-var userProfile = await user.ToFacetAsync<User, UserProfileDto, UserProfileAsyncMapper>();
+var userProfile = await user.ToFacetAsync<UserProfileDto, UserProfileAsyncMapper>();
 ```
 
 ### Example 2: E-commerce Product with Pricing and Inventory
@@ -272,11 +272,11 @@ public class ProductHybridMapper : IFacetMapConfigurationHybrid<Product, Product
 var product = await dbContext.Products.FindAsync(productId);
 
 // Single product with full async mapping
-var productDto = await product.ToFacetHybridAsync<Product, ProductDto, ProductHybridMapper>();
+var productDto = await product.ToFacetHybridAsync<ProductDto, ProductHybridMapper>();
 
 // Multiple products with parallel processing
 var products = await dbContext.Products.Take(20).ToListAsync();
-var productDtos = await products.ToFacetsParallelAsync<Product, ProductDto, ProductHybridMapper>(
+var productDtos = await products.ToFacetsParallelAsync<ProductDto, ProductHybridMapper>(
     maxDegreeOfParallelism: 4);
 ```
 
@@ -285,13 +285,13 @@ var productDtos = await products.ToFacetsParallelAsync<Product, ProductDto, Prod
 ### Sequential Processing
 ```csharp
 // Best for: Small collections, operations that might conflict if run in parallel
-var results = await items.ToFacetsAsync<Source, Target, AsyncMapper>();
+var results = await items.ToFacetsAsync<Target, AsyncMapper>();
 ```
 
 ### Parallel Processing
 ```csharp
 // Best for: Large collections, independent operations
-var results = await items.ToFacetsParallelAsync<Source, Target, AsyncMapper>(
+var results = await items.ToFacetsParallelAsync<Target, AsyncMapper>(
     maxDegreeOfParallelism: Environment.ProcessorCount);
 ```
 
@@ -307,7 +307,7 @@ public static async Task<List<ProductDto>> ProcessProductsBatched(
     
     foreach (var batch in batches)
     {
-        var batchResults = await batch.ToFacetsParallelAsync<Product, ProductDto, ProductHybridMapper>(
+        var batchResults = await batch.ToFacetsParallelAsync<ProductDto, ProductHybridMapper>(
             maxDegreeOfParallelism: 4);
         results.AddRange(batchResults);
         
@@ -436,13 +436,13 @@ public class CachedAsyncMapper : IFacetMapConfigurationAsync<User, UserDto>
 
 ```csharp
 // For database operations: Low concurrency to avoid overwhelming the DB
-var dbResults = await items.ToFacetsParallelAsync<Source, Target, DbMapper>(maxDegreeOfParallelism: 2);
+var dbResults = await items.ToFacetsParallelAsync<Target, DbMapper>(maxDegreeOfParallelism: 2);
 
 // For HTTP APIs: Medium concurrency
-var apiResults = await items.ToFacetsParallelAsync<Source, Target, ApiMapper>(maxDegreeOfParallelism: 4);
+var apiResults = await items.ToFacetsParallelAsync<Target, ApiMapper>(maxDegreeOfParallelism: 4);
 
 // For CPU-bound operations: High concurrency
-var cpuResults = await items.ToFacetsParallelAsync<Source, Target, CpuMapper>(maxDegreeOfParallelism: Environment.ProcessorCount);
+var cpuResults = await items.ToFacetsParallelAsync<Target, CpuMapper>(maxDegreeOfParallelism: Environment.ProcessorCount);
 ```
 
 ### 2. Always Handle Cancellation

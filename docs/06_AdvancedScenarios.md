@@ -48,10 +48,10 @@ public partial class UserDto { public string FullName { get; set; } }
 
 ```csharp
 using Facet.Extensions; // provider-agnostic
-var query = dbContext.People.SelectFacet<Person, PersonDto>();
+var query = dbContext.People.SelectFacet<PersonDto>();
 
 using Facet.Extensions.EFCore; // for async EF Core support
-var dtosAsync = await dbContext.People.ToFacetsAsync<Person, PersonDto>();
+var dtosAsync = await dbContext.People.ToFacetsAsync<PersonDto>();
 ```
 ---
 

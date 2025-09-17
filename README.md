@@ -9,6 +9,18 @@
 "One part of a subject, situation, object that has many parts."
 </div>
 
+<br>
+
+<div align="center">
+  
+[![NuGet](https://img.shields.io/nuget/v/Facet.svg)](https://www.nuget.org/packages/Facet)
+[![Downloads](https://img.shields.io/nuget/dt/Facet.svg)](https://www.nuget.org/packages/Facet)
+[![GitHub](https://img.shields.io/github/license/Tim-Maes/Facet.svg)](https://github.com/Tim-Maes/Facet/blob/main/LICENSE.txt)
+[![CI](https://github.com/Tim-Maes/Facet/actions/workflows/build.yml/badge.svg)](https://github.com/Tim-Maes/Facet/actions/workflows/build.yml)
+[![CD](https://github.com/Tim-Maes/Facet/actions/workflows/release.yml/badge.svg)](https://github.com/Tim-Maes/Facet/actions/workflows/release.yml)
+
+</div>
+
 ---
 
 **Facet** is a C# source generator that lets you define **lightweight projections** (DTOs, API models, etc.) directly from your domain models, without writing boilerplate.
@@ -46,6 +58,8 @@ You can think of it like **carving out a specific facet** of a gem:
 - :white_check_mark: Auto-generate constructors for fast mapping
 - :white_check_mark: LINQ projection expressions
 - :white_check_mark: Full mapping support with custom mapping configurations
+- :white_check_mark: Auto-generate complete CRUD DTO sets with `[GenerateDtos]`
+- :white_check_mark: **Expression transformation and mapping utilities** for reusing business logic across entities and DTOs
 - :white_check_mark: Preserves member and type XML documentation
 
 ## :earth_americas: The Facet Ecosystem
@@ -57,6 +71,8 @@ Facet is modular and consists of several NuGet packages:
 - **Facet.Extensions**: Provider-agnostic extension methods for mapping and projecting (works with any LINQ provider, no EF Core dependency).
 
 - **Facet.Mapping**: Advanced static mapping configuration support with async capabilities and dependency injection for complex mapping scenarios.
+
+- **Facet.Mapping.Expressions**: Expression tree transformation utilities for transforming predicates, selectors, and business logic between source entities and their Facet projections.
 
 - **Facet.Extensions.EFCore**: Async extension methods for Entity Framework Core (requires EF Core 6+).
 
@@ -78,6 +94,11 @@ For EF Core support:
 dotnet add package Facet.Extensions.EFCore
 ```
 
+For expression transformation utilities:
+```
+dotnet add package Facet.Mapping.Expressions
+```
+
 ### Basic Projection
 ```csharp
 [Facet(typeof(User))]
@@ -85,8 +106,12 @@ public partial class UserFacet { }
 
 // Auto-generates constructor, properties, and LINQ projection
 var userFacet = user.ToFacet<UserFacet>();
+var userFacet = user.ToFacet<User, UserFacet>(); //Much faster
+
 var user = userFacet.BackTo<User>();
+
 var users = users.SelectFacets<UserFacet>();
+var users = users.SelectFacets<User, UserFacet>(); //Much faster
 ```
 
 ### Property Exclusion & Field Inclusion
@@ -226,6 +251,98 @@ if (result.HasChanges)
 }
 ```
 
+### Automatic CRUD DTO Generation
+
+Generate standard Create, Update, Response, Query, and Upsert DTOs automatically:
+
+```csharp
+// Generate all standard CRUD DTOs
+[GenerateDtos(Types = DtoTypes.All, OutputType = OutputType.Record)]
+public class User
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public string Email { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+// Auto-generates:
+// - CreateUserRequest (excludes Id)
+// - UpdateUserRequest (includes Id)  
+// - UserResponse (includes all)
+// - UserQuery (all properties nullable)
+// - UpsertUserRequest (includes Id, for create/update operations)
+```
+
+#### 
+Entities with Smart Exclusions
+```csharp
+[GenerateAuditableDtos(
+    Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response,
+    OutputType = OutputType.Record,
+    ExcludeProperties = new[] { "Password" })]
+public class Product
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string Password { get; set; } // Excluded
+    public DateTime CreatedAt { get; set; } // Auto-excluded (audit)
+    public string CreatedBy { get; set; } // Auto-excluded (audit)
+}
+
+// Auto-excludes audit fields: CreatedAt, UpdatedAt, CreatedBy, UpdatedBy
+```
+
+#### Multiple Configurations for Fine-Grained Control
+```csharp
+// Different exclusions for different DTO types
+[GenerateDtos(Types = DtoTypes.Response, ExcludeProperties = new[] { "Password", "InternalNotes" })]
+[GenerateDtos(Types = DtoTypes.Upsert, ExcludeProperties = new[] { "Password" })]
+public class Schedule
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string Password { get; set; } // Excluded from both
+    public string InternalNotes { get; set; } // Only excluded from Response
+}
+
+// Generates:
+// - ScheduleResponse (excludes Password, InternalNotes) 
+// - UpsertScheduleRequest (excludes Password, includes InternalNotes)
+```
+
+#### Perfect for RESTful APIs
+```csharp
+[HttpPost]
+public async Task<ActionResult<ScheduleResponse>> CreateSchedule(CreateScheduleRequest request)
+{
+    var schedule = new Schedule
+    {
+        Name = request.Name,
+        // Map other properties;;;
+    };
+
+    context.Schedules.Add(schedule);
+    await context.SaveChangesAsync();
+    return schedule.ToFacet<ScheduleResponse>();
+}
+
+[HttpPut("{id}")]
+public async Task<ActionResult<ScheduleResponse>> UpsertSchedule(int id, UpsertScheduleRequest body)
+{
+    var schedule = context.GetScheduleById(id);
+    if (schedule == null) return NotFound();
+    
+    // Ensure the body ID matches the route ID  
+    body = body with { Id = id };
+    
+    schedule.UpdateFromFacet(body, context);
+    await context.SaveChangesAsync();
+    return schedule.ToFacet<ScheduleResponse>();
+}
+```
+
 ## :chart_with_upwards_trend: Performance Benchmarks
 
 Facet delivers competitive performance across different mapping scenarios. Here's how it compares to popular alternatives:
@@ -245,6 +362,8 @@ Facet delivers competitive performance across different mapping scenarios. Here'
 | Mapster  | 192.55 ns | 1,416 B | **10% faster, 10% less memory** |
 | **Facet** | 207.32 ns | 1,568 B | **Baseline** |
 | Mapperly | 222.50 ns | 1,552 B | 7% slower, 1% less memory |
+
+For this benchmark we used the `<TSource, TTarget>` methods. 
 
 **Insights:**
 > - **Single mapping**: All three libraries perform similarly with sub-nanosecond differences

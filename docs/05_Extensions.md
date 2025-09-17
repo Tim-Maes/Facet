@@ -7,12 +7,12 @@ For async EF Core support, see the separate Facet.Extensions.EFCore package.
 
 | Method                              | Description                                                      |
 |------------------------------------- |------------------------------------------------------------------|
-| `ToFacet<TTarget>()`        | Map a single object using the generated constructor.              |
-| `ToFacet<TSource, TTarget>()`        | Map a single object using the generated constructor.              |
-| `SelectFacets<TTarget>()`   | Map an `IEnumerable<TSource>` to `IEnumerable<TTarget>`.          |
-| `SelectFacets<TSource, TTarget>()`   | Map an `IEnumerable<TSource>` to `IEnumerable<TTarget>`.          |
-| `SelectFacet<TTarget>()`    | Project an `IQueryable<TSource>` to `IQueryable<TTarget>`.        |
-| `SelectFacet<TSource, TTarget>()`    | Project an `IQueryable<TSource>` to `IQueryable<TTarget>`.        |
+| `ToFacet<TSource, TTarget>()`        | Map a single object with explicit source type (compile-time).   |
+| `ToFacet<TTarget>()`                 | Map a single object with inferred source type (runtime).        |
+| `SelectFacets<TSource, TTarget>()`   | Map an `IEnumerable<TSource>` with explicit types.              |
+| `SelectFacets<TTarget>()`            | Map an `IEnumerable` with inferred source type.                 |
+| `SelectFacet<TSource, TTarget>()`    | Project an `IQueryable<TSource>` with explicit types.           |
+| `SelectFacet<TTarget>()`             | Project an `IQueryable` with inferred source type.              |
 
 ## Methods (Facet.Extensions.EFCore)
 
@@ -59,10 +59,9 @@ dotnet add package Facet.Extensions.EFCore
 using Facet.Extensions.EFCore; 
 
 var query = dbContext.People.SelectFacet<PersonDto>();
-var query = dbContext.People.SelectFacet<Person, PersonDto>();
 
 // Async (EF Core) 
-var dtosAsync = await dbContext.People.ToFacetsAsync<Person, PersonDto>();
+var dtosAsync = await dbContext.People.ToFacetsAsync<PersonDto>();
 var dtosInferred = await dbContext.People.ToFacetsAsync<PersonDto>();
 
 var firstDto = await dbContext.People.FirstFacetAsync<Person, PersonDto>();

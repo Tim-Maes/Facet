@@ -27,7 +27,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
         {
             spc.CancellationToken.ThrowIfCancellationRequested();
             var code = Generate(model!);
-            spc.AddSource($"{model!.Name}.g.cs", SourceText.From(code, Encoding.UTF8));
+
+            spc.AddSource($"{model!.FullName}.g.cs", SourceText.From(code, Encoding.UTF8));
         });
     }
 
@@ -123,9 +124,27 @@ public sealed class FacetGenerator : IIncrementalGenerator
             }
         }
 
+        var useFullName = GetNamedArg(attribute.NamedArguments, "UseFullName", false);
+
+        string fullName = string.Empty;
+
+        if (useFullName)
+        {
+            fullName = targetSymbol
+                .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                .GetSafeName();
+        }
+        else
+        {
+            fullName = targetSymbol.Name;
+        }
+
         var ns = targetSymbol.ContainingNamespace.IsGlobalNamespace
             ? null
             : targetSymbol.ContainingNamespace.ToDisplayString();
+
+        // Get containing types for nested classes
+        var containingTypes = GetContainingTypes(targetSymbol);
 
         // Check if the target type already has a primary constructor
         var hasExistingPrimaryConstructor = HasExistingPrimaryConstructor(targetSymbol);
@@ -133,6 +152,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         return new FacetTargetModel(
             targetSymbol.Name,
             ns,
+            fullName,
             kind,
             generateConstructor,
             generateParameterlessConstructor,
@@ -141,7 +161,26 @@ public sealed class FacetGenerator : IIncrementalGenerator
             configurationTypeName,
             members.ToImmutableArray(),
             hasExistingPrimaryConstructor,
-            typeXmlDocumentation);
+            typeXmlDocumentation,
+            containingTypes,
+            useFullName);
+    }
+
+    /// <summary>
+    /// Gets the containing types for nested classes, in order from outermost to innermost.
+    /// </summary>
+    private static ImmutableArray<string> GetContainingTypes(INamedTypeSymbol targetSymbol)
+    {
+        var containingTypes = new List<string>();
+        var current = targetSymbol.ContainingType;
+
+        while (current != null)
+        {
+            containingTypes.Insert(0, current.Name); // Insert at beginning to maintain order
+            current = current.ContainingType;
+        }
+
+        return containingTypes.ToImmutableArray();
     }
 
     /// <summary>
@@ -287,12 +326,12 @@ public sealed class FacetGenerator : IIncrementalGenerator
             return string.Empty;
 
         var lines = new List<string>();
-        
+
         try
         {
             var doc = System.Xml.Linq.XDocument.Parse(xmlDoc);
             var root = doc.Root;
-            
+
             if (root == null)
                 return string.Empty;
 
@@ -386,8 +425,15 @@ public sealed class FacetGenerator : IIncrementalGenerator
     {
         var sb = new StringBuilder();
         GenerateFileHeader(sb);
-        sb.AppendLine("using System;");
-        sb.AppendLine("using System.Linq.Expressions;");
+
+        // Collect all namespaces from referenced types
+        var namespacesToImport = CollectNamespaces(model);
+
+        // Generate using statements for all required namespaces
+        foreach (var ns in namespacesToImport.OrderBy(x => x))
+        {
+            sb.AppendLine($"using {ns};");
+        }
         sb.AppendLine();
 
         if (!string.IsNullOrWhiteSpace(model.Namespace))
@@ -395,10 +441,20 @@ public sealed class FacetGenerator : IIncrementalGenerator
             sb.AppendLine($"namespace {model.Namespace};");
         }
 
+        // Generate containing type hierarchy for nested classes
+        var containingTypeIndent = "";
+        foreach (var containingType in model.ContainingTypes)
+        {
+            sb.AppendLine($"{containingTypeIndent}public partial class {containingType}");
+            sb.AppendLine($"{containingTypeIndent}{{");
+            containingTypeIndent += "    ";
+        }
+
         // Generate type-level XML documentation if available
         if (!string.IsNullOrWhiteSpace(model.TypeXmlDocumentation))
         {
-            sb.AppendLine(model.TypeXmlDocumentation);
+            var indentedDocumentation = model.TypeXmlDocumentation.Replace("\n", $"\n{containingTypeIndent}");
+            sb.AppendLine($"{containingTypeIndent}{indentedDocumentation}");
         }
 
         var keyword = model.Kind switch
@@ -428,11 +484,13 @@ public sealed class FacetGenerator : IIncrementalGenerator
                     }
                     return param;
                 }));
-            sb.AppendLine($"public partial {keyword} {model.Name}({parameters});");
+            sb.AppendLine($"{containingTypeIndent}public partial {keyword} {model.Name}({parameters});");
         }
 
-        sb.AppendLine($"public partial {keyword} {model.Name}");
-        sb.AppendLine("{");
+        sb.AppendLine($"{containingTypeIndent}public partial {keyword} {model.Name}");
+        sb.AppendLine($"{containingTypeIndent}{{");
+
+        var memberIndent = containingTypeIndent + "    ";
 
         // Generate properties if not positional OR if there's an existing primary constructor
         if (!isPositional || model.HasExistingPrimaryConstructor)
@@ -442,7 +500,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 // Generate member XML documentation if available
                 if (!string.IsNullOrWhiteSpace(m.XmlDocumentation))
                 {
-                    sb.AppendLine($"    {m.XmlDocumentation.Replace("\n", "\n    ")}");
+                    var indentedDocumentation = m.XmlDocumentation.Replace("\n", $"\n{memberIndent}");
+                    sb.AppendLine($"{memberIndent}{indentedDocumentation}");
                 }
 
                 if (m.Kind == FacetMemberKind.Property)
@@ -463,7 +522,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
                         propDef = $"required {propDef}";
                     }
 
-                    sb.AppendLine($"    {propDef}");
+                    sb.AppendLine($"{memberIndent}{propDef}");
                 }
                 else
                 {
@@ -472,7 +531,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
                     {
                         fieldDef = $"required {fieldDef}";
                     }
-                    sb.AppendLine($"    {fieldDef}");
+                    sb.AppendLine($"{memberIndent}{fieldDef}");
                 }
             }
         }
@@ -497,41 +556,58 @@ public sealed class FacetGenerator : IIncrementalGenerator
             if (model.HasExistingPrimaryConstructor && model.Kind is FacetKind.Record or FacetKind.RecordStruct)
             {
                 // For records with existing primary constructors, the projection can't use the standard constructor approach
-                sb.AppendLine($"    // Note: Projection generation is not supported for records with existing primary constructors.");
-                sb.AppendLine($"    // You must manually create projection expressions or use the FromSource factory method.");
-                sb.AppendLine($"    // Example: source => new {model.Name}(defaultPrimaryConstructorValue) {{ PropA = source.PropA, PropB = source.PropB }}");
+                sb.AppendLine($"{memberIndent}// Note: Projection generation is not supported for records with existing primary constructors.");
+                sb.AppendLine($"{memberIndent}// You must manually create projection expressions or use the FromSource factory method.");
+                sb.AppendLine($"{memberIndent}// Example: source => new {model.Name}(defaultPrimaryConstructorValue) {{ PropA = source.PropA, PropB = source.PropB }}");
             }
             else
             {
                 // Generate projection XML documentation
-                sb.AppendLine("    /// <summary>");
-                sb.AppendLine($"    /// Gets the projection expression for converting <see cref=\"{GetSimpleTypeName(model.SourceTypeName)}\"/> to <see cref=\"{model.Name}\"/>.");
-                sb.AppendLine("    /// Use this for LINQ and Entity Framework query projections.");
-                sb.AppendLine("    /// </summary>");
-                sb.AppendLine($"    /// <value>An expression tree that can be used in LINQ queries for efficient database projections.</value>");
-                sb.AppendLine("    /// <example>");
-                sb.AppendLine("    /// <code>");
-                sb.AppendLine($"    /// var dtos = context.{GetSimpleTypeName(model.SourceTypeName)}s");
-                sb.AppendLine("    ///     .Where(x => x.IsActive)");
-                sb.AppendLine($"    ///     .Select({model.Name}.Projection)");
-                sb.AppendLine("    ///     .ToList();");
-                sb.AppendLine("    /// </code>");
-                sb.AppendLine("    /// </example>");
-                sb.AppendLine($"    public static Expression<Func<{model.SourceTypeName}, {model.Name}>> Projection =>");
-                sb.AppendLine($"        source => new {model.Name}(source);");
+                sb.AppendLine($"{memberIndent}/// <summary>");
+                sb.AppendLine($"{memberIndent}/// Gets the projection expression for converting <see cref=\"{GetSimpleTypeName(model.SourceTypeName)}\"/> to <see cref=\"{model.Name}\"/>.");
+                sb.AppendLine($"{memberIndent}/// Use this for LINQ and Entity Framework query projections.");
+                sb.AppendLine($"{memberIndent}/// </summary>");
+                sb.AppendLine($"{memberIndent}/// <value>An expression tree that can be used in LINQ queries for efficient database projections.</value>");
+                sb.AppendLine($"{memberIndent}/// <example>");
+                sb.AppendLine($"{memberIndent}/// <code>");
+                sb.AppendLine($"{memberIndent}/// var dtos = context.{GetSimpleTypeName(model.SourceTypeName)}s");
+                sb.AppendLine($"{memberIndent}///     .Where(x => x.IsActive)");
+                sb.AppendLine($"{memberIndent}///     .Select({model.Name}.Projection)");
+                sb.AppendLine($"{memberIndent}///     .ToList();");
+                sb.AppendLine($"{memberIndent}/// </code>");
+                sb.AppendLine($"{memberIndent}/// </example>");
+                sb.AppendLine($"{memberIndent}public static Expression<Func<{model.SourceTypeName}, {model.Name}>> Projection =>");
+                sb.AppendLine($"{memberIndent}    source => new {model.Name}(source);");
             }
         }
 
         // Generate reverse mapping method (BackTo)
         GenerateBackToMethod(sb, model);
+        
+        sb.AppendLine($"{containingTypeIndent}}}");
 
-        sb.AppendLine("}");
+        // Close containing type braces
+        for (int i = model.ContainingTypes.Length - 1; i >= 0; i--)
+        {
+            containingTypeIndent = containingTypeIndent.Substring(0, containingTypeIndent.Length - 4);
+            sb.AppendLine($"{containingTypeIndent}}}");
+        }
 
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Gets the indentation string for the current nesting level
+    /// </summary>
+    private static string GetIndentation(FacetTargetModel model)
+    {
+        return new string(' ', 4 * (model.ContainingTypes.Length + 1));
+    }
+
     private static void GenerateConstructor(StringBuilder sb, FacetTargetModel model, bool isPositional, bool hasInitOnlyProperties, bool hasCustomMapping)
     {
+        var indent = GetIndentation(model);
+
         // If the target has an existing primary constructor, skip constructor generation
         // and provide only a factory method
         if (model.HasExistingPrimaryConstructor && model.Kind is FacetKind.Record or FacetKind.RecordStruct)
@@ -540,6 +616,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
             return;
         }
 
+        // For now, keep the hardcoded indentation approach but add the proper nesting support later
         // Generate constructor XML documentation
         sb.AppendLine();
         sb.AppendLine("    /// <summary>");
@@ -704,7 +781,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         {
             var defaultValues = model.Members.Select(m => GetDefaultValue(m.TypeName)).ToArray();
             var defaultArgs = string.Join(", ", defaultValues);
-            
+
             sb.AppendLine($"    public {model.Name}() : this({defaultArgs})");
             sb.AppendLine("    {");
             sb.AppendLine("    }");
@@ -750,6 +827,84 @@ public sealed class FacetGenerator : IIncrementalGenerator
             // For other types, use default() expression
             _ => "default"
         };
+    }
+
+    /// <summary>
+    /// Collects all namespaces that need to be imported based on the types used in the model.
+    /// </summary>
+    private static HashSet<string> CollectNamespaces(FacetTargetModel model)
+    {
+        var namespaces = new HashSet<string>
+        {
+            "System",
+            "System.Linq.Expressions"
+        };
+
+        var sourceTypeNamespace = ExtractNamespaceFromFullyQualifiedType(model.SourceTypeName);
+        if (!string.IsNullOrWhiteSpace(sourceTypeNamespace))
+        {
+            namespaces.Add(sourceTypeNamespace);
+        }
+
+        foreach (var member in model.Members)
+        {
+            var memberTypeNamespace = ExtractNamespaceFromFullyQualifiedType(member.TypeName);
+            if (!string.IsNullOrWhiteSpace(memberTypeNamespace))
+            {
+                namespaces.Add(memberTypeNamespace);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.ConfigurationTypeName))
+        {
+            var configNamespace = ExtractNamespaceFromFullyQualifiedType(model.ConfigurationTypeName);
+            if (!string.IsNullOrWhiteSpace(configNamespace))
+            {
+                namespaces.Add(configNamespace);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.Namespace))
+        {
+            namespaces.Remove(model.Namespace);
+        }
+
+        namespaces.Remove("");
+
+        return namespaces;
+    }
+
+    /// <summary>
+    /// Extracts the namespace from a fully qualified type name (e.g., "global::System.String" -> "System").
+    /// </summary>
+    private static string? ExtractNamespaceFromFullyQualifiedType(string fullyQualifiedTypeName)
+    {
+        if (string.IsNullOrWhiteSpace(fullyQualifiedTypeName))
+            return null;
+
+        // Remove global:: prefix if present
+        var typeName = fullyQualifiedTypeName.StartsWith("global::")
+            ? fullyQualifiedTypeName.Substring(8)
+            : fullyQualifiedTypeName;
+
+        var genericIndex = typeName.IndexOf('<');
+        if (genericIndex > 0)
+        {
+            typeName = typeName.Substring(0, genericIndex);
+        }
+
+        if (typeName.EndsWith("?"))
+        {
+            typeName = typeName.Substring(0, typeName.Length - 1);
+        }
+
+        var lastDotIndex = typeName.LastIndexOf('.');
+        if (lastDotIndex > 0)
+        {
+            return typeName.Substring(0, lastDotIndex);
+        }
+
+        return null;
     }
 
     private static void GenerateBackToMethod(StringBuilder sb, FacetTargetModel model)

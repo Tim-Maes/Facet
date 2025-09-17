@@ -50,7 +50,7 @@ jobs:
     - name: Build
       run: dotnet build --configuration Release --no-restore
     
-    - name: Test
+    - name: Run Unit Tests
       run: dotnet test --configuration Release --no-build --verbosity normal
     
     - name: Pack NuGet packages
@@ -65,7 +65,13 @@ jobs:
         foreach ($file in Get-ChildItem "./artifacts" -Recurse -Include *.nupkg) {
           Write-Host "Processing package: $($file.Name)"
           
-          if ($file.Name -like "Facet.Mapping.*.nupkg") {
+          if ($file.Name -like "Facet.Mapping.Expressions.*.nupkg") {
+            Write-Host "Publishing Facet.Mapping.Expressions package..."
+            dotnet nuget push $file `
+              --api-key "${{ secrets.NUGET_API_KEY_EXPRESSIONS }}" `
+              --source https://api.nuget.org/v3/index.json `
+              --skip-duplicate
+          } elseif ($file.Name -like "Facet.Mapping.*.nupkg") {
             Write-Host "Publishing Facet.Mapping package..."
             dotnet nuget push $file `
               --api-key "${{ secrets.NUGET_MAP_API_KEY }}" `
