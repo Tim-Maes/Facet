@@ -19,6 +19,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public string? ConfigurationTypeName { get; }
     public ImmutableArray<FacetMember> Members { get; }
     public bool HasExistingPrimaryConstructor { get; }
+    public bool SourceHasPositionalConstructor { get; }
     public string? TypeXmlDocumentation { get; }
     public ImmutableArray<string> ContainingTypes { get; }
     public bool UseFullName { get; }
@@ -35,6 +36,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         string? configurationTypeName,
         ImmutableArray<FacetMember> members,
         bool hasExistingPrimaryConstructor = false,
+        bool sourceHasPositionalConstructor = false,
         string? typeXmlDocumentation = null,
         ImmutableArray<string> containingTypes = default,
         bool useFullName = false)
@@ -50,6 +52,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         ConfigurationTypeName = configurationTypeName;
         Members = members;
         HasExistingPrimaryConstructor = hasExistingPrimaryConstructor;
+        SourceHasPositionalConstructor = sourceHasPositionalConstructor;
         TypeXmlDocumentation = typeXmlDocumentation;
         ContainingTypes = containingTypes.IsDefault ? ImmutableArray<string>.Empty : containingTypes;
         UseFullName = useFullName;
@@ -70,6 +73,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && SourceTypeName == other.SourceTypeName
             && ConfigurationTypeName == other.ConfigurationTypeName
             && HasExistingPrimaryConstructor == other.HasExistingPrimaryConstructor
+            && SourceHasPositionalConstructor == other.SourceHasPositionalConstructor
             && TypeXmlDocumentation == other.TypeXmlDocumentation
             && Members.SequenceEqual(other.Members)
             && ContainingTypes.SequenceEqual(other.ContainingTypes)
@@ -93,6 +97,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + (SourceTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + (ConfigurationTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + HasExistingPrimaryConstructor.GetHashCode();
+            hash = hash * 31 + SourceHasPositionalConstructor.GetHashCode();
             hash = hash * 31 + (TypeXmlDocumentation?.GetHashCode() ?? 0);
             hash = hash * 31 + Members.Length.GetHashCode();
 
