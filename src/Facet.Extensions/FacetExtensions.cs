@@ -187,7 +187,7 @@ public static class FacetExtensions
     /// <param name="facets">The source collection of facets.</param>
     /// <returns>An <see cref="IEnumerable{TEntity}"/> mapped from the input.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="facets"/> is <c>null</c>.</exception>
-    public static IEnumerable<TEntity> ToEntities<TFacet, TEntity>(this IEnumerable<TFacet> facets)
+    public static IEnumerable<TEntity> BackTo<TFacet, TEntity>(this IEnumerable<TFacet> facets)
         where TFacet : class
         where TEntity : class
     {
