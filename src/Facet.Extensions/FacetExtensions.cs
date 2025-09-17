@@ -30,8 +30,8 @@ public static class FacetExtensions
                 return ps.Length == 1;
             });
 
-    // Cached MethodInfo for BackTo<TFacet, TEntity>(TFacet)
-    private static readonly MethodInfo _toEntityTwoGenericMethod =
+    // Cached MethodInfo for BackTo<TFacet, TFacetSource>(TFacet)
+    private static readonly MethodInfo _toFacetSourceTwoGenericMethod =
         typeof(FacetExtensions)
             .GetMethods(BindingFlags.Public | BindingFlags.Static)
             .First(m =>
@@ -151,7 +151,7 @@ public static class FacetExtensions
                 $"Target entity type '{typeof(TFacetSource).FullName}' does not match declared Facet source '{declaredSource.FullName}' for facet '{facetType.FullName}'.");
         }
 
-        var forwarded = _toEntityTwoGenericMethod.MakeGenericMethod(facetType, typeof(TFacetSource))
+        var forwarded = _toFacetSourceTwoGenericMethod.MakeGenericMethod(facetType, typeof(TFacetSource))
                                          .Invoke(null, new[] { facet });
         if (forwarded is null)
         {
