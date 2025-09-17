@@ -19,6 +19,9 @@ public partial class EmployeeDto;
 [Facet(typeof(Manager), "Password", "Salary", "Budget", "CreatedAt")]
 public partial class ManagerDto;
 
+[Facet(typeof(ClassicUser))]
+public partial record ClassicUserDto;
+
 [Facet(typeof(ModernUser), "PasswordHash", "Bio")]
 public partial record ModernUserDto
 {

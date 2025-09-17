@@ -149,6 +149,24 @@ public class BackToTests
     }
 
     [Fact]
+    public void BackTo_ShouldHandleRecord_WithPositionalConstructor()
+    {
+        // Arrange
+        var originalClassicUser = TestDataFactory.CreateClassicUser("Alice", "Wonder");
+        var classicUserDto = originalClassicUser.ToFacet<ClassicUser, ClassicUserDto>();
+
+        // Act
+        var mappedClassicUser = classicUserDto.BackTo<ClassicUser>();
+
+        // Assert
+        mappedClassicUser.Should().NotBeNull();
+        mappedClassicUser.Id.Should().Be(originalClassicUser.Id);
+        mappedClassicUser.FirstName.Should().Be("Alice");
+        mappedClassicUser.LastName.Should().Be("Wonder");
+        mappedClassicUser.Email.Should().Be(originalClassicUser.Email);
+    }
+
+    [Fact]
     public void BackTo_ShouldHandleModernRecord_WithGettersAndInitializers()
     {
         // Arrange

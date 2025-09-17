@@ -117,6 +117,13 @@ public static class TestDataFactory
             PasswordHash = "hashed_password_modern"
         };
     }
+    
+    public static ClassicUser CreateClassicUser(
+        string firstName = "Classic",
+        string lastName = "User")
+    {
+        return new ClassicUser(Guid.NewGuid().ToString(), firstName, lastName, $"{firstName.ToLower()}.{lastName.ToLower()}@modern.com");
+    }
 
     public static UserWithEnum CreateUserWithEnum(
         string name = "Test User",

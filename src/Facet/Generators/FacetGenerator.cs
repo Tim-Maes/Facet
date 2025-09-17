@@ -911,14 +911,14 @@ public sealed class FacetGenerator : IIncrementalGenerator
     {
         sb.AppendLine();
         sb.AppendLine("    /// <summary>");
-        sb.AppendLine($"    /// Converts this instance of <see cref=\"{model.Name}\"/> to an instance of the entity type.");
+        sb.AppendLine($"    /// Converts this instance of <see cref=\"{model.Name}\"/> to an instance of the source type.");
         sb.AppendLine("    /// </summary>");
-        sb.AppendLine($"    /// <returns>An instance of the entity type with properties mapped from this instance.</returns>");
+        sb.AppendLine($"    /// <returns>An instance of the source type with properties mapped from this instance.</returns>");
         sb.AppendLine($"    public {model.SourceTypeName} BackTo()");
         sb.AppendLine("    {");
         sb.AppendLine("        return new " + model.SourceTypeName + " {");
 
-        // TODO this needs work - this won't work when the entity has a positional constructor, and it also won't work when the entity has properties without setters
+        // TODO this needs work - this won't work when the source type has a positional constructor, and it also won't work when the source type has properties without setters
         var propertyAssignments = model.Members
             .Select(m => $"            {m.Name} = this.{m.Name}");
         sb.AppendLine(string.Join(",\n", propertyAssignments));

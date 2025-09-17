@@ -40,6 +40,8 @@ public class Manager : Employee
     public decimal Budget { get; set; }
 }
 
+public record ClassicUser(string Id, string FirstName, string LastName, string? Email);
+
 public record ModernUser
 {
     public required string Id { get; init; }
