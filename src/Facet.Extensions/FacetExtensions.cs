@@ -148,7 +148,7 @@ public static class FacetExtensions
         if (declaredSource != typeof(TFacetSource))
         {
             throw new InvalidOperationException(
-                $"Target entity type '{typeof(TFacetSource).FullName}' does not match declared Facet source '{declaredSource.FullName}' for facet '{facetType.FullName}'.");
+                $"Target type '{typeof(TFacetSource).FullName}' does not match declared Facet source '{declaredSource.FullName}' for facet '{facetType.FullName}'.");
         }
 
         var forwarded = _toFacetSourceTwoGenericMethod.MakeGenericMethod(facetType, typeof(TFacetSource))
@@ -182,10 +182,10 @@ public static class FacetExtensions
     /// Maps an <see cref="IEnumerable{TFacet}"/> to an <see cref="IEnumerable{TFacetSource}"/>
     /// via the generated BackTo method of the facet type.
     /// </summary>
-    /// <typeparam name="TFacet">The facet type, which must be annotated with [Facet(typeof(TEntity))].</typeparam>
-    /// <typeparam name="TFacetSource">The entity type.</typeparam>
+    /// <typeparam name="TFacet">The facet type, which must be annotated with [Facet(typeof(TFacetSource))].</typeparam>
+    /// <typeparam name="TFacetSource">The facet source type.</typeparam>
     /// <param name="facets">The source collection of facets.</param>
-    /// <returns>An <see cref="IEnumerable{TEntity}"/> mapped from the input.</returns>
+    /// <returns>An <see cref="IEnumerable{TFacetSource}"/> mapped from the input.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="facets"/> is <c>null</c>.</exception>
     public static IEnumerable<TFacetSource> BackTo<TFacet, TFacetSource>(this IEnumerable<TFacet> facets)
         where TFacet : class
