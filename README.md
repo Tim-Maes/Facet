@@ -109,6 +109,7 @@ var userFacet = user.ToFacet<UserFacet>();
 var userFacet = user.ToFacet<User, UserFacet>(); //Much faster
 
 var user = userFacet.BackTo<User>();
+var user = userFacet.BackTo<UserFacet, User>(); //Much faster
 
 var users = users.SelectFacets<UserFacet>();
 var users = users.SelectFacets<User, UserFacet>(); //Much faster

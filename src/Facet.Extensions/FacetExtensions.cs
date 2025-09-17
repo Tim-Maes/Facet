@@ -108,58 +108,58 @@ public static class FacetExtensions
     }
 
     /// <summary>
-    /// Maps a single facet instance to the specified entity type by invoking its generated BackTo method.
+    /// Maps a single facet instance to the specified source type by invoking its generated BackTo method.
     /// </summary>
-    /// <typeparam name="TFacet">The facet type that is annotated with [Facet(typeof(TEntity))].</typeparam>
-    /// <typeparam name="TEntity">The entity type to map to.</typeparam>
+    /// <typeparam name="TFacet">The facet type that is annotated with [Facet(typeof(TFacetSource))].</typeparam>
+    /// <typeparam name="TFacetSource">The entity type to map to.</typeparam>
     /// <param name="facet">The facet instance to map.</param>
-    /// <returns>A new <typeparamref name="TEntity"/> instance populated from <paramref name="facet"/>.</returns>
+    /// <returns>A new <typeparamref name="TFacetSource"/> instance populated from <paramref name="facet"/>.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="facet"/> is <c>null</c>.</exception>
-    public static TEntity BackTo<TFacet, TEntity>(this TFacet facet)
+    public static TFacetSource BackTo<TFacet, TFacetSource>(this TFacet facet)
         where TFacet : class
-        where TEntity : class
+        where TFacetSource : class
     {
         if (facet is null) throw new ArgumentNullException(nameof(facet));    
-        return EntityCache<TFacet, TEntity>.Mapper(facet);
+        return FacetSourceCache<TFacet, TFacetSource>.Mapper(facet);
     }
 
     /// <summary>
-    /// Converts the specified facet object to an instance of the entity type that the facet was created from.
+    /// Converts the specified facet object to an instance of the source type that the facet was created from.
     /// </summary>
-    /// <typeparam name="TEntity">The entity type to which the facet object will be converted. Must be a reference type.</typeparam>
+    /// <typeparam name="TFacetSource">The source type to which the facet object will be converted. Must be a reference type.</typeparam>
     /// <param name="facet">The facet object to be converted. Cannot be <see langword="null"/>.</param>
-    /// <returns>An instance of the entity type <typeparamref name="TEntity"/> created from the facet object.</returns>
+    /// <returns>An instance of the source type <typeparamref name="TFacetSource"/> created from the facet object.</returns>
     /// <exception cref="ArgumentNullException">Thrown if <paramref name="facet"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">Thrown if: <list type="bullet"> <item><description>The facet type is not
-    /// annotated with <c>[Facet(typeof(...))]</c>.</description></item> <item><description>The target entity type does not match
+    /// annotated with <c>[Facet(typeof(...))]</c>.</description></item> <item><description>The target type does not match
     /// the declared source type for the facet.</description></item> <item><description>The
     /// conversion process fails due to a missing BackTo method on the facet.</description></item>
     /// </list></exception>
-    public static TEntity BackTo<TEntity>(this object facet)
-        where TEntity : class
+    public static TFacetSource BackTo<TFacetSource>(this object facet)
+        where TFacetSource : class
     {
         if (facet is null) throw new ArgumentNullException(nameof(facet));
 
         var facetType = facet.GetType();
         var declaredSource = GetDeclaredSourceType(facetType)
             ?? throw new InvalidOperationException(
-                $"Type '{facetType.FullName}' must be annotated with [Facet(typeof(...))] to use BackTo<{typeof(TEntity).Name}>().");
+                $"Type '{facetType.FullName}' must be annotated with [Facet(typeof(...))] to use BackTo<{typeof(TFacetSource).Name}>().");
 
-        if (declaredSource != typeof(TEntity))
+        if (declaredSource != typeof(TFacetSource))
         {
             throw new InvalidOperationException(
-                $"Target entity type '{typeof(TEntity).FullName}' does not match declared Facet source '{declaredSource.FullName}' for facet '{facetType.FullName}'.");
+                $"Target entity type '{typeof(TFacetSource).FullName}' does not match declared Facet source '{declaredSource.FullName}' for facet '{facetType.FullName}'.");
         }
 
-        var forwarded = _toEntityTwoGenericMethod.MakeGenericMethod(facetType, typeof(TEntity))
+        var forwarded = _toEntityTwoGenericMethod.MakeGenericMethod(facetType, typeof(TFacetSource))
                                          .Invoke(null, new[] { facet });
         if (forwarded is null)
         {
             throw new InvalidOperationException(
-                $"Unable to map facet '{facetType.FullName}' to '{typeof(TEntity).FullName}'. Ensure the facet has a generated BackTo method.");
+                $"Unable to map facet '{facetType.FullName}' to '{typeof(TFacetSource).FullName}'. Ensure the facet has a generated BackTo method.");
         }
 
-        return (TEntity)forwarded;
+        return (TFacetSource)forwarded;
     }
 
     /// <summary>
@@ -179,20 +179,20 @@ public static class FacetExtensions
     }
 
     /// <summary>
-    /// Maps an <see cref="IEnumerable{TFacet}"/> to an <see cref="IEnumerable{TEntity}"/>
+    /// Maps an <see cref="IEnumerable{TFacet}"/> to an <see cref="IEnumerable{TFacetSource}"/>
     /// via the generated BackTo method of the facet type.
     /// </summary>
     /// <typeparam name="TFacet">The facet type, which must be annotated with [Facet(typeof(TEntity))].</typeparam>
-    /// <typeparam name="TEntity">The entity type.</typeparam>
+    /// <typeparam name="TFacetSource">The entity type.</typeparam>
     /// <param name="facets">The source collection of facets.</param>
     /// <returns>An <see cref="IEnumerable{TEntity}"/> mapped from the input.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="facets"/> is <c>null</c>.</exception>
-    public static IEnumerable<TEntity> BackTo<TFacet, TEntity>(this IEnumerable<TFacet> facets)
+    public static IEnumerable<TFacetSource> BackTo<TFacet, TFacetSource>(this IEnumerable<TFacet> facets)
         where TFacet : class
-        where TEntity : class
+        where TFacetSource : class
     {
         if (facets is null) throw new ArgumentNullException(nameof(facets));
-        return facets.Select(f => f.BackTo<TFacet, TEntity>());
+        return facets.Select(f => f.BackTo<TFacet, TFacetSource>());
     }
 
     /// <summary>
