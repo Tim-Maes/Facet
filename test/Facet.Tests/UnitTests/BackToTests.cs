@@ -36,7 +36,7 @@ public class BackToTests
         var userDto = originalUser.ToFacet<User, UserDto>();
 
         // Act
-        var mappedUser = userDto.BackTo<User>();
+        var mappedUser = userDto.BackTo<UserDto, User>();
 
         // Assert
         mappedUser.Should().NotBeNull();
