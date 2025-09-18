@@ -8,7 +8,7 @@ public class BackToTests
     #region Class Tests
 
     [Fact]
-    public void BackTo_ShouldMapBasicProperties_WhenMappingFromUserDto()
+    public void BackToShorthand_ShouldMapBasicProperties_WhenMappingFromUserDto()
     {
         // Arrange
         var originalUser = TestDataFactory.CreateUser("John", "Doe", "john@example.com");
@@ -16,6 +16,27 @@ public class BackToTests
 
         // Act
         var mappedUser = userDto.BackTo<User>();
+
+        // Assert
+        mappedUser.Should().NotBeNull();
+        mappedUser.Id.Should().Be(originalUser.Id);
+        mappedUser.FirstName.Should().Be("John");
+        mappedUser.LastName.Should().Be("Doe");
+        mappedUser.Email.Should().Be("john@example.com");
+        mappedUser.IsActive.Should().Be(originalUser.IsActive);
+        mappedUser.DateOfBirth.Should().Be(originalUser.DateOfBirth);
+        mappedUser.LastLoginAt.Should().Be(originalUser.LastLoginAt);
+    }
+
+    [Fact]
+    public void BackTo_ShouldMapBasicProperties_WhenMappingFromUserDto()
+    {
+        // Arrange
+        var originalUser = TestDataFactory.CreateUser("John", "Doe", "john@example.com");
+        var userDto = originalUser.ToFacet<User, UserDto>();
+
+        // Act
+        var mappedUser = userDto.BackTo<UserDto, User>();
 
         // Assert
         mappedUser.Should().NotBeNull();
