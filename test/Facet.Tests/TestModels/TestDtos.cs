@@ -38,8 +38,7 @@ public partial record struct UserSummary;
 [Facet(typeof(Product), "InternalNotes", "CreatedAt", Kind = FacetKind.Struct)]
 public partial struct ProductSummary;
 
-// This DTO demonstrates the BackTo issue - it excludes a required field (Source)
-[Facet(typeof(EventLog), "Source")] // Excluding the required 'Source' field
+[Facet(typeof(EventLog), "Source")]
 public partial class EventLogDto;
 
 public class UserDtoWithMappingMapper : IFacetMapConfiguration<User, UserDtoWithMapping>

@@ -53,7 +53,6 @@ public record ModernUser
     public string? PasswordHash { get; init; }
 }
 
-// Test entity that demonstrates the BackTo issue with required fields
 public record EventLog
 {
     public required string Id { get; init; }
@@ -61,7 +60,7 @@ public record EventLog
     public required DateTime Timestamp { get; init; }
     public string? Message { get; init; }
     public string? UserId { get; init; }
-    public required string Source { get; init; } // This will be excluded in the facet
+    public required string Source { get; init; }
 }
 
 public enum UserStatus
