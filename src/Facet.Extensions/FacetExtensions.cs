@@ -187,12 +187,44 @@ public static class FacetExtensions
     /// <param name="facets">The source collection of facets.</param>
     /// <returns>An <see cref="IEnumerable{TFacetSource}"/> mapped from the input.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="facets"/> is <c>null</c>.</exception>
-    public static IEnumerable<TFacetSource> BackTo<TFacet, TFacetSource>(this IEnumerable<TFacet> facets)
+    public static IEnumerable<TFacetSource> SelectFacetSources<TFacet, TFacetSource>(this IEnumerable<TFacet> facets)
         where TFacet : class
         where TFacetSource : class
     {
         if (facets is null) throw new ArgumentNullException(nameof(facets));
         return facets.Select(f => f.BackTo<TFacet, TFacetSource>());
+    }
+    
+    /// <summary>
+    /// Maps an <see cref="IEnumerable"/> of facet objects to an <see cref="IEnumerable{TFacetSource}"/>
+    /// via the generated BackTo method of each facet type.
+    /// </summary>
+    /// <remarks>
+    /// This method lazily converts each non-null facet object by calling <see cref="BackTo{TFacetSource}(object)"/> on each element.
+    /// Only non-null elements are processed; nulls are skipped. The operation uses deferred execution and
+    /// preserves the order of the source sequence.
+    /// <para>
+    /// Note: Each facet object must be annotated with <c>[Facet(typeof(TFacetSource))]</c> and have a generated BackTo method.
+    /// If a facet type is not properly annotated or lacks the required BackTo method, the underlying
+    /// <see cref="BackTo{TFacetSource}(object)"/> may throw <see cref="InvalidOperationException"/> at iteration time.
+    /// </para>
+    /// </remarks>
+    /// <typeparam name="TFacetSource">The facet source type to map back to. Must be a reference type.</typeparam>
+    /// <param name="facets">The source collection of facet objects. Cannot be <see langword="null"/>.</param>
+    /// <returns>An <see cref="IEnumerable{TFacetSource}"/> containing source instances mapped from the non-null facet objects in the input collection.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="facets"/> is <see langword="null"/>.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown at iteration time if any facet object is not annotated with <c>[Facet(typeof(TFacetSource))]</c> or lacks a generated BackTo method.
+    /// </exception>
+    public static IEnumerable<TFacetSource> SelectFacetSources<TFacetSource>(this IEnumerable facets)
+        where TFacetSource : class
+    {
+        if (facets is null) throw new ArgumentNullException(nameof(facets));
+        foreach (var item in facets)
+        {
+            if (item is null) continue;
+            yield return item.BackTo<TFacetSource>();
+        }
     }
 
     /// <summary>

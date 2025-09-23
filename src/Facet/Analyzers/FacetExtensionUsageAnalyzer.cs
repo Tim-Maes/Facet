@@ -11,53 +11,24 @@ namespace Facet.Analyzers;
 public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
 {
     // Diagnostic descriptors for different error scenarios
-    public static readonly DiagnosticDescriptor ToFacetTargetNotFacetRule = new DiagnosticDescriptor(
+    public static readonly DiagnosticDescriptor TargetNotFacetRule = new DiagnosticDescriptor(
         "FAC001",
-        "ToFacet target type must be annotated with [Facet]",
-        "Type '{0}' must be annotated with [Facet] attribute to be used as target in ToFacet method",
+        "Type must be annotated with [Facet]",
+        "Type '{1}' must be annotated with [Facet] attribute to be used here in {0} method",
         "Usage",
         DiagnosticSeverity.Error,
-        isEnabledByDefault: true,
-        description: "The target type in ToFacet<TTarget> or ToFacet<TSource, TTarget> must be a type annotated with [Facet] attribute.");
+        isEnabledByDefault: true);
 
-    public static readonly DiagnosticDescriptor BackToFacetNotFacetRule = new DiagnosticDescriptor(
+    public static readonly DiagnosticDescriptor SingleGenericPerformanceRule = new DiagnosticDescriptor(
         "FAC002",
-        "BackTo facet type must be annotated with [Facet]",
-        "Type '{0}' must be annotated with [Facet] attribute to be used as facet in BackTo method",
-        "Usage",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true,
-        description: "The facet type in BackTo<TFacet, TFacetSource> must be a type annotated with [Facet] attribute.");
-
-    public static readonly DiagnosticDescriptor BackToObjectNotFacetRule = new DiagnosticDescriptor(
-        "FAC003",
-        "BackTo object must be a facet type",
-        "The object used with BackTo<TFacetSource> must be of a type annotated with [Facet] attribute",
-        "Usage",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true,
-        description: "When using BackTo<TFacetSource>(this object facet), the object must be of a type annotated with [Facet] attribute.");
-
-    public static readonly DiagnosticDescriptor ToFacetSingleGenericPerformanceRule = new DiagnosticDescriptor(
-        "FAC004",
-        "Consider using ToFacet<TSource, TTarget> for better performance",
-        "Consider using ToFacet<{0}, {1}> instead of ToFacet<{1}> for better performance",
+        "Consider using the two-generic variant of this method for better performance",
+        "Consider using {0}<{1}, {2}> instead of {0}<{2}> for better performance",
         "Performance",
         DiagnosticSeverity.Info,
-        isEnabledByDefault: true,
-        description: "Using the two-generic variant ToFacet<TSource, TTarget> provides better performance than the single-generic variant ToFacet<TTarget>.");
-
-    public static readonly DiagnosticDescriptor BackToSingleGenericPerformanceRule = new DiagnosticDescriptor(
-        "FAC005",
-        "Consider using BackTo<TFacet, TFacetSource> for better performance",
-        "Consider using BackTo<{0}, {1}> instead of BackTo<{1}> for better performance",
-        "Performance",
-        DiagnosticSeverity.Info,
-        isEnabledByDefault: true,
-        description: "Using the two-generic variant BackTo<TFacet, TFacetSource> provides better performance than the single-generic variant BackTo<TFacetSource>.");
+        isEnabledByDefault: true);
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
-        [ToFacetTargetNotFacetRule, BackToFacetNotFacetRule, BackToObjectNotFacetRule, ToFacetSingleGenericPerformanceRule, BackToSingleGenericPerformanceRule];
+        [TargetNotFacetRule, SingleGenericPerformanceRule];
 
     public override void Initialize(AnalysisContext context)
     {
@@ -81,15 +52,21 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
         switch (method.Name)
         {
             case "ToFacet":
-                AnalyzeToFacetCall(context, method, invocation, memberAccess);
+                AnalyzeToFacetCall(context, method, invocation, memberAccess, false);
                 break;
             case "BackTo":
-                AnalyzeBackToCall(context, method, invocation, memberAccess);
+                AnalyzeBackToCall(context, method, invocation, memberAccess, false);
+                break;
+            case "SelectFacets":
+                AnalyzeToFacetCall(context, method, invocation, memberAccess, true);
+                break;
+            case "SelectFacetSources":
+                AnalyzeBackToCall(context, method, invocation, memberAccess, true);
                 break;
         }
     }
 
-    private static void AnalyzeToFacetCall(SyntaxNodeAnalysisContext context, IMethodSymbol method, InvocationExpressionSyntax invocation, MemberAccessExpressionSyntax memberAccess)
+    private static void AnalyzeToFacetCall(SyntaxNodeAnalysisContext context, IMethodSymbol method, InvocationExpressionSyntax invocation, MemberAccessExpressionSyntax memberAccess, bool isCollection)
     {
         // Check both ToFacet<TTarget> and ToFacet<TSource, TTarget>
         if (method.TypeArguments.Length == 0) return;
@@ -103,11 +80,12 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
             // We need to check the actual type of the object being called on
             var objectExpression = memberAccess.Expression;
             var objectTypeInfo = context.SemanticModel.GetTypeInfo(objectExpression);
+            var sourceElementType = isCollection ? GetCollectionElementType(objectTypeInfo.Type) : objectTypeInfo.Type;
             
             context.ReportDiagnostic(Diagnostic.Create(
-                ToFacetSingleGenericPerformanceRule,
+                SingleGenericPerformanceRule,
                 invocation.GetLocation(),
-                objectTypeInfo.Type?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat), targetType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                method.Name, sourceElementType?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat), targetType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
         }
         else if (method.TypeArguments.Length == 2)
         {
@@ -122,14 +100,14 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
         if (!HasFacetAttribute(targetType))
         {
             var diagnostic = Diagnostic.Create(
-                ToFacetTargetNotFacetRule,
+                TargetNotFacetRule,
                 invocation.GetLocation(),
-                targetType.ToDisplayString());
+                method.Name, targetType.ToDisplayString());
             context.ReportDiagnostic(diagnostic);
         }
     }
 
-    private static void AnalyzeBackToCall(SyntaxNodeAnalysisContext context, IMethodSymbol method, InvocationExpressionSyntax invocation, MemberAccessExpressionSyntax memberAccess)
+    private static void AnalyzeBackToCall(SyntaxNodeAnalysisContext context, IMethodSymbol method, InvocationExpressionSyntax invocation, MemberAccessExpressionSyntax memberAccess, bool isCollection)
     {
         if (method.TypeArguments.Length == 0) return;
 
@@ -140,9 +118,9 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
             if (!HasFacetAttribute(facetType))
             {
                 var diagnostic = Diagnostic.Create(
-                    BackToFacetNotFacetRule,
+                    TargetNotFacetRule,
                     invocation.GetLocation(),
-                    facetType.ToDisplayString());
+                    method.Name, facetType.ToDisplayString());
                 context.ReportDiagnostic(diagnostic);
             }
         }
@@ -152,22 +130,57 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
             // We need to check the actual type of the object being called on
             var objectExpression = memberAccess.Expression;
             var objectTypeInfo = context.SemanticModel.GetTypeInfo(objectExpression);
+            var sourceElementType = isCollection ? GetCollectionElementType(objectTypeInfo.Type) : objectTypeInfo.Type;
             
             var targetType = method.TypeArguments[0];
             
             context.ReportDiagnostic(Diagnostic.Create(
-                BackToSingleGenericPerformanceRule,
+                SingleGenericPerformanceRule,
                 invocation.GetLocation(),
-                objectTypeInfo.Type?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat), targetType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                method.Name, sourceElementType?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat), targetType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
             
-            if (objectTypeInfo.Type != null && !HasFacetAttribute(objectTypeInfo.Type))
+            if (sourceElementType != null && !HasFacetAttribute(sourceElementType))
             {
                 var diagnostic = Diagnostic.Create(
-                    BackToObjectNotFacetRule,
-                    invocation.GetLocation());
+                    TargetNotFacetRule,
+                    invocation.GetLocation(),
+                    method.Name, objectTypeInfo.Type?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat));
                 context.ReportDiagnostic(diagnostic);
             }
         }
+    }
+    
+    private static ITypeSymbol? GetCollectionElementType(ITypeSymbol? collectionType)
+    {
+        if (collectionType == null) return null;
+
+        // Check if it's an array type
+        if (collectionType is IArrayTypeSymbol arrayType)
+        {
+            return arrayType.ElementType;
+        }
+
+        // Check if it's a generic type that implements IEnumerable<T>
+        if (collectionType is INamedTypeSymbol namedType && namedType.IsGenericType)
+        {
+            // First check if it's directly IEnumerable<T>
+            if (namedType.ConstructedFrom.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>")
+            {
+                return namedType.TypeArguments[0];
+            }
+
+            // Check if it implements IEnumerable<T>
+            foreach (var iface in namedType.AllInterfaces)
+            {
+                if (iface.IsGenericType && 
+                    iface.ConstructedFrom.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>")
+                {
+                    return iface.TypeArguments[0];
+                }
+            }
+        }
+
+        return collectionType;
     }
 
     private static bool HasFacetAttribute(ITypeSymbol type)
@@ -176,4 +189,3 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
             attr.AttributeClass?.ToDisplayString() == "Facet.FacetAttribute");
     }
 }
-
