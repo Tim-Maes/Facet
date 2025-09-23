@@ -53,6 +53,16 @@ public record ModernUser
     public string? PasswordHash { get; init; }
 }
 
+public record EventLog
+{
+    public required string Id { get; init; }
+    public required string EventType { get; init; }
+    public required DateTime Timestamp { get; init; }
+    public string? Message { get; init; }
+    public string? UserId { get; init; }
+    public required string Source { get; init; }
+}
+
 public enum UserStatus
 {
     Active,

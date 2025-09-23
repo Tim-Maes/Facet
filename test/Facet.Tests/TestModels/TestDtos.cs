@@ -38,6 +38,9 @@ public partial record struct UserSummary;
 [Facet(typeof(Product), "InternalNotes", "CreatedAt", Kind = FacetKind.Struct)]
 public partial struct ProductSummary;
 
+[Facet(typeof(EventLog), "Source")]
+public partial class EventLogDto;
+
 public class UserDtoWithMappingMapper : IFacetMapConfiguration<User, UserDtoWithMapping>
 {
     public static void Map(User source, UserDtoWithMapping target)

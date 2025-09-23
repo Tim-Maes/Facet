@@ -23,6 +23,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public string? TypeXmlDocumentation { get; }
     public ImmutableArray<string> ContainingTypes { get; }
     public bool UseFullName { get; }
+    public ImmutableArray<FacetMember> ExcludedRequiredMembers { get; }
 
     public FacetTargetModel(
         string name,
@@ -39,7 +40,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         bool sourceHasPositionalConstructor = false,
         string? typeXmlDocumentation = null,
         ImmutableArray<string> containingTypes = default,
-        bool useFullName = false)
+        bool useFullName = false,
+        ImmutableArray<FacetMember> excludedRequiredMembers = default)
     {
         Name = name;
         Namespace = @namespace;
@@ -56,6 +58,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         TypeXmlDocumentation = typeXmlDocumentation;
         ContainingTypes = containingTypes.IsDefault ? ImmutableArray<string>.Empty : containingTypes;
         UseFullName = useFullName;
+        ExcludedRequiredMembers = excludedRequiredMembers.IsDefault ? ImmutableArray<FacetMember>.Empty : excludedRequiredMembers;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -77,6 +80,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && TypeXmlDocumentation == other.TypeXmlDocumentation
             && Members.SequenceEqual(other.Members)
             && ContainingTypes.SequenceEqual(other.ContainingTypes)
+            && ExcludedRequiredMembers.SequenceEqual(other.ExcludedRequiredMembers)
             && UseFullName == other.UseFullName;
     }
 
@@ -99,6 +103,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + HasExistingPrimaryConstructor.GetHashCode();
             hash = hash * 31 + SourceHasPositionalConstructor.GetHashCode();
             hash = hash * 31 + (TypeXmlDocumentation?.GetHashCode() ?? 0);
+            hash = hash * 31 + UseFullName.GetHashCode();
             hash = hash * 31 + Members.Length.GetHashCode();
 
             foreach (var member in Members)
@@ -106,6 +111,9 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
 
             foreach (var containingType in ContainingTypes)
                 hash = hash * 31 + (containingType?.GetHashCode() ?? 0);
+
+            foreach (var excludedMember in ExcludedRequiredMembers)
+                hash = hash * 31 + excludedMember.GetHashCode();
 
             return hash;
         }

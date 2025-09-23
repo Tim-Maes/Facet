@@ -80,6 +80,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         var preserveRequired = GetNamedArg(attribute.NamedArguments, "PreserveRequiredProperties", preserveRequiredDefault);
 
         var members = new List<FacetMember>();
+        var excludedRequiredMembers = new List<FacetMember>();
         var addedMembers = new HashSet<string>();
 
         var allMembersWithModifiers = GetAllMembersWithModifiers(sourceType);
@@ -90,14 +91,31 @@ public sealed class FacetGenerator : IIncrementalGenerator
         foreach (var (member, isInitOnly, isRequired) in allMembersWithModifiers)
         {
             token.ThrowIfCancellationRequested();
-            if (excluded.Contains(member.Name)) continue;
+            
             if (addedMembers.Contains(member.Name)) continue;
 
             if (member is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } p)
             {
+                var memberXmlDocumentation = ExtractXmlDocumentation(p);
+                
+                if (excluded.Contains(member.Name))
+                {
+                    // If this is a required member that was excluded, track it for BackTo generation
+                    if (isRequired)
+                    {
+                        excludedRequiredMembers.Add(new FacetMember(
+                            p.Name,
+                            p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                            FacetMemberKind.Property,
+                            isInitOnly,
+                            isRequired,
+                            memberXmlDocumentation));
+                    }
+                    continue;
+                }
+
                 var shouldPreserveInitOnly = preserveInitOnly && isInitOnly;
                 var shouldPreserveRequired = preserveRequired && isRequired;
-                var memberXmlDocumentation = ExtractXmlDocumentation(p);
 
                 members.Add(new FacetMember(
                     p.Name,
@@ -110,8 +128,25 @@ public sealed class FacetGenerator : IIncrementalGenerator
             }
             else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
             {
-                var shouldPreserveRequired = preserveRequired && isRequired;
                 var memberXmlDocumentation = ExtractXmlDocumentation(f);
+                
+                if (excluded.Contains(member.Name))
+                {
+                    // If this is a required field that was excluded, track it for BackTo generation
+                    if (isRequired)
+                    {
+                        excludedRequiredMembers.Add(new FacetMember(
+                            f.Name,
+                            f.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                            FacetMemberKind.Field,
+                            false, // Fields don't have init-only
+                            isRequired,
+                            memberXmlDocumentation));
+                    }
+                    continue;
+                }
+
+                var shouldPreserveRequired = preserveRequired && isRequired;
 
                 members.Add(new FacetMember(
                     f.Name,
@@ -167,7 +202,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
             hasPositionalConstructor,
             typeXmlDocumentation,
             containingTypes,
-            useFullName);
+            useFullName,
+            excludedRequiredMembers.ToImmutableArray());
     }
 
     /// <summary>
@@ -963,13 +999,109 @@ public sealed class FacetGenerator : IIncrementalGenerator
             // For source types without positional constructors, use object initializer syntax
             sb.AppendLine($"        return new {model.SourceTypeName}");
             sb.AppendLine("        {");
-            var propertyAssignments = model.Members
-                .Select(m => $"            {m.Name} = this.{m.Name}");
+            
+            var propertyAssignments = new List<string>();
+            
+            // Add assignments for included properties
+            foreach (var member in model.Members)
+            {
+                propertyAssignments.Add($"            {member.Name} = this.{member.Name}");
+            }
+            
+            // Add default values for excluded required members
+            foreach (var excludedMember in model.ExcludedRequiredMembers)
+            {
+                var defaultValue = GetDefaultValueForType(excludedMember.TypeName);
+                propertyAssignments.Add($"            {excludedMember.Name} = {defaultValue}");
+            }
+            
             sb.AppendLine(string.Join(",\n", propertyAssignments));
             sb.AppendLine("        };");
         }
 
         sb.AppendLine("    }");
+    }
+
+    /// <summary>
+    /// Gets the appropriate default value for a given type name.
+    /// </summary>
+    private static string GetDefaultValueForType(string typeName)
+    {
+        // Remove global:: prefix if present
+        var cleanTypeName = typeName.StartsWith("global::") ? typeName.Substring(8) : typeName;
+        
+        // Handle nullable types
+        if (cleanTypeName.EndsWith("?"))
+        {
+            return "null";
+        }
+        
+        // Handle Nullable<T>
+        if (cleanTypeName.StartsWith("System.Nullable<"))
+        {
+            return "null";
+        }
+        
+        return cleanTypeName switch
+        {
+            // String types
+            "string" or "System.String" => "string.Empty",
+            
+            // Numeric types
+            "int" or "System.Int32" => "0",
+            "long" or "System.Int64" => "0L",
+            "short" or "System.Int16" => "(short)0",
+            "byte" or "System.Byte" => "(byte)0",
+            "sbyte" or "System.SByte" => "(sbyte)0",
+            "uint" or "System.UInt32" => "0U",
+            "ulong" or "System.UInt64" => "0UL",
+            "ushort" or "System.UInt16" => "(ushort)0",
+            "float" or "System.Single" => "0.0f",
+            "double" or "System.Double" => "0.0",
+            "decimal" or "System.Decimal" => "0.0m",
+            
+            // Other value types
+            "bool" or "System.Boolean" => "false",
+            "char" or "System.Char" => "'\\0'",
+            "System.DateTime" => "default(System.DateTime)",
+            "System.DateTimeOffset" => "default(System.DateTimeOffset)",
+            "System.TimeSpan" => "default(System.TimeSpan)",
+            "System.Guid" => "default(System.Guid)",
+            
+            // Default for unknown types
+            _ when IsValueType(cleanTypeName) => $"default({cleanTypeName})",
+            _ => "null" // Reference types default to null
+        };
+    }
+    
+    /// <summary>
+    /// Determines if a type is a value type based on its name.
+    /// </summary>
+    private static bool IsValueType(string typeName)
+    {
+        return typeName switch
+        {
+            "bool" or "System.Boolean" => true,
+            "byte" or "System.Byte" => true,
+            "sbyte" or "System.SByte" => true,
+            "char" or "System.Char" => true,
+            "decimal" or "System.Decimal" => true,
+            "double" or "System.Double" => true,
+            "float" or "System.Single" => true,
+            "int" or "System.Int32" => true,
+            "uint" or "System.UInt32" => true,
+            "long" or "System.Int64" => true,
+            "ulong" or "System.UInt64" => true,
+            "short" or "System.Int16" => true,
+            "ushort" or "System.UInt16" => true,
+            "System.DateTime" => true,
+            "System.DateTimeOffset" => true,
+            "System.TimeSpan" => true,
+            "System.Guid" => true,
+            _ when typeName.StartsWith("System.Enum") => true,
+            _ when typeName.EndsWith("Enum") => true,  // Simple heuristic for enums
+            _ => false
+        };
     }
 }
 
