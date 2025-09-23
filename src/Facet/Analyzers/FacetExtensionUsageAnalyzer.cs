@@ -161,22 +161,21 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
         }
 
         // Check if it's a generic type that implements IEnumerable<T>
-        if (collectionType is INamedTypeSymbol namedType && namedType.IsGenericType)
+        if (collectionType is not INamedTypeSymbol namedType || !namedType.IsGenericType) return collectionType;
+        
+        // First check if it's directly IEnumerable<T>
+        if (namedType.ConstructedFrom.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>")
         {
-            // First check if it's directly IEnumerable<T>
-            if (namedType.ConstructedFrom.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>")
-            {
-                return namedType.TypeArguments[0];
-            }
+            return namedType.TypeArguments[0];
+        }
 
-            // Check if it implements IEnumerable<T>
-            foreach (var iface in namedType.AllInterfaces)
+        // Check if it implements IEnumerable<T>
+        foreach (var iface in namedType.AllInterfaces)
+        {
+            if (iface.IsGenericType && 
+                iface.ConstructedFrom.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>")
             {
-                if (iface.IsGenericType && 
-                    iface.ConstructedFrom.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>")
-                {
-                    return iface.TypeArguments[0];
-                }
+                return iface.TypeArguments[0];
             }
         }
 
