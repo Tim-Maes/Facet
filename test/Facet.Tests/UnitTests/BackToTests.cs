@@ -8,7 +8,7 @@ public class BackToTests
     #region Class Tests
 
     [Fact]
-    public void BackTo_ShouldMapBasicProperties_WhenMappingFromUserDto()
+    public void BackToShorthand_ShouldMapBasicProperties_WhenMappingFromUserDto()
     {
         // Arrange
         var originalUser = TestDataFactory.CreateUser("John", "Doe", "john@example.com");
@@ -29,6 +29,27 @@ public class BackToTests
     }
 
     [Fact]
+    public void BackTo_ShouldMapBasicProperties_WhenMappingFromUserDto()
+    {
+        // Arrange
+        var originalUser = TestDataFactory.CreateUser("John", "Doe", "john@example.com");
+        var userDto = originalUser.ToFacet<User, UserDto>();
+
+        // Act
+        var mappedUser = userDto.BackTo<UserDto, User>();
+
+        // Assert
+        mappedUser.Should().NotBeNull();
+        mappedUser.Id.Should().Be(originalUser.Id);
+        mappedUser.FirstName.Should().Be("John");
+        mappedUser.LastName.Should().Be("Doe");
+        mappedUser.Email.Should().Be("john@example.com");
+        mappedUser.IsActive.Should().Be(originalUser.IsActive);
+        mappedUser.DateOfBirth.Should().Be(originalUser.DateOfBirth);
+        mappedUser.LastLoginAt.Should().Be(originalUser.LastLoginAt);
+    }
+
+    [Fact]
     public void BackTo_ShouldSetDefaultValues_ForExcludedProperties()
     {
         // Arrange
@@ -36,7 +57,7 @@ public class BackToTests
         var userDto = originalUser.ToFacet<User, UserDto>();
 
         // Act
-        var mappedUser = userDto.BackTo<User>();
+        var mappedUser = userDto.BackTo<UserDto, User>();
 
         // Assert
         mappedUser.Should().NotBeNull();
@@ -253,14 +274,32 @@ public class BackToTests
     #region Collection Tests
 
     [Fact]
-    public void BackTo_ShouldMapMultipleUsers_WithDifferentData()
+    public void SelectFacetSources_ShouldMapMultipleUsers_WithDifferentData()
     {
         // Arrange
         var originalUsers = TestDataFactory.CreateUsers();
-        var userDtos = originalUsers.Select(u => u.ToFacet<User, UserDto>()).ToList();
+        var userDtos = originalUsers.SelectFacets<User, UserDto>().ToList();
 
         // Act
-        var mappedUsers = userDtos.Select(dto => dto.BackTo<User>()).ToList();
+        var mappedUsers = userDtos.SelectFacetSources<UserDto, User>().ToList();
+
+        // Assert
+        mappedUsers.Should().HaveCount(3);
+        mappedUsers[0].FirstName.Should().Be(originalUsers[0].FirstName);
+        mappedUsers[1].FirstName.Should().Be(originalUsers[1].FirstName);
+        mappedUsers[2].FirstName.Should().Be(originalUsers[2].FirstName);
+        mappedUsers[2].IsActive.Should().Be(originalUsers[2].IsActive);
+    }
+    
+    [Fact]
+    public void SelectFacetSourcesShorthand_ShouldMapMultipleUsers_WithDifferentData()
+    {
+        // Arrange
+        var originalUsers = TestDataFactory.CreateUsers();
+        var userDtos = originalUsers.SelectFacets<User, UserDto>().ToList();
+
+        // Act
+        var mappedUsers = userDtos.SelectFacetSources<User>().ToList();
 
         // Assert
         mappedUsers.Should().HaveCount(3);
@@ -271,7 +310,7 @@ public class BackToTests
     }
 
     [Fact]
-    public void BackTo_ShouldMapMultipleProducts_FromRecordDtos()
+    public void SelectFacetSources_ShouldMapMultipleProducts_FromRecordDtos()
     {
         // Arrange
         var originalProducts = new List<Product>
@@ -280,10 +319,10 @@ public class BackToTests
             TestDataFactory.CreateProduct("Product B", 39.99m),
             TestDataFactory.CreateProduct("Product C", 59.99m, false)
         };
-        var productDtos = originalProducts.Select(p => p.ToFacet<Product, ProductDto>()).ToList();
+        var productDtos = originalProducts.SelectFacets<Product, ProductDto>().ToList();
 
         // Act
-        var mappedProducts = productDtos.Select(dto => dto.BackTo<Product>()).ToList();
+        var mappedProducts = productDtos.SelectFacetSources<ProductDto, Product>().ToList();
 
         // Assert
         mappedProducts.Should().HaveCount(originalProducts.Count);
