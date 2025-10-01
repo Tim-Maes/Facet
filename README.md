@@ -47,6 +47,7 @@ You can think of it like **carving out a specific facet** of a gem:
 
 ## :clipboard: Documentation
 
+- [Comprehensive article about Facetting](https://tim-maes.com/facets-in-dotnet.html)
 - **[Documentation & Guides](docs/README.md)**
 - [What is being generated?](docs/07_WhatIsBeingGenerated.md)
 
