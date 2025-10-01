@@ -148,3 +148,8 @@ public partial class UserHybridDto
     public int Age { get; set; }
     public string AsyncComputedField { get; set; } = string.Empty;
 }
+
+[Facet(typeof(NullableTestEntity))]
+public partial class NullableTestDto
+{
+}

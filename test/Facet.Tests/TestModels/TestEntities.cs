@@ -78,3 +78,11 @@ public class UserWithEnum
     public UserStatus Status { get; set; }
     public string Email { get; set; } = string.Empty;
 }
+
+public sealed class NullableTestEntity
+{
+    public bool Test1 { get; set; }
+    public bool? Test2 { get; set; }
+    public string Test3 { get; set; } = string.Empty;
+    public string? Test4 { get; set; } = null;
+}

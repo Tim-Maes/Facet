@@ -153,7 +153,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 {
                     members.Add(new FacetMember(
                         p.Name,
-                        p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        GetTypeNameWithNullability(p.Type),
                         FacetMemberKind.Property,
                         isInitOnly,
                         isRequired,
@@ -164,7 +164,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 {
                     members.Add(new FacetMember(
                         f.Name,
-                        f.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        GetTypeNameWithNullability(f.Type),
                         FacetMemberKind.Field,
                         false, // Fields don't have init-only
                         isRequired,
@@ -590,5 +590,27 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
             return defaultValue;
         }
+    }
+
+    /// <summary>
+    /// Gets the type name with proper nullability information preserved.
+    /// </summary>
+    private static string GetTypeNameWithNullability(ITypeSymbol typeSymbol)
+    {
+        // Create a SymbolDisplayFormat that includes nullability information
+        var format = new SymbolDisplayFormat(
+            globalNamespaceStyle: SymbolDisplayGlobalNamespaceStyle.Included,
+            typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
+            genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters | SymbolDisplayGenericsOptions.IncludeVariance,
+            memberOptions: SymbolDisplayMemberOptions.None,
+            delegateStyle: SymbolDisplayDelegateStyle.NameAndSignature,
+            extensionMethodStyle: SymbolDisplayExtensionMethodStyle.Default,
+            parameterOptions: SymbolDisplayParameterOptions.None,
+            propertyStyle: SymbolDisplayPropertyStyle.NameOnly,
+            localOptions: SymbolDisplayLocalOptions.None,
+            kindOptions: SymbolDisplayKindOptions.None,
+            miscellaneousOptions: SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers | SymbolDisplayMiscellaneousOptions.UseSpecialTypes | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+
+        return typeSymbol.ToDisplayString(format);
     }
 }
