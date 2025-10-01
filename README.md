@@ -54,7 +54,7 @@ You can think of it like **carving out a specific facet** of a gem:
 ## :star: Key Features
 
 - :white_check_mark: Generate classes, records, structs, or record structs from existing types
-- :white_check_mark: Exclude fields/properties you don't want (create a Facetted view of your model)
+- :white_check_mark: Define what to include, or exclude fields/properties you don't want (create a Facetted view of your model)
 - :white_check_mark: Include/redact public fields
 - :white_check_mark: Auto-generate constructors for fast mapping
 - :white_check_mark: LINQ projection expressions
@@ -124,9 +124,17 @@ string[] excludeFields = { "Password", "Email" };
 [Facet(typeof(User), exclude: excludeFields)]
 public partial class UserWithoutEmail { }
 
+// Include only specific properties
+[Facet(typeof(User), Include = new[] { "FirstName", "LastName", "Email" })]
+public partial class UserContactDto { }
+
 // Include public fields
 [Facet(typeof(Entity), IncludeFields = true)]
 public partial class EntityDto { }
+
+// Include specific fields and properties 
+[Facet(typeof(Entity), Include = new[] { "Name", "Status" }, IncludeFields = true)]
+public partial class EntitySummaryDto { }
 ```
 
 ### Custom Sync Mapping

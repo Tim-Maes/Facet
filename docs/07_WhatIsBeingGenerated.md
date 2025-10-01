@@ -37,7 +37,53 @@ public partial class PersonWithoutEmail
 
 ---
 
-## 2. Class With Additional Properties
+## 2. Class Include Example
+
+**Input:**
+```csharp
+public class Person
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string Email { get; set; }
+    public int Age { get; set; }
+    public string Password { get; set; }
+}
+
+[Facet(typeof(Person), Include = new[] { "Name", "Age" })]
+public partial class PersonContactInfo { }
+```
+
+**Generated:**
+```csharp
+public partial class PersonContactInfo
+{
+    public string Name { get; set; }
+    public int Age { get; set; }
+    public PersonContactInfo(Project.Namespace.Person source)
+    {
+        this.Name = source.Name;
+        this.Age = source.Age;
+    }
+    public static Expression<Func<Project.Namespace.Person, PersonContactInfo>> Projection =>
+        source => new PersonContactInfo(source);
+    public Project.Namespace.Person BackTo()
+    {
+        return new Project.Namespace.Person
+        {
+            Name = this.Name,
+            Age = this.Age,
+            Id = 0,
+            Email = string.Empty,
+            Password = string.Empty
+        };
+    }
+}
+```
+
+---
+
+## 3. Class With Additional Properties
 
 **Input:**
 ```csharp
@@ -65,7 +111,37 @@ public partial class PersonWithNote
 
 ---
 
-## 3. Field Facet Example
+## 4. Include with Custom Properties
+
+**Input:**
+```csharp
+[Facet(typeof(Person), Include = new[] { "Name" })]
+public partial class PersonSummary
+{
+    public string DisplayName { get; set; }
+    public string Category { get; set; } = "Person";
+}
+```
+
+**Generated:**
+```csharp
+public partial class PersonSummary
+{
+    public string Name { get; set; }
+    public string DisplayName { get; set; }
+    public string Category { get; set; } = "Person";
+    public PersonSummary(Project.Namespace.Person source)
+    {
+        this.Name = source.Name;
+    }
+    public static Expression<Func<Project.Namespace.Person, PersonSummary>> Projection =>
+        source => new PersonSummary(source);
+}
+```
+
+---
+
+## 5. Field Facet Example
 
 **Input:**
 ```csharp
@@ -103,7 +179,41 @@ public partial class PersonWithFieldFacet
 
 ---
 
-## 4. Custom Mapping Example
+## 6. Include with Fields Example
+
+**Input:**
+```csharp
+public class PersonWithField
+{
+    public string Name;
+    public int Age;
+    public Guid Identifier;
+    public string Email { get; set; }
+}
+
+[Facet(typeof(PersonWithField), Include = new[] { "Name", "Email" }, IncludeFields = true)]
+public partial class PersonNameAndEmail { }
+```
+
+**Generated:**
+```csharp
+public partial class PersonNameAndEmail
+{
+    public string Name;
+    public string Email { get; set; }
+    public PersonNameAndEmail(Project.Namespace.PersonWithField source)
+    {
+        this.Name = source.Name;
+        this.Email = source.Email;
+    }
+    public static Expression<Func<Project.Namespace.PersonWithField, PersonNameAndEmail>> Projection =>
+        source => new PersonNameAndEmail(source);
+}
+```
+
+---
+
+## 7. Custom Mapping Example
 
 **Input:**
 ```csharp
@@ -148,7 +258,30 @@ public partial class UserDto
 
 ---
 
-## 5. Smart Defaults
+## 8. Include Mode with Records
+
+**Input:**
+```csharp
+public record User(int Id, string FirstName, string LastName, string Email, string Password);
+
+[Facet(typeof(User), Include = new[] { "FirstName", "LastName", "Email" }, Kind = FacetKind.Record)]
+public partial record UserContactRecord;
+```
+
+**Generated:**
+```csharp
+public partial record UserContactRecord(string FirstName, string LastName, string Email);
+public partial record UserContactRecord
+{
+    public UserContactRecord(Project.Namespace.User source) : this(source.FirstName, source.LastName, source.Email) { }
+    public static Expression<Func<Project.Namespace.User, UserContactRecord>> Projection =>
+        source => new UserContactRecord(source);
+}
+```
+
+---
+
+## 9. Smart Defaults
 
 Facet automatically chooses sensible defaults based on the target type:
 
@@ -169,6 +302,10 @@ public partial record UserRecord;
 // 2. CLASS: Defaults to mutable
 [Facet(typeof(ModernUser))]
 public partial class UserClass;
+
+// 3. INCLUDE MODE: Only specific properties
+[Facet(typeof(ModernUser), Include = new[] { "Id", "Name" })]
+public partial class UserMinimal;
 ```
 
 **Generated for Record:**
@@ -211,9 +348,35 @@ public partial class UserClass
 }
 ```
 
+**Generated for Include Mode:**
+```csharp
+public partial class UserMinimal
+{
+    public string Id { get; set; }
+    public string Name { get; set; }
+    public UserMinimal(Project.Namespace.ModernUser source)
+    {
+        this.Id = source.Id;
+        this.Name = source.Name;
+    }
+    public static Expression<Func<Project.Namespace.ModernUser, UserMinimal>> Projection =>
+        source => new UserMinimal(source);
+    public Project.Namespace.ModernUser BackTo()
+    {
+        return new Project.Namespace.ModernUser
+        {
+            Id = this.Id,
+            Name = this.Name,
+            Email = null,
+            CreatedAt = default(DateTime)
+        };
+    }
+}
+```
+
 ---
 
-## 6. Explicit Control Over Init-Only and Required Properties
+## 10. Explicit Control Over Init-Only and Required Properties
 
 You can override smart defaults with explicit control:
 
@@ -274,7 +437,57 @@ public partial record MutableUserRecord
 
 ---
 
-## 7. Init-Only Properties with Custom Mapping
+## 11. Include vs Exclude Comparison
+
+**Same Source Type, Different Approaches:**
+
+```csharp
+public class User
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public string Email { get; set; }
+    public string Password { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+// Exclude approach - hide password but keep everything else
+[Facet(typeof(User), nameof(User.Password))]
+public partial class UserExcludeDto;
+
+// Include approach - only get contact info
+[Facet(typeof(User), Include = new[] { "FirstName", "LastName", "Email" })]
+public partial class UserIncludeDto;
+```
+
+**Generated Exclude DTO (5 properties):**
+```csharp
+public partial class UserExcludeDto
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public string Email { get; set; }
+    public DateTime CreatedAt { get; set; }
+    // ... constructor and projection
+}
+```
+
+**Generated Include DTO (3 properties):**
+```csharp
+public partial class UserIncludeDto
+{
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public string Email { get; set; }
+    // ... constructor and projection
+}
+```
+
+---
+
+## 12. Init-Only Properties with Custom Mapping
 
 When using custom mapping with init-only properties, Facet generates a `FromSource` factory method:
 
@@ -338,7 +551,7 @@ public partial record ImmutableUserDto
 
 ---
 
-## 8. Positional Record Facets
+## 13. Positional Record Facets
 
 **Input:**
 ```csharp
@@ -361,7 +574,7 @@ public partial record struct DataRecordStructDto
 
 ---
 
-## 9. Legacy Readonly / Init-Only Example
+## 14. Legacy Readonly / Init-Only Example
 
 **Input:**
 ```csharp
@@ -401,7 +614,7 @@ public partial class ReadonlySourceModelFacet
 
 ---
 
-## 10. Record Facet with Custom Mapping
+## 15. Record Facet with Custom Mapping
 
 **Input:**
 ```csharp
@@ -442,7 +655,7 @@ public partial record UserRecordDto
 
 ---
 
-## 11. Plain Struct Facet Example
+## 16. Plain Struct Facet Example
 
 **Input:**
 ```csharp

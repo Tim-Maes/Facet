@@ -41,6 +41,34 @@ public partial struct ProductSummary;
 [Facet(typeof(EventLog), "Source")]
 public partial class EventLogDto;
 
+// Include functionality test DTOs
+[Facet(typeof(User), Include = new[] { "FirstName", "LastName", "Email" })]
+public partial class UserIncludeDto;
+
+[Facet(typeof(User), Include = new[] { "FirstName" })]
+public partial class UserSingleIncludeDto;
+
+[Facet(typeof(Product), Include = new[] { "Name", "Price" })]
+public partial class ProductIncludeDto;
+
+[Facet(typeof(Employee), Include = new[] { "FirstName", "LastName", "Department" })]
+public partial class EmployeeIncludeDto;
+
+[Facet(typeof(User), Include = new[] { "FirstName", "LastName" })]
+public partial class UserIncludeWithCustomDto
+{
+    public string FullName { get; set; } = string.Empty;
+}
+
+[Facet(typeof(ModernUser), Include = new[] { "FirstName", "LastName" }, Kind = FacetKind.Record)]
+public partial record ModernUserIncludeDto;
+
+[Facet(typeof(EntityWithFields), Include = new[] { "Name", "Age" }, IncludeFields = true)]
+public partial class EntityWithFieldsIncludeDto;
+
+[Facet(typeof(EntityWithFields), Include = new[] { "Email", "Name", "Age" }, IncludeFields = false)]
+public partial class EntityWithFieldsIncludeNoFieldsDto;
+
 public class UserDtoWithMappingMapper : IFacetMapConfiguration<User, UserDtoWithMapping>
 {
     public static void Map(User source, UserDtoWithMapping target)

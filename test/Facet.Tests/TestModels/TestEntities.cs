@@ -86,3 +86,12 @@ public sealed class NullableTestEntity
     public string Test3 { get; set; } = string.Empty;
     public string? Test4 { get; set; } = null;
 }
+
+// Test entity with fields for include functionality testing
+public class EntityWithFields
+{
+    public int Id;
+    public string Name = string.Empty;
+    public int Age;
+    public string Email { get; set; } = string.Empty;
+}

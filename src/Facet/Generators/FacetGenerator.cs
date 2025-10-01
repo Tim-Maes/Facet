@@ -44,12 +44,39 @@ public sealed class FacetGenerator : IIncrementalGenerator
         var sourceType = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
         if (sourceType == null) return null;
 
-        var excluded = new HashSet<string>(
-            attribute.ConstructorArguments.ElementAtOrDefault(1).Values
-                .Select(v => v.Value?.ToString())
-                .Where(n => n != null)!);
+        var excluded = new HashSet<string>();
+        var included = new HashSet<string>();
+        bool isIncludeMode = false;
 
-        var includeFields = GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
+        if (attribute.ConstructorArguments.Length > 1)
+        {
+            var excludeArg = attribute.ConstructorArguments[1];
+            if (excludeArg.Kind == TypedConstantKind.Array)
+            {
+                excluded = new HashSet<string>(
+                    excludeArg.Values
+                        .Select(v => v.Value?.ToString())
+                        .Where(n => n != null)!);
+            }
+        }
+
+        var includeArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "Include");
+        if (includeArg.Value.Kind != TypedConstantKind.Error && !includeArg.Value.IsNull)
+        {
+            if (includeArg.Value.Kind == TypedConstantKind.Array)
+            {
+                included = new HashSet<string>(
+                    includeArg.Value.Values
+                        .Select(v => v.Value?.ToString())
+                        .Where(n => n != null)!);
+                isIncludeMode = true;
+            }
+        }
+
+        var includeFields = isIncludeMode 
+            ? GetNamedArg(attribute.NamedArguments, "IncludeFields", false)
+            : GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
+
         var generateConstructor = GetNamedArg(attribute.NamedArguments, "GenerateConstructor", true);
         var generateParameterlessConstructor = GetNamedArg(attribute.NamedArguments, "GenerateParameterlessConstructor", true);
         var generateProjection = GetNamedArg(attribute.NamedArguments, "GenerateProjection", true);
@@ -95,11 +122,22 @@ public sealed class FacetGenerator : IIncrementalGenerator
             
             if (addedMembers.Contains(member.Name)) continue;
 
+            bool shouldIncludeMember = false;
+
+            if (isIncludeMode)
+            {
+                shouldIncludeMember = included.Contains(member.Name);
+            }
+            else
+            {
+                shouldIncludeMember = !excluded.Contains(member.Name);
+            }
+
             if (member is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } p)
             {
                 var memberXmlDocumentation = ExtractXmlDocumentation(p);
                 
-                if (excluded.Contains(member.Name))
+                if (!shouldIncludeMember)
                 {
                     // If this is a required member that was excluded, track it for BackTo generation
                     if (isRequired)
@@ -131,7 +169,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
             {
                 var memberXmlDocumentation = ExtractXmlDocumentation(f);
                 
-                if (excluded.Contains(member.Name))
+                if (!shouldIncludeMember)
                 {
                     // If this is a required field that was excluded, track it for BackTo generation
                     if (isRequired)
