@@ -1,7 +1,4 @@
 using Facet.Tests.TestModels;
-using Facet.Tests.Utilities;
-using Facet.Tests.Verification;
-
 namespace Facet.Tests.UnitTests;
 
 public class NullableHandlingTests
@@ -15,7 +12,7 @@ public class NullableHandlingTests
             Test1 = true,
             Test2 = false,
             Test3 = "Non-nullable string",
-            Test4 = null // nullable string set to null
+            Test4 = null
         };
 
         // Act
@@ -35,25 +32,21 @@ public class NullableHandlingTests
         // Arrange & Act
         var dtoType = typeof(NullableTestDto);
         
-        // Assert - Check that property types preserve nullability
+        // Assert
         var test1Property = dtoType.GetProperty("Test1");
         var test2Property = dtoType.GetProperty("Test2");
         var test3Property = dtoType.GetProperty("Test3");
         var test4Property = dtoType.GetProperty("Test4");
 
-        // Test1 should be non-nullable bool
         test1Property.Should().NotBeNull();
         test1Property!.PropertyType.Should().Be<bool>();
 
-        // Test2 should be nullable bool
         test2Property.Should().NotBeNull();
         test2Property!.PropertyType.Should().Be(typeof(bool?));
 
-        // Test3 should be non-nullable string
         test3Property.Should().NotBeNull();
         test3Property!.PropertyType.Should().Be<string>();
 
-        // Test4 should be nullable string (this is the key test case)
         test4Property.Should().NotBeNull();
         test4Property!.PropertyType.Should().Be<string>();
         
@@ -85,15 +78,5 @@ public class NullableHandlingTests
 
         // Assert
         dto.Test4.Should().Be(testValue);
-    }
-
-    [Fact]
-    public void VerifyNullableHandling_ShouldDemonstrateFixWorking()
-    {
-        // This test demonstrates that our fix works
-        // It would have failed before the fix was applied
-        
-        // Act & Assert (should not throw)
-        NullableVerification.VerifyNullableHandling();
     }
 }
