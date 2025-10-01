@@ -55,6 +55,12 @@ public sealed class FacetAttribute : Attribute
     public bool GenerateProjection { get; set; } = true;
 
     /// <summary>
+    /// Whether to generate a method to map back from the facet type to the source type.
+    /// Default is true to facilitate two-way mapping scenarios.
+    /// </summary>
+    public bool GenerateBackTo { get; set; } = true;
+
+    /// <summary>
     /// Which facet to generate: Class, Record (class), RecordStruct, or Struct.
     /// When set to Auto, the generator will attempt to infer the kind from the target type declaration.
     /// </summary>
