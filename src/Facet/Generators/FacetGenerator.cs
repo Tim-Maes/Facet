@@ -53,6 +53,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         var generateConstructor = GetNamedArg(attribute.NamedArguments, "GenerateConstructor", true);
         var generateParameterlessConstructor = GetNamedArg(attribute.NamedArguments, "GenerateParameterlessConstructor", true);
         var generateProjection = GetNamedArg(attribute.NamedArguments, "GenerateProjection", true);
+        var generateBackTo = GetNamedArg(attribute.NamedArguments, "GenerateBackTo", true);
 
         var configurationTypeName = attribute.NamedArguments
             .FirstOrDefault(kvp => kvp.Key == "Configuration")
@@ -195,6 +196,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
             generateConstructor,
             generateParameterlessConstructor,
             generateProjection,
+            generateBackTo,
             sourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             configurationTypeName,
             members.ToImmutableArray(),
@@ -653,8 +655,11 @@ public sealed class FacetGenerator : IIncrementalGenerator
         }
 
         // Generate reverse mapping method (BackTo)
-        GenerateBackToMethod(sb, model);
-        
+        if (model.GenerateBackTo)
+        {
+            GenerateBackToMethod(sb, model);
+        }
+
         sb.AppendLine($"{containingTypeIndent}}}");
 
         // Close containing type braces
