@@ -4,7 +4,7 @@
   </PropertyGroup>
   
   <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="9.0.9" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.0" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.0" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.0" />
