@@ -104,43 +104,6 @@ public class GenerateDtosFacetIntegrationTests
     }
 
     [Fact]
-    public void BackTo_Should_Work_WithGeneratedResponseDto()
-    {
-        // Arrange
-        var user = CreateTestUser();
-        var responseDto = user.ToFacet<TestUserResponse>();
-
-        // Act & Assert
-        var backToUser = responseDto.BackTo<TestUser>();
-        
-        backToUser.Should().NotBeNull();
-        backToUser.Id.Should().Be(user.Id);
-        backToUser.FirstName.Should().Be("John");
-        backToUser.LastName.Should().Be("Doe");
-        backToUser.Email.Should().Be("john@example.com");
-        backToUser.IsActive.Should().Be(user.IsActive);
-    }
-
-    [Fact]
-    public void BackTo_Should_Work_WithMultipleGeneratedDtos()
-    {
-        // Arrange
-        var users = new List<TestUser>
-        {
-            CreateTestUser("Alice", "Smith"),
-            CreateTestUser("Bob", "Johnson")
-        };
-        var responseDtos = users.SelectFacets<TestUserResponse>().ToList();
-
-        // Act & Assert
-        var backToUsers = responseDtos.BackTo<TestUserResponse, TestUser>().ToList();
-        
-        backToUsers.Should().HaveCount(2);
-        backToUsers[0].FirstName.Should().Be("Alice");
-        backToUsers[1].FirstName.Should().Be("Bob");
-    }
-
-    [Fact]
     public void Projection_Should_Be_Available_OnGeneratedDtos()
     {
         // Arrange

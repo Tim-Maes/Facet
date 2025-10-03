@@ -148,6 +148,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
                             FacetMemberKind.Property,
                             isInitOnly,
                             isRequired,
+                            false, // Properties are not readonly
                             memberXmlDocumentation));
                     }
                     continue;
@@ -162,6 +163,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
                     FacetMemberKind.Property,
                     shouldPreserveInitOnly,
                     shouldPreserveRequired,
+                    false, // Properties are not readonly
                     memberXmlDocumentation));
                 addedMembers.Add(p.Name);
             }
@@ -180,6 +182,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
                             FacetMemberKind.Field,
                             false, // Fields don't have init-only
                             isRequired,
+                            f.IsReadOnly, // Fields can be readonly
                             memberXmlDocumentation));
                     }
                     continue;
@@ -193,6 +196,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
                     FacetMemberKind.Field,
                     false, // Fields don't have init-only
                     shouldPreserveRequired,
+                    f.IsReadOnly, // Fields can be readonly
                     memberXmlDocumentation));
                 addedMembers.Add(f.Name);
             }
