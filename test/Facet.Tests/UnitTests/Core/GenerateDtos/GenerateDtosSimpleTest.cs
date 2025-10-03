@@ -2,7 +2,7 @@ using Facet.Extensions;
 using Facet.Tests.TestModels;
 using System.Reflection;
 
-namespace Facet.Tests.UnitTests;
+namespace Facet.Tests.UnitTests.Core.GenerateDtos;
 
 /// <summary>
 /// Simple test to verify that DTOs are generated and can be instantiated

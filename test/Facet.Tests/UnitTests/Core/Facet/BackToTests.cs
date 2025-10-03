@@ -1,7 +1,7 @@
 using Facet.Tests.TestModels;
 using Facet.Tests.Utilities;
 
-namespace Facet.Tests.UnitTests;
+namespace Facet.Tests.UnitTests.Core.Facet;
 
 public class BackToTests
 {
@@ -54,6 +54,7 @@ public class BackToTests
 
         // Act
         var mappedUser = userDto.BackTo<User>();
+
 
         // Assert
         mappedUser.LastLoginAt.Should().BeNull();

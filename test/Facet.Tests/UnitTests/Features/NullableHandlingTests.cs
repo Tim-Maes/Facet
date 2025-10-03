@@ -1,5 +1,7 @@
 using Facet.Tests.TestModels;
-namespace Facet.Tests.UnitTests;
+using Facet.Tests.Utilities;
+
+namespace Facet.Tests.UnitTests.Features;
 
 public class NullableHandlingTests
 {

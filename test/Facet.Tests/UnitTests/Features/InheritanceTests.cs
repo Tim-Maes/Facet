@@ -1,7 +1,7 @@
 using Facet.Tests.TestModels;
 using Facet.Tests.Utilities;
 
-namespace Facet.Tests.UnitTests;
+namespace Facet.Tests.UnitTests.Features;
 
 public class InheritanceTests
 {
