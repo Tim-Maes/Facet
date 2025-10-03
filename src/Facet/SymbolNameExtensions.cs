@@ -7,6 +7,6 @@ public static class SymbolNameExtensions
         return symbol
             .Replace("global::", "")
             .Replace("<", "_")
-            .Replace(">", "_"); ;
+            .Replace(">", "_");
     }
 }

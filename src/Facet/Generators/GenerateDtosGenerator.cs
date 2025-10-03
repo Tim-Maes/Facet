@@ -367,6 +367,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         GenerateFileHeader(sb);
         sb.AppendLine("using System;");
         sb.AppendLine("using System.Linq.Expressions;");
+        sb.AppendLine("using Facet;");
         sb.AppendLine();
 
         if (!string.IsNullOrWhiteSpace(model.TargetNamespace))
@@ -390,12 +391,15 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine($"/// Generated {purpose} DTO for {sourceTypeName}.");
         sb.AppendLine($"/// </summary>");
 
+        // Add [Facet] attribute to generated DTOs so they can use ToFacet extension methods
+        sb.AppendLine($"[Facet(typeof({model.SourceTypeName}))]");
+
         var isPositional = model.OutputType is OutputType.Record or OutputType.RecordStruct;
         var hasInitOnlyProperties = members.Any(m => m.IsInitOnly);
 
         if (isPositional)
         {
-            sb.AppendLine($"public {keyword} {dtoName}(");
+            sb.AppendLine($"public partial {keyword} {dtoName}(");
 
             for (int i = 0; i < members.Length; i++)
             {
@@ -420,7 +424,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
         else
         {
-            sb.AppendLine($"public {keyword} {dtoName}");
+            sb.AppendLine($"public partial {keyword} {dtoName}");
             sb.AppendLine("{");
 
             foreach (var member in members)
