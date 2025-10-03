@@ -307,9 +307,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
 
         var ns = string.IsNullOrEmpty(model.SourceNamespace) ? "Global" : model.SourceNamespace;
-
         var baseName = $"{ns}.{dtoName}";
-
         var safeName = baseName.GetSafeName();
 
         return $"{safeName}.g.cs";
@@ -361,6 +359,23 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         };
     }
 
+    private static string GetDefaultValueForType(string typeName)
+    {
+        return typeName switch
+        {
+            "string" or "System.String" => "string.Empty",
+            "System.DateTime" => "default(System.DateTime)",
+            "System.DateTimeOffset" => "default(System.DateTimeOffset)",
+            "System.TimeSpan" => "default(System.TimeSpan)",
+            "System.Guid" => "System.Guid.Empty",
+            _ when typeName.StartsWith("System.Collections.Generic.List<") => $"new {typeName}()",
+            _ when typeName.StartsWith("System.Collections.Generic.IList<") => $"new System.Collections.Generic.List<{typeName.Substring("System.Collections.Generic.IList<".Length).TrimEnd('>')}>()",
+            _ when typeName.StartsWith("List<") => $"new {typeName}()",
+            _ when typeName.StartsWith("IList<") => $"new List<{typeName.Substring("IList<".Length).TrimEnd('>')}>()",
+            _ => "default"
+        };
+    }
+
     private static string GenerateDtoCode(GenerateDtosTargetModel model, string dtoName, ImmutableArray<FacetMember> members, string purpose)
     {
         var sb = new StringBuilder();
@@ -389,6 +404,9 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine($"/// <summary>");
         sb.AppendLine($"/// Generated {purpose} DTO for {sourceTypeName}.");
         sb.AppendLine($"/// </summary>");
+
+        // Add [Facet] attribute to make it work with extension methods
+        sb.AppendLine($"[Facet.Facet(typeof({model.SourceTypeName}))]");
 
         var isPositional = model.OutputType is OutputType.Record or OutputType.RecordStruct;
         var hasInitOnlyProperties = members.Any(m => m.IsInitOnly);
@@ -460,6 +478,10 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             if (model.GenerateConstructors)
             {
                 sb.AppendLine();
+                sb.AppendLine($"    /// <summary>");
+                sb.AppendLine($"    /// Initializes a new instance of the <see cref=\"{dtoName}\"/> class from the specified <see cref=\"{sourceTypeName}\"/>.");
+                sb.AppendLine($"    /// </summary>");
+                sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{sourceTypeName}\"/> object to copy data from.</param>");
                 sb.AppendLine($"    public {dtoName}({model.SourceTypeName} source)");
                 sb.AppendLine("    {");
 
@@ -470,10 +492,24 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
                 sb.AppendLine("    }");
 
+                // Add parameterless constructor
+                sb.AppendLine();
+                sb.AppendLine($"    /// <summary>");
+                sb.AppendLine($"    /// Initializes a new instance of the <see cref=\"{dtoName}\"/> class with default values.");
+                sb.AppendLine($"    /// </summary>");
+                sb.AppendLine($"    public {dtoName}()");
+                sb.AppendLine("    {");
+                sb.AppendLine("    }");
+
                 // Add static factory method for types with init-only properties
                 if (hasInitOnlyProperties)
                 {
                     sb.AppendLine();
+                    sb.AppendLine($"    /// <summary>");
+                    sb.AppendLine($"    /// Creates a new instance of <see cref=\"{dtoName}\"/> from the specified <see cref=\"{sourceTypeName}\"/> with init-only properties.");
+                    sb.AppendLine($"    /// </summary>");
+                    sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{sourceTypeName}\"/> object to copy data from.</param>");
+                    sb.AppendLine($"    /// <returns>A new <see cref=\"{dtoName}\"/> instance with all properties initialized from the source.</returns>");
                     sb.AppendLine($"    public static {dtoName} FromSource({model.SourceTypeName} source)");
                     sb.AppendLine("    {");
                     sb.AppendLine($"        return new {dtoName}");
@@ -492,6 +528,19 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             if (model.GenerateProjections)
             {
                 sb.AppendLine();
+                sb.AppendLine($"    /// <summary>");
+                sb.AppendLine($"    /// Gets the projection expression for converting <see cref=\"{sourceTypeName}\"/> to <see cref=\"{dtoName}\"/>.");
+                sb.AppendLine($"    /// Use this for LINQ and Entity Framework query projections.");
+                sb.AppendLine($"    /// </summary>");
+                sb.AppendLine($"    /// <value>An expression tree that can be used in LINQ queries for efficient database projections.</value>");
+                sb.AppendLine($"    /// <example>");
+                sb.AppendLine($"    /// <code>");
+                sb.AppendLine($"    /// var dtos = context.{sourceTypeName}s");
+                sb.AppendLine($"    ///     .Where(x => x.IsActive)");
+                sb.AppendLine($"    ///     .Select({dtoName}.Projection)");
+                sb.AppendLine($"    ///     .ToList();");
+                sb.AppendLine($"    /// </code>");
+                sb.AppendLine($"    /// </example>");
                 sb.AppendLine($"    public static Expression<Func<{model.SourceTypeName}, {dtoName}>> Projection =>");
 
                 if (hasInitOnlyProperties)
@@ -510,6 +559,65 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                     sb.AppendLine($"        source => new {dtoName}(source);");
                 }
             }
+
+            // Generate BackTo method for Facet compatibility
+            sb.AppendLine();
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Converts this instance of <see cref=\"{dtoName}\"/> back to an instance of the source type.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    /// <returns>An instance of the source type with properties mapped from this instance.</returns>");
+            sb.AppendLine($"    public {model.SourceTypeName} BackTo()");
+            sb.AppendLine("    {");
+
+            // Generate BackTo method body
+            sb.AppendLine($"        return new {model.SourceTypeName}");
+            sb.AppendLine("        {");
+
+            var propertyAssignments = new List<string>();
+
+            // Add assignments for included properties
+            foreach (var member in members)
+            {
+                string assignment;
+                if (purpose == "Query" && member.TypeName.EndsWith("?"))
+                {
+                    // For Query DTOs with nullable properties, provide appropriate default values
+                    var nonNullableType = member.TypeName.TrimEnd('?');
+                    
+                    if (IsValueType(nonNullableType))
+                    {
+                        assignment = $"            {member.Name} = this.{member.Name} ?? default";
+                    }
+                    else
+                    {
+                        // For reference types, provide appropriate defaults
+                        var defaultValue = GetDefaultValueForType(nonNullableType);
+                        assignment = $"            {member.Name} = this.{member.Name} ?? {defaultValue}";
+                    }
+                }
+                else
+                {
+                    assignment = $"            {member.Name} = this.{member.Name}";
+                }
+                
+                propertyAssignments.Add(assignment);
+            }
+
+            // Add default values for commonly excluded properties based on purpose
+            switch (purpose)
+            {
+                case "Create":
+                    // For Create DTOs, ID is typically excluded, so provide a default
+                    if (!members.Any(m => IdFieldPatterns.Contains(m.Name)))
+                    {
+                        propertyAssignments.Add($"            Id = default");
+                    }
+                    break;
+            }
+
+            sb.AppendLine(string.Join(",\n", propertyAssignments));
+            sb.AppendLine("        };");
+            sb.AppendLine("    }");
 
             sb.AppendLine("}");
         }
