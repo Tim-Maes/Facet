@@ -55,7 +55,7 @@ jobs:
           retention-days: 7
 
       - name: Publish Test Results
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v2
         # Only run on push events or pull requests from the same repository (not forks)
         if: (success() || failure()) && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
         with:
