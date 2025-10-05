@@ -690,4 +690,288 @@ public partial struct PersonStructDto
 
 ---
 
+## 17. NullableProperties for Query/Filter DTOs
+
+**Input:**
+```csharp
+public class Product
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public decimal Price { get; set; }
+    public bool IsAvailable { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+[Facet(typeof(Product), "CreatedAt", NullableProperties = true, GenerateBackTo = false)]
+public partial class ProductQueryDto { }
+```
+
+**Generated:**
+```csharp
+public partial class ProductQueryDto
+{
+    public int? Id { get; set; }
+    public string? Name { get; set; }
+    public decimal? Price { get; set; }
+    public bool? IsAvailable { get; set; }
+
+    public ProductQueryDto() { }
+
+    public ProductQueryDto(Project.Namespace.Product source)
+    {
+        this.Id = source.Id;
+        this.Name = source.Name;
+        this.Price = source.Price;
+        this.IsAvailable = source.IsAvailable;
+    }
+
+    public static Expression<Func<Project.Namespace.Product, ProductQueryDto>> Projection =>
+        source => new ProductQueryDto(source);
+
+    // Note: No BackTo() method generated when GenerateBackTo = false
+}
+```
+
+**Why nullable properties?**
+All value types become nullable (int -> int?, bool -> bool?, DateTime -> DateTime?) and reference types are marked nullable. Perfect for query/filter scenarios where all criteria are optional.
+
+---
+
+## 18. Disabling Code Generation Features
+
+You can control what gets generated with boolean flags:
+
+**Input:**
+```csharp
+// No constructor - only properties
+[Facet(typeof(Person), GenerateConstructor = false)]
+public partial class PersonPropertiesOnly { }
+
+// No parameterless constructor
+[Facet(typeof(Person), GenerateParameterlessConstructor = false)]
+public partial class PersonNoParamless { }
+
+// No projection expression
+[Facet(typeof(Person), GenerateProjection = false)]
+public partial class PersonNoProjection { }
+
+// No BackTo method
+[Facet(typeof(Person), GenerateBackTo = false)]
+public partial class PersonNoBackTo { }
+```
+
+**Generated for GenerateConstructor = false:**
+```csharp
+public partial class PersonPropertiesOnly
+{
+    public string Name { get; set; }
+    public string Email { get; set; }
+    public int Age { get; set; }
+
+    // No constructor generated!
+    // User must manually populate properties
+
+    public static Expression<Func<Project.Namespace.Person, PersonPropertiesOnly>> Projection =>
+        source => new PersonPropertiesOnly { Name = source.Name, Email = source.Email, Age = source.Age };
+}
+```
+
+**Generated for GenerateProjection = false:**
+```csharp
+public partial class PersonNoProjection
+{
+    public string Name { get; set; }
+    public string Email { get; set; }
+    public int Age { get; set; }
+
+    public PersonNoProjection(Project.Namespace.Person source)
+    {
+        this.Name = source.Name;
+        this.Email = source.Email;
+        this.Age = source.Age;
+    }
+
+    // No Projection property generated!
+}
+```
+
+---
+
+## 19. Parameterless Constructor Generation
+
+By default, Facet generates both a source constructor and a parameterless constructor:
+
+**Input:**
+```csharp
+[Facet(typeof(Person))]
+public partial class PersonDto { }
+```
+
+**Generated:**
+```csharp
+public partial class PersonDto
+{
+    public string Name { get; set; }
+    public string Email { get; set; }
+    public int Age { get; set; }
+
+    // Parameterless constructor (for deserialization, testing, etc.)
+    public PersonDto() { }
+
+    // Source constructor (for mapping)
+    public PersonDto(Project.Namespace.Person source)
+    {
+        this.Name = source.Name;
+        this.Email = source.Email;
+        this.Age = source.Age;
+    }
+
+    public static Expression<Func<Project.Namespace.Person, PersonDto>> Projection =>
+        source => new PersonDto(source);
+
+    public Project.Namespace.Person BackTo()
+    {
+        return new Project.Namespace.Person
+        {
+            Name = this.Name,
+            Email = this.Email,
+            Age = this.Age
+        };
+    }
+}
+```
+
+**Why two constructors?**
+- **Parameterless**: Needed for JSON deserialization, object initializers, testing
+- **Source constructor**: Used for efficient mapping from entities
+
+---
+
+## 20. XML Documentation Preservation
+
+Facet preserves XML documentation from source types:
+
+**Input:**
+```csharp
+/// <summary>
+/// Represents a person in the system
+/// </summary>
+public class Person
+{
+    /// <summary>
+    /// Gets or sets the person's full name
+    /// </summary>
+    public string Name { get; set; }
+
+    /// <summary>
+    /// Gets or sets the person's email address
+    /// </summary>
+    public string Email { get; set; }
+
+    /// <summary>
+    /// Gets or sets the person's age in years
+    /// </summary>
+    public int Age { get; set; }
+}
+
+[Facet(typeof(Person))]
+public partial class PersonDto { }
+```
+
+**Generated:**
+```csharp
+public partial class PersonDto
+{
+    /// <summary>
+    /// Gets or sets the person's full name
+    /// </summary>
+    public string Name { get; set; }
+
+    /// <summary>
+    /// Gets or sets the person's email address
+    /// </summary>
+    public string Email { get; set; }
+
+    /// <summary>
+    /// Gets or sets the person's age in years
+    /// </summary>
+    public int Age { get; set; }
+
+    public PersonDto() { }
+
+    public PersonDto(Project.Namespace.Person source)
+    {
+        this.Name = source.Name;
+        this.Email = source.Email;
+        this.Age = source.Age;
+    }
+
+    public static Expression<Func<Project.Namespace.Person, PersonDto>> Projection =>
+        source => new PersonDto(source);
+}
+```
+
+**Note:** Type-level XML documentation is preserved on the generated partial class as well!
+
+---
+
+## 21. Combining Multiple Options
+
+Real-world example combining several features:
+
+**Input:**
+```csharp
+public class Product
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public decimal Price { get; set; }
+    public string InternalNotes { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+// Query DTO: nullable properties, no BackTo, exclude internal fields
+[Facet(typeof(Product),
+       "InternalNotes", "CreatedAt",
+       NullableProperties = true,
+       GenerateBackTo = false,
+       Kind = FacetKind.Record)]
+public partial record ProductQueryDto { }
+
+// API Response: exclude internal fields, preserve docs
+[Facet(typeof(Product), "InternalNotes")]
+public partial class ProductResponse { }
+
+// Admin DTO: include everything
+[Facet(typeof(Product))]
+public partial class ProductAdminDto { }
+```
+
+**Generated ProductQueryDto:**
+```csharp
+public partial record ProductQueryDto
+{
+    public int? Id { get; set; }
+    public string? Name { get; set; }
+    public decimal? Price { get; set; }
+
+    public ProductQueryDto() { }
+
+    public ProductQueryDto(Project.Namespace.Product source)
+    {
+        this.Id = source.Id;
+        this.Name = source.Name;
+        this.Price = source.Price;
+    }
+
+    public static Expression<Func<Project.Namespace.Product, ProductQueryDto>> Projection =>
+        source => new ProductQueryDto(source);
+
+    // No BackTo() - GenerateBackTo = false
+}
+```
+
+---
+
 See the [Quick Start](02_QuickStart.md) and [Advanced Scenarios](06_AdvancedScenarios.md) for more details.
