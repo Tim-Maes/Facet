@@ -120,9 +120,13 @@ public partial class UserContactDto { }
 [Facet(typeof(Entity), IncludeFields = true)]
 public partial class EntityDto { }
 
-// Include specific fields and properties 
+// Include specific fields and properties
 [Facet(typeof(Entity), Include = new[] { "Name", "Status" }, IncludeFields = true)]
 public partial class EntitySummaryDto { }
+
+// Make all properties nullable for query/filter scenarios
+[Facet(typeof(Product), "InternalNotes", NullableProperties = true, GenerateBackTo = false)]
+public partial class ProductQueryDto { }
 ```
 
 ### Basic Projection of Facets

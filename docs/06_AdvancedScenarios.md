@@ -169,6 +169,90 @@ public partial class UserFormattedDto
 }
 ```
 
+## Nullable Properties for Query and Patch Models
+
+The `NullableProperties` parameter makes all non-nullable properties nullable in the generated facet, which is extremely useful for query DTOs and partial update scenarios.
+
+### Query/Filter DTOs
+
+```csharp
+public class Product
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+    public int CategoryId { get; set; }
+    public bool IsAvailable { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+// All properties become nullable for flexible querying
+[Facet(typeof(Product), "CreatedAt", NullableProperties = true, GenerateBackTo = false)]
+public partial class ProductQueryDto;
+
+// Usage: Only specify the fields you want to filter on
+var query = new ProductQueryDto
+{
+    Name = "Widget",           // Filter by name
+    Price = 50.00m,            // Filter by price
+    IsAvailable = true         // Filter by availability
+    // Id, CategoryId remain null (not part of filter)
+};
+
+// Use in LINQ queries
+var results = products.Where(p =>
+    (query.Name == null || p.Name.Contains(query.Name)) &&
+    (query.Price == null || p.Price == query.Price) &&
+    (query.IsAvailable == null || p.IsAvailable == query.IsAvailable)
+).ToList();
+```
+
+### Patch/Update Models
+
+```csharp
+// Create a patch model where only non-null fields are updated
+[Facet(typeof(User), "Id", "CreatedAt", NullableProperties = true, GenerateBackTo = false)]
+public partial class UserPatchDto;
+
+// Usage: Only update specific fields
+var patch = new UserPatchDto
+{
+    Email = "newemail@example.com",  // Update email
+    IsActive = false                 // Update active status
+    // Other properties remain null (won't be updated)
+};
+
+// Apply the patch
+void ApplyPatch(User user, UserPatchDto patch)
+{
+    if (patch.FirstName != null) user.FirstName = patch.FirstName;
+    if (patch.LastName != null) user.LastName = patch.LastName;
+    if (patch.Email != null) user.Email = patch.Email;
+    if (patch.IsActive != null) user.IsActive = patch.IsActive.Value;
+    // ... etc
+}
+```
+
+### How NullableProperties Works
+
+- **Value Types**: Become nullable (`int` → `int?`, `bool` → `bool?`, `DateTime` → `DateTime?`, enums → `EnumType?`)
+- **Reference Types**: Remain reference types but are marked as nullable (`string` → `string`)
+- **Already Nullable Types**: Stay nullable (`DateTime?` remains `DateTime?`)
+
+### Important Considerations
+
+1. **Disable GenerateBackTo**: When using `NullableProperties = true`, set `GenerateBackTo = false` since mapping nullable properties back to non-nullable source properties is not logically sound.
+
+2. **Constructor Behavior**: The generated constructor will still map from source to nullable properties correctly.
+
+3. **Comparison with GenerateDtos Query**: This provides the same functionality as the Query DTOs in `GenerateDtos`, but gives you more control with the `Facet` attribute.
+
+```csharp
+// Similar to GenerateDtos Query DTO
+[Facet(typeof(Product), NullableProperties = true, GenerateBackTo = false, Kind = FacetKind.Record)]
+public partial record ProductQueryRecord;
+```
+
 ## Mixed Usage Patterns
 
 ### API Layer Pattern

@@ -32,6 +32,7 @@ public partial class MyFacet { }
 | `Kind`                         | `FacetKind`| Output type: Class, Record, Struct, RecordStruct, Auto (default: Auto).     |
 | `PreserveInitOnlyProperties`   | `bool`    | Preserve init-only modifiers from source properties (default: true for records). |
 | `PreserveRequiredProperties`   | `bool`    | Preserve required modifiers from source properties (default: true for records). |
+| `NullableProperties`           | `bool`    | Make all properties nullable in the generated facet |
 | `UseFullName`                  | `bool`    | Use full type name in generated file names to avoid collisions (default: false). |
 
 ## Include vs Exclude
@@ -96,6 +97,23 @@ public partial record UserNameRecord;
 public partial record UserDto;
 ```
 
+### Nullable Properties for Query Models
+```csharp
+// Make all properties nullable for query/filter scenarios
+[Facet(typeof(Product), "InternalNotes", NullableProperties = true, GenerateBackTo = false)]
+public partial class ProductQueryDto;
+
+// Usage: All fields are optional for filtering
+var query = new ProductQueryDto
+{
+    Name = "Widget",
+    Price = 50.00m
+    // Other fields remain null
+};
+```
+
+**Note:** When using `NullableProperties = true`, it's recommended to set `GenerateBackTo = false` since mapping nullable properties back to non-nullable source properties is not logically sound.
+
 ## When to Use Include vs Exclude
 
 ### Use **Include** when:
@@ -108,6 +126,17 @@ public partial record UserDto;
 - You want most properties but need to hide a few sensitive ones
 - The majority of the source type should be included in the facet
 - Following the original Facet pattern for backward compatibility
+
+### Use **NullableProperties** when:
+- Creating query/filter DTOs where all search criteria are optional
+- Building patch/update models where only changed fields are provided
+- Implementing flexible API request models that support partial data
+- Generating DTOs similar to the Query DTOs in `GenerateDtos`
+
+**Important considerations:**
+- Value types (int, bool, DateTime, enums) become nullable (int?, bool?, etc.)
+- Reference types (string, objects) remain reference types but are marked nullable
+- Disable `GenerateBackTo` to avoid mapping issues from nullable to non-nullable types
 
 ---
 
