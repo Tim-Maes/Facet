@@ -95,6 +95,13 @@ public sealed class FacetAttribute : Attribute
     public bool UseFullName { get; set; } = false;
 
     /// <summary>
+    /// If true, all non-nullable properties from the source type will be made nullable in the generated facet.
+    /// This is useful for query or patch models where all fields should be optional.
+    /// Default is false (properties preserve their original nullability).
+    /// </summary>
+    public bool NullableProperties { get; set; } = false;
+
+    /// <summary>
     /// Creates a new FacetAttribute that targets a given source type and excludes specified members.
     /// </summary>
     /// <param name="sourceType">The type to generate from.</param>

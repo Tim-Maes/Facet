@@ -106,6 +106,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
 
         var preserveInitOnly = GetNamedArg(attribute.NamedArguments, "PreserveInitOnlyProperties", preserveInitOnlyDefault);
         var preserveRequired = GetNamedArg(attribute.NamedArguments, "PreserveRequiredProperties", preserveRequiredDefault);
+        var nullableProperties = GetNamedArg(attribute.NamedArguments, "NullableProperties", false);
 
         var members = new List<FacetMember>();
         var excludedRequiredMembers = new List<FacetMember>();
@@ -136,7 +137,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
             if (member is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } p)
             {
                 var memberXmlDocumentation = ExtractXmlDocumentation(p);
-                
+
                 if (!shouldIncludeMember)
                 {
                     // If this is a required member that was excluded, track it for BackTo generation
@@ -157,9 +158,15 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 var shouldPreserveInitOnly = preserveInitOnly && isInitOnly;
                 var shouldPreserveRequired = preserveRequired && isRequired;
 
+                var typeName = GetTypeNameWithNullability(p.Type);
+                if (nullableProperties)
+                {
+                    typeName = MakeNullable(typeName);
+                }
+
                 members.Add(new FacetMember(
                     p.Name,
-                    GetTypeNameWithNullability(p.Type),
+                    typeName,
                     FacetMemberKind.Property,
                     shouldPreserveInitOnly,
                     shouldPreserveRequired,
@@ -170,7 +177,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
             else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
             {
                 var memberXmlDocumentation = ExtractXmlDocumentation(f);
-                
+
                 if (!shouldIncludeMember)
                 {
                     // If this is a required field that was excluded, track it for BackTo generation
@@ -190,9 +197,15 @@ public sealed class FacetGenerator : IIncrementalGenerator
 
                 var shouldPreserveRequired = preserveRequired && isRequired;
 
+                var typeName = GetTypeNameWithNullability(f.Type);
+                if (nullableProperties)
+                {
+                    typeName = MakeNullable(typeName);
+                }
+
                 members.Add(new FacetMember(
                     f.Name,
-                    GetTypeNameWithNullability(f.Type),
+                    typeName,
                     FacetMemberKind.Field,
                     false, // Fields don't have init-only
                     shouldPreserveRequired,
@@ -247,7 +260,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
             typeXmlDocumentation,
             containingTypes,
             useFullName,
-            excludedRequiredMembers.ToImmutableArray());
+            excludedRequiredMembers.ToImmutableArray(),
+            nullableProperties);
     }
 
     /// <summary>
@@ -1154,6 +1168,16 @@ public sealed class FacetGenerator : IIncrementalGenerator
     /// <summary>
     /// Gets the type name with proper nullability information preserved.
     /// </summary>
+    private static string MakeNullable(string typeName)
+    {
+        // Don't make already nullable types more nullable
+        if (typeName.EndsWith("?") || typeName.StartsWith("System.Nullable<"))
+            return typeName;
+
+        // Always add ? to make the type nullable
+        return typeName + "?";
+    }
+
     private static string GetTypeNameWithNullability(ITypeSymbol typeSymbol)
     {
         // Create a SymbolDisplayFormat that includes nullability information

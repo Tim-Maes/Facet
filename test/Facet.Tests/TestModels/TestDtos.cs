@@ -181,3 +181,13 @@ public partial class UserHybridDto
 public partial class NullableTestDto
 {
 }
+
+// NullableProperties functionality test DTOs
+[Facet(typeof(Product), "InternalNotes", "CreatedAt", NullableProperties = true, GenerateBackTo = false)]
+public partial class ProductQueryDto;
+
+[Facet(typeof(User), "Password", "CreatedAt", NullableProperties = true, Kind = FacetKind.Record, GenerateBackTo = false)]
+public partial record UserQueryDto;
+
+[Facet(typeof(UserWithEnum), NullableProperties = true, GenerateBackTo = false)]
+public partial class UserWithEnumQueryDto;
