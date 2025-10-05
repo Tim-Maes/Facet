@@ -46,10 +46,9 @@ You can think of it like **carving out a specific facet** of a gem:
 ## :star: Key Features
 
 - :white_check_mark: Generate classes, records, structs, or record structs from existing types
-- :white_check_mark: Define what to include, or exclude fields/properties you don't want (create a Facetted view of your model)
+- :white_check_mark: Define what to include, or exclude fields/properties you don't want
 - :white_check_mark: Include/redact public fields
-- :white_check_mark: Auto-generate constructors for fast mapping
-- :white_check_mark: LINQ projection expressions
+- :white_check_mark: Constructors & LINQ projection expressions
 - :white_check_mark: Full mapping support with custom mapping configurations
 - :white_check_mark: Auto-generate complete CRUD DTO sets with `[GenerateDtos]`
 - :white_check_mark: **Expression transformation and mapping utilities** for reusing business logic across entities and DTOs
