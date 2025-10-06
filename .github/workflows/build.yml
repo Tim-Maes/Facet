@@ -1,6 +1,7 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 
 name: build
+run-name: '[Build] ${{ github.event.head_commit.message || github.event.pull_request.title || github.ref_name }}'
 on:
   workflow_dispatch:
   push:
@@ -30,12 +31,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: |
             8.0.x
@@ -47,30 +48,8 @@ jobs:
       - name: Build Solution
         run: dotnet build --configuration Release --no-restore
 
-      - name: Run Unit Tests
-        run: dotnet test --configuration Release --no-build --verbosity normal --logger trx --results-directory TestResults
-
       - name: Pack NuGet Packages
         run: dotnet pack --configuration Release --no-build --output ${{ env.NuGetDirectory }}
-
-      - name: Upload Test Results
-        uses: actions/upload-artifact@v4
-        if: success() || failure()
-        with:
-          name: test-results
-          path: TestResults/*.trx
-          retention-days: 7
-
-      - name: Publish Test Results
-        uses: dorny/test-reporter@v1
-        # Only run on push events or pull requests from the same repository (not forks)
-        if: (success() || failure()) && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
-        with:
-          name: Unit Test Results
-          path: TestResults/*.trx
-          reporter: dotnet-trx
-          fail-on-error: false
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

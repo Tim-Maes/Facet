@@ -15,8 +15,16 @@ public sealed class FacetAttribute : Attribute
 
     /// <summary>
     /// An array of property or field names to exclude from the generated class.
+    /// This property is mutually exclusive with <see cref="Include"/>.
     /// </summary>
     public string[] Exclude { get; }
+
+    /// <summary>
+    /// An array of property or field names to include in the generated class.
+    /// When specified, only these properties will be included in the facet.
+    /// This property is mutually exclusive with <see cref="Exclude"/>.
+    /// </summary>
+    public string[]? Include { get; set; }
 
     /// <summary>
     /// Whether to include public fields from the source type (default: true).
@@ -87,6 +95,13 @@ public sealed class FacetAttribute : Attribute
     public bool UseFullName { get; set; } = false;
 
     /// <summary>
+    /// If true, all non-nullable properties from the source type will be made nullable in the generated facet.
+    /// This is useful for query or patch models where all fields should be optional.
+    /// Default is false (properties preserve their original nullability).
+    /// </summary>
+    public bool NullableProperties { get; set; } = false;
+
+    /// <summary>
     /// Creates a new FacetAttribute that targets a given source type and excludes specified members.
     /// </summary>
     /// <param name="sourceType">The type to generate from.</param>
@@ -95,5 +110,6 @@ public sealed class FacetAttribute : Attribute
     {
         SourceType = sourceType;
         Exclude = exclude ?? Array.Empty<string>();
+        Include = null;
     }
 }

@@ -137,4 +137,17 @@ public static class TestDataFactory
             Email = $"{name.Replace(" ", ".").ToLower()}@example.com"
         };
     }
+
+    public static EntityWithFields CreateEntityWithFields(
+        string name = "Test Entity",
+        int age = 25)
+    {
+        return new EntityWithFields
+        {
+            Id = Random.Shared.Next(1, 1000),
+            Name = name,
+            Age = age,
+            Email = $"{name.Replace(" ", ".").ToLower()}@fields.com"
+        };
+    }
 }

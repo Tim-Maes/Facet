@@ -13,51 +13,42 @@
 
 <div align="center">
   
+[![CI](https://github.com/Tim-Maes/Facet/actions/workflows/build.yml/badge.svg)](https://github.com/Tim-Maes/Facet/actions/workflows/build.yml)
+[![Test](https://github.com/Tim-Maes/Facet/actions/workflows/test.yml/badge.svg)](https://github.com/Tim-Maes/Facet/actions/workflows/test.yml)
+[![CD](https://github.com/Tim-Maes/Facet/actions/workflows/release.yml/badge.svg)](https://github.com/Tim-Maes/Facet/actions/workflows/release.yml)
 [![NuGet](https://img.shields.io/nuget/v/Facet.svg)](https://www.nuget.org/packages/Facet)
 [![Downloads](https://img.shields.io/nuget/dt/Facet.svg)](https://www.nuget.org/packages/Facet)
 [![GitHub](https://img.shields.io/github/license/Tim-Maes/Facet.svg)](https://github.com/Tim-Maes/Facet/blob/main/LICENSE.txt)
-[![CI](https://github.com/Tim-Maes/Facet/actions/workflows/build.yml/badge.svg)](https://github.com/Tim-Maes/Facet/actions/workflows/build.yml)
-[![CD](https://github.com/Tim-Maes/Facet/actions/workflows/release.yml/badge.svg)](https://github.com/Tim-Maes/Facet/actions/workflows/release.yml)
 
 </div>
 
 ---
 
-**Facet** is a C# source generator that lets you define **lightweight projections** (DTOs, API models, etc.) directly from your domain models, without writing boilerplate.
-
-It generates partial classes, records, structs, or record structs with constructors, optional LINQ projections, and even supports custom mappings, all at compile time, with zero runtime cost.
+**Facet** is a C# source generator that lets you define **projections** (DTOs, API models, etc.) directly from your domain models, without writing boilerplate.
 
 ## :gem: What is Facetting?
 
 Facetting is the process of defining **focused views** of a larger model at compile time.
 
-Instead of manually writing separate DTOs, mappers, and projections, **Facet** allows you to declare what you want to keep, and generates everything else.
+Instead of manually writing separate DTOs, mappers, and projections, **Facet** allows you to declare what you want to keep, and generates everything else. It generates partial classes, records, structs, or record structs with constructors, LINQ projections, and even supports custom mappings, all at compile time, with zero runtime cost.
 
 You can think of it like **carving out a specific facet** of a gem:
 
 - The part you care about
-- Leaving the rest behind.
-
-## :grey_question: Why Facetting?
-
-- Reduce duplication across DTOs, projections, and ViewModels
-- Maintain strong typing with no runtime cost
-- Stay DRY (Don't Repeat Yourself) without sacrificing performance
-- Works seamlessly with LINQ providers like Entity Framework
+- Leave the rest behind.
 
 ## :clipboard: Documentation
 
-- [Comprehensive article about Facetting](https://tim-maes.com/facets-in-dotnet.html)
 - **[Documentation & Guides](docs/README.md)**
 - [What is being generated?](docs/07_WhatIsBeingGenerated.md)
+- [Comprehensive article about Facetting](https://tim-maes.com/facets-in-dotnet.html)
 
 ## :star: Key Features
 
 - :white_check_mark: Generate classes, records, structs, or record structs from existing types
-- :white_check_mark: Exclude fields/properties you don't want (create a Facetted view of your model)
+- :white_check_mark: Define what to include, or exclude fields/properties you don't want
 - :white_check_mark: Include/redact public fields
-- :white_check_mark: Auto-generate constructors for fast mapping
-- :white_check_mark: LINQ projection expressions
+- :white_check_mark: Constructors & LINQ projection expressions
 - :white_check_mark: Full mapping support with custom mapping configurations
 - :white_check_mark: Auto-generate complete CRUD DTO sets with `[GenerateDtos]`
 - :white_check_mark: **Expression transformation and mapping utilities** for reusing business logic across entities and DTOs
@@ -100,7 +91,35 @@ For expression transformation utilities:
 dotnet add package Facet.Mapping.Expressions
 ```
 
-### Basic Projection
+### Define Facets
+
+... and specify what you need.
+
+```csharp
+// Exclude sensitive properties
+string[] excludeFields = { "Password", "Email" };
+
+[Facet(typeof(User), exclude: excludeFields)]
+public partial class UserWithoutEmail { }
+
+// Include only specific properties
+[Facet(typeof(User), Include = new[] { "FirstName", "LastName", "Email" })]
+public partial class UserContactDto { }
+
+// Include public fields
+[Facet(typeof(Entity), IncludeFields = true)]
+public partial class EntityDto { }
+
+// Include specific fields and properties
+[Facet(typeof(Entity), Include = new[] { "Name", "Status" }, IncludeFields = true)]
+public partial class EntitySummaryDto { }
+
+// Make all properties nullable for query/filter scenarios
+[Facet(typeof(Product), "InternalNotes", NullableProperties = true, GenerateBackTo = false)]
+public partial class ProductQueryDto { }
+```
+
+### Basic Projection of Facets
 ```csharp
 [Facet(typeof(User))]
 public partial class UserFacet { }
@@ -114,19 +133,6 @@ var user = userFacet.BackTo<UserFacet, User>(); //Much faster
 
 var users = users.SelectFacets<UserFacet>();
 var users = users.SelectFacets<User, UserFacet>(); //Much faster
-```
-
-### Property Exclusion & Field Inclusion
-```csharp
-// Exclude sensitive properties
-string[] excludeFields = { "Password", "Email" };
-
-[Facet(typeof(User), exclude: excludeFields)]
-public partial class UserWithoutEmail { }
-
-// Include public fields
-[Facet(typeof(Entity), IncludeFields = true)]
-public partial class EntityDto { }
 ```
 
 ### Custom Sync Mapping

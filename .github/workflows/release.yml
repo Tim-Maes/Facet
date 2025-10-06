@@ -1,4 +1,5 @@
 name: Release
+run-name: '[Release] ${{ github.event.release.tag_name }}'
 
 on:
   release:
@@ -17,13 +18,13 @@ jobs:
     
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v5
       with:
         dotnet-version: |
           8.0.x
@@ -42,8 +43,7 @@ jobs:
         # Update the version in Directory.Build.props
         sed -i "s|<Version>.*</Version>|<Version>${{ steps.get_version.outputs.VERSION }}</Version>|g" Directory.Build.props
         echo "Updated Directory.Build.props with version ${{ steps.get_version.outputs.VERSION }}"
-        cat Directory.Build.props
-    
+
     - name: Restore dependencies
       run: dotnet restore
     

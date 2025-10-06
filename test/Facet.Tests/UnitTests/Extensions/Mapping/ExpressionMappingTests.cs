@@ -9,7 +9,7 @@ using Facet.Tests.Utilities;
 using FluentAssertions;
 using Xunit;
 
-namespace Facet.Tests.UnitTests;
+namespace Facet.Tests.UnitTests.Extensions.Mapping;
 
 public class ExpressionMappingTests
 {

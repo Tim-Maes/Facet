@@ -1,8 +1,7 @@
 using Facet.Tests.TestModels;
 using Facet.Tests.Utilities;
-using Facet.Mapping;
 
-namespace Facet.Tests.UnitTests;
+namespace Facet.Tests.UnitTests.Extensions.Mapping;
 
 public class AsyncMappingTests
 {

@@ -1,0 +1,66 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: test
+run-name: '[Test] ${{ github.event.workflow_run.head_commit.message || github.event.workflow_run.display_title || github.event.workflow_run.head_branch }}'
+on:
+  workflow_run:
+    workflows: ["build"]
+    types:
+      - completed
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: true
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run' }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build Solution
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Run Unit Tests
+        run: dotnet test --configuration Release --no-build --verbosity normal --logger trx --results-directory TestResults
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: success() || failure()
+        with:
+          name: test-results
+          path: TestResults/*.trx
+          retention-days: 7
+
+      - name: Publish Test Results
+        uses: dorny/test-reporter@v2
+        # Only run on push events or pull requests from the same repository (not forks)
+        if: (success() || failure()) && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        with:
+          name: Unit Test Results
+          path: TestResults/*.trx
+          reporter: dotnet-trx
+          fail-on-error: false
+          token: ${{ secrets.GITHUB_TOKEN }}

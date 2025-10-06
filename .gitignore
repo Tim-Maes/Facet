@@ -364,3 +364,6 @@ FodyWeavers.xsd
 
 # Rider
 .idea/
+
+# Claude
+/.claude/settings.local.json

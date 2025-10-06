@@ -2,7 +2,7 @@ using Facet.Tests.TestModels;
 using Facet.Tests.Utilities;
 using Microsoft.EntityFrameworkCore;
 
-namespace Facet.Tests.IntegrationTests;
+namespace Facet.Tests.UnitTests.Extensions.EFCore;
 
 public class LinqProjectionTests : IDisposable
 {

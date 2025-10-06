@@ -44,12 +44,39 @@ public sealed class FacetGenerator : IIncrementalGenerator
         var sourceType = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
         if (sourceType == null) return null;
 
-        var excluded = new HashSet<string>(
-            attribute.ConstructorArguments.ElementAtOrDefault(1).Values
-                .Select(v => v.Value?.ToString())
-                .Where(n => n != null)!);
+        var excluded = new HashSet<string>();
+        var included = new HashSet<string>();
+        bool isIncludeMode = false;
 
-        var includeFields = GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
+        if (attribute.ConstructorArguments.Length > 1)
+        {
+            var excludeArg = attribute.ConstructorArguments[1];
+            if (excludeArg.Kind == TypedConstantKind.Array)
+            {
+                excluded = new HashSet<string>(
+                    excludeArg.Values
+                        .Select(v => v.Value?.ToString())
+                        .Where(n => n != null)!);
+            }
+        }
+
+        var includeArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "Include");
+        if (includeArg.Value.Kind != TypedConstantKind.Error && !includeArg.Value.IsNull)
+        {
+            if (includeArg.Value.Kind == TypedConstantKind.Array)
+            {
+                included = new HashSet<string>(
+                    includeArg.Value.Values
+                        .Select(v => v.Value?.ToString())
+                        .Where(n => n != null)!);
+                isIncludeMode = true;
+            }
+        }
+
+        var includeFields = isIncludeMode 
+            ? GetNamedArg(attribute.NamedArguments, "IncludeFields", false)
+            : GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
+
         var generateConstructor = GetNamedArg(attribute.NamedArguments, "GenerateConstructor", true);
         var generateParameterlessConstructor = GetNamedArg(attribute.NamedArguments, "GenerateParameterlessConstructor", true);
         var generateProjection = GetNamedArg(attribute.NamedArguments, "GenerateProjection", true);
@@ -79,6 +106,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
 
         var preserveInitOnly = GetNamedArg(attribute.NamedArguments, "PreserveInitOnlyProperties", preserveInitOnlyDefault);
         var preserveRequired = GetNamedArg(attribute.NamedArguments, "PreserveRequiredProperties", preserveRequiredDefault);
+        var nullableProperties = GetNamedArg(attribute.NamedArguments, "NullableProperties", false);
 
         var members = new List<FacetMember>();
         var excludedRequiredMembers = new List<FacetMember>();
@@ -95,21 +123,33 @@ public sealed class FacetGenerator : IIncrementalGenerator
             
             if (addedMembers.Contains(member.Name)) continue;
 
+            bool shouldIncludeMember = false;
+
+            if (isIncludeMode)
+            {
+                shouldIncludeMember = included.Contains(member.Name);
+            }
+            else
+            {
+                shouldIncludeMember = !excluded.Contains(member.Name);
+            }
+
             if (member is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } p)
             {
                 var memberXmlDocumentation = ExtractXmlDocumentation(p);
-                
-                if (excluded.Contains(member.Name))
+
+                if (!shouldIncludeMember)
                 {
                     // If this is a required member that was excluded, track it for BackTo generation
                     if (isRequired)
                     {
                         excludedRequiredMembers.Add(new FacetMember(
                             p.Name,
-                            p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                            GetTypeNameWithNullability(p.Type),
                             FacetMemberKind.Property,
                             isInitOnly,
                             isRequired,
+                            false, // Properties are not readonly
                             memberXmlDocumentation));
                     }
                     continue;
@@ -118,30 +158,38 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 var shouldPreserveInitOnly = preserveInitOnly && isInitOnly;
                 var shouldPreserveRequired = preserveRequired && isRequired;
 
+                var typeName = GetTypeNameWithNullability(p.Type);
+                if (nullableProperties)
+                {
+                    typeName = MakeNullable(typeName);
+                }
+
                 members.Add(new FacetMember(
                     p.Name,
-                    p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                    typeName,
                     FacetMemberKind.Property,
                     shouldPreserveInitOnly,
                     shouldPreserveRequired,
+                    false, // Properties are not readonly
                     memberXmlDocumentation));
                 addedMembers.Add(p.Name);
             }
             else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
             {
                 var memberXmlDocumentation = ExtractXmlDocumentation(f);
-                
-                if (excluded.Contains(member.Name))
+
+                if (!shouldIncludeMember)
                 {
                     // If this is a required field that was excluded, track it for BackTo generation
                     if (isRequired)
                     {
                         excludedRequiredMembers.Add(new FacetMember(
                             f.Name,
-                            f.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                            GetTypeNameWithNullability(f.Type),
                             FacetMemberKind.Field,
                             false, // Fields don't have init-only
                             isRequired,
+                            f.IsReadOnly, // Fields can be readonly
                             memberXmlDocumentation));
                     }
                     continue;
@@ -149,12 +197,19 @@ public sealed class FacetGenerator : IIncrementalGenerator
 
                 var shouldPreserveRequired = preserveRequired && isRequired;
 
+                var typeName = GetTypeNameWithNullability(f.Type);
+                if (nullableProperties)
+                {
+                    typeName = MakeNullable(typeName);
+                }
+
                 members.Add(new FacetMember(
                     f.Name,
-                    f.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                    typeName,
                     FacetMemberKind.Field,
                     false, // Fields don't have init-only
                     shouldPreserveRequired,
+                    f.IsReadOnly, // Fields can be readonly
                     memberXmlDocumentation));
                 addedMembers.Add(f.Name);
             }
@@ -205,7 +260,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
             typeXmlDocumentation,
             containingTypes,
             useFullName,
-            excludedRequiredMembers.ToImmutableArray());
+            excludedRequiredMembers.ToImmutableArray(),
+            nullableProperties);
     }
 
     /// <summary>
@@ -1107,6 +1163,38 @@ public sealed class FacetGenerator : IIncrementalGenerator
             _ when typeName.EndsWith("Enum") => true,  // Simple heuristic for enums
             _ => false
         };
+    }
+
+    /// <summary>
+    /// Gets the type name with proper nullability information preserved.
+    /// </summary>
+    private static string MakeNullable(string typeName)
+    {
+        // Don't make already nullable types more nullable
+        if (typeName.EndsWith("?") || typeName.StartsWith("System.Nullable<"))
+            return typeName;
+
+        // Always add ? to make the type nullable
+        return typeName + "?";
+    }
+
+    private static string GetTypeNameWithNullability(ITypeSymbol typeSymbol)
+    {
+        // Create a SymbolDisplayFormat that includes nullability information
+        var format = new SymbolDisplayFormat(
+            globalNamespaceStyle: SymbolDisplayGlobalNamespaceStyle.Included,
+            typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
+            genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters | SymbolDisplayGenericsOptions.IncludeVariance,
+            memberOptions: SymbolDisplayMemberOptions.None,
+            delegateStyle: SymbolDisplayDelegateStyle.NameAndSignature,
+            extensionMethodStyle: SymbolDisplayExtensionMethodStyle.Default,
+            parameterOptions: SymbolDisplayParameterOptions.None,
+            propertyStyle: SymbolDisplayPropertyStyle.NameOnly,
+            localOptions: SymbolDisplayLocalOptions.None,
+            kindOptions: SymbolDisplayKindOptions.None,
+            miscellaneousOptions: SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers | SymbolDisplayMiscellaneousOptions.UseSpecialTypes | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+
+        return typeSymbol.ToDisplayString(format);
     }
 }
 

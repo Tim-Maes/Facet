@@ -153,21 +153,24 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 {
                     members.Add(new FacetMember(
                         p.Name,
-                        p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        GetTypeNameWithNullability(p.Type),
                         FacetMemberKind.Property,
                         isInitOnly,
                         isRequired,
+                        false, // Properties are not readonly in the field sense
                         null)); // No XML documentation for GenerateDtos
                     addedMembers.Add(p.Name);
                 }
                 else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
                 {
+                    bool isReadOnly = f.IsReadOnly;
                     members.Add(new FacetMember(
                         f.Name,
-                        f.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        GetTypeNameWithNullability(f.Type),
                         FacetMemberKind.Field,
                         false, // Fields don't have init-only
                         isRequired,
+                        isReadOnly,
                         null)); // No XML documentation for GenerateDtos
                     addedMembers.Add(f.Name);
                 }
@@ -307,9 +310,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
 
         var ns = string.IsNullOrEmpty(model.SourceNamespace) ? "Global" : model.SourceNamespace;
-
         var baseName = $"{ns}.{dtoName}";
-
         var safeName = baseName.GetSafeName();
 
         return $"{safeName}.g.cs";
@@ -361,6 +362,23 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         };
     }
 
+    private static string GetDefaultValueForType(string typeName)
+    {
+        return typeName switch
+        {
+            "string" or "System.String" => "string.Empty",
+            "System.DateTime" => "default(System.DateTime)",
+            "System.DateTimeOffset" => "default(System.DateTimeOffset)",
+            "System.TimeSpan" => "default(System.TimeSpan)",
+            "System.Guid" => "System.Guid.Empty",
+            _ when typeName.StartsWith("System.Collections.Generic.List<") => $"new {typeName}()",
+            _ when typeName.StartsWith("System.Collections.Generic.IList<") => $"new System.Collections.Generic.List<{typeName.Substring("System.Collections.Generic.IList<".Length).TrimEnd('>')}>()",
+            _ when typeName.StartsWith("List<") => $"new {typeName}()",
+            _ when typeName.StartsWith("IList<") => $"new List<{typeName.Substring("IList<".Length).TrimEnd('>')}>()",
+            _ => "default"
+        };
+    }
+
     private static string GenerateDtoCode(GenerateDtosTargetModel model, string dtoName, ImmutableArray<FacetMember> members, string purpose)
     {
         var sb = new StringBuilder();
@@ -390,129 +408,180 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine($"/// Generated {purpose} DTO for {sourceTypeName}.");
         sb.AppendLine($"/// </summary>");
 
-        var isPositional = model.OutputType is OutputType.Record or OutputType.RecordStruct;
+        // Add [Facet] attribute to make it work with extension methods
+        sb.AppendLine($"[Facet.Facet(typeof({model.SourceTypeName}))]");
+
         var hasInitOnlyProperties = members.Any(m => m.IsInitOnly);
 
-        if (isPositional)
+        sb.AppendLine($"public {keyword} {dtoName}");
+        sb.AppendLine("{");
+
+        foreach (var member in members)
         {
-            sb.AppendLine($"public {keyword} {dtoName}(");
-
-            for (int i = 0; i < members.Length; i++)
+            if (member.Kind == FacetMemberKind.Property)
             {
-                var member = members[i];
-                var param = $"    {member.TypeName} {member.Name}";
+                var propDef = $"public {member.TypeName} {member.Name}";
 
-                if (member.IsRequired && model.OutputType == OutputType.RecordStruct)
+                if (member.IsInitOnly)
                 {
-                    param = $"    required {member.TypeName} {member.Name}";
-                }
-
-                // Add comma for all but the last parameter
-                if (i < members.Length - 1)
-                {
-                    param += ",";
-                }
-
-                sb.AppendLine(param);
-            }
-
-            sb.AppendLine(");");
-        }
-        else
-        {
-            sb.AppendLine($"public {keyword} {dtoName}");
-            sb.AppendLine("{");
-
-            foreach (var member in members)
-            {
-                if (member.Kind == FacetMemberKind.Property)
-                {
-                    var propDef = $"public {member.TypeName} {member.Name}";
-
-                    if (member.IsInitOnly)
-                    {
-                        propDef += " { get; init; }";
-                    }
-                    else
-                    {
-                        propDef += " { get; set; }";
-                    }
-
-                    if (member.IsRequired)
-                    {
-                        propDef = $"required {propDef}";
-                    }
-
-                    sb.AppendLine($"    {propDef}");
+                    propDef += " { get; init; }";
                 }
                 else
                 {
-                    var fieldDef = $"public {member.TypeName} {member.Name};";
-                    if (member.IsRequired)
-                    {
-                        fieldDef = $"required {fieldDef}";
-                    }
-                    sb.AppendLine($"    {fieldDef}");
+                    propDef += " { get; set; }";
                 }
+
+                if (member.IsRequired)
+                {
+                    propDef = $"required {propDef}";
+                }
+
+                sb.AppendLine($"    {propDef}");
             }
-
-            // Generate constructor if requested
-            if (model.GenerateConstructors)
+            else
             {
-                sb.AppendLine();
-                sb.AppendLine($"    public {dtoName}({model.SourceTypeName} source)");
-                sb.AppendLine("    {");
+                var fieldDef = $"public";
+                if (member.IsReadOnly)
+                {
+                    fieldDef += " readonly";
+                }
+                fieldDef += $" {member.TypeName} {member.Name}";
+                
+                // For readonly fields, we need to provide a default value since they can't be assigned in constructor
+                if (member.IsReadOnly)
+                {
+                    var defaultValue = GetDefaultValueForType(member.TypeName);
+                    fieldDef += $" = {defaultValue}";
+                }
+                
+                fieldDef += ";";
+                
+                if (member.IsRequired && !member.IsReadOnly)
+                {
+                    fieldDef = $"required {fieldDef}";
+                }
+                
+                sb.AppendLine($"    {fieldDef}");
+            }
+        }
 
-                foreach (var member in members.Where(x => !x.IsInitOnly))
+        // Generate constructor if requested
+        if (model.GenerateConstructors)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Initializes a new instance of the <see cref=\"{dtoName}\"/> class from the specified <see cref=\"{sourceTypeName}\"/>.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{sourceTypeName}\"/> object to copy data from.</param>");
+            sb.AppendLine($"    public {dtoName}({model.SourceTypeName} source)");
+            sb.AppendLine("    {");
+
+            // Only assign to non-init-only properties and non-readonly fields
+            var assignableMembers = members.Where(x => !x.IsInitOnly && !x.IsReadOnly).ToList();
+            
+            if (assignableMembers.Any())
+            {
+                foreach (var member in assignableMembers)
                 {
                     sb.AppendLine($"        this.{member.Name} = source.{member.Name};");
                 }
-
-                sb.AppendLine("    }");
-
-                // Add static factory method for types with init-only properties
-                if (hasInitOnlyProperties)
-                {
-                    sb.AppendLine();
-                    sb.AppendLine($"    public static {dtoName} FromSource({model.SourceTypeName} source)");
-                    sb.AppendLine("    {");
-                    sb.AppendLine($"        return new {dtoName}");
-                    sb.AppendLine("        {");
-                    foreach (var member in members)
-                    {
-                        var comma = member == members.Last() ? "" : ",";
-                        sb.AppendLine($"            {member.Name} = source.{member.Name}{comma}");
-                    }
-                    sb.AppendLine("        };");
-                    sb.AppendLine("    }");
-                }
+            }
+            else
+            {
+                // If there are no assignable members, add a comment to explain
+                sb.AppendLine("        // No assignable members to initialize from source");
+                sb.AppendLine("        // (all members are either init-only properties or readonly fields with default values)");
             }
 
-            // Generate projection if requested
-            if (model.GenerateProjections)
+            sb.AppendLine("    }");
+
+            // Add parameterless constructor
+            sb.AppendLine();
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Initializes a new instance of the <see cref=\"{dtoName}\"/> class with default values.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    public {dtoName}()");
+            sb.AppendLine("    {");
+            sb.AppendLine("    }");
+
+            // Add static factory method for types with init-only properties or readonly fields
+            if (hasInitOnlyProperties || members.Any(m => m.IsReadOnly))
             {
                 sb.AppendLine();
-                sb.AppendLine($"    public static Expression<Func<{model.SourceTypeName}, {dtoName}>> Projection =>");
-
-                if (hasInitOnlyProperties)
+                sb.AppendLine($"    /// <summary>");
+                sb.AppendLine($"    /// Creates a new instance of <see cref=\"{dtoName}\"/> from the specified <see cref=\"{sourceTypeName}\"/> with init-only properties.");
+                sb.AppendLine($"    /// </summary>");
+                sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{sourceTypeName}\"/> object to copy data from.</param>");
+                sb.AppendLine($"    /// <returns>A new <see cref=\"{dtoName}\"/> instance with all properties initialized from the source.</returns>");
+                
+                if (members.Any(m => m.IsReadOnly))
                 {
-                    sb.AppendLine($"        source => new {dtoName}");
-                    sb.AppendLine("        {");
-                    foreach (var member in members)
-                    {
-                        var comma = member == members.Last() ? "" : ",";
-                        sb.AppendLine($"            {member.Name} = source.{member.Name}{comma}");
-                    }
-                    sb.AppendLine("        };");
+                    sb.AppendLine($"    /// <remarks>");
+                    sb.AppendLine($"    /// Note: Readonly fields will use their default values and cannot be copied from the source.");
+                    sb.AppendLine($"    /// </remarks>");
                 }
-                else
+                
+                sb.AppendLine($"    public static {dtoName} FromSource({model.SourceTypeName} source)");
+                sb.AppendLine("    {");
+                sb.AppendLine($"        return new {dtoName}");
+                sb.AppendLine("        {");
+                
+                // Only include non-readonly fields in the object initializer
+                var initializableMembers = members.Where(m => !m.IsReadOnly).ToList();
+                for (int i = 0; i < initializableMembers.Count; i++)
                 {
-                    sb.AppendLine($"        source => new {dtoName}(source);");
+                    var member = initializableMembers[i];
+                    var comma = i == initializableMembers.Count - 1 ? "" : ",";
+                    sb.AppendLine($"            {member.Name} = source.{member.Name}{comma}");
                 }
+                
+                sb.AppendLine("        };");
+                sb.AppendLine("    }");
             }
-
-            sb.AppendLine("}");
         }
+
+        // Generate projection if requested
+        if (model.GenerateProjections)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Gets the projection expression for converting <see cref=\"{sourceTypeName}\"/> to <see cref=\"{dtoName}\"/>.");
+            sb.AppendLine($"    /// Use this for LINQ and Entity Framework query projections.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    /// <value>An expression tree that can be used in LINQ queries for efficient database projections.</value>");
+            sb.AppendLine($"    /// <example>");
+            sb.AppendLine($"    /// <code>");
+            sb.AppendLine($"    /// var dtos = context.{sourceTypeName}s");
+            sb.AppendLine($"    ///     .Where(x => x.IsActive)");
+            sb.AppendLine($"    ///     .Select({dtoName}.Projection)");
+            sb.AppendLine($"    ///     .ToList();");
+            sb.AppendLine($"    /// </code>");
+            sb.AppendLine($"    /// </example>");
+            sb.AppendLine($"    public static Expression<Func<{model.SourceTypeName}, {dtoName}>> Projection =>");
+
+            if (hasInitOnlyProperties || members.Any(m => m.IsReadOnly))
+            {
+                sb.AppendLine($"        source => new {dtoName}");
+                sb.AppendLine("        {");
+                
+                // Only include non-readonly fields in the object initializer for projections too
+                var initializableMembers = members.Where(m => !m.IsReadOnly).ToList();
+                for (int i = 0; i < initializableMembers.Count; i++)
+                {
+                    var member = initializableMembers[i];
+                    var comma = i == initializableMembers.Count - 1 ? "" : ",";
+                    sb.AppendLine($"            {member.Name} = source.{member.Name}{comma}");
+                }
+                
+                sb.AppendLine("        };");
+            }
+            else
+            {
+                sb.AppendLine($"        source => new {dtoName}(source);");
+            }
+        }
+
+        sb.AppendLine("}");
 
         return sb.ToString();
     }
@@ -590,5 +659,27 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
             return defaultValue;
         }
+    }
+
+    /// <summary>
+    /// Gets the type name with proper nullability information preserved.
+    /// </summary>
+    private static string GetTypeNameWithNullability(ITypeSymbol typeSymbol)
+    {
+        // Create a SymbolDisplayFormat that includes nullability information
+        var format = new SymbolDisplayFormat(
+            globalNamespaceStyle: SymbolDisplayGlobalNamespaceStyle.Included,
+            typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
+            genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters | SymbolDisplayGenericsOptions.IncludeVariance,
+            memberOptions: SymbolDisplayMemberOptions.None,
+            delegateStyle: SymbolDisplayDelegateStyle.NameAndSignature,
+            extensionMethodStyle: SymbolDisplayExtensionMethodStyle.Default,
+            parameterOptions: SymbolDisplayParameterOptions.None,
+            propertyStyle: SymbolDisplayPropertyStyle.NameOnly,
+            localOptions: SymbolDisplayLocalOptions.None,
+            kindOptions: SymbolDisplayKindOptions.None,
+            miscellaneousOptions: SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers | SymbolDisplayMiscellaneousOptions.UseSpecialTypes | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+
+        return typeSymbol.ToDisplayString(format);
     }
 }

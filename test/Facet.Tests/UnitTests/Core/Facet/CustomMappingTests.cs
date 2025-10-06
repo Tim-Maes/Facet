@@ -1,7 +1,7 @@
 using Facet.Tests.TestModels;
 using Facet.Tests.Utilities;
 
-namespace Facet.Tests.UnitTests;
+namespace Facet.Tests.UnitTests.Core.Facet;
 
 public class CustomMappingTests
 {
@@ -45,7 +45,7 @@ public class CustomMappingTests
         // Act
         var dto = user.ToFacet<User, UserDtoWithMapping>();
 
-        // Assert
+       // Assert
         dto.Age.Should().Be(29, "Age should be 29 if birthday hasn't occurred this year yet");
     }
 
@@ -84,7 +84,7 @@ public class CustomMappingTests
             var dto = user.ToFacet<User, UserDtoWithMapping>();
 
             // Assert
-            dto.FullName.Should().Be(expectedFullName, 
+            dto.FullName.Should().Be(expectedFullName,
                 $"FullName should be '{expectedFullName}' for '{firstName}' + '{lastName}'");
         }
     }
@@ -119,7 +119,7 @@ public class CustomMappingTests
         dto.LastName.Should().Be("Mapping");
         dto.Email.Should().Be("custom@example.com");
         dto.IsActive.Should().Be(user.IsActive);
-        
+
         // Plus the custom mapped properties
         dto.FullName.Should().Be("Custom Mapping");
         dto.Age.Should().BeGreaterThan(0);

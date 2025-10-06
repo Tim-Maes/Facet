@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: pr-validation
+run-name: '[PR Check] ${{ github.event.pull_request.title }}'
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - labeled
+      - unlabeled
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  check-changelog-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: PR has no changelog label
+        if: |
+          !contains(github.event.pull_request.labels.*.name, 'bug') &&
+          !contains(github.event.pull_request.labels.*.name, 'bugfix') &&
+          !contains(github.event.pull_request.labels.*.name, 'enhancement') &&
+          !contains(github.event.pull_request.labels.*.name, 'breaking-change') &&
+          !contains(github.event.pull_request.labels.*.name, 'dependencies') &&
+          !contains(github.event.pull_request.labels.*.name, 'documentation')
+        run: |
+          echo "::error::Pull request must have at least one changelog label: bug/bugfix, enhancement, breaking-change, dependencies, or documentation"
+          exit 1
+      - name: PR has changelog label
+        run: echo "Pull request has appropriate changelog label"
