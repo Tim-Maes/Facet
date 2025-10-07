@@ -217,7 +217,7 @@ public class UserController : ControllerBase
 }
 ```
 
-### NEW: Hybrid Mapping with Dependency Injection
+### Hybrid Mapping with Dependency Injection
 
 ```csharp
 public class UserHybridMapperWithDI : IFacetMapConfigurationHybridInstance<User, UserDto>
@@ -249,45 +249,3 @@ public class UserHybridMapperWithDI : IFacetMapConfigurationHybridInstance<User,
 // Usage
 var userDto = await user.ToFacetHybridAsync(hybridMapperWithDI);
 ```
-
-## When to Use Each Approach
-
-| Scenario | Recommended Approach | Interface |
-|----------|---------------------|-----------|
-| Simple property transformations | Static mapper | `IFacetMapConfiguration<TSource, TTarget>` |
-| Complex logic with external services | Instance mapper | `IFacetMapConfigurationAsyncInstance<TSource, TTarget>` |
-| Database operations | Instance mapper with DbContext | `IFacetMapConfigurationAsyncInstance<TSource, TTarget>` |
-| HTTP API calls | Instance mapper with HttpClient | `IFacetMapConfigurationAsyncInstance<TSource, TTarget>` |
-| Logging and error handling | Instance mapper with ILogger | `IFacetMapConfigurationAsyncInstance<TSource, TTarget>` |
-| Mixed sync/async operations | Hybrid instance mapper | `IFacetMapConfigurationHybridInstance<TSource, TTarget>` |
-
-## Benefits of Instance Mappers
-
-### Dependency Injection Support
-- Inject any service: `IDbContext`, `IHttpClient`, `ILogger`, custom services
-- Full integration with DI containers (ASP.NET Core, etc.)
-- Easy to configure and manage dependencies
-
-### Better Testability  
-- Mock dependencies for unit testing
-- Isolate mapper logic from external services
-- Test different scenarios with different service implementations
-
-### Real-World Integration
-- Access to properly configured services
-- Connection string management through DI
-- Shared service instances and connection pooling
-
-### Error Handling and Logging
-- Inject `ILogger` for proper logging
-- Structured error handling with context
-- Integration with application monitoring
-
-### Backward Compatibility
-- All existing static mappers continue to work unchanged
-- Gradual migration path
-- Choose the right tool for each scenario
-
----
-
-**Facet.Mapping** — Simple transformations with static mappers, complex scenarios with dependency injection.
