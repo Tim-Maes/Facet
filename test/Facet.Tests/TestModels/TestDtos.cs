@@ -10,7 +10,7 @@ public partial class UserDto
     public int Age { get; set; }
 }
 
-[Facet(typeof(Product), "InternalNotes", Kind = FacetKind.Record)]
+[Facet(typeof(Product), "InternalNotes")]
 public partial record ProductDto;
 
 [Facet(typeof(Employee), "Password", "Salary", "CreatedAt")]
@@ -32,10 +32,10 @@ public partial record ModernUserDto
 [Facet(typeof(UserWithEnum))]
 public partial class UserWithEnumDto;
 
-[Facet(typeof(User), "Password", "CreatedAt", Kind = FacetKind.RecordStruct)]
+[Facet(typeof(User), "Password", "CreatedAt")]
 public partial record struct UserSummary;
 
-[Facet(typeof(Product), "InternalNotes", "CreatedAt", Kind = FacetKind.Struct)]
+[Facet(typeof(Product), "InternalNotes", "CreatedAt")]
 public partial struct ProductSummary;
 
 [Facet(typeof(EventLog), "Source")]
@@ -60,7 +60,7 @@ public partial class UserIncludeWithCustomDto
     public string FullName { get; set; } = string.Empty;
 }
 
-[Facet(typeof(ModernUser), Include = new[] { "FirstName", "LastName" }, Kind = FacetKind.Record)]
+[Facet(typeof(ModernUser), Include = new[] { "FirstName", "LastName" })]
 public partial record ModernUserIncludeDto;
 
 [Facet(typeof(EntityWithFields), Include = new[] { "Name", "Age" }, IncludeFields = true)]
@@ -186,7 +186,7 @@ public partial class NullableTestDto
 [Facet(typeof(Product), "InternalNotes", "CreatedAt", NullableProperties = true, GenerateBackTo = false)]
 public partial class ProductQueryDto;
 
-[Facet(typeof(User), "Password", "CreatedAt", NullableProperties = true, Kind = FacetKind.Record, GenerateBackTo = false)]
+[Facet(typeof(User), "Password", "CreatedAt", NullableProperties = true, GenerateBackTo = false)]
 public partial record UserQueryDto;
 
 [Facet(typeof(UserWithEnum), NullableProperties = true, GenerateBackTo = false)]

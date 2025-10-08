@@ -87,22 +87,13 @@ public sealed class FacetGenerator : IIncrementalGenerator
             .Value.Value?
             .ToString();
 
-        // If Auto is specified, infer the kind from the target type first
-        var kind = attribute.NamedArguments
-            .FirstOrDefault(kvp => kvp.Key == "Kind")
-            .Value.Value is int kindValue
-            ? (FacetKind)kindValue
-            : FacetKind.Auto;
-
-        if (kind == FacetKind.Auto)
-        {
-            kind = InferFacetKind(targetSymbol);
-        }
+        // Infer the type kind and whether it's a record from the target type declaration
+        var (typeKind, isRecord) = InferTypeKind(targetSymbol);
 
         // For record types, default to preserving init-only and required modifiers
         // unless explicitly overridden by the user
-        var preserveInitOnlyDefault = kind is FacetKind.Record or FacetKind.RecordStruct;
-        var preserveRequiredDefault = kind is FacetKind.Record or FacetKind.RecordStruct;
+        var preserveInitOnlyDefault = isRecord;
+        var preserveRequiredDefault = isRecord;
 
         var preserveInitOnly = GetNamedArg(attribute.NamedArguments, "PreserveInitOnlyProperties", preserveInitOnlyDefault);
         var preserveRequired = GetNamedArg(attribute.NamedArguments, "PreserveRequiredProperties", preserveRequiredDefault);
@@ -247,7 +238,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
             targetSymbol.Name,
             ns,
             fullName,
-            kind,
+            typeKind,
+            isRecord,
             generateConstructor,
             generateParameterlessConstructor,
             generateProjection,
@@ -394,37 +386,37 @@ public sealed class FacetGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// Attempts to determine the FacetKind from the target symbol's declaration.
+    /// Infers the TypeKind and whether it's a record from the target symbol's declaration.
+    /// Returns a tuple of (TypeKind, IsRecord).
     /// </summary>
-    private static FacetKind InferFacetKind(INamedTypeSymbol targetSymbol)
+    private static (TypeKind typeKind, bool isRecord) InferTypeKind(INamedTypeSymbol targetSymbol)
     {
-        if (targetSymbol.TypeKind == TypeKind.Struct)
+        var typeKind = targetSymbol.TypeKind;
+        var isRecord = false;
+
+        if (typeKind == TypeKind.Struct || typeKind == TypeKind.Class)
         {
             var syntax = targetSymbol.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-            if (syntax != null && syntax.ToString().Contains("record struct"))
+            if (syntax != null)
             {
-                return FacetKind.RecordStruct;
+                var syntaxText = syntax.ToString();
+                if (syntaxText.Contains("record struct") || syntaxText.Contains("record "))
+                {
+                    isRecord = true;
+                }
             }
-            return FacetKind.Struct;
+
+            // Additional check for records by looking for the compiler-generated Clone method
+            if (!isRecord && typeKind == TypeKind.Class)
+            {
+                if (targetSymbol.GetMembers().Any(m => m.Name.Contains("Clone") && m.IsImplicitlyDeclared))
+                {
+                    isRecord = true;
+                }
+            }
         }
 
-        if (targetSymbol.TypeKind == TypeKind.Class)
-        {
-            var syntax = targetSymbol.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-            if (syntax != null && syntax.ToString().Contains("record "))
-            {
-                return FacetKind.Record;
-            }
-
-            if (targetSymbol.GetMembers().Any(m => m.Name.Contains("Clone") && m.IsImplicitlyDeclared))
-            {
-                return FacetKind.Record;
-            }
-
-            return FacetKind.Class;
-        }
-
-        return FacetKind.Class;
+        return (typeKind, isRecord);
     }
 
     private static T GetNamedArg<T>(
@@ -586,16 +578,16 @@ public sealed class FacetGenerator : IIncrementalGenerator
             sb.AppendLine($"{containingTypeIndent}{indentedDocumentation}");
         }
 
-        var keyword = model.Kind switch
+        var keyword = (model.TypeKind, model.IsRecord) switch
         {
-            FacetKind.Class => "class",
-            FacetKind.Record => "record",
-            FacetKind.RecordStruct => "record struct",
-            FacetKind.Struct => "struct",
+            (TypeKind.Class, false) => "class",
+            (TypeKind.Class, true) => "record",
+            (TypeKind.Struct, true) => "record struct",
+            (TypeKind.Struct, false) => "struct",
             _ => "class",
         };
 
-        var isPositional = model.Kind is FacetKind.Record or FacetKind.RecordStruct && !model.HasExistingPrimaryConstructor;
+        var isPositional = model.IsRecord && !model.HasExistingPrimaryConstructor;
         var hasInitOnlyProperties = model.Members.Any(m => m.IsInitOnly);
         var hasRequiredProperties = model.Members.Any(m => m.IsRequired);
         var hasCustomMapping = !string.IsNullOrWhiteSpace(model.ConfigurationTypeName);
@@ -608,7 +600,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 {
                     var param = $"{m.TypeName} {m.Name}";
                     // Add required modifier for positional parameters if needed
-                    if (m.IsRequired && model.Kind == FacetKind.RecordStruct)
+                    if (m.IsRequired && model.TypeKind == TypeKind.Struct && model.IsRecord)
                     {
                         param = $"required {param}";
                     }
@@ -683,7 +675,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         {
             sb.AppendLine();
 
-            if (model.HasExistingPrimaryConstructor && model.Kind is FacetKind.Record or FacetKind.RecordStruct)
+            if (model.HasExistingPrimaryConstructor && model.IsRecord)
             {
                 // For records with existing primary constructors, the projection can't use the standard constructor approach
                 sb.AppendLine($"{memberIndent}// Note: Projection generation is not supported for records with existing primary constructors.");
@@ -743,7 +735,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
 
         // If the target has an existing primary constructor, skip constructor generation
         // and provide only a factory method
-        if (model.HasExistingPrimaryConstructor && model.Kind is FacetKind.Record or FacetKind.RecordStruct)
+        if (model.HasExistingPrimaryConstructor && model.IsRecord)
         {
             GenerateFactoryMethodForExistingPrimaryConstructor(sb, model, hasCustomMapping);
             return;
@@ -896,7 +888,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
 
         // Don't generate parameterless constructor for records with existing primary constructors
         // as it would conflict with the C# language rules
-        if (model.HasExistingPrimaryConstructor && model.Kind is FacetKind.Record or FacetKind.RecordStruct)
+        if (model.HasExistingPrimaryConstructor && model.IsRecord)
         {
             sb.AppendLine($"    // Note: Parameterless constructor not generated for records with existing primary constructors");
             sb.AppendLine($"    // to avoid conflicts with C# language rules. Use object initializer syntax instead:");

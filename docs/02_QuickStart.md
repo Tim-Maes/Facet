@@ -33,12 +33,12 @@ using Facet;
 [Facet(typeof(Person), exclude: nameof(Person.Email))]
 public partial class PersonDto { }
 
-// Record
-[Facet(typeof(Person), FacetKind.Record)]
+// Record (inferred from 'record' keyword)
+[Facet(typeof(Person))]
 public partial record PersonDto { }
 
-// Struct
-[Facet(typeof(Person), FacetKind.Struct)]
+// Struct (inferred from 'struct' keyword)
+[Facet(typeof(Person))]
 public partial struct PersonDto { }
 ```
 

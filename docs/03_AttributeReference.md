@@ -29,7 +29,6 @@ public partial class MyFacet { }
 | `Configuration`                | `Type?`   | Custom mapping config type (see [Custom Mapping](04_CustomMapping.md)).      |
 | `GenerateProjection`           | `bool`    | Generate a static LINQ projection (default: true).                          |
 | `GenerateBackTo`               | `bool`    | Generate a method to map back from facet to source type (default: true).    |
-| `Kind`                         | `FacetKind`| Output type: Class, Record, Struct, RecordStruct, Auto (default: Auto).     |
 | `PreserveInitOnlyProperties`   | `bool`    | Preserve init-only modifiers from source properties (default: true for records). |
 | `PreserveRequiredProperties`   | `bool`    | Preserve required modifiers from source properties (default: true for records). |
 | `NullableProperties`           | `bool`    | Make all properties nullable in the generated facet |
@@ -86,14 +85,14 @@ public partial class EntityDto;
 ### Include with Records
 ```csharp
 // Generate a record type with only specific properties
-[Facet(typeof(User), Include = new[] { "FirstName", "LastName" }, Kind = FacetKind.Record)]
+[Facet(typeof(User), Include = new[] { "FirstName", "LastName" })]
 public partial record UserNameRecord;
 ```
 
 ### Traditional Exclude Usage
 ```csharp
 // Exclude sensitive properties (original behavior)
-[Facet(typeof(User), exclude: nameof(User.Password), Kind = FacetKind.Record)]
+[Facet(typeof(User), exclude: nameof(User.Password))]
 public partial record UserDto;
 ```
 

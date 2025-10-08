@@ -69,12 +69,6 @@ public sealed class FacetAttribute : Attribute
     public bool GenerateBackTo { get; set; } = true;
 
     /// <summary>
-    /// Which facet to generate: Class, Record (class), RecordStruct, or Struct.
-    /// When set to Auto, the generator will attempt to infer the kind from the target type declaration.
-    /// </summary>
-    public FacetKind Kind { get; set; } = FacetKind.Auto;
-
-    /// <summary>
     /// Controls whether generated properties should preserve init-only modifiers from source properties.
     /// When true, properties with init accessors in the source will be generated as init-only in the target.
     /// Defaults to true for record and record struct types, false for class and struct types.

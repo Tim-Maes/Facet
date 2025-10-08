@@ -249,7 +249,7 @@ void ApplyPatch(User user, UserPatchDto patch)
 
 ```csharp
 // Similar to GenerateDtos Query DTO
-[Facet(typeof(Product), NullableProperties = true, GenerateBackTo = false, Kind = FacetKind.Record)]
+[Facet(typeof(Product), NullableProperties = true, GenerateBackTo = false)]
 public partial record ProductQueryRecord;
 ```
 
@@ -309,13 +309,12 @@ public record ModernUser
 }
 
 // Generate record with only specific properties
-[Facet(typeof(ModernUser), Include = new[] { "FirstName", "LastName", "Email" }, Kind = FacetKind.Record)]
+[Facet(typeof(ModernUser), Include = new[] { "FirstName", "LastName", "Email" })]
 public partial record ModernUserContactRecord;
 
 // Include with init-only preservation
-[Facet(typeof(ModernUser), 
-       Include = new[] { "Id", "FirstName", "LastName" }, 
-       Kind = FacetKind.Record,
+[Facet(typeof(ModernUser),
+       Include = new[] { "Id", "FirstName", "LastName" },
        PreserveInitOnlyProperties = true)]
 public partial record ModernUserImmutableRecord;
 ```

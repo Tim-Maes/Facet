@@ -264,7 +264,7 @@ public partial class UserDto
 ```csharp
 public record User(int Id, string FirstName, string LastName, string Email, string Password);
 
-[Facet(typeof(User), Include = new[] { "FirstName", "LastName", "Email" }, Kind = FacetKind.Record)]
+[Facet(typeof(User), Include = new[] { "FirstName", "LastName", "Email" })]
 public partial record UserContactRecord;
 ```
 
@@ -557,7 +557,7 @@ public partial record ImmutableUserDto
 ```csharp
 public record struct DataRecordStruct(int Code, string Label);
 
-[Facet(typeof(DataRecordStruct), Kind = FacetKind.RecordStruct)]
+[Facet(typeof(DataRecordStruct))]
 public partial record struct DataRecordStructDto { }
 ```
 
@@ -629,7 +629,7 @@ public class UserRecordMapper : IFacetMapConfiguration<UserRecord, UserRecordDto
     }
 }
 
-[Facet(typeof(UserRecord), nameof(UserRecord.FirstName), nameof(UserRecord.LastName), nameof(UserRecord.Registered), Configuration = typeof(UserRecordMapper), Kind = FacetKind.Record)]
+[Facet(typeof(UserRecord), nameof(UserRecord.FirstName), nameof(UserRecord.LastName), nameof(UserRecord.Registered), Configuration = typeof(UserRecordMapper))]
 public partial record UserRecordDto
 {
     public string FullName { get; set; }
@@ -666,7 +666,7 @@ public struct PersonStruct
     public string Email;
 }
 
-[Facet(typeof(PersonStruct), Kind = FacetKind.Struct, IncludeFields = true)]
+[Facet(typeof(PersonStruct), IncludeFields = true)]
 public partial struct PersonStructDto { }
 ```
 
@@ -935,8 +935,7 @@ public class Product
 [Facet(typeof(Product),
        "InternalNotes", "CreatedAt",
        NullableProperties = true,
-       GenerateBackTo = false,
-       Kind = FacetKind.Record)]
+       GenerateBackTo = false)]
 public partial record ProductQueryDto { }
 
 // API Response: exclude internal fields, preserve docs

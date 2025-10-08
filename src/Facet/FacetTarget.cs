@@ -11,7 +11,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public string Name { get; }
     public string? Namespace { get; }
     public string FullName { get; }
-    public FacetKind Kind { get; }
+    public TypeKind TypeKind { get; }
+    public bool IsRecord { get; }
     public bool GenerateConstructor { get; }
     public bool GenerateParameterlessConstructor { get; }
     public bool GenerateExpressionProjection { get; }
@@ -31,7 +32,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         string name,
         string? @namespace,
         string fullName,
-        FacetKind kind,
+        TypeKind typeKind,
+        bool isRecord,
         bool generateConstructor,
         bool generateParameterlessConstructor,
         bool generateExpressionProjection,
@@ -50,7 +52,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         Name = name;
         Namespace = @namespace;
         FullName = fullName;
-        Kind = kind;
+        TypeKind = typeKind;
+        IsRecord = isRecord;
         GenerateConstructor = generateConstructor;
         GenerateParameterlessConstructor = generateParameterlessConstructor;
         GenerateExpressionProjection = generateExpressionProjection;
@@ -75,7 +78,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         return Name == other.Name
             && Namespace == other.Namespace
             && FullName == other.FullName
-            && Kind == other.Kind
+            && TypeKind == other.TypeKind
+            && IsRecord == other.IsRecord
             && GenerateConstructor == other.GenerateConstructor
             && GenerateParameterlessConstructor == other.GenerateParameterlessConstructor
             && GenerateExpressionProjection == other.GenerateExpressionProjection
@@ -101,7 +105,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + (Name?.GetHashCode() ?? 0);
             hash = hash * 31 + (Namespace?.GetHashCode() ?? 0);
             hash = hash * 31 + (FullName?.GetHashCode() ?? 0);
-            hash = hash * 31 + Kind.GetHashCode();
+            hash = hash * 31 + TypeKind.GetHashCode();
+            hash = hash * 31 + IsRecord.GetHashCode();
             hash = hash * 31 + GenerateConstructor.GetHashCode();
             hash = hash * 31 + GenerateParameterlessConstructor.GetHashCode();
             hash = hash * 31 + GenerateExpressionProjection.GetHashCode();

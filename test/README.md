@@ -20,7 +20,6 @@ xUnit-based test suite with proper assertions and isolated test scenarios.
 - **UnitTests/**: Core functionality tests
   - BasicMappingTests.cs - Property mapping verification
   - InheritanceTests.cs - Class inheritance handling
-  - FacetKindsTests.cs - Different output types (class, record, struct)
   - CustomMappingTests.cs - Custom mapping configurations
   - ModernRecordTests.cs - Modern C# record support
   - EnumHandlingTests.cs - Enum property handling

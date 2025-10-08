@@ -182,7 +182,7 @@ The library uses expression tree visitors to transform expressions from source t
 This library works seamlessly with all Facet-generated types:
 
 - Standard Facets with `[Facet]` attribute
-- Record-based Facets (`FacetKind.Record`)
-- Struct-based Facets (`FacetKind.Struct`) 
+- Record-based Facets (using `record` keyword)
+- Struct-based Facets (using `struct` keyword)
 - Custom mapping configurations
 - Async mapping scenarios (when combined with `Facet.Mapping`)
