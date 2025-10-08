@@ -141,7 +141,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             var members = new List<FacetMember>();
             var addedMembers = new HashSet<string>();
 
-            var allMembersWithModifiers = GetAllMembersWithModifiers(sourceSymbol);
+            var allMembersWithModifiers = GeneratorUtilities.GetAllMembersWithModifiers(sourceSymbol);
 
             foreach (var (member, isInitOnly, isRequired) in allMembersWithModifiers)
             {
@@ -153,7 +153,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 {
                     members.Add(new FacetMember(
                         p.Name,
-                        GetTypeNameWithNullability(p.Type),
+                        GeneratorUtilities.GetTypeNameWithNullability(p.Type),
                         FacetMemberKind.Property,
                         isInitOnly,
                         isRequired,
@@ -166,7 +166,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                     bool isReadOnly = f.IsReadOnly;
                     members.Add(new FacetMember(
                         f.Name,
-                        GetTypeNameWithNullability(f.Type),
+                        GeneratorUtilities.GetTypeNameWithNullability(f.Type),
                         FacetMemberKind.Field,
                         false, // Fields don't have init-only
                         isRequired,
@@ -270,7 +270,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
             var queryMembers = model.Members.Select(m => new FacetMember(
                 m.Name,
-                MakeNullable(m.TypeName),
+                GeneratorUtilities.MakeNullable(m.TypeName),
                 m.Kind,
                 m.IsInitOnly,
                 false)) // Make all properties optional in Query DTOs
@@ -322,62 +322,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         return parts[parts.Length - 1];
     }
 
-    private static string MakeNullable(string typeName)
-    {
-        // Don't make already nullable types more nullable
-        if (typeName.EndsWith("?") || typeName.StartsWith("System.Nullable<"))
-            return typeName;
-
-        // Handle value types
-        if (IsValueType(typeName))
-            return typeName + "?";
-
-        // Reference types are already nullable in modern C#
-        return typeName + "?";
-    }
-
-    private static bool IsValueType(string typeName)
-    {
-        return typeName switch
-        {
-            "bool" or "System.Boolean" => true,
-            "byte" or "System.Byte" => true,
-            "sbyte" or "System.SByte" => true,
-            "char" or "System.Char" => true,
-            "decimal" or "System.Decimal" => true,
-            "double" or "System.Double" => true,
-            "float" or "System.Single" => true,
-            "int" or "System.Int32" => true,
-            "uint" or "System.UInt32" => true,
-            "long" or "System.Int64" => true,
-            "ulong" or "System.UInt64" => true,
-            "short" or "System.Int16" => true,
-            "ushort" or "System.UInt16" => true,
-            "System.DateTime" => true,
-            "System.DateTimeOffset" => true,
-            "System.TimeSpan" => true,
-            "System.Guid" => true,
-            _ when typeName.StartsWith("System.Enum") => true,
-            _ => false
-        };
-    }
-
-    private static string GetDefaultValueForType(string typeName)
-    {
-        return typeName switch
-        {
-            "string" or "System.String" => "string.Empty",
-            "System.DateTime" => "default(System.DateTime)",
-            "System.DateTimeOffset" => "default(System.DateTimeOffset)",
-            "System.TimeSpan" => "default(System.TimeSpan)",
-            "System.Guid" => "System.Guid.Empty",
-            _ when typeName.StartsWith("System.Collections.Generic.List<") => $"new {typeName}()",
-            _ when typeName.StartsWith("System.Collections.Generic.IList<") => $"new System.Collections.Generic.List<{typeName.Substring("System.Collections.Generic.IList<".Length).TrimEnd('>')}>()",
-            _ when typeName.StartsWith("List<") => $"new {typeName}()",
-            _ when typeName.StartsWith("IList<") => $"new List<{typeName.Substring("IList<".Length).TrimEnd('>')}>()",
-            _ => "default"
-        };
-    }
 
     private static string GenerateDtoCode(GenerateDtosTargetModel model, string dtoName, ImmutableArray<FacetMember> members, string purpose)
     {
@@ -450,7 +394,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 // For readonly fields, we need to provide a default value since they can't be assigned in constructor
                 if (member.IsReadOnly)
                 {
-                    var defaultValue = GetDefaultValueForType(member.TypeName);
+                    var defaultValue = GeneratorUtilities.GetDefaultValueForType(member.TypeName);
                     fieldDef += $" = {defaultValue}";
                 }
                 
@@ -598,40 +542,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine();
     }
 
-    private static IEnumerable<(ISymbol Symbol, bool IsInitOnly, bool IsRequired)> GetAllMembersWithModifiers(INamedTypeSymbol type)
-    {
-        var visited = new HashSet<string>();
-        var current = type;
-
-        while (current != null)
-        {
-            foreach (var member in current.GetMembers())
-            {
-                if (member.DeclaredAccessibility == Accessibility.Public &&
-                    !visited.Contains(member.Name))
-                {
-                    if (member is IPropertySymbol prop)
-                    {
-                        visited.Add(member.Name);
-                        var isInitOnly = prop.SetMethod?.IsInitOnly == true;
-                        var isRequired = prop.IsRequired;
-                        yield return (prop, isInitOnly, isRequired);
-                    }
-                    else if (member is IFieldSymbol field)
-                    {
-                        visited.Add(member.Name);
-                        var isRequired = field.IsRequired;
-                        yield return (field, false, isRequired);
-                    }
-                }
-            }
-
-            current = current.BaseType;
-
-            if (current?.SpecialType == SpecialType.System_Object)
-                break;
-        }
-    }
 
     private static T GetNamedArg<T>(
         ImmutableArray<KeyValuePair<string, TypedConstant>> args,
@@ -661,25 +571,4 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
     }
 
-    /// <summary>
-    /// Gets the type name with proper nullability information preserved.
-    /// </summary>
-    private static string GetTypeNameWithNullability(ITypeSymbol typeSymbol)
-    {
-        // Create a SymbolDisplayFormat that includes nullability information
-        var format = new SymbolDisplayFormat(
-            globalNamespaceStyle: SymbolDisplayGlobalNamespaceStyle.Included,
-            typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
-            genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters | SymbolDisplayGenericsOptions.IncludeVariance,
-            memberOptions: SymbolDisplayMemberOptions.None,
-            delegateStyle: SymbolDisplayDelegateStyle.NameAndSignature,
-            extensionMethodStyle: SymbolDisplayExtensionMethodStyle.Default,
-            parameterOptions: SymbolDisplayParameterOptions.None,
-            propertyStyle: SymbolDisplayPropertyStyle.NameOnly,
-            localOptions: SymbolDisplayLocalOptions.None,
-            kindOptions: SymbolDisplayKindOptions.None,
-            miscellaneousOptions: SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers | SymbolDisplayMiscellaneousOptions.UseSpecialTypes | SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
-
-        return typeSymbol.ToDisplayString(format);
-    }
 }

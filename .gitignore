@@ -367,3 +367,6 @@ FodyWeavers.xsd
 
 # Claude
 /.claude/settings.local.json
+/benchmark/Facet.Benchmark/nul
+/test/Facet.Tests/nul
+/nul
