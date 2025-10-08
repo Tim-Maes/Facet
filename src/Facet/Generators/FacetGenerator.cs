@@ -571,45 +571,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         // Generate properties if not positional OR if there's an existing primary constructor
         if (!isPositional || model.HasExistingPrimaryConstructor)
         {
-            foreach (var m in model.Members)
-            {
-                // Generate member XML documentation if available
-                if (!string.IsNullOrWhiteSpace(m.XmlDocumentation))
-                {
-                    var indentedDocumentation = m.XmlDocumentation!.Replace("\n", $"\n{memberIndent}");
-                    sb.AppendLine($"{memberIndent}{indentedDocumentation}");
-                }
-
-                if (m.Kind == FacetMemberKind.Property)
-                {
-                    var propDef = $"public {m.TypeName} {m.Name}";
-
-                    if (m.IsInitOnly)
-                    {
-                        propDef += " { get; init; }";
-                    }
-                    else
-                    {
-                        propDef += " { get; set; }";
-                    }
-
-                    if (m.IsRequired)
-                    {
-                        propDef = $"required {propDef}";
-                    }
-
-                    sb.AppendLine($"{memberIndent}{propDef}");
-                }
-                else
-                {
-                    var fieldDef = $"public {m.TypeName} {m.Name};";
-                    if (m.IsRequired)
-                    {
-                        fieldDef = $"required {fieldDef}";
-                    }
-                    sb.AppendLine($"{memberIndent}{fieldDef}");
-                }
-            }
+            GenerateMembers(sb, model, memberIndent);
         }
 
         // Generate constructor
@@ -627,34 +589,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         // Generate projection
         if (model.GenerateExpressionProjection)
         {
-            sb.AppendLine();
-
-            if (model.HasExistingPrimaryConstructor && model.IsRecord)
-            {
-                // For records with existing primary constructors, the projection can't use the standard constructor approach
-                sb.AppendLine($"{memberIndent}// Note: Projection generation is not supported for records with existing primary constructors.");
-                sb.AppendLine($"{memberIndent}// You must manually create projection expressions or use the FromSource factory method.");
-                sb.AppendLine($"{memberIndent}// Example: source => new {model.Name}(defaultPrimaryConstructorValue) {{ PropA = source.PropA, PropB = source.PropB }}");
-            }
-            else
-            {
-                // Generate projection XML documentation
-                sb.AppendLine($"{memberIndent}/// <summary>");
-                sb.AppendLine($"{memberIndent}/// Gets the projection expression for converting <see cref=\"{GetSimpleTypeName(model.SourceTypeName)}\"/> to <see cref=\"{model.Name}\"/>.");
-                sb.AppendLine($"{memberIndent}/// Use this for LINQ and Entity Framework query projections.");
-                sb.AppendLine($"{memberIndent}/// </summary>");
-                sb.AppendLine($"{memberIndent}/// <value>An expression tree that can be used in LINQ queries for efficient database projections.</value>");
-                sb.AppendLine($"{memberIndent}/// <example>");
-                sb.AppendLine($"{memberIndent}/// <code>");
-                sb.AppendLine($"{memberIndent}/// var dtos = context.{GetSimpleTypeName(model.SourceTypeName)}s");
-                sb.AppendLine($"{memberIndent}///     .Where(x => x.IsActive)");
-                sb.AppendLine($"{memberIndent}///     .Select({model.Name}.Projection)");
-                sb.AppendLine($"{memberIndent}///     .ToList();");
-                sb.AppendLine($"{memberIndent}/// </code>");
-                sb.AppendLine($"{memberIndent}/// </example>");
-                sb.AppendLine($"{memberIndent}public static Expression<Func<{model.SourceTypeName}, {model.Name}>> Projection =>");
-                sb.AppendLine($"{memberIndent}    source => new {model.Name}(source);");
-            }
+            GenerateProjectionProperty(sb, model, memberIndent);
         }
 
         // Generate reverse mapping method (BackTo)
@@ -681,6 +616,87 @@ public sealed class FacetGenerator : IIncrementalGenerator
     private static string GetIndentation(FacetTargetModel model)
     {
         return new string(' ', 4 * (model.ContainingTypes.Length + 1));
+    }
+
+    /// <summary>
+    /// Generates member declarations (properties and fields) for the target type.
+    /// </summary>
+    private static void GenerateMembers(StringBuilder sb, FacetTargetModel model, string memberIndent)
+    {
+        foreach (var m in model.Members)
+        {
+            // Generate member XML documentation if available
+            if (!string.IsNullOrWhiteSpace(m.XmlDocumentation))
+            {
+                var indentedDocumentation = m.XmlDocumentation!.Replace("\n", $"\n{memberIndent}");
+                sb.AppendLine($"{memberIndent}{indentedDocumentation}");
+            }
+
+            if (m.Kind == FacetMemberKind.Property)
+            {
+                var propDef = $"public {m.TypeName} {m.Name}";
+
+                if (m.IsInitOnly)
+                {
+                    propDef += " { get; init; }";
+                }
+                else
+                {
+                    propDef += " { get; set; }";
+                }
+
+                if (m.IsRequired)
+                {
+                    propDef = $"required {propDef}";
+                }
+
+                sb.AppendLine($"{memberIndent}{propDef}");
+            }
+            else
+            {
+                var fieldDef = $"public {m.TypeName} {m.Name};";
+                if (m.IsRequired)
+                {
+                    fieldDef = $"required {fieldDef}";
+                }
+                sb.AppendLine($"{memberIndent}{fieldDef}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Generates the projection property for LINQ/EF Core query optimization.
+    /// </summary>
+    private static void GenerateProjectionProperty(StringBuilder sb, FacetTargetModel model, string memberIndent)
+    {
+        sb.AppendLine();
+
+        if (model.HasExistingPrimaryConstructor && model.IsRecord)
+        {
+            // For records with existing primary constructors, the projection can't use the standard constructor approach
+            sb.AppendLine($"{memberIndent}// Note: Projection generation is not supported for records with existing primary constructors.");
+            sb.AppendLine($"{memberIndent}// You must manually create projection expressions or use the FromSource factory method.");
+            sb.AppendLine($"{memberIndent}// Example: source => new {model.Name}(defaultPrimaryConstructorValue) {{ PropA = source.PropA, PropB = source.PropB }}");
+        }
+        else
+        {
+            // Generate projection XML documentation
+            sb.AppendLine($"{memberIndent}/// <summary>");
+            sb.AppendLine($"{memberIndent}/// Gets the projection expression for converting <see cref=\"{GetSimpleTypeName(model.SourceTypeName)}\"/> to <see cref=\"{model.Name}\"/>.");
+            sb.AppendLine($"{memberIndent}/// Use this for LINQ and Entity Framework query projections.");
+            sb.AppendLine($"{memberIndent}/// </summary>");
+            sb.AppendLine($"{memberIndent}/// <value>An expression tree that can be used in LINQ queries for efficient database projections.</value>");
+            sb.AppendLine($"{memberIndent}/// <example>");
+            sb.AppendLine($"{memberIndent}/// <code>");
+            sb.AppendLine($"{memberIndent}/// var dtos = context.{GetSimpleTypeName(model.SourceTypeName)}s");
+            sb.AppendLine($"{memberIndent}///     .Where(x => x.IsActive)");
+            sb.AppendLine($"{memberIndent}///     .Select({model.Name}.Projection)");
+            sb.AppendLine($"{memberIndent}///     .ToList();");
+            sb.AppendLine($"{memberIndent}/// </code>");
+            sb.AppendLine($"{memberIndent}/// </example>");
+            sb.AppendLine($"{memberIndent}public static Expression<Func<{model.SourceTypeName}, {model.Name}>> Projection =>");
+            sb.AppendLine($"{memberIndent}    source => new {model.Name}(source);");
+        }
     }
 
     private static void GenerateConstructor(StringBuilder sb, FacetTargetModel model, bool isPositional, bool hasInitOnlyProperties, bool hasCustomMapping, bool hasRequiredProperties)
