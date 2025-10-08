@@ -24,4 +24,9 @@
         </None>
     </ItemGroup>
 
+    <!-- Resolve System.Collections.Immutable version conflict for net8.0 -->
+    <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+        <PackageReference Include="System.Collections.Immutable" />
+    </ItemGroup>
+
 </Project>

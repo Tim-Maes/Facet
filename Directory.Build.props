@@ -2,16 +2,24 @@
   <PropertyGroup>
     <!-- Centralized version for all Facet packages -->
     <Version>2.9.3</Version>
-    
+
     <!-- Common package properties -->
     <Authors>Tim Maes</Authors>
     <RepositoryUrl>https://github.com/Tim-Maes/Facet</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
-    
+
     <!-- Common build properties for packable projects -->
     <IsPackable Condition="'$(IsPackable)' == ''">false</IsPackable>
     <GeneratePackageOnBuild Condition="'$(IsPackable)' == 'true'">true</GeneratePackageOnBuild>
+
+    <!--
+      Suppress MSB3277 System.Collections.Immutable version conflicts.
+      This is expected: Facet (netstandard2.0 source generator) uses Roslyn which requires v9.0,
+      while net8.0 framework provides v8.0. The build system correctly resolves to v8.0 for
+      net8.0 targets. These warnings are informational and don't indicate a problem.
+    -->
+    <NoWarn>$(NoWarn);MSB3277</NoWarn>
   </PropertyGroup>
 </Project>
