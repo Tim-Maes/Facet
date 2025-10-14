@@ -96,6 +96,22 @@ public sealed class FacetAttribute : Attribute
     public bool NullableProperties { get; set; } = false;
 
     /// <summary>
+    /// An array of child facet types that represent nested objects within the source type.
+    /// When specified, the generator will automatically map properties of the source type to these child facets.
+    /// </summary>
+    /// <remarks>
+    /// This feature simplifies nested type handling by:
+    /// <list type="bullet">
+    /// <item>Automatically detecting which properties should use child facets based on the child facet's source type</item>
+    /// <item>Generating proper mapping code in constructors
+    /// <item>Handling projections for EF Core queries</item>
+    /// <item>Supporting BackTo mapping (converting child facets back to source types)</item>
+    /// <item>Working with collections</item>
+    /// </list>
+    /// </remarks>
+    public Type[]? Children { get; set; }
+
+    /// <summary>
     /// Creates a new FacetAttribute that targets a given source type and excludes specified members.
     /// </summary>
     /// <param name="sourceType">The type to generate from.</param>

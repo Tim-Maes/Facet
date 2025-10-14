@@ -32,6 +32,48 @@ public sealed class FacetGenerator : IIncrementalGenerator
         });
     }
 
+    /// <summary>
+    /// Extracts child facet mappings from the Children parameter.
+    /// Returns a dictionary mapping source type full names to child facet type information.
+    /// </summary>
+    private static Dictionary<string, (string childFacetTypeName, string sourceTypeName)> ExtractChildFacetMappings(
+        AttributeData attribute,
+        Compilation compilation)
+    {
+        var mappings = new Dictionary<string, (string, string)>();
+
+        var childrenArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "Children");
+        if (childrenArg.Value.Kind != TypedConstantKind.Error && !childrenArg.Value.IsNull)
+        {
+            if (childrenArg.Value.Kind == TypedConstantKind.Array)
+            {
+                foreach (var childValue in childrenArg.Value.Values)
+                {
+                    if (childValue.Value is INamedTypeSymbol childFacetType)
+                    {
+                        // Find the Facet attribute on the child type to get its source type
+                        var childFacetAttr = childFacetType.GetAttributes()
+                            .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == "Facet.FacetAttribute");
+
+                        if (childFacetAttr != null && childFacetAttr.ConstructorArguments.Length > 0)
+                        {
+                            if (childFacetAttr.ConstructorArguments[0].Value is INamedTypeSymbol childSourceType)
+                            {
+                                var sourceTypeName = childSourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                                var childFacetTypeName = childFacetType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+                                // Map the source type to the child facet type
+                                mappings[sourceTypeName] = (childFacetTypeName, sourceTypeName);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return mappings;
+    }
+
     private static FacetTargetModel? GetTargetModel(GeneratorAttributeSyntaxContext context, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -99,6 +141,9 @@ public sealed class FacetGenerator : IIncrementalGenerator
         var preserveRequired = GetNamedArg(attribute.NamedArguments, "PreserveRequiredProperties", preserveRequiredDefault);
         var nullableProperties = GetNamedArg(attribute.NamedArguments, "NullableProperties", false);
 
+        // Extract Children parameter and build mapping from source type to child facet type
+        var childFacetMappings = ExtractChildFacetMappings(attribute, context.SemanticModel.Compilation);
+
         var members = new List<FacetMember>();
         var excludedRequiredMembers = new List<FacetMember>();
         var addedMembers = new HashSet<string>();
@@ -151,7 +196,19 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 var shouldPreserveRequired = preserveRequired && isRequired;
 
                 var typeName = GeneratorUtilities.GetTypeNameWithNullability(p.Type);
-                if (nullableProperties)
+                var propertyTypeName = p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                bool isChildFacet = false;
+                string? childFacetSourceTypeName = null;
+
+                // Check if this property's type matches a child facet source type
+                if (childFacetMappings.TryGetValue(propertyTypeName, out var childMapping))
+                {
+                    typeName = childMapping.childFacetTypeName;
+                    isChildFacet = true;
+                    childFacetSourceTypeName = childMapping.sourceTypeName;
+                }
+
+                if (nullableProperties && !isChildFacet)
                 {
                     typeName = GeneratorUtilities.MakeNullable(typeName);
                 }
@@ -164,7 +221,9 @@ public sealed class FacetGenerator : IIncrementalGenerator
                     shouldPreserveInitOnly,
                     shouldPreserveRequired,
                     false, // Properties are not readonly
-                    memberXmlDocumentation));
+                    memberXmlDocumentation,
+                    isChildFacet,
+                    childFacetSourceTypeName));
                 addedMembers.Add(p.Name);
             }
             else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
@@ -743,7 +802,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         {
             // Traditional positional record - chain to primary constructor
             var args = string.Join(", ",
-                model.Members.Select(m => $"source.{m.Name}"));
+                model.Members.Select(m => GetSourceValueExpression(m, "source")));
             ctorSig += $" : this({args})";
         }
 
@@ -775,7 +834,10 @@ public sealed class FacetGenerator : IIncrementalGenerator
             {
                 // No custom mapping - copy properties directly
                 foreach (var m in model.Members.Where(x => !x.IsInitOnly))
-                    sb.AppendLine($"        this.{m.Name} = source.{m.Name};");
+                {
+                    var sourceValue = GetSourceValueExpression(m, "source");
+                    sb.AppendLine($"        this.{m.Name} = {sourceValue};");
+                }
             }
         }
         else if (hasCustomMapping && !model.HasExistingPrimaryConstructor)
@@ -811,13 +873,30 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 foreach (var m in model.Members)
                 {
                     var comma = m == model.Members.Last() ? "" : ",";
-                    sb.AppendLine($"            {m.Name} = source.{m.Name}{comma}");
+                    var sourceValue = GetSourceValueExpression(m, "source");
+                    sb.AppendLine($"            {m.Name} = {sourceValue}{comma}");
                 }
                 sb.AppendLine("        };");
             }
 
             sb.AppendLine("    }");
         }
+    }
+
+    /// <summary>
+    /// Gets the appropriate source value expression for a member.
+    /// For child facets, returns "new ChildFacetType(source.PropertyName)".
+    /// For regular members, returns "source.PropertyName".
+    /// </summary>
+    private static string GetSourceValueExpression(FacetMember member, string sourceVariableName)
+    {
+        if (member.IsChildFacet)
+        {
+            // Use the child facet's generated constructor
+            return $"new {member.TypeName}({sourceVariableName}.{member.Name})";
+        }
+
+        return $"{sourceVariableName}.{member.Name}";
     }
 
     private static void GenerateFactoryMethodForExistingPrimaryConstructor(StringBuilder sb, FacetTargetModel model, bool hasCustomMapping)
@@ -998,7 +1077,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         if (model.SourceHasPositionalConstructor)
         {
             // For source types with positional constructors (like records), use positional syntax
-            var constructorArgs = string.Join(", ", model.Members.Select(m => $"this.{m.Name}"));
+            var constructorArgs = string.Join(", ", model.Members.Select(m => GetBackToValueExpression(m)));
             sb.AppendLine($"        return new {model.SourceTypeName}({constructorArgs});");
         }
         else
@@ -1006,22 +1085,23 @@ public sealed class FacetGenerator : IIncrementalGenerator
             // For source types without positional constructors, use object initializer syntax
             sb.AppendLine($"        return new {model.SourceTypeName}");
             sb.AppendLine("        {");
-            
+
             var propertyAssignments = new List<string>();
-            
+
             // Add assignments for included properties
             foreach (var member in model.Members)
             {
-                propertyAssignments.Add($"            {member.Name} = this.{member.Name}");
+                var backToValue = GetBackToValueExpression(member);
+                propertyAssignments.Add($"            {member.Name} = {backToValue}");
             }
-            
+
             // Add default values for excluded required members
             foreach (var excludedMember in model.ExcludedRequiredMembers)
             {
                 var defaultValue = GeneratorUtilities.GetDefaultValueForType(excludedMember.TypeName);
                 propertyAssignments.Add($"            {excludedMember.Name} = {defaultValue}");
             }
-            
+
             sb.AppendLine(string.Join(",\n", propertyAssignments));
             sb.AppendLine("        };");
         }
@@ -1029,6 +1109,21 @@ public sealed class FacetGenerator : IIncrementalGenerator
         sb.AppendLine("    }");
     }
 
+    /// <summary>
+    /// Gets the appropriate value expression for mapping back to the source type.
+    /// For child facets, returns "this.PropertyName.BackTo()".
+    /// For regular members, returns "this.PropertyName".
+    /// </summary>
+    private static string GetBackToValueExpression(FacetMember member)
+    {
+        if (member.IsChildFacet)
+        {
+            // Use the child facet's generated BackTo method
+            return $"this.{member.Name}.BackTo()";
+        }
+
+        return $"this.{member.Name}";
+    }
 
 }
 
