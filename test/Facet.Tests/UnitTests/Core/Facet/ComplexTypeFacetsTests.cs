@@ -364,4 +364,215 @@ public class ComplexTypeFacetsTests
         dto.HeadquartersAddress.Should().BeOfType<AddressFacet>();
         dto.HeadquartersAddress.Should().NotBeAssignableTo<AddressEntity>();
     }
+
+    [Fact]
+    public void ToFacet_ShouldMapNestedFacets_WhenUsingExtensionMethod()
+    {
+        // Arrange
+        var staffMember = new StaffMember
+        {
+            Id = 1,
+            FirstName = "John",
+            LastName = "Doe",
+            Email = "john.doe@example.com",
+            PasswordHash = "secrethash123",
+            HireDate = new DateTime(2020, 1, 15),
+            Salary = 75000m,
+            Company = new CompanyEntity
+            {
+                Id = 10,
+                Name = "Tech Solutions",
+                Industry = "Software",
+                HeadquartersAddress = new AddressEntity
+                {
+                    Street = "456 Tech Blvd",
+                    City = "Austin",
+                    State = "TX",
+                    ZipCode = "78701",
+                    Country = "USA"
+                }
+            },
+            HomeAddress = new AddressEntity
+            {
+                Street = "789 Residential Ave",
+                City = "Round Rock",
+                State = "TX",
+                ZipCode = "78664",
+                Country = "USA"
+            }
+        };
+
+        // Act
+        var dto = staffMember.ToFacet<StaffMemberFacet>();
+
+        // Assert
+        dto.Should().NotBeNull();
+        dto.Id.Should().Be(1);
+        dto.FirstName.Should().Be("John");
+        dto.LastName.Should().Be("Doe");
+        dto.Email.Should().Be("john.doe@example.com");
+
+        // Verify nested Company facet
+        dto.Company.Should().NotBeNull();
+        dto.Company.Should().BeOfType<CompanyFacet>();
+        dto.Company.Id.Should().Be(10);
+        dto.Company.Name.Should().Be("Tech Solutions");
+        dto.Company.Industry.Should().Be("Software");
+
+        // Verify nested Address within Company
+        dto.Company.HeadquartersAddress.Should().NotBeNull();
+        dto.Company.HeadquartersAddress.Should().BeOfType<AddressFacet>();
+        dto.Company.HeadquartersAddress.Street.Should().Be("456 Tech Blvd");
+        dto.Company.HeadquartersAddress.City.Should().Be("Austin");
+
+        // Verify HomeAddress facet
+        dto.HomeAddress.Should().NotBeNull();
+        dto.HomeAddress.Should().BeOfType<AddressFacet>();
+        dto.HomeAddress.Street.Should().Be("789 Residential Ave");
+        dto.HomeAddress.City.Should().Be("Round Rock");
+    }
+
+    [Fact]
+    public void SelectFacets_ShouldMapNestedFacets_WhenProjectingCollection()
+    {
+        // Arrange
+        var staffMembers = new[]
+        {
+            new StaffMember
+            {
+                Id = 1,
+                FirstName = "Alice",
+                LastName = "Smith",
+                Email = "alice@example.com",
+                Company = new CompanyEntity
+                {
+                    Id = 100,
+                    Name = "Company A",
+                    Industry = "Tech",
+                    HeadquartersAddress = new AddressEntity { City = "New York", State = "NY" }
+                },
+                HomeAddress = new AddressEntity { City = "Brooklyn", State = "NY" }
+            },
+            new StaffMember
+            {
+                Id = 2,
+                FirstName = "Bob",
+                LastName = "Johnson",
+                Email = "bob@example.com",
+                Company = new CompanyEntity
+                {
+                    Id = 200,
+                    Name = "Company B",
+                    Industry = "Finance",
+                    HeadquartersAddress = new AddressEntity { City = "Chicago", State = "IL" }
+                },
+                HomeAddress = new AddressEntity { City = "Evanston", State = "IL" }
+            }
+        }.AsQueryable();
+
+        // Act
+        var dtos = staffMembers.SelectFacets<StaffMemberFacet>().ToList();
+
+        // Assert
+        dtos.Should().HaveCount(2);
+
+        // First staff member
+        dtos[0].FirstName.Should().Be("Alice");
+        dtos[0].Company.Should().BeOfType<CompanyFacet>();
+        dtos[0].Company.Name.Should().Be("Company A");
+        dtos[0].Company.HeadquartersAddress.Should().BeOfType<AddressFacet>();
+        dtos[0].Company.HeadquartersAddress.City.Should().Be("New York");
+        dtos[0].HomeAddress.Should().BeOfType<AddressFacet>();
+        dtos[0].HomeAddress.City.Should().Be("Brooklyn");
+
+        // Second staff member
+        dtos[1].FirstName.Should().Be("Bob");
+        dtos[1].Company.Should().BeOfType<CompanyFacet>();
+        dtos[1].Company.Name.Should().Be("Company B");
+        dtos[1].Company.HeadquartersAddress.Should().BeOfType<AddressFacet>();
+        dtos[1].Company.HeadquartersAddress.City.Should().Be("Chicago");
+        dtos[1].HomeAddress.Should().BeOfType<AddressFacet>();
+        dtos[1].HomeAddress.City.Should().Be("Evanston");
+    }
+
+    [Fact]
+    public void ToFacet_WithTypedParameters_ShouldMapNestedFacets()
+    {
+        // Arrange
+        var company = new CompanyEntity
+        {
+            Id = 1,
+            Name = "Acme Corp",
+            Industry = "Technology",
+            HeadquartersAddress = new AddressEntity
+            {
+                Street = "123 Main St",
+                City = "San Francisco",
+                State = "CA",
+                ZipCode = "94105",
+                Country = "USA"
+            }
+        };
+
+        // Act - Using typed ToFacet for better performance
+        var dto = company.ToFacet<CompanyEntity, CompanyFacet>();
+
+        // Assert
+        dto.Should().NotBeNull();
+        dto.Id.Should().Be(1);
+        dto.Name.Should().Be("Acme Corp");
+        dto.Industry.Should().Be("Technology");
+
+        // Child facet should be automatically mapped
+        dto.HeadquartersAddress.Should().NotBeNull();
+        dto.HeadquartersAddress.Should().BeOfType<AddressFacet>();
+        dto.HeadquartersAddress.Street.Should().Be("123 Main St");
+        dto.HeadquartersAddress.City.Should().Be("San Francisco");
+        dto.HeadquartersAddress.State.Should().Be("CA");
+        dto.HeadquartersAddress.ZipCode.Should().Be("94105");
+        dto.HeadquartersAddress.Country.Should().Be("USA");
+    }
+
+    [Fact]
+    public void SelectFacets_WithTypedParameters_ShouldMapNestedFacets()
+    {
+        // Arrange
+        var companies = new[]
+        {
+            new CompanyEntity
+            {
+                Id = 1,
+                Name = "Company A",
+                Industry = "Industry A",
+                HeadquartersAddress = new AddressEntity { City = "City A", State = "CA" }
+            },
+            new CompanyEntity
+            {
+                Id = 2,
+                Name = "Company B",
+                Industry = "Industry B",
+                HeadquartersAddress = new AddressEntity { City = "City B", State = "NY" }
+            }
+        }.AsQueryable();
+
+        // Act - Using typed SelectFacets for better performance
+        var dtos = companies.SelectFacets<CompanyEntity, CompanyFacet>().ToList();
+
+        // Assert
+        dtos.Should().HaveCount(2);
+
+        dtos[0].Id.Should().Be(1);
+        dtos[0].Name.Should().Be("Company A");
+        dtos[0].HeadquartersAddress.Should().NotBeNull();
+        dtos[0].HeadquartersAddress.Should().BeOfType<AddressFacet>();
+        dtos[0].HeadquartersAddress.City.Should().Be("City A");
+        dtos[0].HeadquartersAddress.State.Should().Be("CA");
+
+        dtos[1].Id.Should().Be(2);
+        dtos[1].Name.Should().Be("Company B");
+        dtos[1].HeadquartersAddress.Should().NotBeNull();
+        dtos[1].HeadquartersAddress.Should().BeOfType<AddressFacet>();
+        dtos[1].HeadquartersAddress.City.Should().Be("City B");
+        dtos[1].HeadquartersAddress.State.Should().Be("NY");
+    }
 }
