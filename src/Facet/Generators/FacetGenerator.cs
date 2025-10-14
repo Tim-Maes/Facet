@@ -33,8 +33,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// Extracts child facet mappings from the Children parameter.
-    /// Returns a dictionary mapping source type full names to child facet type information.
+    /// Extracts nested facet mappings from the NestedFacets parameter.
+    /// Returns a dictionary mapping source type full names to nested facet type information.
     /// </summary>
     private static Dictionary<string, (string childFacetTypeName, string sourceTypeName)> ExtractChildFacetMappings(
         AttributeData attribute,
@@ -42,7 +42,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
     {
         var mappings = new Dictionary<string, (string, string)>();
 
-        var childrenArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "Children");
+        var childrenArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "NestedFacets");
         if (childrenArg.Value.Kind != TypedConstantKind.Error && !childrenArg.Value.IsNull)
         {
             if (childrenArg.Value.Kind == TypedConstantKind.Array)
