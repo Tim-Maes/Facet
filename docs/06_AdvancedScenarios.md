@@ -107,7 +107,157 @@ public partial class LegacyEntityDto;
 public partial class LegacyEntityPropsOnlyDto;
 ```
 
-## Nested Types and Inheritance
+## Nested Facets - Composing DTOs
+
+Facet supports automatic mapping of nested objects through the `NestedFacets` parameter. This eliminates the need to manually declare nested properties and handle their mapping.
+
+### Basic Nested Facets
+
+```csharp
+// Source entities with nested structure
+public class Address
+{
+    public string Street { get; set; }
+    public string City { get; set; }
+    public string State { get; set; }
+    public string ZipCode { get; set; }
+}
+
+public class Company
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public Address HeadquartersAddress { get; set; }
+}
+
+// Facet DTOs with automatic nested mapping
+[Facet(typeof(Address))]
+public partial record AddressDto;
+
+[Facet(typeof(Company), NestedFacets = [typeof(AddressDto)])]
+public partial record CompanyDto;
+
+// Usage
+var company = new Company
+{
+    Name = "Acme Corp",
+    HeadquartersAddress = new Address { City = "San Francisco" }
+};
+
+var companyDto = new CompanyDto(company);
+// companyDto.HeadquartersAddress is automatically an AddressDto
+```
+
+### Multi-Level Nesting
+
+```csharp
+public class Employee
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public string PasswordHash { get; set; }
+    public decimal Salary { get; set; }
+    public Company Company { get; set; }
+    public Address HomeAddress { get; set; }
+}
+
+public class Department
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public Company Company { get; set; }
+    public Employee Manager { get; set; }
+}
+
+// Employee DTO with multiple nested facets
+[Facet(typeof(Employee), exclude: ["PasswordHash", "Salary"],
+    NestedFacets = [typeof(CompanyDto), typeof(AddressDto)])]
+public partial record EmployeeDto;
+
+// Department DTO with deeply nested structure
+[Facet(typeof(Department), NestedFacets = [typeof(CompanyDto), typeof(EmployeeDto)])]
+public partial record DepartmentDto;
+
+// Usage - handles 3+ levels of nesting automatically
+var department = new Department
+{
+    Name = "Engineering",
+    Company = new Company
+    {
+        Name = "Tech Corp",
+        HeadquartersAddress = new Address { City = "Seattle" }
+    },
+    Manager = new Employee
+    {
+        FirstName = "Jane",
+        Company = new Company
+        {
+            Name = "Tech Corp",
+            HeadquartersAddress = new Address { City = "Seattle" }
+        },
+        HomeAddress = new Address { City = "Bellevue" }
+    }
+};
+
+var departmentDto = new DepartmentDto(department);
+// departmentDto.Manager.Company.HeadquartersAddress.City == "Seattle"
+```
+
+### How NestedFacets Works
+
+**Automatic Type Detection:**
+- The generator inspects each nested facet's source type
+- Properties in the parent source that match nested facet source types are automatically replaced
+- For example, if `CompanyDto` facets from `Company`, any `Company` property becomes `CompanyDto`
+
+**Generated Code:**
+```csharp
+// For: [Facet(typeof(Company), NestedFacets = [typeof(AddressDto)])]
+public partial record CompanyDto
+{
+    public int Id { get; init; }
+    public string Name { get; init; }
+    public AddressDto HeadquartersAddress { get; init; } // Automatically becomes AddressDto
+
+    public CompanyDto(Company source)
+        : this(source.Id, source.Name, new AddressDto(source.HeadquartersAddress)) // Automatic nesting
+    { }
+
+    public Company BackTo()
+    {
+        return new Company
+        {
+            Id = this.Id,
+            Name = this.Name,
+            HeadquartersAddress = this.HeadquartersAddress.BackTo() // Automatic reverse mapping
+        };
+    }
+}
+```
+
+### EF Core Projections with Nested Facets
+
+```csharp
+// Works seamlessly with Entity Framework Core
+var companies = await dbContext.Companies
+    .Where(c => c.IsActive)
+    .Select(CompanyDto.Projection)
+    .ToListAsync();
+
+// The generated projection handles nested types automatically:
+// c => new CompanyDto(c.Id, c.Name, new AddressDto(c.HeadquartersAddress))
+```
+
+### Benefits
+
+1. **No Manual Property Declarations**: Don't redeclare nested properties
+2. **Automatic Constructor Mapping**: Nested constructors are called automatically
+3. **BackTo Support**: Reverse mapping works for nested structures
+4. **EF Core Compatible**: Projections work in database queries
+5. **Multi-Level Support**: Handle 3+ levels of nesting
+
+## Inheritance and Base Classes
 
 ### Including Properties from Base Classes
 

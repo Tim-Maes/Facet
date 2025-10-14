@@ -23,6 +23,7 @@ public partial class MyFacet { }
 | `sourceType`                   | `Type`    | The type to project from (required).                                        |
 | `exclude`                      | `string[]`| Names of properties/fields to exclude from the generated type (optional).   |
 | `Include`                      | `string[]`| Names of properties/fields to include in the generated type (optional). Mutually exclusive with `exclude`. |
+| `NestedFacets`                 | `Type[]?` | Array of nested facet types to automatically map nested objects (default: null). |
 | `IncludeFields`                | `bool`    | Include public fields from the source type (default: false for include mode, false for exclude mode). |
 | `GenerateConstructor`          | `bool`    | Generate a constructor that copies values from the source (default: true).   |
 | `GenerateParameterlessConstructor` | `bool` | Generate a parameterless constructor for testing and initialization (default: true). |
@@ -31,7 +32,7 @@ public partial class MyFacet { }
 | `GenerateBackTo`               | `bool`    | Generate a method to map back from facet to source type (default: true).    |
 | `PreserveInitOnlyProperties`   | `bool`    | Preserve init-only modifiers from source properties (default: true for records). |
 | `PreserveRequiredProperties`   | `bool`    | Preserve required modifiers from source properties (default: true for records). |
-| `NullableProperties`           | `bool`    | Make all properties nullable in the generated facet |
+| `NullableProperties`           | `bool`    | Make all properties nullable in the generated facet (default: false). |
 | `UseFullName`                  | `bool`    | Use full type name in generated file names to avoid collisions (default: false). |
 
 ## Include vs Exclude
@@ -112,6 +113,55 @@ var query = new ProductQueryDto
 ```
 
 **Note:** When using `NullableProperties = true`, it's recommended to set `GenerateBackTo = false` since mapping nullable properties back to non-nullable source properties is not logically sound.
+
+### Nested Facets for Composing DTOs
+```csharp
+// Define facets for nested types
+[Facet(typeof(Address))]
+public partial record AddressDto;
+
+[Facet(typeof(Company), NestedFacets = [typeof(AddressDto)])]
+public partial record CompanyDto;
+
+[Facet(typeof(Employee),
+    exclude: ["PasswordHash", "Salary"],
+    NestedFacets = [typeof(CompanyDto), typeof(AddressDto)])]
+public partial record EmployeeDto;
+
+// Usage - automatically handles nested mapping
+var employee = new Employee
+{
+    FirstName = "John",
+    Company = new Company
+    {
+        Name = "Acme Corp",
+        HeadquartersAddress = new Address { City = "San Francisco" }
+    },
+    HomeAddress = new Address { City = "Oakland" }
+};
+
+var employeeDto = new EmployeeDto(employee);
+// employeeDto.Company is CompanyDto
+// employeeDto.Company.HeadquartersAddress is AddressDto
+// employeeDto.HomeAddress is AddressDto
+
+// BackTo also handles nested types automatically
+var mappedEmployee = employeeDto.BackTo();
+// All nested objects are properly reconstructed
+```
+
+**How NestedFacets Works:**
+- The generator automatically detects which properties in your source type match the source types of the nested facets
+- For each match, it replaces the property type with the nested facet type
+- Constructors automatically call `new NestedFacetType(source.Property)` for nested properties
+- Projections work seamlessly for EF Core queries through constructor chaining
+- BackTo methods call `.BackTo()` on nested facets to reconstruct the original type hierarchy
+
+**Benefits:**
+- No manual property declarations for nested types
+- Automatic mapping in constructors, projections, and BackTo methods
+- Works with multiple levels of nesting
+- Supports multiple nested facets on the same parent type
 
 ## When to Use Include vs Exclude
 
