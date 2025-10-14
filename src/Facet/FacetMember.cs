@@ -12,10 +12,10 @@ internal sealed class FacetMember : IEquatable<FacetMember>
     public bool IsRequired { get; }
     public bool IsReadOnly { get; }
     public string? XmlDocumentation { get; }
-    public bool IsChildFacet { get; }
-    public string? ChildFacetSourceTypeName { get; }
+    public bool IsNestedFacet { get; }
+    public string? NestedFacetSourceTypeName { get; }
 
-    public FacetMember(string name, string typeName, FacetMemberKind kind, bool isValueType, bool isInitOnly = false, bool isRequired = false, bool isReadOnly = false, string? xmlDocumentation = null, bool isChildFacet = false, string? childFacetSourceTypeName = null)
+    public FacetMember(string name, string typeName, FacetMemberKind kind, bool isValueType, bool isInitOnly = false, bool isRequired = false, bool isReadOnly = false, string? xmlDocumentation = null, bool isNestedFacet = false, string? nestedFacetSourceTypeName = null)
     {
         Name = name;
         TypeName = typeName;
@@ -25,8 +25,8 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         IsRequired = isRequired;
         IsReadOnly = isReadOnly;
         XmlDocumentation = xmlDocumentation;
-        IsChildFacet = isChildFacet;
-        ChildFacetSourceTypeName = childFacetSourceTypeName;
+        IsNestedFacet = isNestedFacet;
+        NestedFacetSourceTypeName = nestedFacetSourceTypeName;
     }
 
     public bool Equals(FacetMember? other) =>
@@ -38,8 +38,8 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         IsRequired == other.IsRequired &&
         IsReadOnly == other.IsReadOnly &&
         XmlDocumentation == other.XmlDocumentation &&
-        IsChildFacet == other.IsChildFacet &&
-        ChildFacetSourceTypeName == other.ChildFacetSourceTypeName;
+        IsNestedFacet == other.IsNestedFacet &&
+        NestedFacetSourceTypeName == other.NestedFacetSourceTypeName;
 
     public override bool Equals(object? obj) => obj is FacetMember other && Equals(other);
 
@@ -55,8 +55,8 @@ internal sealed class FacetMember : IEquatable<FacetMember>
             hash = hash * 31 + IsRequired.GetHashCode();
             hash = hash * 31 + IsReadOnly.GetHashCode();
             hash = hash * 31 + (XmlDocumentation?.GetHashCode() ?? 0);
-            hash = hash * 31 + IsChildFacet.GetHashCode();
-            hash = hash * 31 + (ChildFacetSourceTypeName?.GetHashCode() ?? 0);
+            hash = hash * 31 + IsNestedFacet.GetHashCode();
+            hash = hash * 31 + (NestedFacetSourceTypeName?.GetHashCode() ?? 0);
             return hash;
         }
     }

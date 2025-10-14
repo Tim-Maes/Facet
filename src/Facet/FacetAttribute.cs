@@ -103,10 +103,6 @@ public sealed class FacetAttribute : Attribute
     /// This feature simplifies nested type handling by:
     /// <list type="bullet">
     /// <item>Automatically detecting which properties should use nested facets based on the nested facet's source type</item>
-    /// <item>Generating proper mapping code in constructors
-    /// <item>Handling projections for EF Core queries</item>
-    /// <item>Supporting BackTo mapping (converting nested facets back to source types)</item>
-    /// <item>Working with collections</item>
     /// </list>
     /// </remarks>
     public Type[]? NestedFacets { get; set; }

@@ -36,7 +36,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
     /// Extracts nested facet mappings from the NestedFacets parameter.
     /// Returns a dictionary mapping source type full names to nested facet type information.
     /// </summary>
-    private static Dictionary<string, (string childFacetTypeName, string sourceTypeName)> ExtractChildFacetMappings(
+    private static Dictionary<string, (string childFacetTypeName, string sourceTypeName)> ExtractNestedFacetMappings(
         AttributeData attribute,
         Compilation compilation)
     {
@@ -141,8 +141,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
         var preserveRequired = GetNamedArg(attribute.NamedArguments, "PreserveRequiredProperties", preserveRequiredDefault);
         var nullableProperties = GetNamedArg(attribute.NamedArguments, "NullableProperties", false);
 
-        // Extract Children parameter and build mapping from source type to child facet type
-        var childFacetMappings = ExtractChildFacetMappings(attribute, context.SemanticModel.Compilation);
+        // Extract nested facets parameter and build mapping from source type to child facet type
+        var nestedFacetMappings = ExtractNestedFacetMappings(attribute, context.SemanticModel.Compilation);
 
         var members = new List<FacetMember>();
         var excludedRequiredMembers = new List<FacetMember>();
@@ -197,18 +197,18 @@ public sealed class FacetGenerator : IIncrementalGenerator
 
                 var typeName = GeneratorUtilities.GetTypeNameWithNullability(p.Type);
                 var propertyTypeName = p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                bool isChildFacet = false;
-                string? childFacetSourceTypeName = null;
+                bool isNestedFacet = false;
+                string? nestedFacetSourceTypeName = null;
 
                 // Check if this property's type matches a child facet source type
-                if (childFacetMappings.TryGetValue(propertyTypeName, out var childMapping))
+                if (nestedFacetMappings.TryGetValue(propertyTypeName, out var nestedMapping))
                 {
-                    typeName = childMapping.childFacetTypeName;
-                    isChildFacet = true;
-                    childFacetSourceTypeName = childMapping.sourceTypeName;
+                    typeName = nestedMapping.childFacetTypeName;
+                    isNestedFacet = true;
+                    nestedFacetSourceTypeName = nestedMapping.sourceTypeName;
                 }
 
-                if (nullableProperties && !isChildFacet)
+                if (nullableProperties && !isNestedFacet)
                 {
                     typeName = GeneratorUtilities.MakeNullable(typeName);
                 }
@@ -222,8 +222,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
                     shouldPreserveRequired,
                     false, // Properties are not readonly
                     memberXmlDocumentation,
-                    isChildFacet,
-                    childFacetSourceTypeName));
+                    isNestedFacet,
+                    nestedFacetSourceTypeName));
                 addedMembers.Add(p.Name);
             }
             else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
@@ -885,14 +885,14 @@ public sealed class FacetGenerator : IIncrementalGenerator
 
     /// <summary>
     /// Gets the appropriate source value expression for a member.
-    /// For child facets, returns "new ChildFacetType(source.PropertyName)".
+    /// For nested facets, returns "new NestedFacetType(source.PropertyName)".
     /// For regular members, returns "source.PropertyName".
     /// </summary>
     private static string GetSourceValueExpression(FacetMember member, string sourceVariableName)
     {
-        if (member.IsChildFacet)
+        if (member.IsNestedFacet)
         {
-            // Use the child facet's generated constructor
+            // Use the nested facet's generated constructor
             return $"new {member.TypeName}({sourceVariableName}.{member.Name})";
         }
 
@@ -1116,7 +1116,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
     /// </summary>
     private static string GetBackToValueExpression(FacetMember member)
     {
-        if (member.IsChildFacet)
+        if (member.IsNestedFacet)
         {
             // Use the child facet's generated BackTo method
             return $"this.{member.Name}.BackTo()";
