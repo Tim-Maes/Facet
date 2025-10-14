@@ -44,11 +44,11 @@ public class DepartmentEntity
 [Facet(typeof(AddressEntity))]
 public partial record AddressFacet;
 
-[Facet(typeof(CompanyEntity), NestedFacets = new[] { typeof(AddressFacet) })]
+[Facet(typeof(CompanyEntity), NestedFacets = [typeof(AddressFacet)])]
 public partial record CompanyFacet;
 
-[Facet(typeof(StaffMember), exclude: ["PasswordHash", "Salary"], NestedFacets = new[] { typeof(CompanyFacet), typeof(AddressFacet) })]
+[Facet(typeof(StaffMember), exclude: ["PasswordHash", "Salary"], NestedFacets = [typeof(CompanyFacet), typeof(AddressFacet)])]
 public partial record StaffMemberFacet;
 
-[Facet(typeof(DepartmentEntity), NestedFacets = new[] { typeof(CompanyFacet), typeof(StaffMemberFacet) })]
+[Facet(typeof(DepartmentEntity), NestedFacets = [typeof(CompanyFacet), typeof(StaffMemberFacet)])]
 public partial record DepartmentFacet;
