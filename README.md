@@ -30,8 +30,8 @@
 
 Facetting is the process of defining **focused views** of a larger model at compile time.
 
-Instead of manually writing separate DTOs, mappers, and projections, **Facet** allows you to declare what you want to keep, and generates everything else.
-It generates partial classes, records, structs, or record structs with constructors, LINQ projections, and even supports custom mappings, all at compile time, with zero runtime cost.
+Instead of manually writing separate DTOs, mappers, and projections, **Facet** allows you to declare what you want, and generates everything else.
+Generate classes, records, structs, or record structs with constructors, LINQ projections, and even supports custom mappings, all at compile time, with zero runtime cost.
 
 You can think of it like **carving out a specific facet** of a gem:
 
@@ -50,11 +50,11 @@ You can think of it like **carving out a specific facet** of a gem:
 - :white_check_mark: Define what to include, or exclude fields/properties you don't want
 - :white_check_mark: Include/redact public fields
 - :white_check_mark: Constructors & LINQ projection expressions
-- :white_check_mark: **Automatic nested facet mapping**, compose DTOs from other DTOs with `NestedFacets`
+- :white_check_mark: Handles **complex and nested objects** with `NestedFacets`
 - :white_check_mark: Full mapping support with custom mapping configurations
-- :white_check_mark: Auto-generate complete CRUD DTO sets with `[GenerateDtos]`
 - :white_check_mark: **Expression transformation and mapping utilities** for reusing business logic across entities and DTOs
-- :white_check_mark: Preserves member and type XML documentation
+- :white_check_mark: Preserve member and type XML documentation
+- :white_check_mark: Auto-generate complete CRUD DTO sets with `[GenerateDtos]`
 
 ## :rocket: Quick start 
 
@@ -88,23 +88,23 @@ dotnet add package Facet.Mapping.Expressions
 string[] excludeFields = { "Password", "Email" };
 
 [Facet(typeof(User), exclude: excludeFields)]
-public partial class UserWithoutEmail { }
+public partial record UserWithoutEmail;
 
 // Include only specific properties
 [Facet(typeof(User), Include = new[] { "FirstName", "LastName", "Email" })]
-public partial class UserContactDto { }
+public partial record UserContactDto;
 
 // Include public fields
 [Facet(typeof(Entity), IncludeFields = true)]
-public partial class EntityDto { }
+public partial record EntityDto;
 
 // Include specific fields and properties
 [Facet(typeof(Entity), Include = new[] { "Name", "Status" }, IncludeFields = true)]
-public partial class EntitySummaryDto { }
+public partial record EntitySummaryDto;
 
 // Make all properties nullable for query/filter scenarios
 [Facet(typeof(Product), "InternalNotes", NullableProperties = true, GenerateBackTo = false)]
-public partial class ProductQueryDto { }
+public partial record ProductQueryDto;
 
 // Automatically map nested types with NestedFacets
 [Facet(typeof(Address))]
