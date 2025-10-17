@@ -447,11 +447,20 @@ public sealed class FacetGenerator : IIncrementalGenerator
         {
             case TypedConstantKind.Primitive:
                 if (constant.Value is string strValue)
-                    return $"\"{strValue.Replace("\"", "\\\"")}\"";
+                {
+                    var escaped = strValue.Replace("\\", "\\\\").Replace("\"", "\\\"");
+                    return $"\"{escaped}\"";
+                }
                 if (constant.Value is bool boolValue)
                     return boolValue ? "true" : "false";
                 if (constant.Value is char charValue)
                     return $"'{charValue}'";
+                if (constant.Value is double doubleValue)
+                    return doubleValue.ToString(System.Globalization.CultureInfo.InvariantCulture) + "d";
+                if (constant.Value is float floatValue)
+                    return floatValue.ToString(System.Globalization.CultureInfo.InvariantCulture) + "f";
+                if (constant.Value is decimal decimalValue)
+                    return decimalValue.ToString(System.Globalization.CultureInfo.InvariantCulture) + "m";
                 return constant.Value?.ToString() ?? "null";
 
             case TypedConstantKind.Enum:

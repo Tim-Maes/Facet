@@ -123,6 +123,50 @@ public class CopyAttributesTests
         attributes.Should().Contain(a => a is RequiredAttribute);
         attributes.Should().Contain(a => a is StringLengthAttribute);
     }
+
+    [Fact]
+    public void Facet_ShouldCopyAttributes_WithNestedFacets()
+    {
+        var orderDtoType = typeof(ComplexOrderDto);
+        var customerProperty = orderDtoType.GetProperty("Customer");
+        var orderNumberProperty = orderDtoType.GetProperty("OrderNumber");
+        var totalAmountProperty = orderDtoType.GetProperty("TotalAmount");
+
+        orderNumberProperty.Should().NotBeNull();
+        orderNumberProperty!.GetCustomAttribute<RequiredAttribute>().Should().NotBeNull();
+        orderNumberProperty.GetCustomAttribute<StringLengthAttribute>()?.MaximumLength.Should().Be(20);
+
+        totalAmountProperty.Should().NotBeNull();
+        totalAmountProperty!.GetCustomAttribute<RangeAttribute>().Should().NotBeNull();
+
+        customerProperty.Should().NotBeNull();
+        customerProperty!.PropertyType.Should().Be(typeof(ComplexCustomerDto));
+    }
+
+    [Fact]
+    public void Facet_ShouldCopyAttributes_OnNestedFacetProperties()
+    {
+        var customerDtoType = typeof(ComplexCustomerDto);
+        var emailProperty = customerDtoType.GetProperty("Email");
+        var fullNameProperty = customerDtoType.GetProperty("FullName");
+
+        emailProperty.Should().NotBeNull();
+        emailProperty!.GetCustomAttribute<RequiredAttribute>().Should().NotBeNull();
+        emailProperty.GetCustomAttribute<EmailAddressAttribute>().Should().NotBeNull();
+
+        fullNameProperty.Should().NotBeNull();
+        fullNameProperty!.GetCustomAttribute<StringLengthAttribute>()?.MaximumLength.Should().Be(100);
+    }
+
+    [Fact]
+    public void Facet_ShouldCopyCustomAttributes()
+    {
+        var productType = typeof(ComplexProductDto);
+        var skuProperty = productType.GetProperty("Sku");
+
+        skuProperty.Should().NotBeNull();
+        skuProperty!.GetCustomAttribute<RegularExpressionAttribute>().Should().NotBeNull();
+    }
 }
 
 // Source model with data annotations
@@ -160,5 +204,76 @@ public partial class UserWithDataAnnotationsDto
 // DTO with CopyAttributes = false (default)
 [Facet(typeof(UserWithDataAnnotations), "Password", "PhoneNumber", "Age")]
 public partial class UserWithDataAnnotationsNoCopyDto
+{
+}
+
+public class ComplexCustomer
+{
+    public int Id { get; set; }
+
+    [Required]
+    [StringLength(100)]
+    public string FullName { get; set; } = string.Empty;
+
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+
+    [Phone]
+    public string? PhoneNumber { get; set; }
+}
+
+[Facet(typeof(ComplexCustomer), "PhoneNumber", CopyAttributes = true)]
+public partial class ComplexCustomerDto
+{
+}
+
+public class ComplexOrder
+{
+    public int Id { get; set; }
+
+    [Required]
+    [StringLength(20)]
+    public string OrderNumber { get; set; } = string.Empty;
+
+    [Range(0.01, 1000000)]
+    public decimal TotalAmount { get; set; }
+
+    public DateTime OrderDate { get; set; }
+
+    public ComplexCustomer Customer { get; set; } = null!;
+
+    public string? InternalNotes { get; set; }
+}
+
+[Facet(typeof(ComplexOrder), "InternalNotes", CopyAttributes = true, NestedFacets = [typeof(ComplexCustomerDto)])]
+public partial class ComplexOrderDto
+{
+}
+
+public class ComplexProduct
+{
+    [Required]
+    [StringLength(50)]
+    public string Name { get; set; } = string.Empty;
+
+    [Required]
+    [RegularExpression(@"^[A-Z]{3}-\d{4}$")]
+    public string Sku { get; set; } = string.Empty;
+
+    [Range(0, 10000)]
+    public decimal Price { get; set; }
+
+    [StringLength(500)]
+    public string? Description { get; set; }
+
+    [Url]
+    public string? ImageUrl { get; set; }
+
+    public bool IsActive { get; set; }
+}
+
+[Facet(typeof(ComplexProduct), "IsActive", "ImageUrl", CopyAttributes = true)]
+public partial class ComplexProductDto
 {
 }
