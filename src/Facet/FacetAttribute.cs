@@ -108,6 +108,28 @@ public sealed class FacetAttribute : Attribute
     public Type[]? NestedFacets { get; set; }
 
     /// <summary>
+    /// When true, copies attributes from the source type members to the generated facet members.
+    /// Only copies attributes that are valid on the target (excludes internal compiler attributes and non-copiable attributes).
+    /// Default is false.
+    /// </summary>
+    /// <remarks>
+    /// This feature will automatically filter out:
+    /// <list type="bullet">
+    /// <item>Internal compiler attributes</item>
+    /// <item>System.ComponentModel.DataAnnotations.ValidationAttribute base class attributes</item>
+    /// <item>Attributes that cannot be applied to the target member type</item>
+    /// </list>
+    /// Commonly copied attributes include:
+    /// <list type="bullet">
+    /// <item>Required, StringLength, Range, EmailAddress, RegularExpression</item>
+    /// <item>Display, DisplayName, Description</item>
+    /// <item>Custom validation attributes</item>
+    /// <item>JSON serialization attributes (JsonPropertyName, etc.)</item>
+    /// </list>
+    /// </remarks>
+    public bool CopyAttributes { get; set; } = false;
+
+    /// <summary>
     /// Creates a new FacetAttribute that targets a given source type and excludes specified members.
     /// </summary>
     /// <param name="sourceType">The type to generate from.</param>

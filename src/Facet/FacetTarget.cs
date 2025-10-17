@@ -27,6 +27,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public bool UseFullName { get; }
     public ImmutableArray<FacetMember> ExcludedRequiredMembers { get; }
     public bool NullableProperties { get; }
+    public bool CopyAttributes { get; }
 
     public FacetTargetModel(
         string name,
@@ -47,7 +48,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         ImmutableArray<string> containingTypes = default,
         bool useFullName = false,
         ImmutableArray<FacetMember> excludedRequiredMembers = default,
-        bool nullableProperties = false)
+        bool nullableProperties = false,
+        bool copyAttributes = false)
     {
         Name = name;
         Namespace = @namespace;
@@ -68,6 +70,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         UseFullName = useFullName;
         ExcludedRequiredMembers = excludedRequiredMembers.IsDefault ? ImmutableArray<FacetMember>.Empty : excludedRequiredMembers;
         NullableProperties = nullableProperties;
+        CopyAttributes = copyAttributes;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -92,7 +95,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && ContainingTypes.SequenceEqual(other.ContainingTypes)
             && ExcludedRequiredMembers.SequenceEqual(other.ExcludedRequiredMembers)
             && UseFullName == other.UseFullName
-            && NullableProperties == other.NullableProperties;
+            && NullableProperties == other.NullableProperties
+            && CopyAttributes == other.CopyAttributes;
     }
 
     public override bool Equals(object? obj) => obj is FacetTargetModel other && Equals(other);
@@ -117,6 +121,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + (TypeXmlDocumentation?.GetHashCode() ?? 0);
             hash = hash * 31 + UseFullName.GetHashCode();
             hash = hash * 31 + NullableProperties.GetHashCode();
+            hash = hash * 31 + CopyAttributes.GetHashCode();
             hash = hash * 31 + Members.Length.GetHashCode();
 
             foreach (var member in Members)

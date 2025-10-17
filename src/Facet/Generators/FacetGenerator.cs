@@ -140,6 +140,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         var preserveInitOnly = GetNamedArg(attribute.NamedArguments, "PreserveInitOnlyProperties", preserveInitOnlyDefault);
         var preserveRequired = GetNamedArg(attribute.NamedArguments, "PreserveRequiredProperties", preserveRequiredDefault);
         var nullableProperties = GetNamedArg(attribute.NamedArguments, "NullableProperties", false);
+        var copyAttributes = GetNamedArg(attribute.NamedArguments, "CopyAttributes", false);
 
         // Extract nested facets parameter and build mapping from source type to child facet type
         var nestedFacetMappings = ExtractNestedFacetMappings(attribute, context.SemanticModel.Compilation);
@@ -213,6 +214,11 @@ public sealed class FacetGenerator : IIncrementalGenerator
                     typeName = GeneratorUtilities.MakeNullable(typeName);
                 }
 
+                // Extract copiable attributes if requested
+                var attributes = copyAttributes
+                    ? ExtractCopiableAttributes(p, FacetMemberKind.Property)
+                    : new List<string>();
+
                 members.Add(new FacetMember(
                     p.Name,
                     typeName,
@@ -223,7 +229,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
                     false, // Properties are not readonly
                     memberXmlDocumentation,
                     isNestedFacet,
-                    nestedFacetSourceTypeName));
+                    nestedFacetSourceTypeName,
+                    attributes));
                 addedMembers.Add(p.Name);
             }
             else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
@@ -256,6 +263,11 @@ public sealed class FacetGenerator : IIncrementalGenerator
                     typeName = GeneratorUtilities.MakeNullable(typeName);
                 }
 
+                // Extract copiable attributes if requested
+                var attributes = copyAttributes
+                    ? ExtractCopiableAttributes(f, FacetMemberKind.Field)
+                    : new List<string>();
+
                 members.Add(new FacetMember(
                     f.Name,
                     typeName,
@@ -264,7 +276,10 @@ public sealed class FacetGenerator : IIncrementalGenerator
                     false, // Fields don't have init-only
                     shouldPreserveRequired,
                     f.IsReadOnly, // Fields can be readonly
-                    memberXmlDocumentation));
+                    memberXmlDocumentation,
+                    false, // Fields don't support nested facets
+                    null,
+                    attributes));
                 addedMembers.Add(f.Name);
             }
         }
@@ -316,7 +331,145 @@ public sealed class FacetGenerator : IIncrementalGenerator
             containingTypes,
             useFullName,
             excludedRequiredMembers.ToImmutableArray(),
-            nullableProperties);
+            nullableProperties,
+            copyAttributes);
+    }
+
+    /// <summary>
+    /// Extracts copiable attributes from a member symbol.
+    /// Filters out internal compiler attributes and non-copiable attributes.
+    /// </summary>
+    private static List<string> ExtractCopiableAttributes(ISymbol member, FacetMemberKind targetKind)
+    {
+        var copiableAttributes = new List<string>();
+
+        foreach (var attr in member.GetAttributes())
+        {
+            if (attr.AttributeClass == null) continue;
+
+            var attributeFullName = attr.AttributeClass.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            // Skip internal compiler-generated attributes
+            if (attributeFullName.StartsWith("global::System.Runtime.CompilerServices.")) continue;
+
+            // Skip the base ValidationAttribute class itself (but allow derived classes)
+            if (attributeFullName == "global::System.ComponentModel.DataAnnotations.ValidationAttribute") continue;
+
+            // Check if attribute can be applied to the target member type
+            var attributeTargets = GetAttributeTargets(attr.AttributeClass);
+            if (targetKind == FacetMemberKind.Property && !attributeTargets.HasFlag(System.AttributeTargets.Property)) continue;
+            if (targetKind == FacetMemberKind.Field && !attributeTargets.HasFlag(System.AttributeTargets.Field)) continue;
+
+            // Generate attribute syntax
+            var attributeSyntax = GenerateAttributeSyntax(attr);
+            if (!string.IsNullOrWhiteSpace(attributeSyntax))
+            {
+                copiableAttributes.Add(attributeSyntax);
+            }
+        }
+
+        return copiableAttributes;
+    }
+
+    /// <summary>
+    /// Gets the AttributeTargets for an attribute type symbol.
+    /// </summary>
+    private static System.AttributeTargets GetAttributeTargets(INamedTypeSymbol attributeType)
+    {
+        var attributeUsage = attributeType.GetAttributes()
+            .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == "System.AttributeUsageAttribute");
+
+        if (attributeUsage != null && attributeUsage.ConstructorArguments.Length > 0)
+        {
+            var targets = attributeUsage.ConstructorArguments[0];
+            if (targets.Value is int targetValue)
+            {
+                return (System.AttributeTargets)targetValue;
+            }
+        }
+
+        // Default to All if no AttributeUsage is specified
+        return System.AttributeTargets.All;
+    }
+
+    /// <summary>
+    /// Generates the C# syntax for an attribute from AttributeData.
+    /// </summary>
+    private static string GenerateAttributeSyntax(AttributeData attribute)
+    {
+        var sb = new StringBuilder();
+
+        // Get the attribute name without the "Attribute" suffix if present
+        var attributeName = attribute.AttributeClass!.Name;
+        if (attributeName.EndsWith("Attribute") && attributeName.Length > 9)
+        {
+            attributeName = attributeName.Substring(0, attributeName.Length - 9);
+        }
+
+        sb.Append($"[{attributeName}");
+
+        var hasArguments = attribute.ConstructorArguments.Length > 0 || attribute.NamedArguments.Length > 0;
+
+        if (hasArguments)
+        {
+            sb.Append("(");
+            var arguments = new List<string>();
+
+            // Constructor arguments
+            foreach (var arg in attribute.ConstructorArguments)
+            {
+                arguments.Add(FormatTypedConstant(arg));
+            }
+
+            // Named arguments
+            foreach (var namedArg in attribute.NamedArguments)
+            {
+                arguments.Add($"{namedArg.Key} = {FormatTypedConstant(namedArg.Value)}");
+            }
+
+            sb.Append(string.Join(", ", arguments));
+            sb.Append(")");
+        }
+
+        sb.Append("]");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Formats a TypedConstant value for attribute syntax generation.
+    /// </summary>
+    private static string FormatTypedConstant(TypedConstant constant)
+    {
+        if (constant.IsNull)
+            return "null";
+
+        switch (constant.Kind)
+        {
+            case TypedConstantKind.Primitive:
+                if (constant.Value is string strValue)
+                    return $"\"{strValue.Replace("\"", "\\\"")}\"";
+                if (constant.Value is bool boolValue)
+                    return boolValue ? "true" : "false";
+                if (constant.Value is char charValue)
+                    return $"'{charValue}'";
+                return constant.Value?.ToString() ?? "null";
+
+            case TypedConstantKind.Enum:
+                var enumType = constant.Type?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                return $"{enumType}.{constant.Value}";
+
+            case TypedConstantKind.Type:
+                if (constant.Value is ITypeSymbol typeValue)
+                    return $"typeof({typeValue.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)})";
+                return "null";
+
+            case TypedConstantKind.Array:
+                var arrayElements = constant.Values.Select(FormatTypedConstant);
+                return $"new[] {{ {string.Join(", ", arrayElements)} }}";
+
+            default:
+                return constant.Value?.ToString() ?? "null";
+        }
     }
 
     /// <summary>
@@ -703,6 +856,12 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 sb.AppendLine($"{memberIndent}{indentedDocumentation}");
             }
 
+            // Generate attributes if any
+            foreach (var attribute in m.Attributes)
+            {
+                sb.AppendLine($"{memberIndent}{attribute}");
+            }
+
             if (m.Kind == FacetMemberKind.Property)
             {
                 var propDef = $"public {m.TypeName} {m.Name}";
@@ -996,6 +1155,12 @@ public sealed class FacetGenerator : IIncrementalGenerator
             "System",
             "System.Linq.Expressions"
         };
+
+        // Add System.ComponentModel.DataAnnotations if any member has attributes
+        if (model.CopyAttributes && model.Members.Any(m => m.Attributes.Count > 0))
+        {
+            namespaces.Add("System.ComponentModel.DataAnnotations");
+        }
 
         var sourceTypeNamespace = ExtractNamespaceFromFullyQualifiedType(model.SourceTypeName);
         if (!string.IsNullOrWhiteSpace(sourceTypeNamespace))
