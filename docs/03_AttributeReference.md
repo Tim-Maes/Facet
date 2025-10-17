@@ -33,6 +33,7 @@ public partial class MyFacet { }
 | `PreserveInitOnlyProperties`   | `bool`    | Preserve init-only modifiers from source properties (default: true for records). |
 | `PreserveRequiredProperties`   | `bool`    | Preserve required modifiers from source properties (default: true for records). |
 | `NullableProperties`           | `bool`    | Make all properties nullable in the generated facet (default: false). |
+| `CopyAttributes`               | `bool`    | Copy attributes from source type members to generated facet members (default: false). See [Attribute Copying](#attribute-copying) below. |
 | `UseFullName`                  | `bool`    | Use full type name in generated file names to avoid collisions (default: false). |
 
 ## Include vs Exclude
@@ -186,6 +187,126 @@ var mappedEmployee = employeeDto.BackTo();
 - Value types (int, bool, DateTime, enums) become nullable (int?, bool?, etc.)
 - Reference types (string, objects) remain reference types but are marked nullable
 - Disable `GenerateBackTo` to avoid mapping issues from nullable to non-nullable types
+
+## Attribute Copying
+
+The `CopyAttributes` parameter allows you to copy attributes from the source type's members to the generated facet members. This is particularly useful for preserving data validation attributes when creating DTOs for API models.
+
+### Usage
+
+```csharp
+public class User
+{
+    public int Id { get; set; }
+
+    [Required]
+    [StringLength(50)]
+    public string FirstName { get; set; } = string.Empty;
+
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+
+    [Range(0, 150)]
+    public int Age { get; set; }
+
+    public string Password { get; set; } = string.Empty;
+}
+
+[Facet(typeof(User), "Password", CopyAttributes = true)]
+public partial class UserDto;
+```
+
+The generated `UserDto` will include all the validation attributes:
+
+```csharp
+public partial class UserDto
+{
+    public int Id { get; set; }
+
+    [Required]
+    [StringLength(50)]
+    public string FirstName { get; set; }
+
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; }
+
+    [Range(0, 150)]
+    public int Age { get; set; }
+}
+```
+
+### What Gets Copied
+
+The attribute copying feature intelligently filters attributes to copy only those that make sense on the target:
+
+**Commonly copied attributes include:**
+- Data validation attributes: `Required`, `StringLength`, `Range`, `EmailAddress`, `Phone`, `Url`, `RegularExpression`, `CreditCard`, etc.
+- Display attributes: `Display`, `DisplayName`, `Description`
+- JSON serialization attributes: `JsonPropertyName`, `JsonIgnore`, etc.
+- Custom validation attributes that inherit from `ValidationAttribute`
+
+**Automatically excluded attributes:**
+- Internal compiler-generated attributes (e.g., `System.Runtime.CompilerServices.*`)
+- The base `ValidationAttribute` class itself (only derived validation attributes are copied)
+- Attributes that are not valid for the target member type based on `AttributeUsage`
+
+### Attribute Parameters
+
+All attribute parameters are preserved with correct C# syntax:
+
+```csharp
+public class Product
+{
+    [Required]
+    [StringLength(100, MinimumLength = 3, ErrorMessage = "Name must be 3-100 characters")]
+    public string Name { get; set; } = string.Empty;
+
+    [Range(0.01, 10000.00)]
+    public decimal Price { get; set; }
+
+    [RegularExpression(@"^[A-Z]{3}-\d{4}$", ErrorMessage = "Invalid SKU format")]
+    public string Sku { get; set; } = string.Empty;
+}
+
+[Facet(typeof(Product), CopyAttributes = true)]
+public partial class ProductDto;
+```
+
+All parameters including named parameters, string literals with escape sequences, and numeric values are correctly preserved.
+
+### With Nested Facets
+
+`CopyAttributes` works seamlessly with `NestedFacets`:
+
+```csharp
+[Facet(typeof(Address), CopyAttributes = true)]
+public partial class AddressDto;
+
+[Facet(typeof(Order), "InternalNotes", CopyAttributes = true, NestedFacets = [typeof(AddressDto)])]
+public partial class OrderDto;
+```
+
+Both the parent and nested facets will have their attributes copied from their respective source types.
+
+### When to Use CopyAttributes
+
+**Use `CopyAttributes = true` when:**
+- Creating API request/response DTOs that need validation
+- Building DTOs for ASP.NET Core model validation
+- Preserving display metadata for UI frameworks
+- Maintaining JSON serialization attributes
+- You want consistent validation between your domain models and DTOs
+
+**Don't use it when:**
+- You want different validation rules for your DTOs
+- Your source types have attributes specific to their domain concerns (e.g., ORM mapping attributes)
+- You prefer to define validation attributes directly on the facet
+
+### Default Behavior
+
+By default, `CopyAttributes = false`, meaning no attributes are copied. This maintains backward compatibility and gives you explicit control over when attributes should be copied.
 
 ---
 

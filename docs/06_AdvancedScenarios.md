@@ -509,6 +509,301 @@ var backToUser = dto.BackTo();
 // backToUser.IsActive = false (default for bool)
 ```
 
+## Attribute Copying for Validation and Metadata
+
+The `CopyAttributes` parameter enables automatic copying of attributes from source type members to the generated facet. This is particularly useful for preserving validation attributes, display metadata, and JSON serialization settings in DTOs.
+
+### Basic Attribute Copying
+
+```csharp
+public class CreateUserRequest
+{
+    [Required(ErrorMessage = "First name is required")]
+    [StringLength(50, MinimumLength = 2, ErrorMessage = "First name must be 2-50 characters")]
+    public string FirstName { get; set; } = string.Empty;
+
+    [Required]
+    [EmailAddress(ErrorMessage = "Invalid email address")]
+    public string Email { get; set; } = string.Empty;
+
+    [Range(18, 120, ErrorMessage = "Age must be between 18 and 120")]
+    public int Age { get; set; }
+
+    [Phone(ErrorMessage = "Invalid phone number")]
+    public string? PhoneNumber { get; set; }
+
+    [StringLength(500)]
+    public string? Bio { get; set; }
+}
+
+// Generate DTO with all validation attributes copied
+[Facet(typeof(CreateUserRequest), CopyAttributes = true)]
+public partial class CreateUserDto;
+```
+
+The generated `CreateUserDto` will include all the validation attributes:
+
+```csharp
+public partial class CreateUserDto
+{
+    [Required(ErrorMessage = "First name is required")]
+    [StringLength(50, MinimumLength = 2, ErrorMessage = "First name must be 2-50 characters")]
+    public string FirstName { get; set; }
+
+    [Required]
+    [EmailAddress(ErrorMessage = "Invalid email address")]
+    public string Email { get; set; }
+
+    [Range(18, 120, ErrorMessage = "Age must be between 18 and 120")]
+    public int Age { get; set; }
+
+    [Phone(ErrorMessage = "Invalid phone number")]
+    public string? PhoneNumber { get; set; }
+
+    [StringLength(500)]
+    public string? Bio { get; set; }
+}
+```
+
+### Combining with Exclude/Include
+
+Attributes are only copied for properties that are included in the facet:
+
+```csharp
+public class User
+{
+    public int Id { get; set; }
+
+    [Required]
+    [StringLength(50)]
+    public string FirstName { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(50)]
+    public string LastName { get; set; } = string.Empty;
+
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(100, MinimumLength = 8)]
+    public string Password { get; set; } = string.Empty;
+}
+
+// Exclude password - its attributes won't be copied
+[Facet(typeof(User), "Password", CopyAttributes = true)]
+public partial class UserDto;
+// UserDto has Required, StringLength, EmailAddress on included properties
+// No attributes from Password property
+
+// Include only specific properties - only those get attributes
+[Facet(typeof(User), Include = new[] { "FirstName", "Email" }, CopyAttributes = true)]
+public partial class UserContactDto;
+// UserContactDto only has attributes for FirstName and Email
+```
+
+### With Nested Facets
+
+Attribute copying works seamlessly with nested facets:
+
+```csharp
+public class Address
+{
+    [Required]
+    [StringLength(100)]
+    public string Street { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(50)]
+    public string City { get; set; } = string.Empty;
+
+    [Required]
+    [RegularExpression(@"^\d{5}(-\d{4})?$", ErrorMessage = "Invalid ZIP code")]
+    public string ZipCode { get; set; } = string.Empty;
+}
+
+public class Order
+{
+    [Required]
+    [StringLength(20)]
+    public string OrderNumber { get; set; } = string.Empty;
+
+    [Range(0.01, 1000000)]
+    public decimal TotalAmount { get; set; }
+
+    public Address ShippingAddress { get; set; } = null!;
+
+    public string? InternalNotes { get; set; }
+}
+
+// Both facets copy their respective attributes
+[Facet(typeof(Address), CopyAttributes = true)]
+public partial class AddressDto;
+
+[Facet(typeof(Order), "InternalNotes", CopyAttributes = true, NestedFacets = [typeof(AddressDto)])]
+public partial class OrderDto;
+
+// Usage - validation works on both parent and nested objects
+var orderDto = new OrderDto
+{
+    OrderNumber = "ORD-12345",
+    TotalAmount = 99.99m,
+    ShippingAddress = new AddressDto
+    {
+        Street = "123 Main St",
+        City = "Springfield",
+        ZipCode = "12345"
+    }
+};
+
+// ASP.NET Core will validate all attributes including nested ones
+var validationContext = new ValidationContext(orderDto);
+var validationResults = new List<ValidationResult>();
+bool isValid = Validator.TryValidateObject(orderDto, validationContext, validationResults, validateAllProperties: true);
+```
+
+### Display and JSON Attributes
+
+Attribute copying works with more than just validation attributes:
+
+```csharp
+public class Product
+{
+    [Display(Name = "Product Name", Description = "The name of the product")]
+    [Required]
+    [StringLength(100)]
+    public string Name { get; set; } = string.Empty;
+
+    [Display(Name = "Unit Price")]
+    [DisplayFormat(DataFormatString = "{0:C}", ApplyFormatInEditMode = true)]
+    [Range(0.01, 10000)]
+    public decimal Price { get; set; }
+
+    [JsonPropertyName("product_sku")]
+    [Required]
+    public string Sku { get; set; } = string.Empty;
+
+    [Display(Name = "Available")]
+    public bool IsAvailable { get; set; }
+}
+
+[Facet(typeof(Product), CopyAttributes = true)]
+public partial class ProductDto;
+
+// ProductDto has all Display, DisplayFormat, JsonPropertyName, Required, StringLength, and Range attributes
+```
+
+### Smart Filtering
+
+The attribute copier automatically excludes:
+
+1. **Compiler-generated attributes** (e.g., `System.Runtime.CompilerServices.*`)
+2. **The base ValidationAttribute class** (only derived validation attributes are copied)
+3. **Attributes not valid for the target member** based on `AttributeUsage`
+
+```csharp
+// Example: These attributes would NOT be copied
+[CompilerGenerated]  // Excluded: compiler-generated
+[ValidationAttribute]  // Excluded: base class itself
+[Table("Users")]  // Excluded if AttributeUsage doesn't allow properties
+public class User { ... }
+```
+
+### API Validation Pattern
+
+A common use case is ensuring DTOs have the same validation as domain models:
+
+```csharp
+// Domain model with validation
+public class RegisterUserCommand
+{
+    [Required(ErrorMessage = "Username is required")]
+    [StringLength(50, MinimumLength = 3)]
+    [RegularExpression(@"^[a-zA-Z0-9_]+$", ErrorMessage = "Username can only contain letters, numbers, and underscores")]
+    public string Username { get; set; } = string.Empty;
+
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(100, MinimumLength = 8)]
+    [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).*$", ErrorMessage = "Password must contain uppercase, lowercase, and number")]
+    public string Password { get; set; } = string.Empty;
+}
+
+// API request DTO with copied validation
+[Facet(typeof(RegisterUserCommand), CopyAttributes = true)]
+public partial class RegisterUserRequest;
+
+// API controller automatically validates using copied attributes
+[ApiController]
+public class AuthController : ControllerBase
+{
+    [HttpPost("register")]
+    public IActionResult Register([FromBody] RegisterUserRequest request)
+    {
+        // ModelState.IsValid uses the copied validation attributes
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var command = new RegisterUserCommand
+        {
+            Username = request.Username,
+            Email = request.Email,
+            Password = request.Password
+        };
+
+        // Process registration...
+        return Ok();
+    }
+}
+```
+
+### Customizing After Copy
+
+You can add additional attributes to the partial class:
+
+```csharp
+public class User
+{
+    [Required]
+    [StringLength(50)]
+    public string FirstName { get; set; } = string.Empty;
+
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+}
+
+[Facet(typeof(User), CopyAttributes = true)]
+public partial class UserDto
+{
+    // Add custom property with its own attributes
+    [Required]
+    [MinLength(10)]
+    public string CustomField { get; set; } = string.Empty;
+}
+
+// Generated properties will have copied attributes
+// Custom properties keep their own attributes
+```
+
+### When to Use CopyAttributes
+
+**Use `CopyAttributes = true` when:**
+- Creating API request/response DTOs that need the same validation as domain models
+- Building form models for UI frameworks
+- Ensuring consistency between entity and DTO validation
+- Preserving display metadata for data grids and forms
+- Maintaining JSON serialization settings across layers
+
+**Don't use it when:**
+- DTOs need different validation rules than the source
+- You want to avoid tight coupling between domain and API models
+- Source types have ORM or infrastructure-specific attributes
+
 ## Best Practices
 
 ### When to Use Include

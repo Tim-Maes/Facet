@@ -47,14 +47,15 @@ You can think of it like **carving out a specific facet** of a gem:
 ## :star: Key Features
 
 - :white_check_mark: Generate classes, records, structs, or record structs from existing types
-- :white_check_mark: Define what to include, or exclude fields/properties you don't want
+- :white_check_mark: Define what to include, or exclude fields/properties
 - :white_check_mark: Include/redact public fields
 - :white_check_mark: Constructors & LINQ projection expressions
-- :white_check_mark: Handles **complex and nested objects** with `NestedFacets`
+- :white_check_mark: Handle **complex and nested objects**
+- :white_check_mark: **Copy data validation attributes**
 - :white_check_mark: Full mapping support with custom mapping configurations
 - :white_check_mark: **Expression transformation and mapping utilities** for reusing business logic across entities and DTOs
 - :white_check_mark: Preserve member and type XML documentation
-- :white_check_mark: Auto-generate complete CRUD DTO sets with `[GenerateDtos]`
+- :white_check_mark: Auto-generate complete CRUD DTO sets
 
 ## :rocket: Quick start 
 
@@ -105,6 +106,10 @@ public partial record EntitySummaryDto;
 // Make all properties nullable for query/filter scenarios
 [Facet(typeof(Product), "InternalNotes", NullableProperties = true, GenerateBackTo = false)]
 public partial record ProductQueryDto;
+
+// Copy data validation attributes from source type
+[Facet(typeof(User), CopyAttributes = true)]
+public partial class UserDto; // Copies [Required], [StringLength], [EmailAddress], etc.
 
 // Automatically map nested types with NestedFacets
 [Facet(typeof(Address))]
