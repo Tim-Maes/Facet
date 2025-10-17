@@ -36,14 +36,14 @@ public class CopyAttributesTests
 
         firstNameProperty.Should().NotBeNull();
         firstNameProperty!.GetCustomAttribute<RequiredAttribute>().Should().NotBeNull();
-        firstNameProperty.GetCustomAttribute<StringLengthAttribute>().Should().NotBeNull();
+        firstNameProperty!.GetCustomAttribute<StringLengthAttribute>().Should().NotBeNull();
 
         lastNameProperty.Should().NotBeNull();
         lastNameProperty!.GetCustomAttribute<RequiredAttribute>().Should().NotBeNull();
 
         emailProperty.Should().NotBeNull();
         emailProperty!.GetCustomAttribute<RequiredAttribute>().Should().NotBeNull();
-        emailProperty.GetCustomAttribute<EmailAddressAttribute>().Should().NotBeNull();
+        emailProperty!.GetCustomAttribute<EmailAddressAttribute>().Should().NotBeNull();
 
         ageProperty.Should().NotBeNull();
         ageProperty!.GetCustomAttribute<RangeAttribute>().Should().NotBeNull();
@@ -152,7 +152,7 @@ public class CopyAttributesTests
 
         emailProperty.Should().NotBeNull();
         emailProperty!.GetCustomAttribute<RequiredAttribute>().Should().NotBeNull();
-        emailProperty.GetCustomAttribute<EmailAddressAttribute>().Should().NotBeNull();
+        emailProperty!.GetCustomAttribute<EmailAddressAttribute>().Should().NotBeNull();
 
         fullNameProperty.Should().NotBeNull();
         fullNameProperty!.GetCustomAttribute<StringLengthAttribute>()?.MaximumLength.Should().Be(100);
@@ -165,7 +165,8 @@ public class CopyAttributesTests
         var skuProperty = productType.GetProperty("Sku");
 
         skuProperty.Should().NotBeNull();
-        skuProperty!.GetCustomAttribute<RegularExpressionAttribute>().Should().NotBeNull();
+        var regexAttr = skuProperty!.GetCustomAttribute<RegularExpressionAttribute>();
+        regexAttr.Should().NotBeNull();
     }
 }
 
