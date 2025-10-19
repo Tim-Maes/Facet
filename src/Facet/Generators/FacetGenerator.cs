@@ -200,9 +200,26 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 var propertyTypeName = p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 bool isNestedFacet = false;
                 string? nestedFacetSourceTypeName = null;
+                bool isCollection = false;
+                string? collectionWrapper = null;
 
-                // Check if this property's type matches a child facet source type
-                if (nestedFacetMappings.TryGetValue(propertyTypeName, out var nestedMapping))
+                // Check if this property's type is a collection
+                if (GeneratorUtilities.TryGetCollectionElementType(p.Type, out var elementType, out var wrapper))
+                {
+                    // Check if the collection element type matches a child facet source type
+                    var elementTypeName = elementType!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    if (nestedFacetMappings.TryGetValue(elementTypeName, out var nestedMapping))
+                    {
+                        // Wrap the child facet type in the same collection type
+                        typeName = GeneratorUtilities.WrapInCollectionType(nestedMapping.childFacetTypeName, wrapper!);
+                        isNestedFacet = true;
+                        isCollection = true;
+                        collectionWrapper = wrapper;
+                        nestedFacetSourceTypeName = nestedMapping.sourceTypeName;
+                    }
+                }
+                // Check if this property's type matches a child facet source type (non-collection)
+                else if (nestedFacetMappings.TryGetValue(propertyTypeName, out var nestedMapping))
                 {
                     typeName = nestedMapping.childFacetTypeName;
                     isNestedFacet = true;
@@ -230,7 +247,9 @@ public sealed class FacetGenerator : IIncrementalGenerator
                     memberXmlDocumentation,
                     isNestedFacet,
                     nestedFacetSourceTypeName,
-                    attributes));
+                    attributes,
+                    isCollection,
+                    collectionWrapper));
                 addedMembers.Add(p.Name);
             }
             else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
@@ -784,17 +803,61 @@ public sealed class FacetGenerator : IIncrementalGenerator
     /// <summary>
     /// Gets the appropriate source value expression for a member.
     /// For nested facets, returns "new NestedFacetType(source.PropertyName)".
+    /// For collection nested facets, returns "source.PropertyName.Select(x => new NestedFacetType(x)).ToList()".
     /// For regular members, returns "source.PropertyName".
     /// </summary>
     private static string GetSourceValueExpression(FacetMember member, string sourceVariableName)
     {
-        if (member.IsNestedFacet)
+        if (member.IsNestedFacet && member.IsCollection)
+        {
+            // Extract the element type from the collection wrapper
+            var elementTypeName = ExtractElementTypeFromCollectionTypeName(member.TypeName);
+
+            // Use LINQ Select to map each element
+            var projection = $"{sourceVariableName}.{member.Name}.Select(x => new {elementTypeName}(x))";
+
+            // Convert back to the appropriate collection type
+            return member.CollectionWrapper switch
+            {
+                "List" => $"{projection}.ToList()",
+                "IList" => $"{projection}.ToList()",
+                "ICollection" => $"{projection}.ToList()",
+                "IEnumerable" => projection,
+                "array" => $"{projection}.ToArray()",
+                _ => projection
+            };
+        }
+        else if (member.IsNestedFacet)
         {
             // Use the nested facet's generated constructor
             return $"new {member.TypeName}({sourceVariableName}.{member.Name})";
         }
 
         return $"{sourceVariableName}.{member.Name}";
+    }
+
+    /// <summary>
+    /// Extracts the element type name from a collection type name.
+    /// For example: "global::System.Collections.Generic.List<global::MyNamespace.MyType>" => "global::MyNamespace.MyType"
+    /// </summary>
+    private static string ExtractElementTypeFromCollectionTypeName(string collectionTypeName)
+    {
+        // Handle array syntax
+        if (collectionTypeName.EndsWith("[]"))
+        {
+            return collectionTypeName.Substring(0, collectionTypeName.Length - 2);
+        }
+
+        // Handle generic collection syntax
+        var startIndex = collectionTypeName.IndexOf('<');
+        var endIndex = collectionTypeName.LastIndexOf('>');
+
+        if (startIndex > 0 && endIndex > startIndex)
+        {
+            return collectionTypeName.Substring(startIndex + 1, endIndex - startIndex - 1);
+        }
+
+        return collectionTypeName;
     }
 
     private static void GenerateFactoryMethodForExistingPrimaryConstructor(StringBuilder sb, FacetTargetModel model, bool hasCustomMapping)
@@ -931,11 +994,28 @@ public sealed class FacetGenerator : IIncrementalGenerator
     /// <summary>
     /// Gets the appropriate value expression for mapping back to the source type.
     /// For child facets, returns "this.PropertyName.BackTo()".
+    /// For collection child facets, returns "this.PropertyName.Select(x => x.BackTo()).ToList()".
     /// For regular members, returns "this.PropertyName".
     /// </summary>
     private static string GetBackToValueExpression(FacetMember member)
     {
-        if (member.IsNestedFacet)
+        if (member.IsNestedFacet && member.IsCollection)
+        {
+            // Use LINQ Select to map each element back
+            var projection = $"this.{member.Name}.Select(x => x.BackTo())";
+
+            // Convert back to the appropriate collection type
+            return member.CollectionWrapper switch
+            {
+                "List" => $"{projection}.ToList()",
+                "IList" => $"{projection}.ToList()",
+                "ICollection" => $"{projection}.ToList()",
+                "IEnumerable" => projection,
+                "array" => $"{projection}.ToArray()",
+                _ => projection
+            };
+        }
+        else if (member.IsNestedFacet)
         {
             // Use the child facet's generated BackTo method
             return $"this.{member.Name}.BackTo()";

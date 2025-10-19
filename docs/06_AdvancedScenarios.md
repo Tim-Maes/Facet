@@ -257,6 +257,358 @@ var companies = await dbContext.Companies
 4. **EF Core Compatible**: Projections work in database queries
 5. **Multi-Level Support**: Handle 3+ levels of nesting
 
+## Collection Nested Facets - Working with Lists and Arrays
+
+Facet fully supports nested facets within collections, automatically mapping `List<T>`, `ICollection<T>`, `T[]`, and other collection types to their corresponding nested facet types.
+
+### Basic Collection Mapping
+
+```csharp
+// Source entities
+public class OrderItem
+{
+    public int Id { get; set; }
+    public string ProductName { get; set; }
+    public decimal Price { get; set; }
+    public int Quantity { get; set; }
+}
+
+public class Order
+{
+    public int Id { get; set; }
+    public string OrderNumber { get; set; }
+    public DateTime OrderDate { get; set; }
+    public List<OrderItem> Items { get; set; }  // Collection of nested objects
+}
+
+// Facet DTOs
+[Facet(typeof(OrderItem))]
+public partial record OrderItemDto;
+
+[Facet(typeof(Order), NestedFacets = [typeof(OrderItemDto)])]
+public partial record OrderDto;
+
+// Usage
+var order = new Order
+{
+    Id = 1,
+    OrderNumber = "ORD-2025-001",
+    OrderDate = DateTime.Now,
+    Items = new List<OrderItem>
+    {
+        new() { Id = 1, ProductName = "Laptop", Price = 1200.00m, Quantity = 1 },
+        new() { Id = 2, ProductName = "Mouse", Price = 25.00m, Quantity = 2 }
+    }
+};
+
+var orderDto = new OrderDto(order);
+// orderDto.Items is List<OrderItemDto>
+// Each OrderItem is automatically mapped to OrderItemDto
+```
+
+### Supported Collection Types
+
+Facet automatically handles all common collection types:
+
+```csharp
+public class Project
+{
+    // All of these work with NestedFacets:
+    public List<Task> Tasks { get; set; }              // List<T>
+    public ICollection<Team> Teams { get; set; }       // ICollection<T>
+    public IList<Milestone> Milestones { get; set; }   // IList<T>
+    public IEnumerable<Comment> Comments { get; set; } // IEnumerable<T>
+    public Employee[] Employees { get; set; }          // T[] (arrays)
+}
+
+[Facet(typeof(Project), NestedFacets = [typeof(TaskDto), typeof(TeamDto), /* ... */])]
+public partial record ProjectDto;
+// All collections automatically map to their corresponding DTO collection types:
+// - List<Task> → List<TaskDto>
+// - ICollection<Team> → ICollection<TeamDto> (implemented as List)
+// - Employee[] → EmployeeDto[]
+```
+
+### Generated Code for Collections
+
+The generator creates efficient LINQ-based transformations:
+
+```csharp
+// Generated constructor
+public OrderDto(Order source)
+{
+    Id = source.Id;
+    OrderNumber = source.OrderNumber;
+    OrderDate = source.OrderDate;
+
+    // Uses LINQ Select to map each element
+    Items = source.Items.Select(x => new OrderItemDto(x)).ToList();
+}
+
+// Generated BackTo method
+public Order BackTo()
+{
+    return new Order
+    {
+        Id = this.Id,
+        OrderNumber = this.OrderNumber,
+        OrderDate = this.OrderDate,
+
+        // Maps each DTO back to entity
+        Items = this.Items.Select(x => x.BackTo()).ToList()
+    };
+}
+```
+
+### Multi-Level Collection Nesting
+
+Collections can be nested at any depth:
+
+```csharp
+public class OrderItem
+{
+    public int Id { get; set; }
+    public string ProductName { get; set; }
+    public List<OrderItemOption> Options { get; set; }  // Nested collection
+}
+
+public class Order
+{
+    public int Id { get; set; }
+    public List<OrderItem> Items { get; set; }  // Collection of objects with collections
+}
+
+[Facet(typeof(OrderItemOption))]
+public partial record OrderItemOptionDto;
+
+[Facet(typeof(OrderItem), NestedFacets = [typeof(OrderItemOptionDto)])]
+public partial record OrderItemDto;
+
+[Facet(typeof(Order), NestedFacets = [typeof(OrderItemDto)])]
+public partial record OrderDto;
+
+// Usage
+var order = new Order
+{
+    Items = new List<OrderItem>
+    {
+        new()
+        {
+            ProductName = "Laptop",
+            Options = new List<OrderItemOption>
+            {
+                new() { Name = "Extended Warranty" },
+                new() { Name = "Gift Wrap" }
+            }
+        }
+    }
+};
+
+var dto = new OrderDto(order);
+// dto.Items[0].Options is List<OrderItemOptionDto>
+```
+
+### Mixing Collections and Single Properties
+
+You can have both collection and single nested facets in the same entity:
+
+```csharp
+public class Order
+{
+    public int Id { get; set; }
+    public Address ShippingAddress { get; set; }      // Single nested object
+    public Address BillingAddress { get; set; }       // Another single nested object
+    public List<OrderItem> Items { get; set; }        // Collection of nested objects
+}
+
+[Facet(typeof(Address))]
+public partial record AddressDto;
+
+[Facet(typeof(OrderItem))]
+public partial record OrderItemDto;
+
+[Facet(typeof(Order), NestedFacets = [typeof(AddressDto), typeof(OrderItemDto)])]
+public partial record OrderDto;
+
+// Generated OrderDto will have:
+// - AddressDto ShippingAddress
+// - AddressDto BillingAddress
+// - List<OrderItemDto> Items
+```
+
+### EF Core Projections with Collection Nested Facets
+
+Collections work seamlessly with Entity Framework Core queries:
+
+```csharp
+// Efficient database projection
+var orders = await dbContext.Orders
+    .Include(o => o.Items)  // Include related data
+    .Where(o => o.OrderDate >= DateTime.Today.AddDays(-30))
+    .Select(OrderDto.Projection)
+    .ToListAsync();
+
+// The generated Projection property handles collections automatically:
+// source => new OrderDto
+// {
+//     Id = source.Id,
+//     OrderNumber = source.OrderNumber,
+//     Items = source.Items.Select(x => new OrderItemDto(x)).ToList()
+// }
+```
+
+### Empty Collections
+
+Empty collections are handled gracefully:
+
+```csharp
+var order = new Order
+{
+    Id = 1,
+    OrderNumber = "EMPTY",
+    Items = new List<OrderItem>()  // Empty collection
+};
+
+var dto = new OrderDto(order);
+// dto.Items is an empty List<OrderItemDto>, not null
+```
+
+### Collection Type Preservation
+
+The original collection type is preserved during mapping:
+
+```csharp
+public class Team
+{
+    public Employee[] Members { get; set; }  // Array
+}
+
+[Facet(typeof(Employee))]
+public partial record EmployeeDto;
+
+[Facet(typeof(Team), NestedFacets = [typeof(EmployeeDto)])]
+public partial record TeamDto;
+
+// Generated TeamDto has:
+// public EmployeeDto[] Members { get; init; }  // Stays as array
+
+var team = new Team { Members = new[] { employee1, employee2 } };
+var dto = new TeamDto(team);
+// dto.Members is EmployeeDto[] (array type preserved)
+```
+
+### Real-World Example: E-Commerce Order System
+
+```csharp
+// Domain entities
+public class Product
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public decimal Price { get; set; }
+}
+
+public class OrderItem
+{
+    public int Id { get; set; }
+    public Product Product { get; set; }
+    public int Quantity { get; set; }
+    public decimal UnitPrice { get; set; }
+}
+
+public class Customer
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string Email { get; set; }
+}
+
+public class Order
+{
+    public int Id { get; set; }
+    public string OrderNumber { get; set; }
+    public DateTime OrderDate { get; set; }
+    public Customer Customer { get; set; }
+    public List<OrderItem> Items { get; set; }
+    public decimal TotalAmount { get; set; }
+}
+
+// DTOs with nested facets
+[Facet(typeof(Product))]
+public partial record ProductDto;
+
+[Facet(typeof(OrderItem), NestedFacets = [typeof(ProductDto)])]
+public partial record OrderItemDto;
+
+[Facet(typeof(Customer))]
+public partial record CustomerDto;
+
+[Facet(typeof(Order), NestedFacets = [typeof(CustomerDto), typeof(OrderItemDto)])]
+public partial record OrderDto;
+
+// Usage in API
+[HttpGet("orders/{id}")]
+public async Task<ActionResult<OrderDto>> GetOrder(int id)
+{
+    var order = await dbContext.Orders
+        .Include(o => o.Customer)
+        .Include(o => o.Items)
+            .ThenInclude(i => i.Product)
+        .FirstOrDefaultAsync(o => o.Id == id);
+
+    if (order == null) return NotFound();
+
+    // Automatic nested and collection mapping
+    return new OrderDto(order);
+}
+```
+
+### Collection Nested Facets Best Practices
+
+1. **Define facets in dependency order**: Define child facets before parent facets
+   ```csharp
+   [Facet(typeof(OrderItem))]      // Define child first
+   public partial record OrderItemDto;
+
+   [Facet(typeof(Order), NestedFacets = [typeof(OrderItemDto)])]  // Then parent
+   public partial record OrderDto;
+   ```
+
+2. **Use collections for one-to-many relationships**: Perfect for Entity Framework navigation properties
+   ```csharp
+   public class Order
+   {
+       public List<OrderItem> Items { get; set; }  // One-to-many
+   }
+   ```
+
+3. **Consider performance with large collections**: Be mindful when mapping large collections in memory
+   ```csharp
+   // For very large collections, consider pagination
+   var recentOrders = dbContext.Orders
+       .OrderByDescending(o => o.OrderDate)
+       .Take(50)  // Limit collection size
+       .Select(OrderDto.Projection)
+       .ToListAsync();
+   ```
+
+4. **Handle null collections**: Initialize collections to avoid null reference exceptions
+   ```csharp
+   public class Order
+   {
+       public List<OrderItem> Items { get; set; } = new();  // Initialize
+   }
+   ```
+
+### Benefits of Collection Nested Facets
+
+1. **Automatic Collection Mapping**: No manual LINQ Select calls needed
+2. **Type Safety**: Compiler-verified collection element types
+3. **Bidirectional Support**: Both forward and reverse (`BackTo()`) mapping
+4. **EF Core Optimized**: Works efficiently with database projections
+5. **Preserves Collection Types**: Lists stay lists, arrays stay arrays
+6. **Multi-Level Support**: Unlimited nesting depth for collections
+
 ## Inheritance and Base Classes
 
 ### Including Properties from Base Classes

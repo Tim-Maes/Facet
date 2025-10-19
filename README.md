@@ -47,9 +47,9 @@ You can think of it like **carving out a specific facet** of a gem:
 ## :star: Key Features
 
 - :white_check_mark: Generate classes, records, structs, or record structs from existing types
+- :white_check_mark: Handle **complex and nested objects & collections**
 - :white_check_mark: Define what to include, or exclude, or add
 - :white_check_mark: Constructors & LINQ projection expressions
-- :white_check_mark: Handle **complex and nested objects**
 - :white_check_mark: **Copy data validation attributes**
 - :white_check_mark: Full mapping support with custom mapping configurations
 - :white_check_mark: **Expression transformation** and mapping utilities
@@ -121,6 +121,13 @@ public partial record CompanyDto; // Automatically includes AddressDto for neste
     exclude: ["PasswordHash", "Salary"],
     NestedFacets = [typeof(CompanyDto), typeof(AddressDto)])]
 public partial record EmployeeDto; // Handles multiple nested facets automatically
+
+// Collection support - automatically maps List<T>, arrays, ICollection<T>, etc.
+[Facet(typeof(OrderItem))]
+public partial record OrderItemDto;
+
+[Facet(typeof(Order), NestedFacets = [typeof(OrderItemDto)])]
+public partial record OrderDto; // List<OrderItem>-> List<OrderItemDto> automatically!
 ```
 
 ### Basic Projection of Facets

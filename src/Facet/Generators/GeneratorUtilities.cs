@@ -225,4 +225,85 @@ internal static class GeneratorUtilities
             _ => "default"
         };
     }
+
+    /// <summary>
+    /// Attempts to extract the element type from a collection type.
+    /// Handles List&lt;T&gt;, ICollection&lt;T&gt;, IEnumerable&lt;T&gt;, IList&lt;T&gt;, and T[].
+    /// </summary>
+    /// <param name="typeSymbol">The type symbol to analyze.</param>
+    /// <param name="elementType">The extracted element type symbol if successful.</param>
+    /// <param name="collectionWrapper">The collection type wrapper (e.g., "List", "ICollection", "array").</param>
+    /// <returns>True if the type is a collection; otherwise, false.</returns>
+    public static bool TryGetCollectionElementType(ITypeSymbol typeSymbol, out ITypeSymbol? elementType, out string? collectionWrapper)
+    {
+        elementType = null;
+        collectionWrapper = null;
+
+        // Check for array type
+        if (typeSymbol is IArrayTypeSymbol arrayType)
+        {
+            elementType = arrayType.ElementType;
+            collectionWrapper = "array";
+            return true;
+        }
+
+        // Check for generic collection types
+        if (typeSymbol is INamedTypeSymbol namedType && namedType.IsGenericType)
+        {
+            var typeDefinition = namedType.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+            // Check for List<T>
+            if (typeDefinition == "global::System.Collections.Generic.List<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "List";
+                return true;
+            }
+
+            // Check for ICollection<T>
+            if (typeDefinition == "global::System.Collections.Generic.ICollection<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "ICollection";
+                return true;
+            }
+
+            // Check for IList<T>
+            if (typeDefinition == "global::System.Collections.Generic.IList<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "IList";
+                return true;
+            }
+
+            // Check for IEnumerable<T>
+            if (typeDefinition == "global::System.Collections.Generic.IEnumerable<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "IEnumerable";
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Wraps an element type name in the appropriate collection type.
+    /// </summary>
+    /// <param name="elementTypeName">The fully qualified element type name.</param>
+    /// <param name="collectionWrapper">The collection wrapper type ("List", "ICollection", "IList", "IEnumerable", "array").</param>
+    /// <returns>The fully qualified collection type name.</returns>
+    public static string WrapInCollectionType(string elementTypeName, string collectionWrapper)
+    {
+        return collectionWrapper switch
+        {
+            "List" => $"global::System.Collections.Generic.List<{elementTypeName}>",
+            "ICollection" => $"global::System.Collections.Generic.ICollection<{elementTypeName}>",
+            "IList" => $"global::System.Collections.Generic.IList<{elementTypeName}>",
+            "IEnumerable" => $"global::System.Collections.Generic.IEnumerable<{elementTypeName}>",
+            "array" => $"{elementTypeName}[]",
+            _ => elementTypeName
+        };
+    }
 }
