@@ -27,6 +27,11 @@ internal static class CodeGenerationHelpers
             namespaces.Add("System.ComponentModel.DataAnnotations");
         }
 
+        if (model.Members.Any(m => m.IsNestedFacet && m.IsCollection))
+        {
+            namespaces.Add("System.Linq");
+        }
+
         var sourceTypeNamespace = ExtractNamespaceFromFullyQualifiedType(model.SourceTypeName);
         if (!string.IsNullOrWhiteSpace(sourceTypeNamespace))
         {
