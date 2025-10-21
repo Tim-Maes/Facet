@@ -181,7 +181,6 @@ public class LinqProjectionTests : IDisposable
 
     private void SeedTestData()
     {
-        // Create users with unique IDs for this test instance
         var baseId = Random.Shared.Next(1000, 9999);
         var users = new List<User>
         {
@@ -190,7 +189,6 @@ public class LinqProjectionTests : IDisposable
             TestDataFactory.CreateUser("Charlie", "Brown", "charlie.brown@example.com", new DateTime(1988, 12, 5), false)
         };
         
-        // Ensure unique IDs to avoid EF tracking conflicts
         for (int i = 0; i < users.Count; i++)
         {
             users[i].Id = baseId + i;
@@ -216,6 +214,189 @@ public class LinqProjectionTests : IDisposable
         _context.SaveChanges();
     }
 
+    [Fact]
+    public void Projection_WithNestedFacets_ShouldLoadNavigationPropertiesWithoutInclude()
+    {
+        // Arrange
+        var address = new AddressEntity
+        {
+            Street = "123 Main St",
+            City = "Test City",
+            State = "TS",
+            ZipCode = "12345",
+            Country = "Testland"
+        };
+
+        var company = new CompanyEntity
+        {
+            Id = 1,
+            Name = "Test Company",
+            Industry = "Technology",
+            HeadquartersAddress = address
+        };
+
+        _context.Set<AddressEntity>().Add(address);
+        _context.Set<CompanyEntity>().Add(company);
+        _context.SaveChanges();
+
+        // Clear the context to ensure we're not using cached entities
+        _context.ChangeTracker.Clear();
+
+        // Act - Use projection WITHOUT .Include()
+        var companyDto = _context.Set<CompanyEntity>()
+            .Where(c => c.Id == 1)
+            .Select(CompanyFacet.Projection)
+            .FirstOrDefault();
+
+        // Assert
+        companyDto.Should().NotBeNull();
+        companyDto!.Id.Should().Be(1);
+        companyDto.Name.Should().Be("Test Company");
+        companyDto.Industry.Should().Be("Technology");
+
+        // The nested facet should be loaded and mapped
+        companyDto.HeadquartersAddress.Should().NotBeNull();
+        companyDto.HeadquartersAddress.Street.Should().Be("123 Main St");
+        companyDto.HeadquartersAddress.City.Should().Be("Test City");
+        companyDto.HeadquartersAddress.State.Should().Be("TS");
+        companyDto.HeadquartersAddress.ZipCode.Should().Be("12345");
+        companyDto.HeadquartersAddress.Country.Should().Be("Testland");
+    }
+
+    [Fact]
+    public void SelectFacet_WithNestedFacets_ShouldLoadNavigationPropertiesWithoutInclude()
+    {
+        // Arrange
+        var address = new AddressEntity
+        {
+            Street = "789 SelectFacet Ave",
+            City = "SelectFacet City",
+            State = "SF",
+            ZipCode = "99999",
+            Country = "Selectland"
+        };
+
+        var company = new CompanyEntity
+        {
+            Id = 2,
+            Name = "SelectFacet Company",
+            Industry = "Software",
+            HeadquartersAddress = address
+        };
+
+        _context.Set<AddressEntity>().Add(address);
+        _context.Set<CompanyEntity>().Add(company);
+        _context.SaveChanges();
+        _context.ChangeTracker.Clear();
+
+        // Act
+        var companyDto = _context.Set<CompanyEntity>()
+            .Where(c => c.Id == 2)
+            .SelectFacet<CompanyEntity, CompanyFacet>()
+            .FirstOrDefault();
+
+        // Assert
+        companyDto.Should().NotBeNull();
+        companyDto!.Name.Should().Be("SelectFacet Company");
+
+        // The nested facet should be loaded via SelectFacet
+        companyDto.HeadquartersAddress.Should().NotBeNull();
+        companyDto.HeadquartersAddress.Street.Should().Be("789 SelectFacet Ave");
+        companyDto.HeadquartersAddress.City.Should().Be("SelectFacet City");
+    }
+
+    [Fact]
+    public void SelectFacet_NonGeneric_WithNestedFacets_ShouldLoadNavigationPropertiesWithoutInclude()
+    {
+        // Arrange
+        var address = new AddressEntity
+        {
+            Street = "456 NonGeneric St",
+            City = "NonGeneric City",
+            State = "NG",
+            ZipCode = "88888",
+            Country = "NGland"
+        };
+
+        var company = new CompanyEntity
+        {
+            Id = 3,
+            Name = "NonGeneric Company",
+            Industry = "Finance",
+            HeadquartersAddress = address
+        };
+
+        _context.Set<AddressEntity>().Add(address);
+        _context.Set<CompanyEntity>().Add(company);
+        _context.SaveChanges();
+        _context.ChangeTracker.Clear();
+
+        // Act
+        IQueryable nonTypedQuery = _context.Set<CompanyEntity>().Where(c => c.Id == 3);
+        var companyDto = nonTypedQuery
+            .SelectFacet<CompanyFacet>()
+            .FirstOrDefault();
+
+        // Assert
+        companyDto.Should().NotBeNull();
+        companyDto!.Name.Should().Be("NonGeneric Company");
+
+        // The nested facet should be loaded
+        companyDto.HeadquartersAddress.Should().NotBeNull();
+        companyDto.HeadquartersAddress.Street.Should().Be("456 NonGeneric St");
+        companyDto.HeadquartersAddress.City.Should().Be("NonGeneric City");
+    }
+
+    [Fact]
+    public void Projection_WithCollectionNestedFacets_ShouldLoadCollectionWithoutInclude()
+    {
+        // Arrange
+        var order = new OrderEntity
+        {
+            Id = 1,
+            OrderNumber = "ORD-001",
+            OrderDate = DateTime.UtcNow,
+            Items = new List<OrderItemEntity>
+            {
+                new OrderItemEntity { Id = 1, ProductName = "Item 1", Price = 10.00m, Quantity = 2 },
+                new OrderItemEntity { Id = 2, ProductName = "Item 2", Price = 20.00m, Quantity = 1 }
+            },
+            ShippingAddress = new AddressEntity
+            {
+                Street = "456 Shipping Rd",
+                City = "Ship City",
+                State = "SC",
+                ZipCode = "67890",
+                Country = "Shipland"
+            }
+        };
+
+        _context.Set<OrderEntity>().Add(order);
+        _context.SaveChanges();
+        _context.ChangeTracker.Clear();
+
+        // Act
+        var orderDto = _context.Set<OrderEntity>()
+            .Where(o => o.Id == 1)
+            .Select(OrderFacet.Projection)
+            .FirstOrDefault();
+
+        // Assert
+        orderDto.Should().NotBeNull();
+        orderDto!.Id.Should().Be(1);
+        orderDto.OrderNumber.Should().Be("ORD-001");
+
+        // Collection nested facets should be loaded
+        orderDto.Items.Should().NotBeNull();
+        orderDto.Items.Should().HaveCount(2);
+        orderDto.Items.Should().Contain(i => i.ProductName == "Item 1");
+        orderDto.Items.Should().Contain(i => i.ProductName == "Item 2");
+
+        // Single nested facet should also be loaded
+        orderDto.ShippingAddress.Should().NotBeNull();
+        orderDto.ShippingAddress.City.Should().Be("Ship City");
+    }
+
     public void Dispose()
     {
         _context.Dispose();
@@ -229,10 +410,16 @@ public class TestDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        
+
         modelBuilder.Entity<User>().HasKey(u => u.Id);
         modelBuilder.Entity<Product>().HasKey(p => p.Id);
         modelBuilder.Entity<Employee>().HasBaseType<User>();
         modelBuilder.Entity<Manager>().HasBaseType<Employee>();
+
+        // Add entities for nested facet tests
+        modelBuilder.Entity<AddressEntity>().HasKey(a => new { a.Street, a.City, a.State });
+        modelBuilder.Entity<CompanyEntity>().HasKey(c => c.Id);
+        modelBuilder.Entity<OrderEntity>().HasKey(o => o.Id);
+        modelBuilder.Entity<OrderItemEntity>().HasKey(i => i.Id);
     }
 }
