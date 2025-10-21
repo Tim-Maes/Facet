@@ -184,7 +184,12 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
 
     private static bool HasFacetAttribute(ITypeSymbol type)
     {
-        return type.GetAttributes().Any(attr => 
+        if (type.TypeKind == TypeKind.TypeParameter)
+        {
+            return true;
+        }
+
+        return type.GetAttributes().Any(attr =>
             attr.AttributeClass?.ToDisplayString() == "Facet.FacetAttribute");
     }
 }
