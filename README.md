@@ -315,6 +315,36 @@ var results = await dbContext.Products
     .ToListAsync();
 ```
 
+#### Automatic Navigation Property Loading (No .Include() Required!)
+```csharp
+// Define nested facets
+[Facet(typeof(Address))]
+public partial record AddressDto;
+
+[Facet(typeof(Company), NestedFacets = [typeof(AddressDto)])]
+public partial record CompanyDto;
+
+// Navigation properties are automatically loaded - no .Include() needed!
+var companies = await dbContext.Companies
+    .Where(c => c.IsActive)
+    .SelectFacet<CompanyDto>()
+    .ToListAsync();
+
+// The HeadquartersAddress navigation property is automatically included!
+// EF Core analyzes the projection expression and generates the necessary JOINs
+
+// This also works with collections:
+[Facet(typeof(OrderItem))]
+public partial record OrderItemDto;
+
+[Facet(typeof(Order), NestedFacets = [typeof(OrderItemDto), typeof(AddressDto)])]
+public partial record OrderDto;
+
+var orders = await dbContext.Orders
+    .SelectFacet<OrderDto>()  // Automatically includes Items collection and ShippingAddress!
+    .ToListAsync();
+```
+
 #### Reverse Mapping (Facet -> Entity)
 ```csharp
 [Facet(typeof(User)]
@@ -325,10 +355,10 @@ public async Task<IActionResult> UpdateUser(int id, UpdateUserDto dto)
 {
     var user = await context.Users.FindAsync(id);
     if (user == null) return NotFound();
-    
+
     // Only updates properties that mutated
     user.UpdateFromFacet(dto, context);
-    
+
     await context.SaveChangesAsync();
     return NoContent();
 }
@@ -337,7 +367,7 @@ public async Task<IActionResult> UpdateUser(int id, UpdateUserDto dto)
 var result = user.UpdateFromFacetWithChanges(dto, context);
 if (result.HasChanges)
 {
-    logger.LogInformation("User {UserId} updated. Changed: {Properties}", 
+    logger.LogInformation("User {UserId} updated. Changed: {Properties}",
         user.Id, string.Join(", ", result.ChangedProperties));
 }
 ```

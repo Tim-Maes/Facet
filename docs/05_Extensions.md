@@ -56,11 +56,11 @@ dotnet add package Facet.Extensions.EFCore
 ```csharp
 // IQueryable (LINQ/EF Core)
 
-using Facet.Extensions.EFCore; 
+using Facet.Extensions.EFCore;
 
 var query = dbContext.People.SelectFacet<PersonDto>();
 
-// Async (EF Core) 
+// Async (EF Core)
 var dtosAsync = await dbContext.People.ToFacetsAsync<PersonDto>();
 var dtosInferred = await dbContext.People.ToFacetsAsync<PersonDto>();
 
@@ -69,6 +69,42 @@ var firstInferred = await dbContext.People.FirstFacetAsync<PersonDto>();
 
 var singleDto = await dbContext.People.SingleFacetAsync<Person, PersonDto>();
 var singleInferred = await dbContext.People.SingleFacetAsync<PersonDto>();
+```
+
+#### Automatic Navigation Property Loading (No `.Include()` Required!)
+
+When using nested facets, EF Core automatically loads navigation properties without requiring explicit `.Include()` calls:
+
+```csharp
+// Define nested facets
+[Facet(typeof(Address))]
+public partial record AddressDto;
+
+[Facet(typeof(Company), NestedFacets = [typeof(AddressDto)])]
+public partial record CompanyDto;
+
+// Navigation properties are automatically loaded!
+var companies = await dbContext.Companies
+    .Where(c => c.IsActive)
+    .ToFacetsAsync<CompanyDto>();
+
+// The HeadquartersAddress navigation property is automatically included
+// EF Core sees the property access in the projection and generates JOINs
+
+// Works with all projection methods:
+await dbContext.Companies.ToFacetsAsync<CompanyDto>();       
+await dbContext.Companies.FirstFacetAsync<CompanyDto>();    
+await dbContext.Companies.SelectFacet<CompanyDto>().ToListAsync();
+
+// Also works with collecstions:
+[Facet(typeof(OrderItem))]
+public partial record OrderItemDto;
+
+[Facet(typeof(Order), NestedFacets = [typeof(OrderItemDto), typeof(AddressDto)])]
+public partial record OrderDto;
+
+var orders = await dbContext.Orders.ToFacetsAsync<OrderDto>();
+// Automatically includes Items collection and ShippingAddress!
 ```
 
 ### EF Core Reverse Mapping (UpdateFromFacet)
