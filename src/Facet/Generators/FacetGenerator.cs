@@ -203,6 +203,9 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 bool isCollection = false;
                 string? collectionWrapper = null;
 
+                // Check if the property type is nullable (reference types)
+                bool isNullableReferenceType = p.Type.NullableAnnotation == NullableAnnotation.Annotated;
+
                 // Check if this property's type is a collection
                 if (GeneratorUtilities.TryGetCollectionElementType(p.Type, out var elementType, out var wrapper))
                 {
@@ -211,7 +214,9 @@ public sealed class FacetGenerator : IIncrementalGenerator
                     if (nestedFacetMappings.TryGetValue(elementTypeName, out var nestedMapping))
                     {
                         // Wrap the child facet type in the same collection type
-                        typeName = GeneratorUtilities.WrapInCollectionType(nestedMapping.childFacetTypeName, wrapper!);
+                        var wrappedType = GeneratorUtilities.WrapInCollectionType(nestedMapping.childFacetTypeName, wrapper!);
+                        // Preserve nullability if the collection itself was nullable
+                        typeName = isNullableReferenceType ? wrappedType + "?" : wrappedType;
                         isNestedFacet = true;
                         isCollection = true;
                         collectionWrapper = wrapper;
@@ -221,7 +226,10 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 // Check if this property's type matches a child facet source type (non-collection)
                 else if (nestedFacetMappings.TryGetValue(propertyTypeName, out var nestedMapping))
                 {
-                    typeName = nestedMapping.childFacetTypeName;
+                    // Preserve nullability when assigning nested facet type name
+                    typeName = isNullableReferenceType
+                        ? nestedMapping.childFacetTypeName + "?"
+                        : nestedMapping.childFacetTypeName;
                     isNestedFacet = true;
                     nestedFacetSourceTypeName = nestedMapping.sourceTypeName;
                 }
@@ -802,22 +810,23 @@ public sealed class FacetGenerator : IIncrementalGenerator
 
     /// <summary>
     /// Gets the appropriate source value expression for a member.
-    /// For nested facets, returns "new NestedFacetType(source.PropertyName)".
-    /// For collection nested facets, returns "source.PropertyName.Select(x => new NestedFacetType(x)).ToList()".
+    /// For nested facets, returns "new NestedFacetType(source.PropertyName)" with null checks if nullable.
+    /// For collection nested facets, returns "source.PropertyName.Select(x => new NestedFacetType(x)).ToList()" with null checks if nullable.
     /// For regular members, returns "source.PropertyName".
     /// </summary>
     private static string GetSourceValueExpression(FacetMember member, string sourceVariableName)
     {
+        bool isNullable = member.TypeName.Contains("?");
+
         if (member.IsNestedFacet && member.IsCollection)
         {
-            // Extract the element type from the collection wrapper
             var elementTypeName = ExtractElementTypeFromCollectionTypeName(member.TypeName);
 
             // Use LINQ Select to map each element
             var projection = $"{sourceVariableName}.{member.Name}.Select(x => new {elementTypeName}(x))";
 
             // Convert back to the appropriate collection type
-            return member.CollectionWrapper switch
+            var collectionExpression = member.CollectionWrapper switch
             {
                 "List" => $"{projection}.ToList()",
                 "IList" => $"{projection}.ToList()",
@@ -826,11 +835,25 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 "array" => $"{projection}.ToArray()",
                 _ => projection
             };
+
+            if (isNullable)
+            {
+                return $"{sourceVariableName}.{member.Name} != null ? {collectionExpression} : null";
+            }
+
+            return collectionExpression;
         }
         else if (member.IsNestedFacet)
         {
+            var nonNullableTypeName = member.TypeName.TrimEnd('?');
+
+            if (isNullable)
+            {
+                return $"{sourceVariableName}.{member.Name} != null ? new {nonNullableTypeName}({sourceVariableName}.{member.Name}) : null";
+            }
+
             // Use the nested facet's generated constructor
-            return $"new {member.TypeName}({sourceVariableName}.{member.Name})";
+            return $"new {nonNullableTypeName}({sourceVariableName}.{member.Name})";
         }
 
         return $"{sourceVariableName}.{member.Name}";
@@ -993,19 +1016,22 @@ public sealed class FacetGenerator : IIncrementalGenerator
 
     /// <summary>
     /// Gets the appropriate value expression for mapping back to the source type.
-    /// For child facets, returns "this.PropertyName.BackTo()".
-    /// For collection child facets, returns "this.PropertyName.Select(x => x.BackTo()).ToList()".
+    /// For child facets, returns "this.PropertyName.BackTo()" with null checks if nullable.
+    /// For collection child facets, returns "this.PropertyName.Select(x => x.BackTo()).ToList()" with null checks if nullable.
     /// For regular members, returns "this.PropertyName".
     /// </summary>
     private static string GetBackToValueExpression(FacetMember member)
     {
+        // Check if the member type is nullable (ends with ?)
+        bool isNullable = member.TypeName.Contains("?");
+
         if (member.IsNestedFacet && member.IsCollection)
         {
             // Use LINQ Select to map each element back
             var projection = $"this.{member.Name}.Select(x => x.BackTo())";
 
             // Convert back to the appropriate collection type
-            return member.CollectionWrapper switch
+            var collectionExpression = member.CollectionWrapper switch
             {
                 "List" => $"{projection}.ToList()",
                 "IList" => $"{projection}.ToList()",
@@ -1014,9 +1040,23 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 "array" => $"{projection}.ToArray()",
                 _ => projection
             };
+
+            // Add null check for nullable collections
+            if (isNullable)
+            {
+                return $"this.{member.Name} != null ? {collectionExpression} : null";
+            }
+
+            return collectionExpression;
         }
         else if (member.IsNestedFacet)
         {
+            // Add null check for nullable nested facets
+            if (isNullable)
+            {
+                return $"this.{member.Name} != null ? this.{member.Name}.BackTo() : null";
+            }
+
             // Use the child facet's generated BackTo method
             return $"this.{member.Name}.BackTo()";
         }
