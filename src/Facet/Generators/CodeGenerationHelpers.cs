@@ -18,6 +18,7 @@ internal static class CodeGenerationHelpers
         var namespaces = new HashSet<string>
         {
             "System",
+            "System.Linq",
             "System.Linq.Expressions"
         };
 
