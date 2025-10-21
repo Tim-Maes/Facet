@@ -18,6 +18,7 @@ internal static class CodeGenerationHelpers
         var namespaces = new HashSet<string>
         {
             "System",
+            "System.Linq",
             "System.Linq.Expressions"
         };
 
@@ -25,11 +26,6 @@ internal static class CodeGenerationHelpers
         if (model.CopyAttributes && model.Members.Any(m => m.Attributes.Count > 0))
         {
             namespaces.Add("System.ComponentModel.DataAnnotations");
-        }
-
-        if (model.Members.Any(m => m.IsNestedFacet && m.IsCollection))
-        {
-            namespaces.Add("System.Linq");
         }
 
         var sourceTypeNamespace = ExtractNamespaceFromFullyQualifiedType(model.SourceTypeName);
