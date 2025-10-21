@@ -8,8 +8,9 @@ EF Core async extension methods for the Facet library, enabling one-line async m
   - Async projection to `List<TTarget>`: `ToFacetsAsync<TSource,TTarget>()` or `ToFacetsAsync<TTarget>()`
   - Async projection to first or default: `FirstFacetAsync<TSource,TTarget>()` or `FirstFacetAsync<TTarget>()`
   - Async projection to single: `SingleFacetAsync<TSource,TTarget>()` or `SingleFacetAsync<TTarget>()`
+  - **Automatic Navigation Property Loading**: No `.Include()` required for nested facets!
 
-- **Reverse Mapping**: Facet DTO -> Entity (NEW!)
+- **Reverse Mapping**: Facet DTO -> Entity
   - Selective entity updates: `UpdateFromFacet<TEntity,TFacet>()`
   - Async entity updates: `UpdateFromFacetAsync<TEntity,TFacet>()`
   - Update with change tracking: `UpdateFromFacetWithChanges<TEntity,TFacet>()`
@@ -46,6 +47,41 @@ var singleDto = await dbContext.People.SingleFacetAsync<PersonDto>();
 
 // Legacy explicit syntax still supported
 var dtosExplicit = await dbContext.People.ToFacetsAsync<Person, PersonDto>();
+```
+
+### 4. Automatic Navigation Property Loading (No `.Include()` Required!)
+
+```csharp
+// Define nested facets
+[Facet(typeof(Address))]
+public partial record AddressDto;
+
+[Facet(typeof(Company), NestedFacets = [typeof(AddressDto)])]
+public partial record CompanyDto;
+
+// Navigation properties are automatically loaded - no .Include() needed!
+var companies = await dbContext.Companies
+    .Where(c => c.IsActive)
+    .ToFacetsAsync<CompanyDto>();
+
+// The HeadquartersAddress navigation property is automatically included!
+// EF Core analyzes the projection expression and generates the necessary JOINs
+
+// This also works with collections:
+[Facet(typeof(OrderItem))]
+public partial record OrderItemDto;
+
+[Facet(typeof(Order), NestedFacets = [typeof(OrderItemDto), typeof(AddressDto)])]
+public partial record OrderDto;
+
+var orders = await dbContext.Orders
+    .ToFacetsAsync<OrderDto>();  // Automatically includes Items collection and ShippingAddress!
+
+// All these methods support auto-include:
+await dbContext.Companies.ToFacetsAsync<CompanyDto>();   
+await dbContext.Companies.FirstFacetAsync<CompanyDto>(); 
+await dbContext.Companies.SingleFacetAsync<CompanyDto>(); 
+await dbContext.Companies.SelectFacet<CompanyDto>().ToListAsync();
 ```
 
 ## Reverse Mapping (DTO -> Entity)
