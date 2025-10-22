@@ -724,6 +724,9 @@ public sealed class FacetGenerator : IIncrementalGenerator
         var members = model.Members;
         var memberCount = members.Length;
 
+        // Track visited facets to prevent infinite recursion in bidirectional relationships
+        var visitedFacets = new HashSet<string> { model.Name };
+
         for (int i = 0; i < memberCount; i++)
         {
             var member = members[i];
@@ -731,7 +734,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
             var memberIndent = indent + "    ";
 
             // Generate the property assignment
-            var projectionValue = GetProjectionValueExpression(member, "source", memberIndent, facetLookup);
+            var projectionValue = GetProjectionValueExpression(member, "source", memberIndent, facetLookup, visitedFacets);
             sb.Append($"{memberIndent}{member.Name} = {projectionValue}{comma}");
 
             // Add newline
@@ -744,8 +747,9 @@ public sealed class FacetGenerator : IIncrementalGenerator
     /// <summary>
     /// Gets the projection expression for a member that's compatible with EF Core query translation.
     /// For nested facets, generates nested object initializers instead of constructor calls.
+    /// Includes cycle detection to prevent infinite recursion in bidirectional relationships.
     /// </summary>
-    private static string GetProjectionValueExpression(FacetMember member, string sourceVariableName, string indent, Dictionary<string, FacetTargetModel> facetLookup)
+    private static string GetProjectionValueExpression(FacetMember member, string sourceVariableName, string indent, Dictionary<string, FacetTargetModel> facetLookup, HashSet<string> visitedFacets)
     {
         // Check if the member type is nullable
         bool isNullable = member.TypeName.Contains("?");
@@ -761,7 +765,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 nonNullableElementType,
                 member.NestedFacetSourceTypeName!,
                 member.CollectionWrapper!,
-                facetLookup);
+                facetLookup,
+                visitedFacets);
 
             if (isNullable)
             {
@@ -809,13 +814,23 @@ public sealed class FacetGenerator : IIncrementalGenerator
             string nestedProjection;
             if (nestedFacetModel != null)
             {
-                // Recursively inline the nested facet's members
-                nestedProjection = GenerateInlineNestedFacetInitializer(
-                    nestedFacetModel,
-                    nestedSourceExpression,
-                    nonNullableTypeName,
-                    indent,
-                    facetLookup);
+                // Check for circular reference - if we've already visited this facet type, use constructor instead
+                if (visitedFacets.Contains(lookupName))
+                {
+                    // Use constructor call to break the cycle
+                    nestedProjection = $"new {nonNullableTypeName}({nestedSourceExpression})";
+                }
+                else
+                {
+                    // Recursively inline the nested facet's members
+                    nestedProjection = GenerateInlineNestedFacetInitializer(
+                        nestedFacetModel,
+                        nestedSourceExpression,
+                        nonNullableTypeName,
+                        indent,
+                        facetLookup,
+                        visitedFacets);
+                }
             }
             else
             {
@@ -837,22 +852,28 @@ public sealed class FacetGenerator : IIncrementalGenerator
 
     /// <summary>
     /// Generates an inline object initializer for a nested facet, recursively expanding all members.
+    /// Includes cycle detection to prevent infinite recursion in bidirectional relationships.
     /// </summary>
     private static string GenerateInlineNestedFacetInitializer(
         FacetTargetModel nestedFacetModel,
         string sourceExpression,
         string facetTypeName,
         string indent,
-        Dictionary<string, FacetTargetModel> facetLookup)
+        Dictionary<string, FacetTargetModel> facetLookup,
+        HashSet<string> visitedFacets)
     {
         var sb = new StringBuilder();
         sb.Append($"new {facetTypeName} {{ ");
+
+        // Add this facet to visited set before processing its members
+        var facetName = nestedFacetModel.Name;
+        var wasAdded = visitedFacets.Add(facetName);
 
         var members = nestedFacetModel.Members;
         for (int i = 0; i < members.Length; i++)
         {
             var member = members[i];
-            var projectionValue = GetProjectionValueExpression(member, sourceExpression, indent, facetLookup);
+            var projectionValue = GetProjectionValueExpression(member, sourceExpression, indent, facetLookup, visitedFacets);
             sb.Append($"{member.Name} = {projectionValue}");
 
             if (i < members.Length - 1)
@@ -861,19 +882,27 @@ public sealed class FacetGenerator : IIncrementalGenerator
             }
         }
 
+        // Remove from visited set after processing (backtrack)
+        if (wasAdded)
+        {
+            visitedFacets.Remove(facetName);
+        }
+
         sb.Append(" }");
         return sb.ToString();
     }
 
     /// <summary>
     /// Generates a collection projection expression for nested facets.
+    /// Includes cycle detection to prevent infinite recursion in bidirectional relationships.
     /// </summary>
     private static string GenerateNestedCollectionProjection(
         string sourceCollectionExpression,
         string elementFacetTypeName,
         string elementSourceTypeName,
         string collectionWrapper,
-        Dictionary<string, FacetTargetModel> facetLookup)
+        Dictionary<string, FacetTargetModel> facetLookup,
+        HashSet<string> visitedFacets)
     {
         // Try to find the nested facet model to inline expand it
         FacetTargetModel? nestedFacetModel = null;
@@ -907,9 +936,18 @@ public sealed class FacetGenerator : IIncrementalGenerator
         string projection;
         if (nestedFacetModel != null)
         {
-            // Inline expand the nested facet
-            var inlineInitializer = GenerateInlineNestedFacetInitializer(nestedFacetModel, "x", elementFacetTypeName, "", facetLookup);
-            projection = $"{sourceCollectionExpression}.Select(x => {inlineInitializer})";
+            // Check for circular reference - if we've already visited this facet type, use constructor instead
+            if (visitedFacets.Contains(lookupName))
+            {
+                // Use constructor call to break the cycle
+                projection = $"{sourceCollectionExpression}.Select(x => new {elementFacetTypeName}(x))";
+            }
+            else
+            {
+                // Inline expand the nested facet
+                var inlineInitializer = GenerateInlineNestedFacetInitializer(nestedFacetModel, "x", elementFacetTypeName, "", facetLookup, visitedFacets);
+                projection = $"{sourceCollectionExpression}.Select(x => {inlineInitializer})";
+            }
         }
         else
         {
