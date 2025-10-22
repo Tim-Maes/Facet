@@ -120,7 +120,7 @@ public class ExpressionMappingTests
         var testDtos = CreateTestUserDtos();
         var results = testDtos.Where(compiledPredicate).ToList();
 
-        results.Should().HaveCountGreaterOrEqualTo(1);
+        results.Should().HaveCountGreaterThanOrEqualTo(1);
         results.Should().OnlyContain(dto => dto.FirstName == "John" || dto.FirstName == "Jane");
     }
 
