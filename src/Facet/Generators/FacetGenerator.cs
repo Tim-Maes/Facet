@@ -23,12 +23,26 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 transform: static (ctx, token) => GetTargetModel(ctx, token))
             .Where(static m => m is not null);
 
-        context.RegisterSourceOutput(facets, static (spc, model) =>
+        // Collect all facet models to enable nested facet lookup during generation
+        var allFacets = facets.Collect();
+
+        context.RegisterSourceOutput(allFacets, static (spc, models) =>
         {
             spc.CancellationToken.ThrowIfCancellationRequested();
-            var code = Generate(model!);
 
-            spc.AddSource($"{model!.FullName}.g.cs", SourceText.From(code, Encoding.UTF8));
+            // Build a lookup dictionary for nested facet resolution
+            var facetLookup = models
+                .Where(m => m is not null)
+                .ToDictionary(m => m!.FullName, m => m!);
+
+            // Generate code for each facet with access to all facet models
+            foreach (var model in models)
+            {
+                if (model is null) continue;
+
+                var code = Generate(model, facetLookup);
+                spc.AddSource($"{model.FullName}.g.cs", SourceText.From(code, Encoding.UTF8));
+            }
         });
     }
 
@@ -486,7 +500,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         => args.FirstOrDefault(kv => kv.Key == name)
             .Value.Value is T t ? t : defaultValue;
 
-    private static string Generate(FacetTargetModel model)
+    private static string Generate(FacetTargetModel model, Dictionary<string, FacetTargetModel> facetLookup)
     {
         var sb = new StringBuilder();
         GenerateFileHeader(sb);
@@ -587,7 +601,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         // Generate projection
         if (model.GenerateExpressionProjection)
         {
-            GenerateProjectionProperty(sb, model, memberIndent);
+            GenerateProjectionProperty(sb, model, memberIndent, facetLookup);
         }
 
         // Generate reverse mapping method (BackTo)
@@ -663,7 +677,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
     /// <summary>
     /// Generates the projection property for LINQ/EF Core query optimization.
     /// </summary>
-    private static void GenerateProjectionProperty(StringBuilder sb, FacetTargetModel model, string memberIndent)
+    private static void GenerateProjectionProperty(StringBuilder sb, FacetTargetModel model, string memberIndent, Dictionary<string, FacetTargetModel> facetLookup)
     {
         sb.AppendLine();
 
@@ -693,7 +707,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
             sb.AppendLine($"{memberIndent}public static Expression<Func<{model.SourceTypeName}, {model.Name}>> Projection =>");
 
             // Generate object initializer projection for EF Core compatibility
-            GenerateProjectionExpression(sb, model, memberIndent);
+            GenerateProjectionExpression(sb, model, memberIndent, facetLookup);
         }
     }
 
@@ -701,7 +715,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
     /// Generates the projection expression body using object initializer syntax for EF Core compatibility.
     /// This allows EF Core to automatically include navigation properties without requiring explicit .Include() calls.
     /// </summary>
-    private static void GenerateProjectionExpression(StringBuilder sb, FacetTargetModel model, string baseIndent)
+    private static void GenerateProjectionExpression(StringBuilder sb, FacetTargetModel model, string baseIndent, Dictionary<string, FacetTargetModel> facetLookup)
     {
         var indent = baseIndent + "    ";
         sb.AppendLine($"{indent}source => new {model.Name}");
@@ -717,7 +731,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
             var memberIndent = indent + "    ";
 
             // Generate the property assignment
-            var projectionValue = GetProjectionValueExpression(member, "source", memberIndent);
+            var projectionValue = GetProjectionValueExpression(member, "source", memberIndent, facetLookup);
             sb.Append($"{memberIndent}{member.Name} = {projectionValue}{comma}");
 
             // Add newline
@@ -731,7 +745,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
     /// Gets the projection expression for a member that's compatible with EF Core query translation.
     /// For nested facets, generates nested object initializers instead of constructor calls.
     /// </summary>
-    private static string GetProjectionValueExpression(FacetMember member, string sourceVariableName, string indent)
+    private static string GetProjectionValueExpression(FacetMember member, string sourceVariableName, string indent, Dictionary<string, FacetTargetModel> facetLookup)
     {
         // Check if the member type is nullable
         bool isNullable = member.TypeName.Contains("?");
@@ -746,7 +760,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 $"{sourceVariableName}.{member.Name}",
                 nonNullableElementType,
                 member.NestedFacetSourceTypeName!,
-                member.CollectionWrapper!);
+                member.CollectionWrapper!,
+                facetLookup);
 
             if (isNullable)
             {
@@ -757,17 +772,60 @@ public sealed class FacetGenerator : IIncrementalGenerator
         }
         else if (member.IsNestedFacet)
         {
-            // For single nested facets, generate inline object initializer
+            // For single nested facets, inline expand the nested facet's members
             var nonNullableTypeName = member.TypeName.TrimEnd('?');
-            var nestedProjection = $"new {nonNullableTypeName} {{ /* nested properties */ }}";
+            var nestedSourceExpression = $"{sourceVariableName}.{member.Name}";
 
-            // For now, we'll use constructor call but with a comment that this should be expanded
-            // In a future iteration, we'd recursively generate the full object initializer
-            nestedProjection = $"new {nonNullableTypeName}({sourceVariableName}.{member.Name})";
+            // Try to look up the nested facet model
+            // The TypeName might be fully qualified (global::Namespace.Type) or simple (Type)
+            FacetTargetModel? nestedFacetModel = null;
+
+            // Strip "global::" prefix and extract simple name
+            var lookupName = nonNullableTypeName
+                .Replace("global::", "")
+                .Split('.', ':')
+                .Last();
+
+            // First try exact match with the lookup name
+            if (facetLookup.TryGetValue(lookupName, out nestedFacetModel))
+            {
+                // Found exact match
+            }
+            else
+            {
+                // Try matching by simple name or full name
+                foreach (var kvp in facetLookup)
+                {
+                    if (kvp.Key == lookupName ||
+                        kvp.Value.Name == lookupName ||
+                        kvp.Key.EndsWith("." + lookupName))
+                    {
+                        nestedFacetModel = kvp.Value;
+                        break;
+                    }
+                }
+            }
+
+            string nestedProjection;
+            if (nestedFacetModel != null)
+            {
+                // Recursively inline the nested facet's members
+                nestedProjection = GenerateInlineNestedFacetInitializer(
+                    nestedFacetModel,
+                    nestedSourceExpression,
+                    nonNullableTypeName,
+                    indent,
+                    facetLookup);
+            }
+            else
+            {
+                // Fallback to constructor call if we can't find the nested facet model
+                nestedProjection = $"new {nonNullableTypeName}({nestedSourceExpression})";
+            }
 
             if (isNullable)
             {
-                return $"{sourceVariableName}.{member.Name} != null ? {nestedProjection} : null";
+                return $"{nestedSourceExpression} != null ? {nestedProjection} : null";
             }
 
             return nestedProjection;
@@ -778,16 +836,86 @@ public sealed class FacetGenerator : IIncrementalGenerator
     }
 
     /// <summary>
+    /// Generates an inline object initializer for a nested facet, recursively expanding all members.
+    /// </summary>
+    private static string GenerateInlineNestedFacetInitializer(
+        FacetTargetModel nestedFacetModel,
+        string sourceExpression,
+        string facetTypeName,
+        string indent,
+        Dictionary<string, FacetTargetModel> facetLookup)
+    {
+        var sb = new StringBuilder();
+        sb.Append($"new {facetTypeName} {{ ");
+
+        var members = nestedFacetModel.Members;
+        for (int i = 0; i < members.Length; i++)
+        {
+            var member = members[i];
+            var projectionValue = GetProjectionValueExpression(member, sourceExpression, indent, facetLookup);
+            sb.Append($"{member.Name} = {projectionValue}");
+
+            if (i < members.Length - 1)
+            {
+                sb.Append(", ");
+            }
+        }
+
+        sb.Append(" }");
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// Generates a collection projection expression for nested facets.
     /// </summary>
     private static string GenerateNestedCollectionProjection(
         string sourceCollectionExpression,
         string elementFacetTypeName,
         string elementSourceTypeName,
-        string collectionWrapper)
+        string collectionWrapper,
+        Dictionary<string, FacetTargetModel> facetLookup)
     {
-        // Generate: source.Collection.Select(x => new ElementType(x)).ToList()/.ToArray()
-        var projection = $"{sourceCollectionExpression}.Select(x => new {elementFacetTypeName}(x))";
+        // Try to find the nested facet model to inline expand it
+        FacetTargetModel? nestedFacetModel = null;
+
+        // Strip "global::" prefix and extract simple name
+        var lookupName = elementFacetTypeName
+            .Replace("global::", "")
+            .Split('.', ':')
+            .Last();
+
+        // First try exact match with the lookup name
+        if (facetLookup.TryGetValue(lookupName, out nestedFacetModel))
+        {
+            // Found exact match
+        }
+        else
+        {
+            // Try matching by simple name or full name
+            foreach (var kvp in facetLookup)
+            {
+                if (kvp.Key == lookupName ||
+                    kvp.Value.Name == lookupName ||
+                    kvp.Key.EndsWith("." + lookupName))
+                {
+                    nestedFacetModel = kvp.Value;
+                    break;
+                }
+            }
+        }
+
+        string projection;
+        if (nestedFacetModel != null)
+        {
+            // Inline expand the nested facet
+            var inlineInitializer = GenerateInlineNestedFacetInitializer(nestedFacetModel, "x", elementFacetTypeName, "", facetLookup);
+            projection = $"{sourceCollectionExpression}.Select(x => {inlineInitializer})";
+        }
+        else
+        {
+            // Fallback to constructor call
+            projection = $"{sourceCollectionExpression}.Select(x => new {elementFacetTypeName}(x))";
+        }
 
         return collectionWrapper switch
         {
