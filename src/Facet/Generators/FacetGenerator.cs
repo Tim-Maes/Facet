@@ -1101,25 +1101,33 @@ public sealed class FacetGenerator : IIncrementalGenerator
     /// <summary>
     /// Extracts the element type name from a collection type name.
     /// For example: "global::System.Collections.Generic.List<global::MyNamespace.MyType>" => "global::MyNamespace.MyType"
+    /// Also handles nullable collections: "List<MyType>?" => "MyType"
     /// </summary>
     private static string ExtractElementTypeFromCollectionTypeName(string collectionTypeName)
     {
-        // Handle array syntax
-        if (collectionTypeName.EndsWith("[]"))
+        // Strip nullable marker from collection first (e.g., "List<T>?" => "List<T>")
+        var nonNullableCollectionType = collectionTypeName.TrimEnd('?');
+
+        // Handle array syntax (e.g., "MyType[]" => "MyType")
+        if (nonNullableCollectionType.EndsWith("[]"))
         {
-            return collectionTypeName.Substring(0, collectionTypeName.Length - 2);
+            var elementType = nonNullableCollectionType.Substring(0, nonNullableCollectionType.Length - 2);
+            // Remove any trailing nullable marker from the element type itself
+            return elementType.TrimEnd('?');
         }
 
-        // Handle generic collection syntax
-        var startIndex = collectionTypeName.IndexOf('<');
-        var endIndex = collectionTypeName.LastIndexOf('>');
+        // Handle generic collection syntax (e.g., "List<MyType>" => "MyType")
+        var startIndex = nonNullableCollectionType.IndexOf('<');
+        var endIndex = nonNullableCollectionType.LastIndexOf('>');
 
         if (startIndex > 0 && endIndex > startIndex)
         {
-            return collectionTypeName.Substring(startIndex + 1, endIndex - startIndex - 1);
+            var elementType = nonNullableCollectionType.Substring(startIndex + 1, endIndex - startIndex - 1);
+            // Remove any trailing nullable marker from the element type itself
+            return elementType.TrimEnd('?');
         }
 
-        return collectionTypeName;
+        return nonNullableCollectionType.TrimEnd('?');
     }
 
     private static void GenerateFactoryMethodForExistingPrimaryConstructor(StringBuilder sb, FacetTargetModel model, bool hasCustomMapping)
