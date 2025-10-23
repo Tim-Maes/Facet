@@ -248,7 +248,11 @@ public sealed class FacetGenerator : IIncrementalGenerator
                     nestedFacetSourceTypeName = nestedMapping.sourceTypeName;
                 }
 
-                if (nullableProperties && !isNestedFacet)
+                // Store the source type name before applying NullableProperties
+                var sourceMemberTypeName = typeName;
+
+                // Apply NullableProperties setting to all properties, including nested facets
+                if (nullableProperties)
                 {
                     typeName = GeneratorUtilities.MakeNullable(typeName);
                 }
@@ -271,7 +275,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
                     nestedFacetSourceTypeName,
                     attributes,
                     isCollection,
-                    collectionWrapper));
+                    collectionWrapper,
+                    sourceMemberTypeName));
                 addedMembers.Add(p.Name);
             }
             else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
@@ -299,6 +304,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 var shouldPreserveRequired = preserveRequired && isRequired;
 
                 var typeName = GeneratorUtilities.GetTypeNameWithNullability(f.Type);
+                var sourceMemberTypeName = typeName; // Store source type before applying NullableProperties
                 if (nullableProperties)
                 {
                     typeName = GeneratorUtilities.MakeNullable(typeName);
@@ -320,7 +326,10 @@ public sealed class FacetGenerator : IIncrementalGenerator
                     memberXmlDocumentation,
                     false, // Fields don't support nested facets
                     null,
-                    attributes));
+                    attributes,
+                    false, // Fields are not collections
+                    null,  // No collection wrapper for fields
+                    sourceMemberTypeName));
                 addedMembers.Add(f.Name);
             }
         }
@@ -1248,12 +1257,15 @@ public sealed class FacetGenerator : IIncrementalGenerator
     /// Gets the appropriate value expression for mapping back to the source type.
     /// For child facets, returns "this.PropertyName.BackTo()" with null checks if nullable.
     /// For collection child facets, returns "this.PropertyName.Select(x => x.BackTo()).ToList()" with null checks if nullable.
-    /// For regular members, returns "this.PropertyName".
+    /// For regular members, returns "this.PropertyName" with nullable-to-non-nullable conversion if needed.
     /// </summary>
     private static string GetBackToValueExpression(FacetMember member)
     {
         // Check if the member type is nullable (ends with ?)
-        bool isNullable = member.TypeName.Contains("?");
+        bool facetTypeIsNullable = member.TypeName.Contains("?");
+
+        // Check if the source type is nullable
+        bool sourceTypeIsNullable = member.SourceMemberTypeName?.Contains("?") ?? facetTypeIsNullable;
 
         if (member.IsNestedFacet && member.IsCollection)
         {
@@ -1272,7 +1284,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
             };
 
             // Add null check for nullable collections
-            if (isNullable)
+            if (facetTypeIsNullable)
             {
                 return $"this.{member.Name} != null ? {collectionExpression} : null";
             }
@@ -1282,13 +1294,30 @@ public sealed class FacetGenerator : IIncrementalGenerator
         else if (member.IsNestedFacet)
         {
             // Add null check for nullable nested facets
-            if (isNullable)
+            if (facetTypeIsNullable)
             {
                 return $"this.{member.Name} != null ? this.{member.Name}.BackTo() : null";
             }
 
             // Use the child facet's generated BackTo method
             return $"this.{member.Name}.BackTo()";
+        }
+
+        // For regular properties/fields:
+        // If the facet type is nullable but the source type is not, we need to unwrap the nullable
+        if (facetTypeIsNullable && !sourceTypeIsNullable)
+        {
+            // Use null-coalescing with default value for value types, or null-forgiving for reference types
+            if (member.IsValueType)
+            {
+                // For value types like int?, use: this.Property ?? default
+                return $"this.{member.Name} ?? default";
+            }
+            else
+            {
+                // For reference types, use null-forgiving operator since the source expects non-null
+                return $"this.{member.Name}!";
+            }
         }
 
         return $"this.{member.Name}";
