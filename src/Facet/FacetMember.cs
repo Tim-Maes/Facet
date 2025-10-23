@@ -19,8 +19,9 @@ internal sealed class FacetMember : IEquatable<FacetMember>
     public IReadOnlyList<string> Attributes { get; }
     public bool IsCollection { get; }
     public string? CollectionWrapper { get; }
+    public string? SourceMemberTypeName { get; }
 
-    public FacetMember(string name, string typeName, FacetMemberKind kind, bool isValueType, bool isInitOnly = false, bool isRequired = false, bool isReadOnly = false, string? xmlDocumentation = null, bool isNestedFacet = false, string? nestedFacetSourceTypeName = null, IReadOnlyList<string>? attributes = null, bool isCollection = false, string? collectionWrapper = null)
+    public FacetMember(string name, string typeName, FacetMemberKind kind, bool isValueType, bool isInitOnly = false, bool isRequired = false, bool isReadOnly = false, string? xmlDocumentation = null, bool isNestedFacet = false, string? nestedFacetSourceTypeName = null, IReadOnlyList<string>? attributes = null, bool isCollection = false, string? collectionWrapper = null, string? sourceMemberTypeName = null)
     {
         Name = name;
         TypeName = typeName;
@@ -35,6 +36,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         Attributes = attributes ?? Array.Empty<string>();
         IsCollection = isCollection;
         CollectionWrapper = collectionWrapper;
+        SourceMemberTypeName = sourceMemberTypeName;
     }
 
     public bool Equals(FacetMember? other) =>
@@ -50,6 +52,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         NestedFacetSourceTypeName == other.NestedFacetSourceTypeName &&
         IsCollection == other.IsCollection &&
         CollectionWrapper == other.CollectionWrapper &&
+        SourceMemberTypeName == other.SourceMemberTypeName &&
         Attributes.SequenceEqual(other.Attributes);
 
     public override bool Equals(object? obj) => obj is FacetMember other && Equals(other);
@@ -70,6 +73,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
             hash = hash * 31 + (NestedFacetSourceTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + IsCollection.GetHashCode();
             hash = hash * 31 + (CollectionWrapper?.GetHashCode() ?? 0);
+            hash = hash * 31 + (SourceMemberTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + Attributes.Count.GetHashCode();
             foreach (var attr in Attributes)
                 hash = hash * 31 + (attr?.GetHashCode() ?? 0);
@@ -77,7 +81,6 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         }
     }
 }
-
 
 internal enum FacetMemberKind
 {
