@@ -220,6 +220,20 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 // Check if the property type is nullable (reference types)
                 bool isNullableReferenceType = p.Type.NullableAnnotation == NullableAnnotation.Annotated;
 
+                bool shouldTreatAsNullable = isNullableReferenceType;
+
+                if (!shouldTreatAsNullable && !p.Type.IsValueType)
+                {
+                    bool isExplicitlyNonNullable = p.Type.NullableAnnotation == NullableAnnotation.NotAnnotated &&
+                                                    p.IsRequired;
+
+                    if (!isExplicitlyNonNullable)
+                    {
+                        // treat as potentially nullable for safety
+                        shouldTreatAsNullable = true;
+                    }
+                }
+
                 // Check if this property's type is a collection
                 if (GeneratorUtilities.TryGetCollectionElementType(p.Type, out var elementType, out var wrapper))
                 {
@@ -230,7 +244,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
                         // Wrap the child facet type in the same collection type
                         var wrappedType = GeneratorUtilities.WrapInCollectionType(nestedMapping.childFacetTypeName, wrapper!);
                         // Preserve nullability if the collection itself was nullable
-                        typeName = isNullableReferenceType ? wrappedType + "?" : wrappedType;
+                        typeName = shouldTreatAsNullable ? wrappedType + "?" : wrappedType;
                         isNestedFacet = true;
                         isCollection = true;
                         collectionWrapper = wrapper;
@@ -241,7 +255,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 else if (nestedFacetMappings.TryGetValue(propertyTypeName, out var nestedMapping))
                 {
                     // Preserve nullability when assigning nested facet type name
-                    typeName = isNullableReferenceType
+                    typeName = shouldTreatAsNullable
                         ? nestedMapping.childFacetTypeName + "?"
                         : nestedMapping.childFacetTypeName;
                     isNestedFacet = true;
