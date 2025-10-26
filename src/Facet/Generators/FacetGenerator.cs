@@ -155,6 +155,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
         var preserveRequired = GetNamedArg(attribute.NamedArguments, "PreserveRequiredProperties", preserveRequiredDefault);
         var nullableProperties = GetNamedArg(attribute.NamedArguments, "NullableProperties", false);
         var copyAttributes = GetNamedArg(attribute.NamedArguments, "CopyAttributes", false);
+        var maxDepth = GetNamedArg(attribute.NamedArguments, "MaxDepth", 0);
+        var preserveReferences = GetNamedArg(attribute.NamedArguments, "PreserveReferences", false);
 
         // Extract nested facets parameter and build mapping from source type to child facet type
         var nestedFacetMappings = ExtractNestedFacetMappings(attribute, context.SemanticModel.Compilation);
@@ -396,7 +398,9 @@ public sealed class FacetGenerator : IIncrementalGenerator
             useFullName,
             excludedRequiredMembers.ToImmutableArray(),
             nullableProperties,
-            copyAttributes);
+            copyAttributes,
+            maxDepth,
+            preserveReferences);
     }
 
     /// <summary>
@@ -754,7 +758,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
             var memberIndent = indent + "    ";
 
             // Generate the property assignment
-            var projectionValue = GetProjectionValueExpression(member, "source", memberIndent, facetLookup);
+            var projectionValue = GetProjectionValueExpression(member, "source", memberIndent, facetLookup, 0, model.MaxDepth);
             sb.Append($"{memberIndent}{member.Name} = {projectionValue}{comma}");
 
             // Add newline
@@ -768,13 +772,20 @@ public sealed class FacetGenerator : IIncrementalGenerator
     /// Gets the projection expression for a member that's compatible with EF Core query translation.
     /// For nested facets, generates nested object initializers instead of constructor calls.
     /// </summary>
-    private static string GetProjectionValueExpression(FacetMember member, string sourceVariableName, string indent, Dictionary<string, FacetTargetModel> facetLookup)
+    private static string GetProjectionValueExpression(FacetMember member, string sourceVariableName, string indent, Dictionary<string, FacetTargetModel> facetLookup, int currentDepth = 0, int maxDepth = 0)
     {
         // Check if the member type is nullable
         bool isNullable = member.TypeName.Contains("?");
 
         if (member.IsNestedFacet && member.IsCollection)
         {
+            // Check if we've reached max depth during code generation
+            // Note: maxDepth of 0 means unlimited
+            if (maxDepth > 0 && currentDepth + 1 > maxDepth)
+            {
+                return "null";
+            }
+
             // For collection nested facets, use Select with nested projection
             var elementTypeName = ExtractElementTypeFromCollectionTypeName(member.TypeName);
             var nonNullableElementType = elementTypeName.TrimEnd('?');
@@ -784,7 +795,9 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 nonNullableElementType,
                 member.NestedFacetSourceTypeName!,
                 member.CollectionWrapper!,
-                facetLookup);
+                facetLookup,
+                currentDepth + 1,
+                maxDepth);
 
             if (isNullable)
             {
@@ -795,6 +808,13 @@ public sealed class FacetGenerator : IIncrementalGenerator
         }
         else if (member.IsNestedFacet)
         {
+            // Check if we've reached max depth during code generation
+            // Note: maxDepth of 0 means unlimited
+            if (maxDepth > 0 && currentDepth + 1 > maxDepth)
+            {
+                return "null";
+            }
+
             // For single nested facets, inline expand the nested facet's members
             var nonNullableTypeName = member.TypeName.TrimEnd('?');
             var nestedSourceExpression = $"{sourceVariableName}.{member.Name}";
@@ -838,7 +858,9 @@ public sealed class FacetGenerator : IIncrementalGenerator
                     nestedSourceExpression,
                     nonNullableTypeName,
                     indent,
-                    facetLookup);
+                    facetLookup,
+                    currentDepth + 1,
+                    maxDepth);
             }
             else
             {
@@ -866,7 +888,9 @@ public sealed class FacetGenerator : IIncrementalGenerator
         string sourceExpression,
         string facetTypeName,
         string indent,
-        Dictionary<string, FacetTargetModel> facetLookup)
+        Dictionary<string, FacetTargetModel> facetLookup,
+        int currentDepth = 0,
+        int maxDepth = 0)
     {
         var sb = new StringBuilder();
         sb.Append($"new {facetTypeName} {{ ");
@@ -875,7 +899,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         for (int i = 0; i < members.Length; i++)
         {
             var member = members[i];
-            var projectionValue = GetProjectionValueExpression(member, sourceExpression, indent, facetLookup);
+            var projectionValue = GetProjectionValueExpression(member, sourceExpression, indent, facetLookup, currentDepth, maxDepth);
             sb.Append($"{member.Name} = {projectionValue}");
 
             if (i < members.Length - 1)
@@ -896,7 +920,9 @@ public sealed class FacetGenerator : IIncrementalGenerator
         string elementFacetTypeName,
         string elementSourceTypeName,
         string collectionWrapper,
-        Dictionary<string, FacetTargetModel> facetLookup)
+        Dictionary<string, FacetTargetModel> facetLookup,
+        int currentDepth = 0,
+        int maxDepth = 0)
     {
         // Try to find the nested facet model to inline expand it
         FacetTargetModel? nestedFacetModel = null;
@@ -931,7 +957,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
         if (nestedFacetModel != null)
         {
             // Inline expand the nested facet
-            var inlineInitializer = GenerateInlineNestedFacetInitializer(nestedFacetModel, "x", elementFacetTypeName, "", facetLookup);
+            var inlineInitializer = GenerateInlineNestedFacetInitializer(nestedFacetModel, "x", elementFacetTypeName, "", facetLookup, currentDepth, maxDepth);
             projection = $"{sourceCollectionExpression}.Select(x => {inlineInitializer})";
         }
         else
@@ -960,6 +986,10 @@ public sealed class FacetGenerator : IIncrementalGenerator
             return;
         }
 
+        // Check if we have nested facets and depth tracking is needed
+        bool hasNestedFacets = model.Members.Any(m => m.IsNestedFacet);
+        bool needsDepthTracking = hasNestedFacets && (model.MaxDepth > 0 || model.PreserveReferences);
+
         // For now, keep the hardcoded indentation approach but add the proper nesting support later
         // Generate constructor XML documentation
         sb.AppendLine();
@@ -976,7 +1006,19 @@ public sealed class FacetGenerator : IIncrementalGenerator
 
         var ctorSig = $"public {model.Name}({model.SourceTypeName} source)";
 
-        if (isPositional && !model.HasExistingPrimaryConstructor)
+        if (needsDepthTracking)
+        {
+            // Chain to internal depth-aware constructor with reference tracking
+            if (model.PreserveReferences)
+            {
+                ctorSig += " : this(source, 0, new System.Collections.Generic.HashSet<object>(System.Collections.Generic.ReferenceEqualityComparer.Instance))";
+            }
+            else
+            {
+                ctorSig += " : this(source, 0, null)";
+            }
+        }
+        else if (isPositional && !model.HasExistingPrimaryConstructor)
         {
             // Traditional positional record - chain to primary constructor
             var args = string.Join(", ",
@@ -991,40 +1033,50 @@ public sealed class FacetGenerator : IIncrementalGenerator
         sb.AppendLine($"    {ctorSig}");
         sb.AppendLine("    {");
 
-        if (!isPositional && !model.HasExistingPrimaryConstructor)
+        // Only generate body if not chaining to depth-aware constructor
+        if (!needsDepthTracking)
         {
-            if (hasCustomMapping && hasInitOnlyProperties)
+            if (!isPositional && !model.HasExistingPrimaryConstructor)
             {
-                // For types with init-only properties and custom mapping,
-                // we can't assign after construction
-                sb.AppendLine($"        // This constructor should not be used for types with init-only properties and custom mapping");
-                sb.AppendLine($"        // Use FromSource factory method instead");
-                sb.AppendLine($"        throw new InvalidOperationException(\"Use {model.Name}.FromSource(source) for types with init-only properties\");");
-            }
-            else if (hasCustomMapping)
-            {
-                // Regular mutable properties - copy first, then apply custom mapping
-                foreach (var m in model.Members)
-                    sb.AppendLine($"        this.{m.Name} = source.{m.Name};");
-                sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
-            }
-            else
-            {
-                // No custom mapping - copy properties directly
-                foreach (var m in model.Members.Where(x => !x.IsInitOnly))
+                if (hasCustomMapping && hasInitOnlyProperties)
                 {
-                    var sourceValue = GetSourceValueExpression(m, "source");
-                    sb.AppendLine($"        this.{m.Name} = {sourceValue};");
+                    // For types with init-only properties and custom mapping,
+                    // we can't assign after construction
+                    sb.AppendLine($"        // This constructor should not be used for types with init-only properties and custom mapping");
+                    sb.AppendLine($"        // Use FromSource factory method instead");
+                    sb.AppendLine($"        throw new InvalidOperationException(\"Use {model.Name}.FromSource(source) for types with init-only properties\");");
+                }
+                else if (hasCustomMapping)
+                {
+                    // Regular mutable properties - copy first, then apply custom mapping
+                    foreach (var m in model.Members)
+                        sb.AppendLine($"        this.{m.Name} = source.{m.Name};");
+                    sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
+                }
+                else
+                {
+                    // No custom mapping - copy properties directly
+                    foreach (var m in model.Members.Where(x => !x.IsInitOnly))
+                    {
+                        var sourceValue = GetSourceValueExpression(m, "source");
+                        sb.AppendLine($"        this.{m.Name} = {sourceValue};");
+                    }
                 }
             }
-        }
-        else if (hasCustomMapping && !model.HasExistingPrimaryConstructor)
-        {
-            // For positional records/record structs with custom mapping
-            sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
+            else if (hasCustomMapping && !model.HasExistingPrimaryConstructor)
+            {
+                // For positional records/record structs with custom mapping
+                sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
+            }
         }
 
         sb.AppendLine("    }");
+
+        // Generate internal depth-aware constructor if needed
+        if (needsDepthTracking)
+        {
+            GenerateDepthAwareConstructor(sb, model, isPositional, hasInitOnlyProperties, hasCustomMapping, hasRequiredProperties);
+        }
 
         // Add static factory method for types with init-only properties
         if (!isPositional && hasInitOnlyProperties && !model.HasExistingPrimaryConstructor)
@@ -1067,7 +1119,7 @@ public sealed class FacetGenerator : IIncrementalGenerator
     /// For collection nested facets, returns "source.PropertyName.Select(x => new NestedFacetType(x)).ToList()" with null checks if nullable.
     /// For regular members, returns "source.PropertyName".
     /// </summary>
-    private static string GetSourceValueExpression(FacetMember member, string sourceVariableName)
+    private static string GetSourceValueExpression(FacetMember member, string sourceVariableName, int maxDepth = 0, bool useDepthParameter = false, bool preserveReferences = false)
     {
         bool isNullable = member.TypeName.Contains("?");
 
@@ -1075,41 +1127,177 @@ public sealed class FacetGenerator : IIncrementalGenerator
         {
             var elementTypeName = ExtractElementTypeFromCollectionTypeName(member.TypeName);
 
-            // Use LINQ Select to map each element
-            var projection = $"{sourceVariableName}.{member.Name}.Select(x => new {elementTypeName}(x))";
-
-            // Convert back to the appropriate collection type
-            var collectionExpression = member.CollectionWrapper switch
+            // Check if we should stop due to max depth
+            if (useDepthParameter && maxDepth > 0)
             {
-                "List" => $"{projection}.ToList()",
-                "IList" => $"{projection}.ToList()",
-                "ICollection" => $"{projection}.ToList()",
-                "IEnumerable" => projection,
-                "array" => $"{projection}.ToArray()",
-                _ => projection
-            };
+                // Use LINQ Select to map each element with depth tracking
+                var projection = preserveReferences
+                    ? $"{sourceVariableName}.{member.Name}.Select(x => __processed != null && __processed.Contains(x) ? null : new {elementTypeName}(x, __depth + 1, __processed)).Where(x => x != null)"
+                    : $"{sourceVariableName}.{member.Name}.Select(x => new {elementTypeName}(x, __depth + 1, __processed))";
 
-            if (isNullable)
-            {
-                return $"{sourceVariableName}.{member.Name} != null ? {collectionExpression} : null";
+                // Convert back to the appropriate collection type
+                var collectionExpression = member.CollectionWrapper switch
+                {
+                    "List" => $"{projection}.ToList()",
+                    "IList" => $"{projection}.ToList()",
+                    "ICollection" => $"{projection}.ToList()",
+                    "IEnumerable" => projection,
+                    "array" => $"{projection}.ToArray()",
+                    _ => projection
+                };
+
+                if (isNullable)
+                {
+                    return $"__depth < {maxDepth} && {sourceVariableName}.{member.Name} != null ? {collectionExpression} : null";
+                }
+
+                return $"__depth < {maxDepth} ? {collectionExpression} : null";
             }
+            else
+            {
+                // Use LINQ Select to map each element
+                var projection = useDepthParameter
+                    ? (preserveReferences
+                        ? $"{sourceVariableName}.{member.Name}.Select(x => __processed != null && __processed.Contains(x) ? null : new {elementTypeName}(x, __depth + 1, __processed)).Where(x => x != null)"
+                        : $"{sourceVariableName}.{member.Name}.Select(x => new {elementTypeName}(x, __depth + 1, __processed))")
+                    : $"{sourceVariableName}.{member.Name}.Select(x => new {elementTypeName}(x))";
 
-            return collectionExpression;
+                // Convert back to the appropriate collection type
+                var collectionExpression = member.CollectionWrapper switch
+                {
+                    "List" => $"{projection}.ToList()",
+                    "IList" => $"{projection}.ToList()",
+                    "ICollection" => $"{projection}.ToList()",
+                    "IEnumerable" => projection,
+                    "array" => $"{projection}.ToArray()",
+                    _ => projection
+                };
+
+                if (isNullable)
+                {
+                    return $"{sourceVariableName}.{member.Name} != null ? {collectionExpression} : null";
+                }
+
+                return collectionExpression;
+            }
         }
         else if (member.IsNestedFacet)
         {
             var nonNullableTypeName = member.TypeName.TrimEnd('?');
 
-            if (isNullable)
+            // Build the constructor call with reference checking if needed
+            string BuildConstructorCall(string sourceExpr)
             {
-                return $"{sourceVariableName}.{member.Name} != null ? new {nonNullableTypeName}({sourceVariableName}.{member.Name}) : null";
+                var ctorCall = useDepthParameter
+                    ? $"new {nonNullableTypeName}({sourceExpr}, __depth + 1, __processed)"
+                    : $"new {nonNullableTypeName}({sourceExpr})";
+
+                if (preserveReferences && useDepthParameter)
+                {
+                    return $"(__processed != null && __processed.Contains({sourceExpr}) ? null : {ctorCall})";
+                }
+
+                return ctorCall;
             }
 
-            // Use the nested facet's generated constructor
-            return $"new {nonNullableTypeName}({sourceVariableName}.{member.Name})";
+            // Check if we should stop due to max depth
+            if (useDepthParameter && maxDepth > 0)
+            {
+                var constructorCall = BuildConstructorCall($"{sourceVariableName}.{member.Name}");
+
+                if (isNullable)
+                {
+                    return $"__depth < {maxDepth} && {sourceVariableName}.{member.Name} != null ? {constructorCall} : null";
+                }
+
+                return $"__depth < {maxDepth} ? {constructorCall} : null";
+            }
+            else
+            {
+                var constructorCall = BuildConstructorCall($"{sourceVariableName}.{member.Name}");
+
+                if (isNullable)
+                {
+                    return $"{sourceVariableName}.{member.Name} != null ? {constructorCall} : null";
+                }
+
+                // Use the nested facet's generated constructor
+                return constructorCall;
+            }
         }
 
         return $"{sourceVariableName}.{member.Name}";
+    }
+
+    /// <summary>
+    /// Generates an internal constructor with depth tracking for circular reference prevention.
+    /// </summary>
+    private static void GenerateDepthAwareConstructor(StringBuilder sb, FacetTargetModel model, bool isPositional, bool hasInitOnlyProperties, bool hasCustomMapping, bool hasRequiredProperties)
+    {
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine($"    /// Internal constructor with depth tracking to prevent stack overflow from circular references.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine($"    /// <param name=\"source\">The source object to copy data from.</param>");
+        sb.AppendLine($"    /// <param name=\"__depth\">Current nesting depth for circular reference detection.</param>");
+        sb.AppendLine($"    /// <param name=\"__processed\">Set of already processed objects to detect circular references.</param>");
+
+        var ctorSig = $"internal {model.Name}({model.SourceTypeName} source, int __depth, System.Collections.Generic.HashSet<object>? __processed)";
+
+        if (isPositional && !model.HasExistingPrimaryConstructor)
+        {
+            // Traditional positional record - chain to primary constructor
+            var args = string.Join(", ",
+                model.Members.Select(m => GetSourceValueExpression(m, "source", model.MaxDepth, true, model.PreserveReferences)));
+            ctorSig += $" : this({args})";
+        }
+
+        if (hasRequiredProperties)
+        {
+            sb.AppendLine("    [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]");
+        }
+        sb.AppendLine($"    {ctorSig}");
+        sb.AppendLine("    {");
+
+        // Add source object to processed set if using reference tracking
+        if (model.PreserveReferences)
+        {
+            sb.AppendLine("        __processed?.Add(source);");
+            sb.AppendLine();
+        }
+
+        if (!isPositional && !model.HasExistingPrimaryConstructor)
+        {
+            if (hasCustomMapping && hasInitOnlyProperties)
+            {
+                sb.AppendLine($"        // This constructor should not be used for types with init-only properties and custom mapping");
+                sb.AppendLine($"        // Use FromSource factory method instead");
+                sb.AppendLine($"        throw new InvalidOperationException(\"Use {model.Name}.FromSource(source) for types with init-only properties\");");
+            }
+            else if (hasCustomMapping)
+            {
+                // Regular mutable properties - copy first, then apply custom mapping
+                foreach (var m in model.Members)
+                    sb.AppendLine($"        this.{m.Name} = source.{m.Name};");
+                sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
+            }
+            else
+            {
+                // No custom mapping - copy properties directly with depth tracking
+                foreach (var m in model.Members.Where(x => !x.IsInitOnly))
+                {
+                    var sourceValue = GetSourceValueExpression(m, "source", model.MaxDepth, true, model.PreserveReferences);
+                    sb.AppendLine($"        this.{m.Name} = {sourceValue};");
+                }
+            }
+        }
+        else if (hasCustomMapping && !model.HasExistingPrimaryConstructor)
+        {
+            // For positional records/record structs with custom mapping
+            sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
+        }
+
+        sb.AppendLine("    }");
     }
 
     /// <summary>
