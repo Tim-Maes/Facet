@@ -28,7 +28,7 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true);
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
-        [TargetNotFacetRule, SingleGenericPerformanceRule];
+        ImmutableArray.Create(TargetNotFacetRule, SingleGenericPerformanceRule);
 
     public override void Initialize(AnalysisContext context)
     {
