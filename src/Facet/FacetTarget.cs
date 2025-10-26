@@ -28,6 +28,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public ImmutableArray<FacetMember> ExcludedRequiredMembers { get; }
     public bool NullableProperties { get; }
     public bool CopyAttributes { get; }
+    public int MaxDepth { get; }
+    public bool PreserveReferences { get; }
 
     public FacetTargetModel(
         string name,
@@ -49,7 +51,9 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         bool useFullName = false,
         ImmutableArray<FacetMember> excludedRequiredMembers = default,
         bool nullableProperties = false,
-        bool copyAttributes = false)
+        bool copyAttributes = false,
+        int maxDepth = 0,
+        bool preserveReferences = false)
     {
         Name = name;
         Namespace = @namespace;
@@ -71,6 +75,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         ExcludedRequiredMembers = excludedRequiredMembers.IsDefault ? ImmutableArray<FacetMember>.Empty : excludedRequiredMembers;
         NullableProperties = nullableProperties;
         CopyAttributes = copyAttributes;
+        MaxDepth = maxDepth;
+        PreserveReferences = preserveReferences;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -96,7 +102,9 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && ExcludedRequiredMembers.SequenceEqual(other.ExcludedRequiredMembers)
             && UseFullName == other.UseFullName
             && NullableProperties == other.NullableProperties
-            && CopyAttributes == other.CopyAttributes;
+            && CopyAttributes == other.CopyAttributes
+            && MaxDepth == other.MaxDepth
+            && PreserveReferences == other.PreserveReferences;
     }
 
     public override bool Equals(object? obj) => obj is FacetTargetModel other && Equals(other);
@@ -122,6 +130,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + UseFullName.GetHashCode();
             hash = hash * 31 + NullableProperties.GetHashCode();
             hash = hash * 31 + CopyAttributes.GetHashCode();
+            hash = hash * 31 + MaxDepth.GetHashCode();
+            hash = hash * 31 + PreserveReferences.GetHashCode();
             hash = hash * 31 + Members.Length.GetHashCode();
 
             foreach (var member in Members)

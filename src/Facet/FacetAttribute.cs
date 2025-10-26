@@ -109,6 +109,26 @@ public sealed class FacetAttribute : Attribute
     public bool CopyAttributes { get; set; } = false;
 
     /// <summary>
+    /// The maximum depth for nested facet recursion. When set to a positive value, the generator will
+    /// limit how deep nested facets can be instantiated to prevent stack overflow with circular references.
+    /// A value of 0 means unlimited depth (not recommended - can cause stack overflow).
+    /// A value of 1 allows one level of nesting, 2 allows two levels, etc.
+    /// Default is 3, which handles most real-world scenarios (e.g., Order -> LineItems -> Product -> Category).
+    /// Set to 0 to disable (use with caution), or increase if you need deeper nesting.
+    /// </summary>
+    public int MaxDepth { get; set; } = 3;
+
+    /// <summary>
+    /// When true, the generator will track object references during facet construction to prevent
+    /// infinite recursion when circular references exist in the object graph.
+    /// This adds a small runtime overhead (HashSet lookups) but prevents processing the same
+    /// object instance multiple times, which is critical for safety with circular references.
+    /// Default is true for safety. Set to false only if you're certain your object graphs have no circular references
+    /// and you need maximum performance.
+    /// </summary>
+    public bool PreserveReferences { get; set; } = true;
+
+    /// <summary>
     /// Creates a new FacetAttribute that targets a given source type and excludes specified members.
     /// </summary>
     /// <param name="sourceType">The type to generate from.</param>

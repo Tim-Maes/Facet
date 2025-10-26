@@ -35,6 +35,8 @@ public partial class MyFacet { }
 | `NullableProperties`           | `bool`    | Make all properties nullable in the generated facet (default: false). |
 | `CopyAttributes`               | `bool`    | Copy attributes from source type members to generated facet members (default: false). See [Attribute Copying](#attribute-copying) below. |
 | `UseFullName`                  | `bool`    | Use full type name in generated file names to avoid collisions (default: false). |
+| `MaxDepth`                     | `int`     | Maximum depth for nested facet recursion to prevent stack overflow (default: 3). Set to 0 for unlimited (not recommended). See [Circular Reference Protection](#circular-reference-protection) below. |
+| `PreserveReferences`           | `bool`    | Enable runtime circular reference detection using object tracking (default: true). See [Circular Reference Protection](#circular-reference-protection) below. |
 
 ## Include vs Exclude
 
@@ -307,6 +309,129 @@ Both the parent and nested facets will have their attributes copied from their r
 ### Default Behavior
 
 By default, `CopyAttributes = false`, meaning no attributes are copied. This maintains backward compatibility and gives you explicit control over when attributes should be copied.
+
+## Circular Reference Protection
+
+When working with nested facets, circular references in your object graph can cause stack overflow exceptions and IDE crashes. The Facet library provides two complementary features to prevent this:
+
+### MaxDepth
+
+Controls how many levels deep nested facets can be instantiated. This prevents infinite recursion during both code generation and runtime.
+
+**Default:** `3` (recommended for most scenarios)
+
+```csharp
+// Handles: Order -> LineItems -> Product -> Category
+[Facet(typeof(Order), NestedFacets = [typeof(LineItemDto)])]
+public partial record OrderDto;
+
+// For deeper nesting, increase MaxDepth
+[Facet(typeof(Organization), MaxDepth = 5, NestedFacets = [typeof(DepartmentDto)])]
+public partial record OrganizationDto;
+
+// To disable depth limiting (use with caution!)
+[Facet(typeof(SimpleType), MaxDepth = 0)]
+public partial record SimpleTypeDto;
+```
+
+**How MaxDepth Works:**
+- **Level 0**: Root object (e.g., Order)
+- **Level 1**: First level nested objects (e.g., LineItems)
+- **Level 2**: Second level nested objects (e.g., Product)
+- **Level 3**: Third level nested objects (e.g., Category) - stops here with default MaxDepth = 3
+- Properties that would exceed MaxDepth are set to `null`
+
+### PreserveReferences
+
+Enables runtime tracking of object instances to detect when the same object is being processed multiple times. This prevents circular references where objects reference each other.
+
+**Default:** `true` (recommended for safety)
+
+```csharp
+// Enable circular reference detection (default)
+[Facet(typeof(Author), PreserveReferences = true, NestedFacets = [typeof(BookDto)])]
+public partial record AuthorDto;
+
+[Facet(typeof(Book), PreserveReferences = true, NestedFacets = [typeof(AuthorDto)])]
+public partial record BookDto;
+
+// Disable for maximum performance (only if you're certain no circular refs exist)
+[Facet(typeof(FlatDto), PreserveReferences = false)]
+public partial record FlatDto;
+```
+
+**How PreserveReferences Works:**
+- Uses a `HashSet<object>` with reference equality to track processed objects
+- When creating nested facets, checks if the source object was already processed
+- Returns `null` for already-processed objects to break circular references
+- Filters out duplicates from collections using `.Where(x => x != null)`
+
+### Best Practices
+
+**For circular references (e.g., Author <> Book, Employee <> Manager):**
+```csharp
+[Facet(typeof(Author), MaxDepth = 2, PreserveReferences = true,
+       NestedFacets = [typeof(BookDto)])]
+public partial record AuthorDto;
+
+[Facet(typeof(Book), MaxDepth = 2, PreserveReferences = true,
+       NestedFacets = [typeof(AuthorDto)])]
+public partial record BookDto;
+```
+
+**For self-referencing types (e.g., Employee -> Manager -> Manager):**
+```csharp
+[Facet(typeof(Employee), MaxDepth = 5, PreserveReferences = true,
+       NestedFacets = [typeof(EmployeeDto)])]
+public partial record EmployeeDto;
+```
+
+**For simple hierarchies with no circular references:**
+```csharp
+// Can reduce overhead if certain no circular refs
+[Facet(typeof(Category), MaxDepth = 10, PreserveReferences = false,
+       NestedFacets = [typeof(CategoryDto)])]
+public partial record CategoryDto;
+```
+
+**For flat DTOs with no nested facets:**
+```csharp
+// Can disable both for maximum performance
+[Facet(typeof(Product), MaxDepth = 0, PreserveReferences = false)]
+public partial record ProductDto;
+```
+
+### Performance Considerations
+
+- **MaxDepth**: Negligible overhead - just depth counter checks
+- **PreserveReferences**: Minimal overhead - HashSet reference lookups (typically < 1% performance impact)
+- Both features are safe to leave enabled by default
+- Only disable if you have profiled your application and identified these as bottlenecks
+
+### Common Scenarios
+
+| Scenario | MaxDepth | PreserveReferences | Example |
+|----------|----------|-------------------|---------|
+| Flat DTO (no nesting) | 0 | false | Simple user profile |
+| Simple parent-child | 2 | false | Order -> Customer |
+| Multi-level hierarchy | 3-5 | false | Order -> LineItem -> Product -> Category |
+| Circular references | 2-3 | true | Author <> Book, Post <> Comments |
+| Self-referencing | 3-5 | true | Employee tree, Category tree |
+| Complex object graphs | 3-5 | true | Any complex domain model |
+
+### Troubleshooting
+
+**Stack overflow during code generation:**
+- Increase `MaxDepth`, the source generator is hitting infinite recursion
+- Ensure `MaxDepth > 0` when using `PreserveReferences = true`
+
+**Stack overflow at runtime:**
+- Enable `PreserveReferences = true`
+- Increase `MaxDepth` if your legitimate nesting depth exceeds the current value
+
+**Missing nested data:**
+- Check if your nesting depth exceeds `MaxDepth`
+- Verify `PreserveReferences` isn't filtering out valid references
 
 ---
 
