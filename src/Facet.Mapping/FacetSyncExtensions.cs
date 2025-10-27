@@ -91,6 +91,11 @@ public static class FacetSyncExtensions
     /// <param name="mapper">The hybrid mapper instance (supports dependency injection)</param>
     /// <returns>The mapped target instance</returns>
     /// <exception cref="ArgumentNullException">Thrown when source or mapper is null</exception>
+    /// <remarks>
+    /// This method uses the obsolete IFacetMapConfigurationHybridInstance interface.
+    /// Consider implementing both IFacetMapConfigurationInstance and IFacetMapConfigurationAsyncInstance directly.
+    /// </remarks>
+#pragma warning disable CS0618 // Type or member is obsolete
     public static TTarget ToFacetSync<TSource, TTarget>(
         this TSource source,
         IFacetMapConfigurationHybridInstance<TSource, TTarget> mapper)
@@ -98,9 +103,10 @@ public static class FacetSyncExtensions
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
         if (mapper == null) throw new ArgumentNullException(nameof(mapper));
-        
+
         var target = new TTarget();
         mapper.Map(source, target);
         return target;
     }
+#pragma warning restore CS0618 // Type or member is obsolete
 }

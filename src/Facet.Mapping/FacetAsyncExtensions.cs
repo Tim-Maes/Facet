@@ -420,6 +420,11 @@ public static class FacetAsyncExtensions
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>A task containing the mapped target instance</returns>
     /// <exception cref="ArgumentNullException">Thrown when source is null</exception>
+    /// <remarks>
+    /// This method uses the obsolete IFacetMapConfigurationHybrid interface.
+    /// Consider implementing both IFacetMapConfiguration and IFacetMapConfigurationAsync directly.
+    /// </remarks>
+#pragma warning disable CS0618 // Type or member is obsolete
     public static async Task<TTarget> ToFacetHybridAsync<TSource, TTarget, THybridMapper>(
         this TSource source,
         CancellationToken cancellationToken = default)
@@ -427,17 +432,18 @@ public static class FacetAsyncExtensions
         where THybridMapper : IFacetMapConfigurationHybrid<TSource, TTarget>
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
-        
+
         var target = CreateFacetInstance<TTarget>(source, typeof(TSource), typeof(TTarget));
-        
+
         // Apply sync mapping first
         THybridMapper.Map(source, target);
-        
+
         // Then apply async mapping
         await THybridMapper.MapAsync(source, target, cancellationToken);
-        
+
         return target;
     }
+#pragma warning restore CS0618 // Type or member is obsolete
 
     /// <summary>
     /// Asynchronously maps using hybrid configuration with simplified syntax.
@@ -453,36 +459,39 @@ public static class FacetAsyncExtensions
     /// <remarks>
     /// This method uses reflection to determine the source type at runtime.
     /// For better performance, use the overload with explicit type parameters.
+    /// This method uses the obsolete IFacetMapConfigurationHybrid interface pattern.
     /// </remarks>
+#pragma warning disable CS0618 // Type or member is obsolete
     public static async Task<TTarget> ToFacetHybridAsync<TTarget, THybridMapper>(
         this object source,
         CancellationToken cancellationToken = default)
         where TTarget : class
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
-        
+
         var sourceType = source.GetType();
         var targetType = typeof(TTarget);
-        
+
         var target = CreateFacetInstance<TTarget>(source, sourceType, targetType);
-        
+
         var mapperType = typeof(THybridMapper);
         var mapMethod = mapperType.GetMethod("Map", new[] { sourceType, targetType });
-        
+
         if (mapMethod != null)
         {
             mapMethod.Invoke(null, new object[] { source, target });
         }
-        
+
         var mapAsyncMethod = mapperType.GetMethod("MapAsync", new[] { sourceType, targetType, typeof(CancellationToken) });
-        
+
         if (mapAsyncMethod != null)
         {
             await (Task)mapAsyncMethod.Invoke(null, new object[] { source, target, cancellationToken })!;
         }
-        
+
         return target;
     }
+#pragma warning restore CS0618 // Type or member is obsolete
 
     /// <summary>
     /// Asynchronously maps using a hybrid mapper instance that implements both sync and async interfaces.
@@ -495,6 +504,11 @@ public static class FacetAsyncExtensions
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>A task containing the mapped target instance</returns>
     /// <exception cref="ArgumentNullException">Thrown when source or mapper is null</exception>
+    /// <remarks>
+    /// This method uses the obsolete IFacetMapConfigurationHybridInstance interface.
+    /// Consider implementing both IFacetMapConfigurationInstance and IFacetMapConfigurationAsyncInstance directly.
+    /// </remarks>
+#pragma warning disable CS0618 // Type or member is obsolete
     public static async Task<TTarget> ToFacetHybridAsync<TSource, TTarget>(
         this TSource source,
         IFacetMapConfigurationHybridInstance<TSource, TTarget> mapper,
@@ -503,17 +517,18 @@ public static class FacetAsyncExtensions
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
         if (mapper == null) throw new ArgumentNullException(nameof(mapper));
-        
+
         var target = CreateFacetInstance<TTarget>(source, typeof(TSource), typeof(TTarget));
-        
+
         // Apply sync mapping first
         mapper.Map(source, target);
-        
+
         // Then apply async mapping
         await mapper.MapAsync(source, target, cancellationToken);
-        
+
         return target;
     }
+#pragma warning restore CS0618 // Type or member is obsolete
 
     private static TTarget CreateFacetInstance<TTarget>(object source, Type sourceType, Type targetType)
         where TTarget : class
