@@ -155,8 +155,8 @@ public sealed class FacetGenerator : IIncrementalGenerator
         var preserveRequired = GetNamedArg(attribute.NamedArguments, "PreserveRequiredProperties", preserveRequiredDefault);
         var nullableProperties = GetNamedArg(attribute.NamedArguments, "NullableProperties", false);
         var copyAttributes = GetNamedArg(attribute.NamedArguments, "CopyAttributes", false);
-        var maxDepth = GetNamedArg(attribute.NamedArguments, "MaxDepth", 0);
-        var preserveReferences = GetNamedArg(attribute.NamedArguments, "PreserveReferences", false);
+        var maxDepth = GetNamedArg(attribute.NamedArguments, "MaxDepth", 3);
+        var preserveReferences = GetNamedArg(attribute.NamedArguments, "PreserveReferences", true);
 
         // Extract nested facets parameter and build mapping from source type to child facet type
         var nestedFacetMappings = ExtractNestedFacetMappings(attribute, context.SemanticModel.Compilation);
@@ -988,7 +988,12 @@ public sealed class FacetGenerator : IIncrementalGenerator
 
         // Check if we have nested facets and depth tracking is needed
         bool hasNestedFacets = model.Members.Any(m => m.IsNestedFacet);
-        bool needsDepthTracking = hasNestedFacets && (model.MaxDepth > 0 || model.PreserveReferences);
+        // IMPORTANT: Generate depth-aware constructors whenever MaxDepth > 0 OR PreserveReferences is enabled
+        // This ensures ALL facets (even those without nested facets) can be instantiated with depth tracking
+        // when they are used as nested facets by other facets that have depth tracking enabled
+        // With the corrected defaults (MaxDepth=3, PreserveReferences=true), this means all facets get
+        // the 3-parameter constructor by default, ensuring consistency across circular reference graphs
+        bool needsDepthTracking = model.MaxDepth > 0 || model.PreserveReferences;
 
         // For now, keep the hardcoded indentation approach but add the proper nesting support later
         // Generate constructor XML documentation

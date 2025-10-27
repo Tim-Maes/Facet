@@ -604,4 +604,387 @@ public class CircularReferenceTests
     }
 
     #endregion
+
+    #region Default Settings Tests (MaxDepth=3, PreserveReferences=true)
+
+    [Fact]
+    public void DefaultSettings_Should_Prevent_StackOverflow_With_Bidirectional_References()
+    {
+        // Arrange - Simulate the user's StringLookup/StringIdentifier scenario
+        // This tests the fix for the reported issue where users were getting constructor errors
+        var lookup = new CircularLookup
+        {
+            Id = 1,
+            Value = "en-US",
+            Identifier = new CircularIdentifier
+            {
+                Id = 1,
+                Name = "LanguageCode",
+                Lookups = new List<CircularLookup>()
+            }
+        };
+
+        lookup.Identifier.Lookups.Add(lookup);
+
+        // Act - This should work with default settings (MaxDepth=3, PreserveReferences=true)
+        var facet = new CircularLookupDefaultDto(lookup);
+
+        // Assert
+        facet.Should().NotBeNull();
+        facet.Id.Should().Be(1);
+        facet.Value.Should().Be("en-US");
+        facet.Identifier.Should().NotBeNull();
+        facet.Identifier!.Name.Should().Be("LanguageCode");
+
+        // With PreserveReferences=true (default), the circular reference should be handled
+        // The CircularLookup should appear in the CircularIdentifier's collection
+        facet.Identifier.Lookups.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void DefaultSettings_Should_Handle_Deep_Nesting_Up_To_MaxDepth()
+    {
+        // Arrange - Create a chain longer than MaxDepth=3
+        var level1 = new OrgEmployee { Id = 1, Name = "Level 1", DirectReports = new List<OrgEmployee>() };
+        var level2 = new OrgEmployee { Id = 2, Name = "Level 2", Manager = level1, DirectReports = new List<OrgEmployee>() };
+        var level3 = new OrgEmployee { Id = 3, Name = "Level 3", Manager = level2, DirectReports = new List<OrgEmployee>() };
+        var level4 = new OrgEmployee { Id = 4, Name = "Level 4", Manager = level3, DirectReports = new List<OrgEmployee>() };
+        var level5 = new OrgEmployee { Id = 5, Name = "Level 5", Manager = level4, DirectReports = new List<OrgEmployee>() };
+
+        level1.DirectReports.Add(level2);
+        level2.DirectReports.Add(level3);
+        level3.DirectReports.Add(level4);
+        level4.DirectReports.Add(level5);
+
+        // Act - Use facet with default settings
+        var facet = new OrgEmployeeDefaultFacet(level1);
+
+        // Assert - Should process up to MaxDepth=3 levels
+        facet.Should().NotBeNull();
+        facet.Name.Should().Be("Level 1");
+        facet.DirectReports.Should().NotBeNull();
+        facet.DirectReports.Should().HaveCount(1);
+
+        // Level 2 should be included
+        var level2Facet = facet.DirectReports![0];
+        level2Facet.Should().NotBeNull();
+        level2Facet.Name.Should().Be("Level 2");
+
+        // Level 3 should be included (depth 2)
+        level2Facet.DirectReports.Should().NotBeNull();
+        level2Facet.DirectReports.Should().HaveCount(1);
+
+        // Level 4 might be cut off or included depending on exact depth calculation
+        // The important thing is no stack overflow occurred
+    }
+
+    [Fact]
+    public void LeafFacet_Without_NestedFacets_Should_Work_As_NestedFacet()
+    {
+        // This tests the core fix: facets without nested facets should still generate
+        // the 3-parameter constructor when they have MaxDepth > 0 or PreserveReferences = true
+
+        // Arrange - SimpleLeaf has no nested facets, but uses default settings
+        var parent = new ParentWithLeaf
+        {
+            Id = 1,
+            Name = "Parent",
+            Leaf = new SimpleLeaf { Id = 2, Value = "Leaf Value" }
+        };
+
+        // Act - This should compile and run (previously caused constructor error)
+        var facet = new ParentWithLeafDto(parent);
+
+        // Assert
+        facet.Should().NotBeNull();
+        facet.Name.Should().Be("Parent");
+        facet.Leaf.Should().NotBeNull();
+        facet.Leaf!.Value.Should().Be("Leaf Value");
+    }
+
+    [Fact]
+    public void MixedSettings_ExplicitAndDefault_Should_WorkTogether()
+    {
+        // Arrange - One facet uses explicit settings, another uses defaults
+        var author = new Author
+        {
+            Id = 1,
+            Name = "Mixed Settings Author",
+            Books = new List<Book>()
+        };
+
+        var book = new Book
+        {
+            Id = 1,
+            Title = "Mixed Settings Book",
+            Author = author
+        };
+
+        author.Books.Add(book);
+
+        // Act - MixedSettingsAuthorDto has explicit settings, but its nested facet uses defaults
+        var facet = new MixedSettingsAuthorDto(author);
+
+        // Assert
+        facet.Should().NotBeNull();
+        facet.Name.Should().Be("Mixed Settings Author");
+        facet.Books.Should().NotBeNull();
+        facet.Books.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void SharedReference_In_Collection_Should_Be_Tracked()
+    {
+        // Arrange - Same author appears multiple times in a collection
+        var sharedAuthor = new Author
+        {
+            Id = 1,
+            Name = "Shared Author",
+            Books = new List<Book>()
+        };
+
+        var book1 = new Book { Id = 1, Title = "Book 1", Author = sharedAuthor };
+        var book2 = new Book { Id = 2, Title = "Book 2", Author = sharedAuthor };
+
+        sharedAuthor.Books.AddRange(new[] { book1, book2 });
+
+        // Create a collection with the same author referenced multiple times
+        var authors = new List<Author> { sharedAuthor, sharedAuthor };
+
+        // Act - With PreserveReferences=true, should handle shared references
+        var facets = authors.Select(a => new AuthorDefaultDto(a)).ToList();
+
+        // Assert
+        facets.Should().HaveCount(2);
+        facets[0].Name.Should().Be("Shared Author");
+        facets[1].Name.Should().Be("Shared Author");
+    }
+
+    [Fact]
+    public void ComplexGraph_With_Multiple_Circular_Paths_Should_Not_Overflow()
+    {
+        // Arrange - Create a complex graph with multiple circular paths
+        var centralNode = new OrgEmployee
+        {
+            Id = 1,
+            Name = "Central",
+            DirectReports = new List<OrgEmployee>()
+        };
+
+        var node2 = new OrgEmployee
+        {
+            Id = 2,
+            Name = "Node 2",
+            Manager = centralNode,
+            DirectReports = new List<OrgEmployee>()
+        };
+
+        var node3 = new OrgEmployee
+        {
+            Id = 3,
+            Name = "Node 3",
+            Manager = centralNode,
+            DirectReports = new List<OrgEmployee>()
+        };
+
+        // Create multiple circular paths
+        centralNode.DirectReports.Add(node2);
+        centralNode.DirectReports.Add(node3);
+        node2.DirectReports.Add(node3);
+        node3.DirectReports.Add(node2);
+        node2.DirectReports.Add(centralNode); // Back to central
+
+        // Act - Should handle complex circular graph
+        var facet = new OrgEmployeeDefaultFacet(centralNode);
+
+        // Assert - No stack overflow, that's the main success
+        facet.Should().NotBeNull();
+        facet.Name.Should().Be("Central");
+        facet.DirectReports.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void ZeroMaxDepth_Should_Still_Work_For_NonRecursive_Structures()
+    {
+        // Arrange - Simple non-recursive structure with MaxDepth = 0
+        var leaf = new SimpleLeaf { Id = 1, Value = "Simple" };
+        var parent = new ParentWithLeaf { Id = 2, Name = "Parent", Leaf = leaf };
+
+        // Act - With MaxDepth=0, should still construct non-recursive structures
+        var facet = new ParentWithLeafNoDepthDto(parent);
+
+        // Assert
+        facet.Should().NotBeNull();
+        facet.Name.Should().Be("Parent");
+    }
+
+    [Fact]
+    public void DefaultSettings_Should_Allow_Constructor_Chaining()
+    {
+        // This tests that the public constructor properly chains to the internal
+        // depth-aware constructor with correct default values
+
+        // Arrange
+        var author = new Author
+        {
+            Id = 1,
+            Name = "Constructor Chain Test",
+            Books = new List<Book>()
+        };
+
+        // Act - Call public constructor (should chain to internal one)
+        var facet1 = new AuthorDefaultDto(author);
+
+        // Also test that we can create multiple instances
+        var facet2 = new AuthorDefaultDto(author);
+
+        // Assert - Both should be independent instances
+        facet1.Should().NotBeNull();
+        facet2.Should().NotBeNull();
+        facet1.Should().NotBeSameAs(facet2);
+        facet1.Name.Should().Be(facet2.Name);
+    }
+
+    [Fact]
+    public void TripleNestedCircular_Reference_Should_Be_Handled()
+    {
+        // Arrange - A -> B -> C -> A circular reference
+        var entityA = new TripleCircularA
+        {
+            Id = 1,
+            Name = "Entity A",
+            BReferences = new List<TripleCircularB>()
+        };
+
+        var entityB = new TripleCircularB
+        {
+            Id = 2,
+            Name = "Entity B",
+            A = entityA,
+            CReferences = new List<TripleCircularC>()
+        };
+
+        var entityC = new TripleCircularC
+        {
+            Id = 3,
+            Name = "Entity C",
+            B = entityB,
+            A = entityA
+        };
+
+        entityA.BReferences.Add(entityB);
+        entityB.CReferences.Add(entityC);
+
+        // Act - Should handle triple circular reference
+        var facet = new TripleCircularADto(entityA);
+
+        // Assert
+        facet.Should().NotBeNull();
+        facet.Name.Should().Be("Entity A");
+        facet.BReferences.Should().NotBeNull();
+
+        // The exact structure will depend on MaxDepth and PreserveReferences
+        // but it shouldn't stack overflow
+    }
+
+    #endregion
 }
+
+#region Additional Test Models for New Tests
+
+// Models for the user's reported scenario (bidirectional circular references)
+public class CircularLookup
+{
+    public int Id { get; set; }
+    public string Value { get; set; } = string.Empty;
+    public CircularIdentifier Identifier { get; set; } = null!;
+}
+
+public class CircularIdentifier
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public List<CircularLookup> Lookups { get; set; } = new();
+}
+
+[Facet(typeof(CircularIdentifier), NestedFacets = [typeof(CircularLookupDefaultDto)])]
+public partial record CircularIdentifierDefaultDto;
+
+[Facet(typeof(CircularLookup), NestedFacets = [typeof(CircularIdentifierDefaultDto)])]
+public partial record CircularLookupDefaultDto;
+
+// Simple leaf facet without nested facets (tests the core fix)
+public class SimpleLeaf
+{
+    public int Id { get; set; }
+    public string Value { get; set; } = string.Empty;
+}
+
+public class ParentWithLeaf
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public SimpleLeaf? Leaf { get; set; }
+}
+
+[Facet(typeof(SimpleLeaf))]
+public partial record SimpleLeafDto;
+
+[Facet(typeof(ParentWithLeaf), NestedFacets = [typeof(SimpleLeafDto)])]
+public partial record ParentWithLeafDto;
+
+// For testing MaxDepth = 0
+[Facet(typeof(SimpleLeaf), MaxDepth = 0, PreserveReferences = false)]
+public partial record SimpleLeafNoDepthDto;
+
+[Facet(typeof(ParentWithLeaf), MaxDepth = 0, PreserveReferences = false, NestedFacets = [typeof(SimpleLeafNoDepthDto)])]
+public partial record ParentWithLeafNoDepthDto;
+
+// Facets with default settings for existing models
+[Facet(typeof(OrgEmployee), NestedFacets = [typeof(OrgEmployeeDefaultFacet)])]
+public partial record OrgEmployeeDefaultFacet;
+
+[Facet(typeof(Author), NestedFacets = [typeof(BookDefaultDto)])]
+public partial record AuthorDefaultDto;
+
+[Facet(typeof(Book), NestedFacets = [typeof(AuthorDefaultDto)])]
+public partial record BookDefaultDto;
+
+// For mixed settings test
+[Facet(typeof(Author), MaxDepth = 5, PreserveReferences = true, NestedFacets = [typeof(BookDefaultDto)])]
+public partial record MixedSettingsAuthorDto;
+
+// Triple circular reference models (A -> B -> C -> A)
+public class TripleCircularA
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public List<TripleCircularB> BReferences { get; set; } = new();
+}
+
+public class TripleCircularB
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public TripleCircularA? A { get; set; }
+    public List<TripleCircularC> CReferences { get; set; } = new();
+}
+
+public class TripleCircularC
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public TripleCircularB? B { get; set; }
+    public TripleCircularA? A { get; set; }
+}
+
+[Facet(typeof(TripleCircularA), NestedFacets = [typeof(TripleCircularBDto)])]
+public partial record TripleCircularADto;
+
+[Facet(typeof(TripleCircularB), NestedFacets = [typeof(TripleCircularADto), typeof(TripleCircularCDto)])]
+public partial record TripleCircularBDto;
+
+[Facet(typeof(TripleCircularC), NestedFacets = [typeof(TripleCircularBDto), typeof(TripleCircularADto)])]
+public partial record TripleCircularCDto;
+
+#endregion

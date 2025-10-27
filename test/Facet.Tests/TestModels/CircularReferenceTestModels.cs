@@ -24,11 +24,11 @@ public class OrgEmployee
     public List<OrgEmployee> DirectReports { get; set; } = new();
 }
 
-// Facets with MaxDepth for depth limiting
-[Facet(typeof(Author), MaxDepth = 2, NestedFacets = [typeof(BookFacetWithDepth)])]
+// Facets with MaxDepth for depth limiting (without reference tracking)
+[Facet(typeof(Author), MaxDepth = 2, PreserveReferences = false, NestedFacets = [typeof(BookFacetWithDepth)])]
 public partial record AuthorFacetWithDepth;
 
-[Facet(typeof(Book), MaxDepth = 2, NestedFacets = [typeof(AuthorFacetWithDepth)])]
+[Facet(typeof(Book), MaxDepth = 2, PreserveReferences = false, NestedFacets = [typeof(AuthorFacetWithDepth)])]
 public partial record BookFacetWithDepth;
 
 // Facets with PreserveReferences for runtime tracking (also needs MaxDepth to prevent generator SO)
