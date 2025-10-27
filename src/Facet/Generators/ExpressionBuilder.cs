@@ -245,11 +245,11 @@ internal static class ExpressionBuilder
     {
         return collectionWrapper switch
         {
-            "List" => $"{projection}.ToList()",
-            "IList" => $"{projection}.ToList()",
-            "ICollection" => $"{projection}.ToList()",
-            "IEnumerable" => projection,
-            "array" => $"{projection}.ToArray()",
+            FacetConstants.CollectionWrappers.List => $"{projection}.ToList()",
+            FacetConstants.CollectionWrappers.IList => $"{projection}.ToList()",
+            FacetConstants.CollectionWrappers.ICollection => $"{projection}.ToList()",
+            FacetConstants.CollectionWrappers.IEnumerable => projection,
+            FacetConstants.CollectionWrappers.Array => $"{projection}.ToArray()",
             _ => projection
         };
     }

@@ -10,8 +10,6 @@ namespace Facet.Generators;
 /// </summary>
 internal static class AttributeParser
 {
-    private const string FacetAttributeName = "Facet.FacetAttribute";
-
     /// <summary>
     /// Extracts nested facet mappings from the NestedFacets parameter.
     /// Returns a dictionary mapping source type full names to nested facet type information.
@@ -22,7 +20,7 @@ internal static class AttributeParser
     {
         var mappings = new Dictionary<string, (string, string)>();
 
-        var childrenArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "NestedFacets");
+        var childrenArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == FacetConstants.AttributeNames.NestedFacets);
         if (childrenArg.Value.Kind != TypedConstantKind.Error && !childrenArg.Value.IsNull)
         {
             if (childrenArg.Value.Kind == TypedConstantKind.Array)
@@ -33,7 +31,7 @@ internal static class AttributeParser
                     {
                         // Find the Facet attribute on the child type to get its source type
                         var childFacetAttr = childFacetType.GetAttributes()
-                            .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == FacetAttributeName);
+                            .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == FacetConstants.FacetAttributeFullName);
 
                         if (childFacetAttr != null && childFacetAttr.ConstructorArguments.Length > 0)
                         {
@@ -89,7 +87,7 @@ internal static class AttributeParser
     /// </summary>
     public static (HashSet<string> includedMembers, bool isIncludeMode) ExtractIncludedMembers(AttributeData attribute)
     {
-        var includeArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "Include");
+        var includeArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == FacetConstants.AttributeNames.Include);
         if (includeArg.Value.Kind != TypedConstantKind.Error && !includeArg.Value.IsNull)
         {
             if (includeArg.Value.Kind == TypedConstantKind.Array)
@@ -111,7 +109,7 @@ internal static class AttributeParser
     public static string? ExtractConfigurationTypeName(AttributeData attribute)
     {
         return attribute.NamedArguments
-            .FirstOrDefault(kvp => kvp.Key == "Configuration")
+            .FirstOrDefault(kvp => kvp.Key == FacetConstants.AttributeNames.Configuration)
             .Value.Value?
             .ToString();
     }

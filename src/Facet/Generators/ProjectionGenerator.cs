@@ -271,8 +271,8 @@ internal static class ProjectionGenerator
 
         return collectionWrapper switch
         {
-            "array" => $"{projection}.ToArray()",
-            "IEnumerable" => projection,
+            FacetConstants.CollectionWrappers.Array => $"{projection}.ToArray()",
+            FacetConstants.CollectionWrappers.IEnumerable => projection,
             _ => $"{projection}.ToList()"
         };
     }

@@ -9,13 +9,11 @@ namespace Facet.Generators;
 [Generator(LanguageNames.CSharp)]
 public sealed class FacetGenerator : IIncrementalGenerator
 {
-    private const string FacetAttributeName = "Facet.FacetAttribute";
-
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var facets = context.SyntaxProvider
             .ForAttributeWithMetadataName(
-                FacetAttributeName,
+                FacetConstants.FacetAttributeFullName,
                 predicate: static (node, _) => node is TypeDeclarationSyntax,
                 transform: static (ctx, token) => ModelBuilder.BuildModel(ctx, token))
             .Where(static m => m is not null);

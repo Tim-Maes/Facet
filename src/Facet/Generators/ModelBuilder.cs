@@ -30,11 +30,11 @@ internal static class ModelBuilder
         var (included, isIncludeMode) = AttributeParser.ExtractIncludedMembers(attribute);
 
         // Extract configuration settings
-        var includeFields = AttributeParser.GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
-        var generateConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, "GenerateConstructor", true);
-        var generateParameterlessConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, "GenerateParameterlessConstructor", true);
-        var generateProjection = AttributeParser.GetNamedArg(attribute.NamedArguments, "GenerateProjection", true);
-        var generateBackTo = AttributeParser.GetNamedArg(attribute.NamedArguments, "GenerateBackTo", true);
+        var includeFields = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.IncludeFields, false);
+        var generateConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateConstructor, true);
+        var generateParameterlessConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateParameterlessConstructor, true);
+        var generateProjection = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateProjection, true);
+        var generateBackTo = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateBackTo, true);
         var configurationTypeName = AttributeParser.ExtractConfigurationTypeName(attribute);
 
         // Infer the type kind and whether it's a record from the target type declaration
@@ -45,12 +45,12 @@ internal static class ModelBuilder
         var preserveInitOnlyDefault = isRecord;
         var preserveRequiredDefault = isRecord;
 
-        var preserveInitOnly = AttributeParser.GetNamedArg(attribute.NamedArguments, "PreserveInitOnlyProperties", preserveInitOnlyDefault);
-        var preserveRequired = AttributeParser.GetNamedArg(attribute.NamedArguments, "PreserveRequiredProperties", preserveRequiredDefault);
-        var nullableProperties = AttributeParser.GetNamedArg(attribute.NamedArguments, "NullableProperties", false);
-        var copyAttributes = AttributeParser.GetNamedArg(attribute.NamedArguments, "CopyAttributes", false);
-        var maxDepth = AttributeParser.GetNamedArg(attribute.NamedArguments, "MaxDepth", 3);
-        var preserveReferences = AttributeParser.GetNamedArg(attribute.NamedArguments, "PreserveReferences", true);
+        var preserveInitOnly = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.PreserveInitOnlyProperties, preserveInitOnlyDefault);
+        var preserveRequired = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.PreserveRequiredProperties, preserveRequiredDefault);
+        var nullableProperties = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.NullableProperties, false);
+        var copyAttributes = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.CopyAttributes, false);
+        var maxDepth = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.MaxDepth, FacetConstants.DefaultMaxDepth);
+        var preserveReferences = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.PreserveReferences, FacetConstants.DefaultPreserveReferences);
 
         // Extract nested facets parameter and build mapping from source type to child facet type
         var nestedFacetMappings = AttributeParser.ExtractNestedFacetMappings(attribute, context.SemanticModel.Compilation);
@@ -73,7 +73,7 @@ internal static class ModelBuilder
             token);
 
         // Determine full name
-        var useFullName = AttributeParser.GetNamedArg(attribute.NamedArguments, "UseFullName", false);
+        var useFullName = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.UseFullName, false);
         string fullName = useFullName
             ? targetSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).GetSafeName()
             : targetSymbol.Name;
