@@ -113,10 +113,10 @@ public sealed class FacetAttribute : Attribute
     /// limit how deep nested facets can be instantiated to prevent stack overflow with circular references.
     /// A value of 0 means unlimited depth (not recommended - can cause stack overflow).
     /// A value of 1 allows one level of nesting, 2 allows two levels, etc.
-    /// Default is 3, which handles most real-world scenarios (e.g., Order -> LineItems -> Product -> Category).
+    /// Default is 10, which handles most real-world scenarios including deep non-circular nesting.
     /// Set to 0 to disable (use with caution), or increase if you need deeper nesting.
     /// </summary>
-    public int MaxDepth { get; set; } = 3;
+    public int MaxDepth { get; set; } = 10;
 
     /// <summary>
     /// When true, the generator will track object references during facet construction to prevent

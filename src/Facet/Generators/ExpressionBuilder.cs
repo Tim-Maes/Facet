@@ -121,14 +121,26 @@ internal static class ExpressionBuilder
         bool preserveReferences)
     {
         var elementTypeName = ExtractElementTypeFromCollectionTypeName(member.TypeName);
+        
+        var sourceElementTypeName = member.NestedFacetSourceTypeName ??
+            (member.SourceMemberTypeName != null
+                ? ExtractElementTypeFromCollectionTypeName(member.SourceMemberTypeName)
+                : elementTypeName);
 
         // Check if we should stop due to max depth
         if (useDepthParameter && maxDepth > 0)
         {
-            // Use LINQ Select to map each element with depth tracking
+            var updatedProcessed = preserveReferences
+                ? $"(__processed != null ? new System.Collections.Generic.HashSet<object>(__processed, System.Collections.Generic.ReferenceEqualityComparer.Instance) {{ {sourceVariableName} }} : new System.Collections.Generic.HashSet<object>(System.Collections.Generic.ReferenceEqualityComparer.Instance) {{ {sourceVariableName} }})"
+                : "__processed";
+
+            var sourceCollection = preserveReferences
+                ? $"{sourceVariableName}.{member.Name}.Distinct(System.Collections.Generic.ReferenceEqualityComparer.Instance).Cast<{sourceElementTypeName}>()"
+                : $"{sourceVariableName}.{member.Name}";
+
             var projection = preserveReferences
-                ? $"{sourceVariableName}.{member.Name}.Select(x => __processed != null && __processed.Contains(x) ? null : new {elementTypeName}(x, __depth + 1, __processed)).Where(x => x != null)"
-                : $"{sourceVariableName}.{member.Name}.Select(x => new {elementTypeName}(x, __depth + 1, __processed))";
+                ? $"{sourceCollection}.Select(x => __processed != null && __processed.Contains(x) ? null : new {elementTypeName}(x, __depth + 1, {updatedProcessed})).Where(x => x != null)"
+                : $"{sourceCollection}.Select(x => new {elementTypeName}(x, __depth + 1, {updatedProcessed}))";
 
             // Convert back to the appropriate collection type
             var collectionExpression = WrapCollectionProjection(projection, member.CollectionWrapper!);
@@ -142,12 +154,19 @@ internal static class ExpressionBuilder
         }
         else
         {
-            // Use LINQ Select to map each element
+            var updatedProcessed = preserveReferences && useDepthParameter
+                ? $"(__processed != null ? new System.Collections.Generic.HashSet<object>(__processed, System.Collections.Generic.ReferenceEqualityComparer.Instance) {{ {sourceVariableName} }} : new System.Collections.Generic.HashSet<object>(System.Collections.Generic.ReferenceEqualityComparer.Instance) {{ {sourceVariableName} }})"
+                : "__processed";
+
+            var sourceCollection = preserveReferences && useDepthParameter
+                ? $"{sourceVariableName}.{member.Name}.Distinct(System.Collections.Generic.ReferenceEqualityComparer.Instance).Cast<{sourceElementTypeName}>()"
+                : $"{sourceVariableName}.{member.Name}";
+
             var projection = useDepthParameter
                 ? (preserveReferences
-                    ? $"{sourceVariableName}.{member.Name}.Select(x => __processed != null && __processed.Contains(x) ? null : new {elementTypeName}(x, __depth + 1, __processed)).Where(x => x != null)"
-                    : $"{sourceVariableName}.{member.Name}.Select(x => new {elementTypeName}(x, __depth + 1, __processed))")
-                : $"{sourceVariableName}.{member.Name}.Select(x => new {elementTypeName}(x))";
+                    ? $"{sourceCollection}.Select(x => __processed != null && __processed.Contains(x) ? null : new {elementTypeName}(x, __depth + 1, {updatedProcessed})).Where(x => x != null)"
+                    : $"{sourceCollection}.Select(x => new {elementTypeName}(x, __depth + 1, {updatedProcessed}))")
+                : $"{sourceCollection}.Select(x => new {elementTypeName}(x))";
 
             // Convert back to the appropriate collection type
             var collectionExpression = WrapCollectionProjection(projection, member.CollectionWrapper!);
@@ -174,12 +193,17 @@ internal static class ExpressionBuilder
         // Build the constructor call with reference checking if needed
         string BuildConstructorCall(string sourceExpr)
         {
+            var updatedProcessed = preserveReferences && useDepthParameter
+                ? $"(__processed != null ? new System.Collections.Generic.HashSet<object>(__processed, System.Collections.Generic.ReferenceEqualityComparer.Instance) {{ {sourceVariableName} }} : new System.Collections.Generic.HashSet<object>(System.Collections.Generic.ReferenceEqualityComparer.Instance) {{ {sourceVariableName} }})"
+                : "__processed";
+
             var ctorCall = useDepthParameter
-                ? $"new {nonNullableTypeName}({sourceExpr}, __depth + 1, __processed)"
+                ? $"new {nonNullableTypeName}({sourceExpr}, __depth + 1, {updatedProcessed})"
                 : $"new {nonNullableTypeName}({sourceExpr})";
 
             if (preserveReferences && useDepthParameter)
             {
+                // Check against __processed (not updatedProcessed) to detect if this exact object was already processed
                 return $"(__processed != null && __processed.Contains({sourceExpr}) ? null : {ctorCall})";
             }
 
