@@ -644,7 +644,7 @@ public class CircularReferenceTests
     [Fact]
     public void DefaultSettings_Should_Handle_Deep_Nesting_Up_To_MaxDepth()
     {
-        // Arrange - Create a chain longer than MaxDepth=3
+        // Arrange - Create a chain longer than default
         var level1 = new OrgEmployee { Id = 1, Name = "Level 1", DirectReports = new List<OrgEmployee>() };
         var level2 = new OrgEmployee { Id = 2, Name = "Level 2", Manager = level1, DirectReports = new List<OrgEmployee>() };
         var level3 = new OrgEmployee { Id = 3, Name = "Level 3", Manager = level2, DirectReports = new List<OrgEmployee>() };
@@ -659,7 +659,7 @@ public class CircularReferenceTests
         // Act - Use facet with default settings
         var facet = new OrgEmployeeDefaultFacet(level1);
 
-        // Assert - Should process up to MaxDepth=3 levels
+        // Assert - we can traverse deeper
         facet.Should().NotBeNull();
         facet.Name.Should().Be("Level 1");
         facet.DirectReports.Should().NotBeNull();
@@ -669,21 +669,23 @@ public class CircularReferenceTests
         var level2Facet = facet.DirectReports![0];
         level2Facet.Should().NotBeNull();
         level2Facet.Name.Should().Be("Level 2");
-
-        // Level 3 should be included (depth 2)
         level2Facet.DirectReports.Should().NotBeNull();
         level2Facet.DirectReports.Should().HaveCount(1);
 
-        // Level 4 might be cut off or included depending on exact depth calculation
-        // The important thing is no stack overflow occurred
+        // Level 3 should be included
+        var level3Facet = level2Facet.DirectReports![0];
+        level3Facet.Should().NotBeNull();
+        level3Facet.Name.Should().Be("Level 3");
+
+        // Manager circular references should be properly handled - they should be null
+        // because the parent is already in the __processed set
+        level2Facet.Manager.Should().BeNull(); // Level1 is already being processed
+        level3Facet.Manager.Should().BeNull(); // Level2 is already being processed
     }
 
     [Fact]
     public void LeafFacet_Without_NestedFacets_Should_Work_As_NestedFacet()
     {
-        // This tests the core fix: facets without nested facets should still generate
-        // the 3-parameter constructor when they have MaxDepth > 0 or PreserveReferences = true
-
         // Arrange - SimpleLeaf has no nested facets, but uses default settings
         var parent = new ParentWithLeaf
         {
@@ -821,9 +823,6 @@ public class CircularReferenceTests
     [Fact]
     public void DefaultSettings_Should_Allow_Constructor_Chaining()
     {
-        // This tests that the public constructor properly chains to the internal
-        // depth-aware constructor with correct default values
-
         // Arrange
         var author = new Author
         {
@@ -882,9 +881,6 @@ public class CircularReferenceTests
         facet.Should().NotBeNull();
         facet.Name.Should().Be("Entity A");
         facet.BReferences.Should().NotBeNull();
-
-        // The exact structure will depend on MaxDepth and PreserveReferences
-        // but it shouldn't stack overflow
     }
 
     #endregion

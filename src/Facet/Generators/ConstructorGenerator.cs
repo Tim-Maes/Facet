@@ -233,13 +233,6 @@ internal static class ConstructorGenerator
         sb.AppendLine($"    {ctorSig}");
         sb.AppendLine("    {");
 
-        // Add source object to processed set if using reference tracking
-        if (model.PreserveReferences)
-        {
-            sb.AppendLine("        __processed?.Add(source);");
-            sb.AppendLine();
-        }
-
         if (!isPositional && !model.HasExistingPrimaryConstructor)
         {
             GenerateDepthAwareConstructorBody(sb, model, hasInitOnlyProperties, hasCustomMapping);

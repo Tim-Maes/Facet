@@ -34,7 +34,7 @@ internal static class FacetConstants
     /// <summary>
     /// The default maximum depth for nested facet traversal to prevent stack overflow.
     /// </summary>
-    public const int DefaultMaxDepth = 3;
+    public const int DefaultMaxDepth = 10;
 
     /// <summary>
     /// The default setting for preserving object references during mapping to detect circular references.
