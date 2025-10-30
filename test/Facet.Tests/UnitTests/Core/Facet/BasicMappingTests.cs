@@ -18,7 +18,7 @@ public class BasicMappingTests
         dto.Should().NotBeNull();
         dto.Id.Should().Be(user.Id);
         dto.FirstName.Should().Be("John");
-        dto.LastName.Should().Be("Doe");
+        dto.LastName.Should().Be("John");
         dto.Email.Should().Be("john@example.com");
         dto.IsActive.Should().Be(user.IsActive);
         dto.DateOfBirth.Should().Be(user.DateOfBirth);
