@@ -398,8 +398,8 @@ public class User
 // - UpsertUserRequest (includes Id, for create/update operations)
 ```
 
-#### 
-Entities with Smart Exclusions
+#### Entities with Smart Exclusions
+
 ```csharp
 [GenerateAuditableDtos(
     Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response,
