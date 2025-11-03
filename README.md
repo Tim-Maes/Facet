@@ -54,7 +54,10 @@ You can think of it like **carving out a specific facet** of a gem:
 - :white_check_mark: Full mapping support with custom mapping configurations
 - :white_check_mark: **Expression transformation** and mapping utilities
 - :white_check_mark: Preserve member and type XML documentation
-- :white_check_mark: Can auto-generate complete CRUD DTO sets
+
+## :heavy_plus_sign: Extras
+- :white_check_mark: Auto generate complete CRUD DTO sets
+- :white_check_mark: **Flatten** nested objects into top-level properties
 
 ## 🚀 Quick Start
 
@@ -374,7 +377,7 @@ if (result.HasChanges)
 </details>
 
 <details>
-  <summary>Automatic CRUD DTO Generation</summary>
+  <summary>Automatic CRUD DTO Generation with [GenerateDtos]</summary>
   
 Generate standard Create, Update, Response, Query, and Upsert DTOs automatically:
 
@@ -434,6 +437,123 @@ public class Schedule
 // - ScheduleResponse (excludes Password, InternalNotes) 
 // - UpsertScheduleRequest (excludes Password, includes InternalNotes)
 ```
+</details>
+
+<details>
+  <summary>Flatten nested objects with [Flatten]</summary>
+
+Flatten nested object hierarchies into top-level properties automatically - perfect for API responses, reports, and denormalized views:
+
+```csharp
+// Domain models with nested structure
+public class Person
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public Address Address { get; set; }
+    public ContactInfo ContactInfo { get; set; }
+}
+
+public class Address
+{
+    public string Street { get; set; }
+    public string City { get; set; }
+    public string ZipCode { get; set; }
+    public Country Country { get; set; }
+}
+
+public class Country
+{
+    public string Name { get; set; }
+    public string Code { get; set; }
+}
+
+public class ContactInfo
+{
+    public string Email { get; set; }
+    public string Phone { get; set; }
+}
+
+// Automatically flatten all nested properties
+[Flatten(typeof(Person))]
+public partial class PersonFlatDto
+{
+    // Auto-generates:
+    // public int Id { get; set; }
+    // public string FirstName { get; set; }
+    // public string LastName { get; set; }
+    // public string AddressStreet { get; set; }
+    // public string AddressCity { get; set; }
+    // public string AddressZipCode { get; set; }
+    // public string AddressCountryName { get; set; }
+    // public string AddressCountryCode { get; set; }
+    // public string ContactInfoEmail { get; set; }
+    // public string ContactInfoPhone { get; set; }
+}
+
+// Usage with constructor
+var person = new Person
+{
+    FirstName = "John",
+    Address = new Address
+    {
+        Street = "123 Main St",
+        City = "Springfield",
+        Country = new Country { Name = "USA", Code = "US" }
+    },
+    ContactInfo = new ContactInfo { Email = "john@example.com" }
+};
+
+var dto = new PersonFlatDto(person);
+// dto.AddressStreet = "123 Main St"
+// dto.AddressCountryName = "USA"
+
+// Usage with Entity Framework projection
+var flatDtos = await dbContext.People
+    .Where(p => p.IsActive)
+    .Select(PersonFlatDto.Projection)
+    .ToListAsync();
+```
+
+#### Controlling Depth and Exclusions
+
+```csharp
+// Limit flattening depth
+[Flatten(typeof(Person), MaxDepth = 2)]
+public partial class PersonFlatDepth2Dto
+{
+    // Includes Address.Street and Address.City
+    // Does NOT include Address.Country.* (beyond depth 2)
+}
+
+// Exclude specific paths
+[Flatten(typeof(Person), "ContactInfo")]
+public partial class PersonFlatWithoutContactDto
+{
+    // All properties except ContactInfo.*
+}
+
+[Flatten(typeof(Person), "Address.Country")]
+public partial class PersonFlatWithoutCountryDto
+{
+    // Includes Address.Street, Address.City
+    // Excludes Address.Country.*
+}
+```
+
+#### Naming Strategies
+
+```csharp
+// Prefix strategy (default): AddressStreet, AddressCity
+[Flatten(typeof(Person), NamingStrategy = FlattenNamingStrategy.Prefix)]
+public partial class PersonFlatPrefixDto { }
+
+// Leaf-only strategy: Street, City (may cause collisions)
+[Flatten(typeof(Person), NamingStrategy = FlattenNamingStrategy.LeafOnly)]
+public partial class PersonFlatLeafDto { }
+```
+
 </details>
 
 ## :earth_americas: The Facet Ecosystem
