@@ -1,7 +1,8 @@
 using System.Linq;
 using System.Text;
+using Facet.Generators.Shared;
 
-namespace Facet.Generators;
+namespace Facet.Generators.FacetGenerators;
 
 /// <summary>
 /// Generates constructors for facet types, including depth-aware constructors for circular reference prevention

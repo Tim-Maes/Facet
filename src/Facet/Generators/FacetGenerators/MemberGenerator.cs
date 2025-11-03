@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Facet.Generators;
+namespace Facet.Generators.FacetGenerators;
 
 /// <summary>
 /// Generates member declarations (properties and fields) for facet types.

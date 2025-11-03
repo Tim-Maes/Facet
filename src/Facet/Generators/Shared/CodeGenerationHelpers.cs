@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Facet.Generators;
+namespace Facet.Generators.Shared;
 
 /// <summary>
 /// Provides utility methods for code generation tasks.

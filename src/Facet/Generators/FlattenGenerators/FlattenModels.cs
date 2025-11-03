@@ -2,7 +2,7 @@ using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 
-namespace Facet.Generators;
+namespace Facet.Generators.FlattenGenerators;
 
 /// <summary>
 /// Represents a flattened target type model.
