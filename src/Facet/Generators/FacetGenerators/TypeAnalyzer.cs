@@ -1,10 +1,11 @@
+using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Immutable;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Facet.Generators;
+namespace Facet.Generators.FacetGenerators;
 
 /// <summary>
 /// Analyzes type characteristics such as containing types, primary constructors, and record detection.

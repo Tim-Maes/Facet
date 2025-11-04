@@ -42,6 +42,7 @@ public partial class PersonFlatDto
 - **LINQ Projection**: Generates `Projection` expression for Entity Framework
 - **Depth Control**: Configurable maximum traversal depth
 - **Exclusion Paths**: Exclude specific nested properties
+- **ID Filtering**: Optional `IgnoreNestedIds` to exclude foreign keys and nested IDs
 - **Naming Strategies**: Prefix or leaf-only naming
 - **One-Way Operation**: Flattening is intentionally one-way (no BackTo method)
 
@@ -124,6 +125,7 @@ public partial class PersonFlatDto
 | `GenerateParameterlessConstructor` | `bool` | `true` | Generate a parameterless constructor for object initialization. |
 | `GenerateProjection` | `bool` | `true` | Generate a LINQ projection expression for database queries. |
 | `UseFullName` | `bool` | `false` | Use fully qualified type name in generated file names to avoid collisions. |
+| `IgnoreNestedIds` | `bool` | `false` | When true, only keeps the root-level `Id` property and excludes all foreign key IDs and nested IDs. |
 
 ## Naming Strategies
 
@@ -194,6 +196,119 @@ public partial class PersonFlatDto
 }
 ```
 
+## Ignoring Nested IDs
+
+The `IgnoreNestedIds` parameter provides a convenient way to exclude all ID properties except the root-level `Id`. This is particularly useful for API responses where you want to display data but don't need all the foreign key IDs and nested entity IDs.
+
+### Without IgnoreNestedIds (Default)
+
+```csharp
+public class Order
+{
+    public int Id { get; set; }
+    public int CustomerId { get; set; }
+    public Customer Customer { get; set; }
+    public DateTime OrderDate { get; set; }
+}
+
+public class Customer
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+}
+
+[Flatten(typeof(Order))]
+public partial class OrderFlatDto
+{
+    // Generated:
+    // public int Id { get; set; }
+    // public int CustomerId { get; set; }        // Foreign key from root
+    // public int CustomerId2 { get; set; }       // Customer.Id (name collision, gets suffix)
+    // public string CustomerName { get; set; }
+    // public DateTime OrderDate { get; set; }
+}
+```
+
+### With IgnoreNestedIds
+
+```csharp
+[Flatten(typeof(Order), IgnoreNestedIds = true)]
+public partial class OrderFlatDto
+{
+    // Generated:
+    // public int Id { get; set; }                // Root-level Id preserved
+    // public string CustomerName { get; set; }
+    // public DateTime OrderDate { get; set; }
+    // (CustomerId and CustomerId2/Customer.Id excluded)
+}
+```
+
+### Behavior Rules
+
+1. **Root-level `Id` is always kept**: The top-level `Id` property of the source type is included
+2. **Foreign key IDs are excluded**: Properties like `CustomerId`, `ProductId` are excluded at the root level
+3. **All nested IDs are excluded**: Any `Id` property from nested objects is excluded
+
+### Use Cases
+
+- **API responses** where you don't want to expose database keys
+- **Reports** where IDs clutter the output
+- **Search results** where you only need the primary ID for navigation
+- **Export files** where human-readable data is preferred over foreign keys
+
+### Example: Clean API Response
+
+```csharp
+public class Product
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public int CategoryId { get; set; }
+    public Category Category { get; set; }
+    public int ManufacturerId { get; set; }
+    public Manufacturer Manufacturer { get; set; }
+}
+
+public class Category
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+}
+
+public class Manufacturer
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string Country { get; set; }
+}
+
+[Flatten(typeof(Product), IgnoreNestedIds = true)]
+public partial class ProductDisplayDto
+{
+    // Generated:
+    // public int Id { get; set; }                    // Root ID kept
+    // public string Name { get; set; }
+    // public string CategoryName { get; set; }       // Category.Id excluded
+    // public string ManufacturerName { get; set; }   // Manufacturer.Id excluded
+    // public string ManufacturerCountry { get; set; }
+    // (CategoryId and ManufacturerId excluded at root)
+}
+
+// Clean API response without exposing internal IDs
+[HttpGet("products/{id}")]
+public async Task<IActionResult> GetProduct(int id)
+{
+    var product = await dbContext.Products
+        .Where(p => p.Id == id)
+        .Select(ProductDisplayDto.Projection)
+        .FirstOrDefaultAsync();
+
+    return Ok(product);
+    // Response: { "id": 1, "name": "Widget", "categoryName": "Tools",
+    //             "manufacturerName": "ACME", "manufacturerCountry": "USA" }
+}
+```
+
 ## Controlling Depth
 
 ### Default Depth (3 Levels)
@@ -219,9 +334,9 @@ Even with `MaxDepth = 0` (unlimited), Facet enforces a safety limit of 10 levels
 
 ## What Gets Flattened?
 
-Facet automatically flattens these types as "leaf" properties:
+Facet automatically determines which types should be flattened as "leaf" properties and which should be recursed into:
 
-### Always Flattened
+### Always Flattened (Leaf Properties)
 - Primitive types (`int`, `bool`, `decimal`, etc.)
 - `string`
 - Enums
@@ -229,10 +344,12 @@ Facet automatically flattens these types as "leaf" properties:
 - `Guid`
 - Value types with 0-2 properties
 
-### Never Flattened (Recursed Into)
-- Complex reference types
-- Collections (Lists, Arrays, etc.)
+### Recursed Into (Nested Objects)
+- Complex reference types with properties
 - Value types with 3+ properties
+
+### Completely Ignored
+- Collections (Lists, Arrays, IEnumerable, etc.) - These are skipped entirely and don't generate any flattened properties
 
 ## Null Handling
 
@@ -441,9 +558,10 @@ public partial class OrganizationSummaryDto
 1. **Use for Read-Only Scenarios**: Flattening is ideal for API responses, reports, and display models
 2. **Set Appropriate MaxDepth**: Don't flatten more than you need - it affects both performance and readability
 3. **Exclude Sensitive Data**: Use `exclude` parameter to omit passwords, salaries, or internal fields
-4. **Prefer Prefix Naming**: Avoid `LeafOnly` unless you're certain there won't be name collisions
-5. **Combine with LINQ**: Use the `Projection` property for efficient database queries
-6. **Document Flattened Types**: Add XML comments to explain what was flattened and why
+4. **Consider IgnoreNestedIds**: For public APIs and reports, use `IgnoreNestedIds = true` to avoid exposing database implementation details
+5. **Prefer Prefix Naming**: Avoid `LeafOnly` unless you're certain there won't be name collisions
+6. **Combine with LINQ**: Use the `Projection` property for efficient database queries
+7. **Document Flattened Types**: Add XML comments to explain what was flattened and why
 
 ## Common Patterns
 
@@ -464,7 +582,7 @@ public partial class MetricsSummaryDto { }
 ### Export/Import
 
 ```csharp
-[Flatten(typeof(Product), exclude: "InternalNotes", "CostPrice")]
+[Flatten(typeof(Product), exclude: ["InternalNotes", "CostPrice"], IgnoreNestedIds = true)]
 public partial class ProductExportDto { }
 ```
 

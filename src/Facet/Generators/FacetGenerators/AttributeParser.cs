@@ -1,9 +1,10 @@
+using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 
-namespace Facet.Generators;
+namespace Facet.Generators.FacetGenerators;
 
 /// <summary>
 /// Handles parsing of Facet attribute data and extraction of configuration values.

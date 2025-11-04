@@ -1,10 +1,11 @@
+using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace Facet.Generators;
+namespace Facet.Generators.FacetGenerators;
 
 /// <summary>
 /// Handles extraction and generation of copiable attributes from source type members.

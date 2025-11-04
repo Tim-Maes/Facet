@@ -1,4 +1,5 @@
-namespace Facet.Generators;
+using Facet.Generators.Shared;
+namespace Facet.Generators.FacetGenerators;
 
 /// <summary>
 /// Builds C# expressions for mapping between source and facet types.

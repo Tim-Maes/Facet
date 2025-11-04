@@ -1,10 +1,11 @@
+using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System.Linq;
 using System.Text;
 
-namespace Facet.Generators;
+namespace Facet.Generators.FacetGenerators;
 
 [Generator(LanguageNames.CSharp)]
 public sealed class FacetGenerator : IIncrementalGenerator

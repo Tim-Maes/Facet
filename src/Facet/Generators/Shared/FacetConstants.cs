@@ -1,7 +1,7 @@
 using System;
 using System.Reflection;
 
-namespace Facet.Generators;
+namespace Facet.Generators.Shared;
 
 /// <summary>
 /// Contains constant values used throughout the Facet source generator.

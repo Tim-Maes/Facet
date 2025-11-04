@@ -1,10 +1,12 @@
+using Facet.Generators.Shared;
+using Facet.Generators.FacetGenerators;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System.Linq;
 using System.Text;
 
-namespace Facet.Generators;
+namespace Facet.Generators.FlattenGenerators;
 
 [Generator(LanguageNames.CSharp)]
 public sealed class FlattenGenerator : IIncrementalGenerator

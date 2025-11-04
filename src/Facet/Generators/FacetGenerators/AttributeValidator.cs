@@ -1,8 +1,9 @@
+using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using System;
 using System.Linq;
 
-namespace Facet.Generators;
+namespace Facet.Generators.FacetGenerators;
 
 /// <summary>
 /// Validates Facet attribute configurations to catch errors early and provide helpful diagnostics.

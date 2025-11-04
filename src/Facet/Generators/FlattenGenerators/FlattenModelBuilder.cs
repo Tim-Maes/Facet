@@ -1,10 +1,12 @@
+using Facet.Generators.Shared;
+using Facet.Generators.FacetGenerators;
 using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 
-namespace Facet.Generators;
+namespace Facet.Generators.FlattenGenerators;
 
 /// <summary>
 /// Builds FlattenTargetModel instances from Flatten attribute syntax contexts.

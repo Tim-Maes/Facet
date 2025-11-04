@@ -1,8 +1,10 @@
+using Facet.Generators.Shared;
+using Facet.Generators.FacetGenerators;
 using Microsoft.CodeAnalysis;
 using System.Linq;
 using System.Text;
 
-namespace Facet.Generators;
+namespace Facet.Generators.FlattenGenerators;
 
 /// <summary>
 /// Generates C# code for flattened target types.

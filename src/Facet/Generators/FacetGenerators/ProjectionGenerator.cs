@@ -1,8 +1,9 @@
+using Facet.Generators.Shared;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace Facet.Generators;
+namespace Facet.Generators.FacetGenerators;
 
 /// <summary>
 /// Generates LINQ projection expressions for efficient database query projections.
