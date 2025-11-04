@@ -44,7 +44,7 @@ You can think of it like **carving out a specific facet** of a gem:
 - [What is being generated?](docs/07_WhatIsBeingGenerated.md)
 - [Comprehensive article about Facetting](https://tim-maes.com/blog/2025/09/28/facets-in-dotnet/)
 
-## :star: Key Features
+## :star: Core Features
 
 - :white_check_mark: Generate classes, records, structs, or record structs from existing types
 - :white_check_mark: Handle **complex and nested objects & collections**
@@ -54,8 +54,10 @@ You can think of it like **carving out a specific facet** of a gem:
 - :white_check_mark: Full mapping support with custom mapping configurations
 - :white_check_mark: **Expression transformation** and mapping utilities
 - :white_check_mark: Preserve member and type XML documentation
+- :white_check_mark: **EF Core** integration
 
-## :heavy_plus_sign: Extras
+## :heavy_plus_sign: Additional
+
 - :white_check_mark: Auto generate complete CRUD DTO sets
 - :white_check_mark: **Flatten** nested objects into top-level properties
 
