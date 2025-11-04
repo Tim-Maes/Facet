@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <!-- Centralized version for all Facet packages -->
-    <Version>3.3.0-alpha</Version>
+    <Version>3.3.0-alpha.1</Version>
 
     <!-- Common package properties -->
     <Authors>Tim Maes</Authors>
