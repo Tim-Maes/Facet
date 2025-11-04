@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace Facet.Generators.FacetGenerators;
+namespace Facet.Generators;
 
 /// <summary>
 /// Handles extraction and generation of copiable attributes from source type members.

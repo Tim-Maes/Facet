@@ -113,6 +113,17 @@ public sealed class FlattenAttribute : Attribute
     /// Default is false.
     /// </summary>
     public bool UseFullName { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets whether to ignore nested ID properties (properties named "Id" or ending with "Id").
+    /// When true, only the root-level Id property is included; all nested entity IDs are excluded.
+    /// This is useful for flattening entities with foreign key relationships.
+    /// Default is false.
+    /// </summary>
+    /// <remarks>
+    /// Example: When true, "User.Id" is kept but "User.Company.Id" and "User.CompanyId" are excluded.
+    /// </remarks>
+    public bool IgnoreNestedIds { get; set; } = false;
 }
 
 /// <summary>

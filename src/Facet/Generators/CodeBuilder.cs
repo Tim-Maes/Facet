@@ -2,9 +2,8 @@ using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Facet.Generators.Shared;
 
-namespace Facet.Generators.FacetGenerators;
+namespace Facet.Generators;
 
 /// <summary>
 /// Orchestrates the generation of complete facet type source code.

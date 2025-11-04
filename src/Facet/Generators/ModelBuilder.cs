@@ -2,9 +2,8 @@ using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Threading;
-using Facet.Generators.Shared;
 
-namespace Facet.Generators.FacetGenerators;
+namespace Facet.Generators;
 
 /// <summary>
 /// Builds FacetTargetModel instances from attribute syntax contexts.

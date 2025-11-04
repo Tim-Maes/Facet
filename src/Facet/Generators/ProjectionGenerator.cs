@@ -1,9 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Facet.Generators.Shared;
 
-namespace Facet.Generators.FacetGenerators;
+namespace Facet.Generators;
 
 /// <summary>
 /// Generates LINQ projection expressions for efficient database query projections.
@@ -43,6 +42,7 @@ internal static class ProjectionGenerator
         sb.AppendLine($"{memberIndent}// Example: source => new {model.Name}(defaultPrimaryConstructorValue) {{ PropA = source.PropA, PropB = source.PropB }}");
     }
 
+
     private static void GenerateProjectionDocumentation(StringBuilder sb, FacetTargetModel model, string memberIndent)
     {
         // Generate projection XML documentation
@@ -78,6 +78,9 @@ internal static class ProjectionGenerator
         var members = model.Members;
         var memberCount = members.Length;
 
+        // Track which facet types we're currently processing to detect circular references
+        var visitedTypes = new HashSet<string> { model.Name };
+
         for (int i = 0; i < memberCount; i++)
         {
             var member = members[i];
@@ -85,7 +88,7 @@ internal static class ProjectionGenerator
             var memberIndent = indent + "    ";
 
             // Generate the property assignment
-            var projectionValue = GetProjectionValueExpression(member, "source", memberIndent, facetLookup, 0, model.MaxDepth);
+            var projectionValue = GetProjectionValueExpression(member, "source", memberIndent, facetLookup, visitedTypes, 0, model.MaxDepth);
             sb.Append($"{memberIndent}{member.Name} = {projectionValue}{comma}");
 
             // Add newline
@@ -104,6 +107,7 @@ internal static class ProjectionGenerator
         string sourceVariableName,
         string indent,
         Dictionary<string, FacetTargetModel> facetLookup,
+        HashSet<string> visitedTypes,
         int currentDepth = 0,
         int maxDepth = 0)
     {
@@ -112,11 +116,11 @@ internal static class ProjectionGenerator
 
         if (member.IsNestedFacet && member.IsCollection)
         {
-            return BuildCollectionProjection(member, sourceVariableName, isNullable, facetLookup, currentDepth, maxDepth);
+            return BuildCollectionProjection(member, sourceVariableName, isNullable, facetLookup, visitedTypes, currentDepth, maxDepth);
         }
         else if (member.IsNestedFacet)
         {
-            return BuildSingleNestedProjection(member, sourceVariableName, isNullable, indent, facetLookup, currentDepth, maxDepth);
+            return BuildSingleNestedProjection(member, sourceVariableName, isNullable, indent, facetLookup, visitedTypes, currentDepth, maxDepth);
         }
 
         // Regular property - direct assignment
@@ -128,6 +132,7 @@ internal static class ProjectionGenerator
         string sourceVariableName,
         bool isNullable,
         Dictionary<string, FacetTargetModel> facetLookup,
+        HashSet<string> visitedTypes,
         int currentDepth,
         int maxDepth)
     {
@@ -148,6 +153,7 @@ internal static class ProjectionGenerator
             member.NestedFacetSourceTypeName!,
             member.CollectionWrapper!,
             facetLookup,
+            visitedTypes,
             currentDepth + 1,
             maxDepth);
 
@@ -165,6 +171,7 @@ internal static class ProjectionGenerator
         bool isNullable,
         string indent,
         Dictionary<string, FacetTargetModel> facetLookup,
+        HashSet<string> visitedTypes,
         int currentDepth,
         int maxDepth)
     {
@@ -179,34 +186,61 @@ internal static class ProjectionGenerator
         var nonNullableTypeName = member.TypeName.TrimEnd('?');
         var nestedSourceExpression = $"{sourceVariableName}.{member.Name}";
 
+        // Extract simple type name for circular reference check
+        var simpleTypeName = nonNullableTypeName.Replace("global::", "").Split('.', ':').Last();
+
+        // Check for circular reference - if we're already processing this type, use constructor
+        if (visitedTypes.Contains(simpleTypeName))
+        {
+            // Circular reference detected - use constructor call to prevent infinite expansion
+            var nestedProjection = $"new {nonNullableTypeName}({nestedSourceExpression})";
+
+            if (isNullable)
+            {
+                return $"{nestedSourceExpression} != null ? {nestedProjection} : null";
+            }
+            return nestedProjection;
+        }
+
         // Try to look up the nested facet model
         var nestedFacetModel = FindNestedFacetModel(nonNullableTypeName, facetLookup);
 
-        string nestedProjection;
+        string nestedProjectionResult;
         if (nestedFacetModel != null)
         {
-            // Recursively inline the nested facet's members
-            nestedProjection = GenerateInlineNestedFacetInitializer(
-                nestedFacetModel,
-                nestedSourceExpression,
-                nonNullableTypeName,
-                indent,
-                facetLookup,
-                currentDepth + 1,
-                maxDepth);
+            // Add this type to visited set before recursing
+            visitedTypes.Add(simpleTypeName);
+            try
+            {
+                // Recursively inline the nested facet's members
+                nestedProjectionResult = GenerateInlineNestedFacetInitializer(
+                    nestedFacetModel,
+                    nestedSourceExpression,
+                    nonNullableTypeName,
+                    indent,
+                    facetLookup,
+                    visitedTypes,
+                    currentDepth + 1,
+                    maxDepth);
+            }
+            finally
+            {
+                // Remove from visited set after recursion completes
+                visitedTypes.Remove(simpleTypeName);
+            }
         }
         else
         {
             // Fallback to constructor call if we can't find the nested facet model
-            nestedProjection = $"new {nonNullableTypeName}({nestedSourceExpression})";
+            nestedProjectionResult = $"new {nonNullableTypeName}({nestedSourceExpression})";
         }
 
         if (isNullable)
         {
-            return $"{nestedSourceExpression} != null ? {nestedProjection} : null";
+            return $"{nestedSourceExpression} != null ? {nestedProjectionResult} : null";
         }
 
-        return nestedProjection;
+        return nestedProjectionResult;
     }
 
     /// <summary>
@@ -218,6 +252,7 @@ internal static class ProjectionGenerator
         string facetTypeName,
         string indent,
         Dictionary<string, FacetTargetModel> facetLookup,
+        HashSet<string> visitedTypes,
         int currentDepth = 0,
         int maxDepth = 0)
     {
@@ -228,7 +263,7 @@ internal static class ProjectionGenerator
         for (int i = 0; i < members.Length; i++)
         {
             var member = members[i];
-            var projectionValue = GetProjectionValueExpression(member, sourceExpression, indent, facetLookup, currentDepth, maxDepth);
+            var projectionValue = GetProjectionValueExpression(member, sourceExpression, indent, facetLookup, visitedTypes, currentDepth, maxDepth);
             sb.Append($"{member.Name} = {projectionValue}");
 
             if (i < members.Length - 1)
@@ -250,19 +285,46 @@ internal static class ProjectionGenerator
         string elementSourceTypeName,
         string collectionWrapper,
         Dictionary<string, FacetTargetModel> facetLookup,
+        HashSet<string> visitedTypes,
         int currentDepth = 0,
         int maxDepth = 0)
     {
+        // Extract simple type name for circular reference check
+        var simpleTypeName = elementFacetTypeName.Replace("global::", "").Split('.', ':').Last();
+
+        // Check for circular reference
+        if (visitedTypes.Contains(simpleTypeName))
+        {
+            // Circular reference detected - use constructor call
+            var circularProjection = $"{sourceCollectionExpression}.Select(x => new {elementFacetTypeName}(x))";
+            return collectionWrapper switch
+            {
+                FacetConstants.CollectionWrappers.Array => $"{circularProjection}.ToArray()",
+                FacetConstants.CollectionWrappers.IEnumerable => circularProjection,
+                _ => $"{circularProjection}.ToList()"
+            };
+        }
+
         // Try to find the nested facet model to inline expand it
         var nestedFacetModel = FindNestedFacetModel(elementFacetTypeName, facetLookup);
 
         string projection;
         if (nestedFacetModel != null)
         {
-            // Inline expand the nested facet
-            var inlineInitializer = GenerateInlineNestedFacetInitializer(
-                nestedFacetModel, "x", elementFacetTypeName, "", facetLookup, currentDepth, maxDepth);
-            projection = $"{sourceCollectionExpression}.Select(x => {inlineInitializer})";
+            // Add this type to visited set before recursing
+            visitedTypes.Add(simpleTypeName);
+            try
+            {
+                // Inline expand the nested facet
+                var inlineInitializer = GenerateInlineNestedFacetInitializer(
+                    nestedFacetModel, "x", elementFacetTypeName, "", facetLookup, visitedTypes, currentDepth, maxDepth);
+                projection = $"{sourceCollectionExpression}.Select(x => {inlineInitializer})";
+            }
+            finally
+            {
+                // Remove from visited set after recursion completes
+                visitedTypes.Remove(simpleTypeName);
+            }
         }
         else
         {

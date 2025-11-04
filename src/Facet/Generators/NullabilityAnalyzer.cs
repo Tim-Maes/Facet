@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis;
 
-namespace Facet.Generators.Shared;
+namespace Facet.Generators;
 
 /// <summary>
 /// Analyzes and provides utilities for handling nullable types consistently across the generator.

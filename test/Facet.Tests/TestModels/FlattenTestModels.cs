@@ -65,3 +65,57 @@ public partial class PersonFlatLeafOnlyDto
 {
     // Uses leaf-only naming strategy
 }
+
+// Test models for collections
+public class Company
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public Address HeadquartersAddress { get; set; } = null!;
+    public List<Worker> Workers { get; set; } = new();
+}
+
+public class Worker
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public int CompanyId { get; set; }
+}
+
+[Flatten(typeof(Company))]
+public partial class CompanyFlatDto
+{
+    // Collections should be completely ignored - no Count, IsReadOnly, or Worker properties
+}
+
+// Test models for nested IDs
+public class Order
+{
+    public int Id { get; set; }
+    public DateTime OrderDate { get; set; }
+    public int CustomerId { get; set; }
+    public Customer Customer { get; set; } = null!;
+    public decimal Total { get; set; }
+}
+
+public class Customer
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public int? PreferredAddressId { get; set; }
+}
+
+[Flatten(typeof(Order), IgnoreNestedIds = true)]
+public partial class OrderFlatDto
+{
+    // Only Order.Id should be included
+    // Customer.Id, Order.CustomerId, and Customer.PreferredAddressId should be excluded
+}
+
+[Flatten(typeof(Order), IgnoreNestedIds = false)]
+public partial class OrderFlatWithAllIdsDto
+{
+    // All IDs should be included for comparison
+}

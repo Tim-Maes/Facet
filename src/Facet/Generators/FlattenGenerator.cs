@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.Text;
 using System.Linq;
 using System.Text;
 
-namespace Facet.Generators.FlattenGenerators;
+namespace Facet.Generators;
 
 [Generator(LanguageNames.CSharp)]
 public sealed class FlattenGenerator : IIncrementalGenerator

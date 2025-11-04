@@ -2,7 +2,7 @@ using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Facet.Generators.Shared;
+namespace Facet.Generators;
 
 /// <summary>
 /// Shared utility methods for Facet source generators.

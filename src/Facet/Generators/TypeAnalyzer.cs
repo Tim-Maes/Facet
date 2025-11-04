@@ -4,7 +4,7 @@ using System.Collections.Immutable;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Facet.Generators.Shared;
+namespace Facet.Generators;
 
 /// <summary>
 /// Analyzes type characteristics such as containing types, primary constructors, and record detection.

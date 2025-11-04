@@ -1,9 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Facet.Generators.Shared;
 
-namespace Facet.Generators.FacetGenerators;
+namespace Facet.Generators;
 
 /// <summary>
 /// Generates BackTo methods for converting facet instances back to their source types.
