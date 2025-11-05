@@ -190,7 +190,6 @@ internal static class FlattenModelBuilder
             ? currentType.GetMembers().Where(m => m is IPropertySymbol or IFieldSymbol)
             : currentType.GetMembers().OfType<IPropertySymbol>();
 
-        // First pass: collect all property names at this level
         var allPropertyNames = new HashSet<string>();
         var propertyTypes = new Dictionary<string, ITypeSymbol>();
 
@@ -216,7 +215,6 @@ internal static class FlattenModelBuilder
             propertyTypes[member.Name] = memberType;
         }
 
-        // Second pass: identify FK patterns and recurse into complex types
         foreach (var member in members)
         {
             if (member.DeclaredAccessibility != Accessibility.Public) continue;
@@ -227,7 +225,6 @@ internal static class FlattenModelBuilder
             // Check if this is a FK pattern
             if (memberName.EndsWith("Id") && memberName.Length > 2)
             {
-                // Must be a value type (int, int?, long?, Guid, etc.) to be a FK
                 var underlyingType = memberType;
                 if (memberType is INamedTypeSymbol named && named.IsGenericType &&
                     named.ConstructedFrom.SpecialType == SpecialType.System_Nullable_T)
@@ -241,7 +238,7 @@ internal static class FlattenModelBuilder
                     var potentialNavProp = memberName.Substring(0, memberName.Length - 2);
                     if (allPropertyNames.Contains(potentialNavProp))
                     {
-                        // This is a FK! Add its flattened path to the set
+                        // This is a forein key!
                         var fkPath = new List<string>(currentPath) { memberName };
                         var flattenedFkName = GenerateFlattenedName(fkPath, namingStrategy);
                         foreignKeyPaths.Add(flattenedFkName);
@@ -249,13 +246,11 @@ internal static class FlattenModelBuilder
                 }
             }
 
-            // Recurse into complex types (not collections, not leaf types)
             if (IsCollectionType(memberType, collectionTypeCache))
             {
                 continue; // Skip collections
             }
 
-            // Only recurse if it's a complex type (not a simple leaf)
             if (memberType.TypeKind == TypeKind.Class && memberType.SpecialType == SpecialType.None)
             {
                 var newPath = new List<string>(currentPath) { memberName };
