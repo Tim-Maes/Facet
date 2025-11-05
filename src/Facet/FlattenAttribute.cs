@@ -124,6 +124,21 @@ public sealed class FlattenAttribute : Attribute
     /// Example: When true, "User.Id" is kept but "User.Company.Id" and "User.CompanyId" are excluded.
     /// </remarks>
     public bool IgnoreNestedIds { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets whether to ignore foreign key clashes when flattening.
+    /// When true, if a foreign key property (e.g., "AddressId") exists and a navigation property
+    /// (e.g., "Address") is flattened, the nested Id property (Address.Id) will be skipped
+    /// since both represent the same data.
+    /// Default is false.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Example: Given Person with AddressId (FK) and Address (navigation property),
+    /// when true, only AddressId is included (not Address.Id flattened to AddressId).
+    /// </para>
+    /// </remarks>
+    public bool IgnoreForeignKeyClashes { get; set; } = false;
 }
 
 /// <summary>
