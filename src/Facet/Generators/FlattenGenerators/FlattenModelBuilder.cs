@@ -348,31 +348,24 @@ internal static class FlattenModelBuilder
 
             var newPathSegments = new List<string>(pathSegments) { memberName };
 
-            // Generate flattened property name for this property
             var flattenedName = GenerateFlattenedName(newPathSegments, namingStrategy);
 
-            // Check for FK clashes: if this property's flattened name matches a FK, skip it
-            // This handles both nested Ids (e.g., Address.Id -> AddressId) and nested FKs (e.g., Customer.HomeAddressId -> CustomerHomeAddressId)
             if (ignoreForeignKeyClashes && depth > 0 && foreignKeyPaths.Contains(flattenedName))
             {
-                // This property would clash with a FK property
+                // This property would clash with a fk property
                 // Skip it to avoid duplication
                 continue;
             }
 
-            // Skip collections completely - they should never be flattened or recursed
             if (IsCollectionType(memberType, collectionTypeCache))
             {
                 continue;
             }
 
-            // Check if this is a "leaf" type (primitive, string, enum, value type that we should flatten)
             if (ShouldFlattenAsLeaf(memberType, leafTypeCache))
             {
-                // Handle name collisions
                 if (seenNames.Contains(flattenedName))
                 {
-                    // Add numeric suffix
                     int counter = 2;
                     string uniqueName;
                     do
