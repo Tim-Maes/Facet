@@ -200,6 +200,16 @@ public class ProductsController : ControllerBase
 }
 ```
 
+## Advanced: Custom Mapping Support
+
+For complex mappings that cannot be expressed as SQL projections (e.g., calling external services, complex type conversions like Vector2, or async operations), see the **[Facet.Extensions.EFCore.Mapping](https://www.nuget.org/packages/Facet.Extensions.EFCore.Mapping)** package.
+
+```bash
+dotnet add package Facet.Extensions.EFCore.Mapping
+```
+
+This optional package provides custom async mapper support with dependency injection for advanced scenarios. See the [Facet.Extensions.EFCore.Mapping README](../Facet.Extensions.EFCore.Mapping/README.md) for details.
+
 ## API Reference
 
 | Method | Description | Use Case |
@@ -213,6 +223,8 @@ public class ProductsController : ControllerBase
 | `UpdateFromFacet<TEntity, TFacet>()` | Selective entity update | PUT/PATCH endpoints |
 | `UpdateFromFacetWithChanges<TEntity, TFacet>()` | Update with change tracking | Auditing scenarios |
 | `UpdateFromFacetAsync<TEntity, TFacet>()` | Async selective update | Future extensibility |
+
+For custom async mapper overloads, see [Facet.Extensions.EFCore.Mapping](https://www.nuget.org/packages/Facet.Extensions.EFCore.Mapping).
 
 ## Requirements
 
