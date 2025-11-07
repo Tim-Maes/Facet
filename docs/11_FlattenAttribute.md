@@ -43,6 +43,7 @@ public partial class PersonFlatDto
 - **Depth Control**: Configurable maximum traversal depth
 - **Exclusion Paths**: Exclude specific nested properties
 - **ID Filtering**: Optional `IgnoreNestedIds` to exclude foreign keys and nested IDs
+- **FK Clash Detection**: Optional `IgnoreForeignKeyClashes` to eliminate duplicate foreign key data
 - **Naming Strategies**: Prefix or leaf-only naming
 - **One-Way Operation**: Flattening is intentionally one-way (no BackTo method)
 
@@ -126,6 +127,7 @@ public partial class PersonFlatDto
 | `GenerateProjection` | `bool` | `true` | Generate a LINQ projection expression for database queries. |
 | `UseFullName` | `bool` | `false` | Use fully qualified type name in generated file names to avoid collisions. |
 | `IgnoreNestedIds` | `bool` | `false` | When true, only keeps the root-level `Id` property and excludes all foreign key IDs and nested IDs. |
+| `IgnoreForeignKeyClashes` | `bool` | `false` | When true, automatically skips nested ID and FK properties that would duplicate foreign key data. |
 
 ## Naming Strategies
 
@@ -308,6 +310,156 @@ public async Task<IActionResult> GetProduct(int id)
     //             "manufacturerName": "ACME", "manufacturerCountry": "USA" }
 }
 ```
+
+## Ignoring Foreign Key Clashes
+
+The `IgnoreForeignKeyClashes` parameter helps eliminate duplicate ID data when flattening entities with foreign key relationships. When enabled, it automatically detects and skips properties that would represent the same data as a foreign key property.
+
+### The Problem: Foreign Key Duplication
+
+In Entity Framework models with foreign keys and navigation properties, you often have both:
+1. A foreign key property (e.g., `AddressId`)
+2. A navigation property (e.g., `Address`)
+3. The referenced entity's ID (e.g., `Address.Id`)
+
+When flattening, both `AddressId` and `Address.Id` become `AddressId`, causing naming collisions and representing the same data twice.
+
+### Without IgnoreForeignKeyClashes (Default)
+
+```csharp
+public class Person
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public int? AddressId { get; set; }  // Foreign key
+    public Address Address { get; set; }  // Navigation property
+}
+
+public class Address
+{
+    public int Id { get; set; }
+    public string Line1 { get; set; }
+    public string City { get; set; }
+}
+
+[Flatten(typeof(Person))]
+public partial class PersonFlatDto
+{
+    // Generated:
+    // public int Id { get; set; }
+    // public string Name { get; set; }
+    // public int? AddressId { get; set; }        // FK property
+    // public int? AddressId2 { get; set; }       // Address.Id (collision!)
+    // public string AddressLine1 { get; set; }
+    // public string AddressCity { get; set; }
+}
+```
+
+### With IgnoreForeignKeyClashes
+
+```csharp
+[Flatten(typeof(Person), IgnoreForeignKeyClashes = true)]
+public partial class PersonFlatDto
+{
+    // Generated:
+    // public int Id { get; set; }
+    // public string Name { get; set; }
+    // public int? AddressId { get; set; }     // FK property kept
+    // public string AddressLine1 { get; set; }
+    // public string AddressCity { get; set; }
+    // (Address.Id is skipped - would be duplicate of AddressId)
+}
+```
+
+### Behavior Rules
+
+1. **Detects FK patterns**: Identifies properties ending with "Id" that have a matching navigation property
+2. **Skips nested IDs**: When a navigation property is flattened, its `Id` property is skipped if it would match a FK
+3. **Skips nested FKs**: Foreign keys within nested objects are also skipped to avoid deep duplicates
+4. **Preserves root FKs**: Foreign keys at the root level are always included
+5. **Works at all depths**: Handles complex scenarios like `Customer.HomeAddressId` and `Customer.HomeAddress.Id`
+
+### Example: Complex Nested Foreign Keys
+
+```csharp
+public class Order
+{
+    public int Id { get; set; }
+    public DateTime OrderDate { get; set; }
+    public int CustomerId { get; set; }           // Root FK
+    public Customer Customer { get; set; }
+    public int? ShippingAddressId { get; set; }   // Root FK
+    public Address ShippingAddress { get; set; }
+}
+
+public class Customer
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string Email { get; set; }
+    public int? HomeAddressId { get; set; }       // Nested FK
+    public Address HomeAddress { get; set; }
+}
+
+public class Address
+{
+    public int Id { get; set; }
+    public string Line1 { get; set; }
+    public string City { get; set; }
+}
+
+[Flatten(typeof(Order), IgnoreForeignKeyClashes = true)]
+public partial class OrderFlatDto
+{
+    // Generated:
+    // public int Id { get; set; }
+    // public DateTime OrderDate { get; set; }
+    // public int CustomerId { get; set; }                 // Root FK included
+    // public string CustomerName { get; set; }
+    // public string CustomerEmail { get; set; }
+    // public string CustomerHomeAddressLine1 { get; set; }
+    // public string CustomerHomeAddressCity { get; set; }
+    // public int? ShippingAddressId { get; set; }        // Root FK included
+    // public string ShippingAddressLine1 { get; set; }
+    // public string ShippingAddressCity { get; set; }
+    //
+    // Skipped (would be duplicates):
+    // - Customer.Id (would clash with CustomerId)
+    // - Customer.HomeAddressId (nested FK)
+    // - Customer.HomeAddress.Id (would clash with CustomerHomeAddressId)
+    // - ShippingAddress.Id (would clash with ShippingAddressId)
+}
+```
+
+### Use Cases
+
+- **Entity Framework models** with explicit foreign key properties
+- **API responses** that don't need duplicate ID data
+- **Cleaner DTOs** without naming collisions from IDs
+- **Database-first models** that follow FK conventions
+
+### Combining with IgnoreNestedIds
+
+You can use both `IgnoreNestedIds` and `IgnoreForeignKeyClashes` together:
+
+```csharp
+[Flatten(typeof(Order), IgnoreNestedIds = true, IgnoreForeignKeyClashes = true)]
+public partial class OrderDisplayDto
+{
+    // This combination:
+    // 1. Ignores ALL ID properties except root (IgnoreNestedIds)
+    // 2. No FK clashes to worry about since FKs are also IDs (both work together)
+    //
+    // Generated:
+    // public int Id { get; set; }              // Root ID only
+    // public DateTime OrderDate { get; set; }
+    // public string CustomerName { get; set; }
+    // public string CustomerEmail { get; set; }
+    // (All foreign keys and IDs excluded)
+}
+```
+
+**Note**: When using both together, `IgnoreNestedIds` takes precedence since it removes all ID properties (which includes FKs). However, `IgnoreForeignKeyClashes` provides more granular control if you want to keep root-level FKs while avoiding clash duplicates.
 
 ## Controlling Depth
 

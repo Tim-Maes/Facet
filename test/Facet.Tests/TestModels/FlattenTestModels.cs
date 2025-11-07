@@ -119,3 +119,64 @@ public partial class OrderFlatWithAllIdsDto
 {
     // All IDs should be included for comparison
 }
+
+// Test models for FK clashes
+public class PersonWithFk
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public int? AddressId { get; set; } // Foreign key
+    public AddressWithId? Address { get; set; } // Navigation property
+}
+
+public class AddressWithId
+{
+    public int Id { get; set; }
+    public string Line1 { get; set; } = string.Empty;
+    public string Line2 { get; set; } = string.Empty;
+    public string City { get; set; } = string.Empty;
+}
+
+[Flatten(typeof(PersonWithFk), IgnoreForeignKeyClashes = true)]
+public partial class PersonWithFkFlatDto
+{
+    // AddressId (FK) should be included
+    // Address.Id should be skipped (would clash with AddressId)
+    // Other Address properties (Line1, City, etc.) should be included as AddressLine1, AddressCity, etc.
+}
+
+[Flatten(typeof(PersonWithFk), IgnoreForeignKeyClashes = false)]
+public partial class PersonWithFkFlatNoIgnoreDto
+{
+    // AddressId (FK) should be included
+    // Address.Id should be included as AddressId2 (name collision)
+    // Other Address properties should be included
+}
+
+// Test model with multiple FKs
+public class OrderWithFks
+{
+    public int Id { get; set; }
+    public DateTime OrderDate { get; set; }
+    public int CustomerId { get; set; } // FK
+    public CustomerWithAddress Customer { get; set; } = null!;
+    public int? ShippingAddressId { get; set; } // FK
+    public AddressWithId? ShippingAddress { get; set; }
+}
+
+public class CustomerWithAddress
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public int? HomeAddressId { get; set; } // Nested FK
+    public AddressWithId? HomeAddress { get; set; }
+}
+
+[Flatten(typeof(OrderWithFks), IgnoreForeignKeyClashes = true)]
+public partial class OrderWithFksFlatDto
+{
+    // Should include: Id, OrderDate, CustomerId (FK), ShippingAddressId (FK)
+    // Should skip: Customer.Id, Customer.HomeAddressId, ShippingAddress.Id, Customer.HomeAddress.Id
+    // Should include: CustomerName, CustomerEmail, ShippingAddressLine1, etc.
+}

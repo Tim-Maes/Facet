@@ -38,6 +38,7 @@ internal static class FlattenModelBuilder
         var generateProjection = GetNamedArg(attribute.NamedArguments, "GenerateProjection", true);
         var useFullName = GetNamedArg(attribute.NamedArguments, "UseFullName", false);
         var ignoreNestedIds = GetNamedArg(attribute.NamedArguments, "IgnoreNestedIds", false);
+        var ignoreForeignKeyClashes = GetNamedArg(attribute.NamedArguments, "IgnoreForeignKeyClashes", false);
 
         // Infer the type kind from the target type declaration
         var (typeKind, isRecord) = TypeAnalyzer.InferTypeKind(targetSymbol);
@@ -53,6 +54,7 @@ internal static class FlattenModelBuilder
             namingStrategy,
             includeFields,
             ignoreNestedIds,
+            ignoreForeignKeyClashes,
             token);
 
         // Determine full name
@@ -129,12 +131,18 @@ internal static class FlattenModelBuilder
         FlattenNamingStrategy namingStrategy,
         bool includeFields,
         bool ignoreNestedIds,
+        bool ignoreForeignKeyClashes,
         CancellationToken token)
     {
         var properties = new List<FlattenProperty>();
         var seenNames = new HashSet<string>();
         var collectionTypeCache = new Dictionary<ITypeSymbol, bool>(SymbolEqualityComparer.Default);
         var leafTypeCache = new Dictionary<ITypeSymbol, bool>(SymbolEqualityComparer.Default);
+
+        // Collect potential foreign keys and their navigation properties for clash detection
+        var foreignKeyPaths = ignoreForeignKeyClashes
+            ? CollectAllForeignKeyPaths(sourceType, includeFields, namingStrategy, new List<string>(), new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default), collectionTypeCache, 0, maxDepth)
+            : new HashSet<string>();
 
         // Start recursive discovery
         DiscoverPropertiesRecursive(
@@ -147,6 +155,8 @@ internal static class FlattenModelBuilder
             namingStrategy,
             includeFields,
             ignoreNestedIds,
+            ignoreForeignKeyClashes,
+            foreignKeyPaths,
             properties,
             seenNames,
             new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default),
@@ -155,6 +165,111 @@ internal static class FlattenModelBuilder
             token);
 
         return properties.ToImmutableArray();
+    }
+
+    private static HashSet<string> CollectAllForeignKeyPaths(
+        INamedTypeSymbol currentType,
+        bool includeFields,
+        FlattenNamingStrategy namingStrategy,
+        List<string> currentPath,
+        HashSet<ITypeSymbol> visitedTypes,
+        Dictionary<ITypeSymbol, bool> collectionTypeCache,
+        int depth,
+        int maxDepth)
+    {
+        var foreignKeyPaths = new HashSet<string>();
+
+        // Check depth limits
+        if (maxDepth > 0 && depth >= maxDepth) return foreignKeyPaths;
+        if (depth >= 10) return foreignKeyPaths; // Safety limit
+
+        // Prevent infinite recursion
+        if (!visitedTypes.Add(currentType)) return foreignKeyPaths;
+
+        var members = includeFields
+            ? currentType.GetMembers().Where(m => m is IPropertySymbol or IFieldSymbol)
+            : currentType.GetMembers().OfType<IPropertySymbol>();
+
+        var allPropertyNames = new HashSet<string>();
+        var propertyTypes = new Dictionary<string, ITypeSymbol>();
+
+        foreach (var member in members)
+        {
+            if (member.DeclaredAccessibility != Accessibility.Public) continue;
+
+            ITypeSymbol memberType;
+            if (member is IPropertySymbol property)
+            {
+                memberType = property.Type;
+            }
+            else if (member is IFieldSymbol field)
+            {
+                memberType = field.Type;
+            }
+            else
+            {
+                continue;
+            }
+
+            allPropertyNames.Add(member.Name);
+            propertyTypes[member.Name] = memberType;
+        }
+
+        foreach (var member in members)
+        {
+            if (member.DeclaredAccessibility != Accessibility.Public) continue;
+
+            var memberName = member.Name;
+            var memberType = propertyTypes[memberName];
+
+            // Check if this is a FK pattern
+            if (memberName.EndsWith("Id") && memberName.Length > 2)
+            {
+                var underlyingType = memberType;
+                if (memberType is INamedTypeSymbol named && named.IsGenericType &&
+                    named.ConstructedFrom.SpecialType == SpecialType.System_Nullable_T)
+                {
+                    underlyingType = named.TypeArguments[0];
+                }
+
+                if (underlyingType.IsValueType)
+                {
+                    // Check if there's a matching navigation property
+                    var potentialNavProp = memberName.Substring(0, memberName.Length - 2);
+                    if (allPropertyNames.Contains(potentialNavProp))
+                    {
+                        // This is a forein key!
+                        var fkPath = new List<string>(currentPath) { memberName };
+                        var flattenedFkName = GenerateFlattenedName(fkPath, namingStrategy);
+                        foreignKeyPaths.Add(flattenedFkName);
+                    }
+                }
+            }
+
+            if (IsCollectionType(memberType, collectionTypeCache))
+            {
+                continue; // Skip collections
+            }
+
+            if (memberType.TypeKind == TypeKind.Class && memberType.SpecialType == SpecialType.None)
+            {
+                var newPath = new List<string>(currentPath) { memberName };
+                var nestedFks = CollectAllForeignKeyPaths(
+                    (INamedTypeSymbol)memberType,
+                    includeFields,
+                    namingStrategy,
+                    newPath,
+                    visitedTypes,
+                    collectionTypeCache,
+                    depth + 1,
+                    maxDepth);
+
+                foreignKeyPaths.UnionWith(nestedFks);
+            }
+        }
+
+        visitedTypes.Remove(currentType);
+        return foreignKeyPaths;
     }
 
     private static void DiscoverPropertiesRecursive(
@@ -167,6 +282,8 @@ internal static class FlattenModelBuilder
         FlattenNamingStrategy namingStrategy,
         bool includeFields,
         bool ignoreNestedIds,
+        bool ignoreForeignKeyClashes,
+        HashSet<string> foreignKeyPaths,
         List<FlattenProperty> properties,
         HashSet<string> seenNames,
         HashSet<ITypeSymbol> visitedTypes,
@@ -231,22 +348,24 @@ internal static class FlattenModelBuilder
 
             var newPathSegments = new List<string>(pathSegments) { memberName };
 
-            // Skip collections completely - they should never be flattened or recursed
+            var flattenedName = GenerateFlattenedName(newPathSegments, namingStrategy);
+
+            if (ignoreForeignKeyClashes && depth > 0 && foreignKeyPaths.Contains(flattenedName))
+            {
+                // This property would clash with a fk property
+                // Skip it to avoid duplication
+                continue;
+            }
+
             if (IsCollectionType(memberType, collectionTypeCache))
             {
                 continue;
             }
 
-            // Check if this is a "leaf" type (primitive, string, enum, value type that we should flatten)
             if (ShouldFlattenAsLeaf(memberType, leafTypeCache))
             {
-                // Generate flattened property name
-                var flattenedName = GenerateFlattenedName(newPathSegments, namingStrategy);
-
-                // Handle name collisions
                 if (seenNames.Contains(flattenedName))
                 {
-                    // Add numeric suffix
                     int counter = 2;
                     string uniqueName;
                     do
@@ -297,6 +416,8 @@ internal static class FlattenModelBuilder
                     namingStrategy,
                     includeFields,
                     ignoreNestedIds,
+                    ignoreForeignKeyClashes,
+                    foreignKeyPaths,
                     properties,
                     seenNames,
                     visitedTypes,
