@@ -82,6 +82,11 @@ For EF Core support:
 dotnet add package Facet.Extensions.EFCore
 ```
 
+For advanced EF Core custom mappers (with DI support):
+```
+dotnet add package Facet.Extensions.EFCore.Mapping
+```
+
 For expression transformation utilities:
 ```
 dotnet add package Facet.Mapping.Expressions
@@ -376,6 +381,61 @@ if (result.HasChanges)
         user.Id, string.Join(", ", result.ChangedProperties));
 }
 ```
+
+#### Advanced: Custom Mappers with EF Core (Facet.Extensions.EFCore.Mapping)
+
+For complex mappings that cannot be expressed as SQL projections (e.g., external service calls, complex type conversions), use the advanced mapping package:
+
+```csharp
+// Install: dotnet add package Facet.Extensions.EFCore.Mapping
+using Facet.Extensions.EFCore.Mapping;
+
+// Example: Converting separate X, Y properties into a Vector2 type
+[Facet(typeof(User), exclude: ["X", "Y"])]
+public partial class UserDto
+{
+    public Vector2 Position { get; set; }
+}
+
+// Static mapper
+public class UserMapper : IFacetMapConfigurationAsync<User, UserDto>
+{
+    public static async Task MapAsync(User source, UserDto target, CancellationToken cancellationToken = default)
+    {
+        target.Position = new Vector2(source.X, source.Y);
+    }
+}
+
+// Usage with EF Core queries
+var users = await dbContext.Users
+    .Where(u => u.IsActive)
+    .ToFacetsAsync<User, UserDto, UserMapper>();
+
+// Or with dependency injection
+public class UserMapper : IFacetMapConfigurationAsyncInstance<User, UserDto>
+{
+    private readonly ILocationService _locationService;
+
+    public UserMapper(ILocationService locationService)
+    {
+        _locationService = locationService;
+    }
+
+    public async Task MapAsync(User source, UserDto target, CancellationToken cancellationToken = default)
+    {
+        target.Position = new Vector2(source.X, source.Y);
+        target.Location = await _locationService.GetLocationAsync(source.LocationId);
+    }
+}
+
+// Usage with DI
+var users = await dbContext.Users
+    .Where(u => u.IsActive)
+    .ToFacetsAsync<User, UserDto>(userMapper);
+```
+
+**Note**: Custom mapper methods materialize the query first (execute SQL), then apply your custom logic. All matching properties are auto-mapped first.
+
 </details>
 
 <details>
@@ -571,6 +631,8 @@ Facet is modular and consists of several NuGet packages:
 - **[Facet.Mapping.Expressions](https://github.com/Tim-Maes/Facet/blob/master/src/Facet.Mapping.Expressions/README.md)**: Expression tree transformation utilities for transforming predicates, selectors, and business logic between source entities and their Facet projections.
 
 - **[Facet.Extensions.EFCore](https://github.com/Tim-Maes/Facet/tree/master/src/Facet.Extensions.EFCore)**: Async extension methods for Entity Framework Core (requires EF Core 6+).
+
+- **[Facet.Extensions.EFCore.Mapping](https://github.com/Tim-Maes/Facet/tree/master/src/Facet.Extensions.EFCore.Mapping)**: Advanced custom async mapper support for EF Core queries. Enables complex mappings that cannot be expressed as SQL projections (e.g., external service calls, complex type conversions like Vector2, async operations with DI).
 
 ## :chart_with_upwards_trend: Performance Benchmarks
 

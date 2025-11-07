@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+        <IsPackable>true</IsPackable>
+        <PackageId>Facet.Extensions.EFCore.Mapping</PackageId>
+        <Description>Advanced custom async mapper support for Facet with EF Core queries. Enables complex mappings that cannot be expressed as SQL projections.</Description>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <Title>Facet.Extensions.EFCore.Mapping</Title>
+        <PackageProjectUrl>https://www.github.com/Tim-Maes/Facet</PackageProjectUrl>
+        <PackageTags>facet efcore entity-framework mapping async dto source-generator</PackageTags>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore" />
+        <ProjectReference Include="..\Facet.Extensions.EFCore\Facet.Extensions.EFCore.csproj" />
+        <ProjectReference Include="..\Facet.Mapping\Facet.Mapping.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="FacetEfCoreMappingExtensions.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="README.md" Pack="true" PackagePath="" />
+    </ItemGroup>
+
+    <!-- Resolve System.Collections.Immutable version conflict for net8.0 -->
+    <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+        <PackageReference Include="System.Collections.Immutable" />
+    </ItemGroup>
+
+</Project>

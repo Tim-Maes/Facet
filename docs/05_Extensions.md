@@ -28,6 +28,23 @@ For async EF Core support, see the separate Facet.Extensions.EFCore package.
 | `UpdateFromFacetAsync<TEntity, TFacet>()`| Async update entity with changed properties from facet DTO.  |
 | `UpdateFromFacetWithChanges<TEntity, TFacet>()`| Update entity and return information about changed properties. |
 
+## Methods (Facet.Extensions.EFCore.Mapping)
+
+For advanced custom async mapper support, install the separate package:
+
+```bash
+dotnet add package Facet.Extensions.EFCore.Mapping
+```
+
+| Method                              | Description                                                      |
+|------------------------------------- |------------------------------------------------------------------|
+| `ToFacetsAsync<TSource, TTarget>(mapper)` | Async projection with custom instance mapper (DI support).    |
+| `ToFacetsAsync<TSource, TTarget, TAsyncMapper>()` | Async projection with static async mapper.              |
+| `FirstFacetAsync<TSource, TTarget>(mapper)` | Get first with custom instance mapper (DI support).        |
+| `FirstFacetAsync<TSource, TTarget, TAsyncMapper>()` | Get first with static async mapper.                   |
+| `SingleFacetAsync<TSource, TTarget>(mapper)` | Get single with custom instance mapper (DI support).      |
+| `SingleFacetAsync<TSource, TTarget, TAsyncMapper>()` | Get single with static async mapper.                 |
+
 ## Usage Examples
 
 ### Extensions
@@ -184,6 +201,66 @@ public class UsersController : ControllerBase
 }
 ```
 
+### EF Core Custom Mappers (Advanced)
+
+For complex mappings that cannot be expressed as SQL projections (e.g., calling external services, complex type conversions like Vector2, or async operations), install the advanced mapping package:
+
+```bash
+dotnet add package Facet.Extensions.EFCore.Mapping
+```
+
+```csharp
+using Facet.Extensions.EFCore.Mapping;  // Advanced mappers
+using Facet.Mapping;
+
+// Define your DTO with excluded properties
+[Facet(typeof(User), exclude: ["X", "Y"])]
+public partial class UserDto
+{
+    public Vector2 Position { get; set; }
+}
+
+// Option 1: Static mapper (no DI)
+public class UserMapper : IFacetMapConfigurationAsync<User, UserDto>
+{
+    public static async Task MapAsync(User source, UserDto target, CancellationToken cancellationToken = default)
+    {
+        target.Position = new Vector2(source.X, source.Y);
+    }
+}
+
+// Option 2: Instance mapper with dependency injection
+public class UserMapper : IFacetMapConfigurationAsyncInstance<User, UserDto>
+{
+    private readonly ILocationService _locationService;
+
+    public UserMapper(ILocationService locationService)
+    {
+        _locationService = locationService;
+    }
+
+    public async Task MapAsync(User source, UserDto target, CancellationToken cancellationToken = default)
+    {
+        target.Position = new Vector2(source.X, source.Y);
+        target.Location = await _locationService.GetLocationAsync(source.LocationId);
+    }
+}
+
+// Usage with static mapper
+var users = await dbContext.Users
+    .Where(u => u.IsActive)
+    .ToFacetsAsync<User, UserDto, UserMapper>();
+
+// Usage with instance mapper (DI)
+var users = await dbContext.Users
+    .Where(u => u.IsActive)
+    .ToFacetsAsync<User, UserDto>(userMapper);
+```
+
+**Note:** Custom mapper methods materialize the query first (execute SQL), then apply your custom logic. All matching properties are auto-mapped first.
+
+See the [Facet.Extensions.EFCore.Mapping](https://www.nuget.org/packages/Facet.Extensions.EFCore.Mapping) package for more details.
+
 ---
 
-See [Quick Start](02_QuickStart.md) for setup and [Facet.Extensions.EFCore](https://www.nuget.org/packages/Facet.Extensions.EFCore) for async EF Core support.
+See [Quick Start](02_QuickStart.md) for setup, [Facet.Extensions.EFCore](https://www.nuget.org/packages/Facet.Extensions.EFCore) for async EF Core support, and [Facet.Extensions.EFCore.Mapping](https://www.nuget.org/packages/Facet.Extensions.EFCore.Mapping) for advanced custom async mappers.
