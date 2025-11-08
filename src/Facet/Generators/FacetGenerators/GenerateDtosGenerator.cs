@@ -321,7 +321,14 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
     private static string GetSimpleTypeName(string fullyQualifiedName)
     {
-        var parts = fullyQualifiedName.Split('.');
+        // remove global:: prefix if present (for types in global namespace)
+        var name = fullyQualifiedName;
+        if (name.StartsWith("global::"))
+        {
+            name = name.Substring(8);
+        }
+
+        var parts = name.Split('.');
         return parts[parts.Length - 1];
     }
 
