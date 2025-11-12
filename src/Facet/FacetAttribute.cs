@@ -3,7 +3,7 @@
 namespace Facet;
 
 /// <summary>
-/// Indicates that this class should be generated based on a source type, optionally excluding properties or including fields.
+/// Indicates that this class should be generated based on a source type.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = true)]
 public sealed class FacetAttribute : Attribute
