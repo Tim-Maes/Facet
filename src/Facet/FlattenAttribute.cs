@@ -12,36 +12,6 @@ namespace Facet;
 /// and creating flattened properties for all primitive types, strings, and value types found
 /// in nested objects.
 /// </para>
-/// <para>
-/// Example:
-/// <code>
-/// public class Person
-/// {
-///     public string FirstName { get; set; }
-///     public Address Address { get; set; }
-/// }
-///
-/// public class Address
-/// {
-///     public string Street { get; set; }
-///     public string City { get; set; }
-/// }
-///
-/// [Flatten(typeof(Person))]
-/// public partial class PersonDto
-/// {
-///     // Generator automatically creates:
-///     // public string FirstName { get; set; }
-///     // public string AddressStreet { get; set; }
-///     // public string AddressCity { get; set; }
-/// }
-/// </code>
-/// </para>
-/// <para>
-/// <strong>Note:</strong> Flattened types do not support BackTo methods as unflattening
-/// is inherently ambiguous and error-prone. Flattening is a one-way operation intended
-/// for read-only projections like API responses.
-/// </para>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false, Inherited = false)]
 public sealed class FlattenAttribute : Attribute
