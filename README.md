@@ -42,6 +42,7 @@ You can think of it like **carving out a specific facet** of a gem:
 
 - **[Documentation & Guides](docs/README.md)**
 - [What is being generated?](docs/07_WhatIsBeingGenerated.md)
+- [Configure generated files output location](docs/12_GeneratedFilesOutput.md)
 - [Comprehensive article about Facetting](https://tim-maes.com/blog/2025/09/28/facets-in-dotnet/)
 
 ## :star: Core Features

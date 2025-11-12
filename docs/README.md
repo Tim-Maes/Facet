@@ -15,6 +15,7 @@ Welcome to the Facet documentation! This index will help you navigate all availa
   - Nested Facets (single objects & collections)
   - Collection support (List, Array, ICollection, IEnumerable)
   - Inheritance and base classes
+- [Generated Files Output Configuration](12_GeneratedFilesOutput.md): Configure where generated files are written and make them visible in Solution Explorer
 - [What is Being Generated?](07_WhatIsBeingGenerated.md): Before/After Examples
 - [Async Mapping Guide](08_AsyncMapping.md): Asynchronous Mapping with Facet.Mapping
 - [GenerateDtos Attribute](09_GenerateDtosAttribute.md): Auto-generate CRUD DTOs with GenerateDtos & GenerateAuditableDtos
