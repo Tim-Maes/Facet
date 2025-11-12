@@ -22,11 +22,21 @@ internal static class CodeBuilder
         // Collect all namespaces from referenced types
         var namespacesToImport = CodeGenerationHelpers.CollectNamespaces(model);
 
+        // Collect types that need 'using static' directives
+        var staticUsingTypes = CodeGenerationHelpers.CollectStaticUsingTypes(model);
+
         // Generate using statements for all required namespaces
         foreach (var ns in namespacesToImport.OrderBy(x => x))
         {
             sb.AppendLine($"using {ns};");
         }
+
+        // Generate using static statements for types nested in other types
+        foreach (var type in staticUsingTypes.OrderBy(x => x))
+        {
+            sb.AppendLine($"using static {type};");
+        }
+
         sb.AppendLine();
 
         // Nullable must be enabled in generated code with a directive
