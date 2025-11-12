@@ -29,10 +29,15 @@ internal static class CodeGenerationHelpers
             namespaces.Add("System.ComponentModel.DataAnnotations");
         }
 
-        var sourceTypeNamespace = ExtractNamespaceFromFullyQualifiedType(model.SourceTypeName);
-        if (!string.IsNullOrWhiteSpace(sourceTypeNamespace))
+        // If the source type is nested in another type, don't add it as a regular namespace
+        // It will be handled by CollectStaticUsingTypes instead
+        if (model.SourceContainingTypes.Length == 0)
         {
-            namespaces.Add(sourceTypeNamespace!);
+            var sourceTypeNamespace = ExtractNamespaceFromFullyQualifiedType(model.SourceTypeName);
+            if (!string.IsNullOrWhiteSpace(sourceTypeNamespace))
+            {
+                namespaces.Add(sourceTypeNamespace!);
+            }
         }
 
         foreach (var member in model.Members)
@@ -61,6 +66,54 @@ internal static class CodeGenerationHelpers
         namespaces.Remove("");
 
         return namespaces;
+    }
+
+    /// <summary>
+    /// Collects types that need 'using static' directives (for types nested in other types).
+    /// </summary>
+    public static HashSet<string> CollectStaticUsingTypes(FacetTargetModel model)
+    {
+        var staticUsingTypes = new HashSet<string>();
+
+        // If the source type is nested within another type, we need 'using static' for the containing type
+        if (model.SourceContainingTypes.Length > 0)
+        {
+            // Build the fully qualified containing type path
+            // Example: if source is Application.Example1.Foo.Bar
+            // and SourceContainingTypes is ["Foo"]
+            // we need to extract "Application.Example1.Foo"
+
+            var sourceTypeName = model.SourceTypeName;
+
+            // Remove global:: prefix if present
+            if (sourceTypeName.StartsWith("global::"))
+            {
+                sourceTypeName = sourceTypeName.Substring(8);
+            }
+
+            // Remove generic parameters if present
+            var genericIndex = sourceTypeName.IndexOf('<');
+            if (genericIndex > 0)
+            {
+                sourceTypeName = sourceTypeName.Substring(0, genericIndex);
+            }
+
+            // Remove nullable marker if present
+            if (sourceTypeName.EndsWith("?"))
+            {
+                sourceTypeName = sourceTypeName.Substring(0, sourceTypeName.Length - 1);
+            }
+
+            // Remove the last part (the nested type name itself) to get the containing type
+            var lastDotIndex = sourceTypeName.LastIndexOf('.');
+            if (lastDotIndex > 0)
+            {
+                var containingType = sourceTypeName.Substring(0, lastDotIndex);
+                staticUsingTypes.Add(containingType);
+            }
+        }
+
+        return staticUsingTypes;
     }
 
     /// <summary>

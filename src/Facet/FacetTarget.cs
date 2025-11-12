@@ -18,6 +18,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public bool GenerateExpressionProjection { get; }
     public bool GenerateBackTo { get; }
     public string SourceTypeName { get; }
+    public ImmutableArray<string> SourceContainingTypes { get; }
     public string? ConfigurationTypeName { get; }
     public ImmutableArray<FacetMember> Members { get; }
     public bool HasExistingPrimaryConstructor { get; }
@@ -42,6 +43,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         bool generateExpressionProjection,
         bool generateBackTo,
         string sourceTypeName,
+        ImmutableArray<string> sourceContainingTypes,
         string? configurationTypeName,
         ImmutableArray<FacetMember> members,
         bool hasExistingPrimaryConstructor = false,
@@ -65,6 +67,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         GenerateExpressionProjection = generateExpressionProjection;
         GenerateBackTo = generateBackTo;
         SourceTypeName = sourceTypeName;
+        SourceContainingTypes = sourceContainingTypes.IsDefault ? ImmutableArray<string>.Empty : sourceContainingTypes;
         ConfigurationTypeName = configurationTypeName;
         Members = members;
         HasExistingPrimaryConstructor = hasExistingPrimaryConstructor;
@@ -93,6 +96,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && GenerateParameterlessConstructor == other.GenerateParameterlessConstructor
             && GenerateExpressionProjection == other.GenerateExpressionProjection
             && SourceTypeName == other.SourceTypeName
+            && SourceContainingTypes.SequenceEqual(other.SourceContainingTypes)
             && ConfigurationTypeName == other.ConfigurationTypeName
             && HasExistingPrimaryConstructor == other.HasExistingPrimaryConstructor
             && SourceHasPositionalConstructor == other.SourceHasPositionalConstructor
@@ -139,6 +143,9 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
 
             foreach (var containingType in ContainingTypes)
                 hash = hash * 31 + (containingType?.GetHashCode() ?? 0);
+
+            foreach (var sourceContainingType in SourceContainingTypes)
+                hash = hash * 31 + (sourceContainingType?.GetHashCode() ?? 0);
 
             foreach (var excludedMember in ExcludedRequiredMembers)
                 hash = hash * 31 + excludedMember.GetHashCode();

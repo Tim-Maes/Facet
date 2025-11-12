@@ -86,6 +86,9 @@ internal static class ModelBuilder
         // Get containing types for nested classes
         var containingTypes = TypeAnalyzer.GetContainingTypes(targetSymbol);
 
+        // Get containing types for the source type (to detect nesting in static classes)
+        var sourceContainingTypes = TypeAnalyzer.GetContainingTypes(sourceType);
+
         // Check if the target type already has a primary constructor
         var hasExistingPrimaryConstructor = TypeAnalyzer.HasExistingPrimaryConstructor(targetSymbol);
 
@@ -103,6 +106,7 @@ internal static class ModelBuilder
             generateProjection,
             generateBackTo,
             sourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            sourceContainingTypes,
             configurationTypeName,
             members,
             hasExistingPrimaryConstructor,
