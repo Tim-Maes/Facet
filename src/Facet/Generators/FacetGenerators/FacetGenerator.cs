@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.Text;
 using System.Linq;
 using System.Text;
 
-namespace Facet.Generators.FacetGenerators;
+namespace Facet.Generators;
 
 [Generator(LanguageNames.CSharp)]
 public sealed class FacetGenerator : IIncrementalGenerator

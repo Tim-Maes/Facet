@@ -20,6 +20,7 @@ Welcome to the Facet documentation! This index will help you navigate all availa
 - [GenerateDtos Attribute](09_GenerateDtosAttribute.md): Auto-generate CRUD DTOs with GenerateDtos & GenerateAuditableDtos
 - [Expression Mapping](10_ExpressionMapping.md): Transform business logic expressions between entities and DTOs with Facet.Mapping.Expressions
 - [Flatten Attribute](11_FlattenAttribute.md): Automatically flatten nested objects into top-level properties for API responses and reports
+- [Generated Files Output Configuration](12_GeneratedFilesOutput.md): Configure where generated files are written and make them visible in Solution Explorer
 - [Facet.Extensions.EFCore](../src/Facet.Extensions.EFCore/README.md): EF Core Async Extension Methods
 - [Facet.Mapping Reference](../src/Facet.Mapping/README.md): Complete Facet.Mapping Documentation
 - [Facet.Mapping.Expressions Reference](../src/Facet.Mapping.Expressions/README.md): Complete Expression Mapping Documentation

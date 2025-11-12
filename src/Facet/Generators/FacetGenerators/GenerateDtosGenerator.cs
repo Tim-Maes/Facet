@@ -9,7 +9,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 
-namespace Facet.Generators.FacetGenerators;
+namespace Facet.Generators;
 
 [Generator(LanguageNames.CSharp)]
 public sealed class GenerateDtosGenerator : IIncrementalGenerator

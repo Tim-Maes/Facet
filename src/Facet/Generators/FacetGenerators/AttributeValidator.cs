@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis;
 using System;
 using System.Linq;
 
-namespace Facet.Generators.FacetGenerators;
+namespace Facet.Generators;
 
 /// <summary>
 /// Validates Facet attribute configurations to catch errors early and provide helpful diagnostics.
