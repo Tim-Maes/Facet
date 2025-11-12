@@ -26,8 +26,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Mapping.Expressions",
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Extensions.EFCore.Mapping", "src\Facet.Extensions.EFCore.Mapping\Facet.Extensions.EFCore.Mapping.csproj", "{9D11593F-8A2C-8FD7-AFF5-F49D54DFAF18}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "examples", "examples", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -128,7 +126,6 @@ Global
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{519E7976-7BE4-4E93-9A45-01A160AA1684} = {0C88DD14-F956-CE84-757C-A364CCF449FC}
-		{576D7A7D-4D33-1A05-D464-D95E2268E516} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {CEF45DDD-485B-4A2F-9944-8A36CFCD1994}
