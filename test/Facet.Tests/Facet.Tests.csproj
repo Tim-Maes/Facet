@@ -8,6 +8,8 @@
     <IsTestProject>true</IsTestProject>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
+    <!-- Suppress analyzer warnings for test cases that intentionally use inherited properties -->
+    <NoWarn>$(NoWarn);FAC004</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
