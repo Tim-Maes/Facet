@@ -78,11 +78,57 @@ var orders = await dbContext.Orders
     .ToFacetsAsync<OrderDto>();  // Automatically includes Items collection and ShippingAddress!
 
 // All these methods support auto-include:
-await dbContext.Companies.ToFacetsAsync<CompanyDto>();   
-await dbContext.Companies.FirstFacetAsync<CompanyDto>(); 
-await dbContext.Companies.SingleFacetAsync<CompanyDto>(); 
+await dbContext.Companies.ToFacetsAsync<CompanyDto>();
+await dbContext.Companies.FirstFacetAsync<CompanyDto>();
+await dbContext.Companies.SingleFacetAsync<CompanyDto>();
 await dbContext.Companies.SelectFacet<CompanyDto>().ToListAsync();
 ```
+
+## Streaming with AsAsyncEnumerable
+
+**Facet fully supports EF Core's streaming patterns using `AsAsyncEnumerable()`** for memory-efficient processing of large result sets:
+
+```csharp
+// Stream results one at a time instead of loading all into memory
+await foreach (var userDto in dbContext.Users
+    .Where(u => u.IsActive)
+    .SelectFacet<UserDto>()        // Apply facet projection
+    .AsAsyncEnumerable())           // Stream results
+{
+    // Process each item as it's retrieved from the database
+    await ProcessUserAsync(userDto);
+}
+
+// Works with complex queries
+await foreach (var companyDto in dbContext.Companies
+    .Where(c => c.Revenue > 1000000)
+    .OrderBy(c => c.Name)
+    .SelectFacet<CompanyDto>()      // Nested facets are automatically loaded
+    .AsAsyncEnumerable())
+{
+    Console.WriteLine($"{companyDto.Name}: {companyDto.HeadquartersAddress?.City}");
+}
+
+// Memory-efficient pagination
+await foreach (var productDto in dbContext.Products
+    .OrderBy(p => p.Id)
+    .Skip(page * pageSize)
+    .Take(pageSize)
+    .SelectFacet<ProductDto>()
+    .AsAsyncEnumerable())
+{
+    yield return productDto;
+}
+```
+
+**Important:** Always call `SelectFacet()` **before** `AsAsyncEnumerable()`:
+- **Correct:** `.SelectFacet<Dto>().AsAsyncEnumerable()` - Projection happens in SQL
+- **Incorrect:** `.AsAsyncEnumerable().Select(x => x.ToFacet<Dto>())` - Loads full entities into memory first
+
+The correct order ensures that:
+1. The projection is translated to SQL (efficient database query)
+2. Only the projected columns are retrieved from the database
+3. Results are streamed without loading everything into memory
 
 ## Reverse Mapping (DTO -> Entity)
 
@@ -220,6 +266,8 @@ This optional package provides custom async mapper support with dependency injec
 | `FirstFacetAsync<TSource, TTarget>()` | Get first DTO or null (explicit types) | Legacy/explicit typing |
 | `SingleFacetAsync<TTarget>()` | Get single DTO (source inferred) | GET unique item |
 | `SingleFacetAsync<TSource, TTarget>()` | Get single DTO (explicit types) | Legacy/explicit typing |
+| `SelectFacet<TTarget>().AsAsyncEnumerable()` | Stream projected results | Memory-efficient large result sets |
+| `SelectFacet<TSource, TTarget>().AsAsyncEnumerable()` | Stream projected results (explicit) | Memory-efficient large result sets |
 | `UpdateFromFacet<TEntity, TFacet>()` | Selective entity update | PUT/PATCH endpoints |
 | `UpdateFromFacetWithChanges<TEntity, TFacet>()` | Update with change tracking | Auditing scenarios |
 | `UpdateFromFacetAsync<TEntity, TFacet>()` | Async selective update | Future extensibility |
