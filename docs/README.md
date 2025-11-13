@@ -23,6 +23,7 @@ Welcome to the Facet documentation! This index will help you navigate all availa
 - [Flatten Attribute](11_FlattenAttribute.md): Automatically flatten nested objects into top-level properties for API responses and reports
 - [Analyzer Rules](13_AnalyzerRules.md): Complete guide to Facet's Roslyn analyzers and diagnostic rules
 
+ ## Ecosystem packages
 - [Facet.Extensions.EFCore](../src/Facet.Extensions.EFCore/README.md): EF Core Async Extension Methods
 - [Facet.Mapping Reference](../src/Facet.Mapping/README.md): Complete Facet.Mapping Documentation
 - [Facet.Mapping.Expressions Reference](../src/Facet.Mapping.Expressions/README.md): Complete Expression Mapping Documentation
