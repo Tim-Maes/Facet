@@ -5,10 +5,6 @@ using Microsoft.Data.Sqlite;
 
 namespace Facet.Tests.UnitTests.Extensions.EFCore;
 
-/// <summary>
-/// Tests streaming with SQLite to verify behavior with a real relational database provider
-/// (as opposed to InMemory which has different behavior)
-/// </summary>
 public class StreamingSqliteTests : IDisposable
 {
     private readonly DbContext _context;
@@ -32,9 +28,6 @@ public class StreamingSqliteTests : IDisposable
     [Fact]
     public async Task SqliteProvider_AsAsyncEnumerable_WithSelectFacet_ShouldStreamResults()
     {
-        // This test verifies streaming works with a REAL database provider (SQLite)
-        // not just InMemory which can mask issues
-
         var userDtos = new List<UserDto>();
 
         await foreach (var dto in _context.Set<User>()
@@ -137,9 +130,6 @@ public class StreamingSqliteTests : IDisposable
     [Fact]
     public async Task SqliteProvider_AsAsyncEnumerable_VerifyNotLoadingAllIntoMemory()
     {
-        // This test demonstrates that streaming is actually working
-        // by processing items one at a time
-
         var processedCount = 0;
         var maxSimultaneous = 0;
         var currentInMemory = 0;
@@ -162,8 +152,6 @@ public class StreamingSqliteTests : IDisposable
         // Assert - we processed all items
         processedCount.Should().Be(3);
 
-        // With true streaming, we should only have 1 item in memory at a time
-        // (or maybe 2 with buffering, but definitely not all 3)
         maxSimultaneous.Should().BeLessThan(3);
     }
 
