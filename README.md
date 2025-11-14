@@ -24,7 +24,7 @@
 
 ---
 
-**Facet** is a C# source generator that lets you define **projections** (DTOs, API models, ViewModels, etc.) and **wrappers** (facades, decorators) directly from your domain models, without writing boilerplate.
+**Facet** is a C# source generator that lets you define **projections** (DTOs, API models, ViewModels, etc.) directly from your domain models, without writing boilerplate.
 
 ## :gem: What is Facetting?
 
@@ -32,17 +32,17 @@ Facetting is the process of defining **focused views** of a larger model at comp
 
 Instead of manually writing separate DTOs, mappers, projections, and wrappers, **Facet** allows you to declare what you want, and generates everything else.
 
-**Two complementary patterns:**
-
-- **`[Facet]`** - Generate value-based copies (DTOs, projections) for data transfer and serialization
-- **`[Wrapper]`** - Generate reference-based delegates (facades, decorators) for runtime object access
-
 Generate classes, records, structs, or record structs with constructors, LINQ projections, and even supports custom mappings, all at compile time, with zero runtime cost.
 
 You can think of it like **carving out a specific facet** of a gem:
 
 - The part you care about
 - Leave the rest behind.
+
+**Two complementary patterns:**
+
+- **`[Facet]`** - Generate value-based copies (DTOs, projections) for data transfer and serialization
+- **`[Wrapper]`** - Generate reference-based delegates (facades, decorators) for runtime object access
 
 ## :clipboard: Documentation
 
@@ -686,7 +686,7 @@ Console.WriteLine(view.Name);  // "Desktop"
 - **ViewModel Pattern**: Expose domain model subset to UI with live binding
 - **Decorator Pattern**: Add behavior without modifying domain models
 - **Memory Efficiency**: Avoid duplicating large object graphs
-- **Read-only Views**: Immutable facades for security and defensive programming
+- **Read-only Views**: Immutable facades
 
 #### Wrapper vs Facet
 
