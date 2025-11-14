@@ -117,6 +117,53 @@ internal static class CodeGenerationHelpers
     }
 
     /// <summary>
+    /// Collects all namespaces that need to be imported for wrapper types.
+    /// </summary>
+    public static HashSet<string> CollectNamespacesForWrapper(WrapperTargetModel model)
+    {
+        var namespaces = new HashSet<string>
+        {
+            "System"
+        };
+
+        // Add System.ComponentModel.DataAnnotations if any member has attributes
+        if (model.CopyAttributes && model.Members.Any(m => m.Attributes.Count > 0))
+        {
+            namespaces.Add("System.ComponentModel.DataAnnotations");
+        }
+
+        // Add the source type namespace
+        if (model.SourceContainingTypes.Length == 0)
+        {
+            var sourceTypeNamespace = ExtractNamespaceFromFullyQualifiedType(model.SourceTypeName);
+            if (!string.IsNullOrWhiteSpace(sourceTypeNamespace))
+            {
+                namespaces.Add(sourceTypeNamespace!);
+            }
+        }
+
+        // Add namespaces for member types
+        foreach (var member in model.Members)
+        {
+            var memberTypeNamespace = ExtractNamespaceFromFullyQualifiedType(member.TypeName);
+            if (!string.IsNullOrWhiteSpace(memberTypeNamespace))
+            {
+                namespaces.Add(memberTypeNamespace!);
+            }
+        }
+
+        // Remove the wrapper's own namespace
+        if (!string.IsNullOrWhiteSpace(model.Namespace))
+        {
+            namespaces.Remove(model.Namespace!);
+        }
+
+        namespaces.Remove("");
+
+        return namespaces;
+    }
+
+    /// <summary>
     /// Extracts the namespace from a fully qualified type name (e.g., "global::System.String" -> "System").
     /// </summary>
     public static string? ExtractNamespaceFromFullyQualifiedType(string fullyQualifiedTypeName)
