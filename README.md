@@ -38,7 +38,7 @@ You can think of it like **carving out a specific facet** of a gem:
 
 - The part you care about
 - Leave the rest behind.
-- 
+
 ## :clipboard: Documentation
 
 - **[Documentation & Guides](docs/README.md)**
