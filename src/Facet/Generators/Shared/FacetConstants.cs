@@ -32,6 +32,11 @@ internal static class FacetConstants
     public const string FacetAttributeFullName = "Facet.FacetAttribute";
 
     /// <summary>
+    /// The fully qualified name of the WrapperAttribute.
+    /// </summary>
+    public const string WrapperAttributeFullName = "Facet.WrapperAttribute";
+
+    /// <summary>
     /// The default maximum depth for nested facet traversal to prevent stack overflow.
     /// </summary>
     public const int DefaultMaxDepth = 10;
@@ -83,5 +88,6 @@ internal static class FacetConstants
         public const string MaxDepth = "MaxDepth";
         public const string PreserveReferences = "PreserveReferences";
         public const string UseFullName = "UseFullName";
+        public const string ReadOnly = "ReadOnly";
     }
 }

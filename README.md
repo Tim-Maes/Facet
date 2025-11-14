@@ -30,14 +30,15 @@
 
 Facetting is the process of defining **focused views** of a larger model at compile time.
 
-Instead of manually writing separate DTOs, mappers, and projections, **Facet** allows you to declare what you want, and generates everything else.
+Instead of manually writing separate DTOs, mappers, projections, and wrappers, **Facet** allows you to declare what you want, and generates everything else.
+
 Generate classes, records, structs, or record structs with constructors, LINQ projections, and even supports custom mappings, all at compile time, with zero runtime cost.
 
 You can think of it like **carving out a specific facet** of a gem:
 
 - The part you care about
 - Leave the rest behind.
-
+- 
 ## :clipboard: Documentation
 
 - **[Documentation & Guides](docs/README.md)**
@@ -61,6 +62,7 @@ You can think of it like **carving out a specific facet** of a gem:
 
 - :white_check_mark: Auto generate complete CRUD DTO sets
 - :white_check_mark: **Flatten** nested objects into top-level properties
+- :white_check_mark: **Wrapper** pattern for reference-based property delegation (facades, decorators, ViewModels)
 
 ## 🚀 Quick Start
 
@@ -616,6 +618,79 @@ public partial class PersonFlatPrefixDto { }
 [Flatten(typeof(Person), NamingStrategy = FlattenNamingStrategy.LeafOnly)]
 public partial class PersonFlatLeafDto { }
 ```
+
+</details>
+
+<details>
+  <summary>Reference-based Wrappers with [Wrapper]</summary>
+
+Generate wrapper classes that **delegate** to a source object instead of copying values. Unlike `[Facet]` which creates independent copies, wrappers maintain a reference to the source, so changes propagate:
+
+```csharp
+// Domain model
+public class User
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public string Email { get; set; }
+    public string Password { get; set; }  // Sensitive!
+    public decimal Salary { get; set; }   // Sensitive!
+}
+
+// Hide sensitive properties with a facade
+[Wrapper(typeof(User), "Password", "Salary")]
+public partial class PublicUserWrapper { }
+
+// Usage - changes propagate to source!
+var user = new User { Id = 1, FirstName = "John", Password = "secret" };
+var wrapper = new PublicUserWrapper(user);
+
+wrapper.FirstName = "Jane";
+Console.WriteLine(user.FirstName);  // "Jane" - source is modified!
+
+// Sensitive properties not accessible
+// wrapper.Password;  // Compile error
+// wrapper.Salary;    // Compile error
+```
+
+#### Read-Only Wrappers (Immutable Facades)
+
+```csharp
+// Prevent modifications with ReadOnly mode
+[Wrapper(typeof(Product), ReadOnly = true)]
+public partial class ReadOnlyProductView { }
+
+var product = new Product { Name = "Laptop", Price = 1299.99m };
+var view = new ReadOnlyProductView(product);
+
+// Can read
+Console.WriteLine(view.Name);
+
+// Cannot write (compile error CS0200)
+// view.Name = "Desktop";  // Property is read-only
+
+// Still reflects source changes
+product.Name = "Desktop";
+Console.WriteLine(view.Name);  // "Desktop"
+```
+
+#### Use Cases
+
+- **Facade Pattern**: Hide sensitive/internal properties from API consumers
+- **ViewModel Pattern**: Expose domain model subset to UI with live binding
+- **Decorator Pattern**: Add behavior without modifying domain models
+- **Memory Efficiency**: Avoid duplicating large object graphs
+- **Read-only Views**: Immutable facades
+
+#### Wrapper vs Facet
+
+| Aspect | Facet (Value Copy) | Wrapper (Reference) |
+|--------|-------------------|---------------------|
+| **Data Storage** | Independent copy | Reference to source |
+| **Memory** | Duplicates data | No duplication |
+| **Changes** | Independent | Synchronized to source |
+| **Use Case** | DTOs, EF projections | Facades, ViewModels |
 
 </details>
 
