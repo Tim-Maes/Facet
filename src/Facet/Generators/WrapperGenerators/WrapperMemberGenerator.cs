@@ -64,32 +64,35 @@ internal static class WrapperMemberGenerator
     private static void GenerateDelegatingProperty(StringBuilder sb, WrapperTargetModel model, FacetMember member, string indent)
     {
         // For wrappers, properties delegate to the source object
-        // Pattern: public TypeName PropertyName { get => _source.PropertyName; set => _source.PropertyName = value; }
+        // Pattern (mutable): public TypeName PropertyName { get => _source.PropertyName; set => _source.PropertyName = value; }
+        // Pattern (readonly): public TypeName PropertyName { get => _source.PropertyName; }
 
         sb.AppendLine($"{indent}public {member.TypeName} {member.Name}");
         sb.AppendLine($"{indent}{{");
         sb.AppendLine($"{indent}    get => {model.SourceFieldName}.{member.Name};");
-        sb.AppendLine($"{indent}    set => {model.SourceFieldName}.{member.Name} = value;");
+
+        // Only generate setter if wrapper is not ReadOnly
+        if (!model.ReadOnly)
+        {
+            sb.AppendLine($"{indent}    set => {model.SourceFieldName}.{member.Name} = value;");
+        }
+
         sb.AppendLine($"{indent}}}");
     }
 
     private static void GenerateDelegatingField(StringBuilder sb, WrapperTargetModel model, FacetMember member, string indent)
     {
         // For fields in wrappers, we generate properties that delegate to the source field
-        // Pattern: public TypeName FieldName { get => _source.FieldName; set => _source.FieldName = value; }
+        // Pattern (mutable): public TypeName FieldName { get => _source.FieldName; set => _source.FieldName = value; }
+        // Pattern (readonly): public TypeName FieldName { get => _source.FieldName; }
 
         sb.AppendLine($"{indent}public {member.TypeName} {member.Name}");
         sb.AppendLine($"{indent}{{");
+        sb.AppendLine($"{indent}    get => {model.SourceFieldName}.{member.Name};");
 
-        if (member.IsReadOnly)
+        // Only generate setter if wrapper is not ReadOnly AND field is not readonly
+        if (!model.ReadOnly && !member.IsReadOnly)
         {
-            // Readonly fields only get a getter
-            sb.AppendLine($"{indent}    get => {model.SourceFieldName}.{member.Name};");
-        }
-        else
-        {
-            // Mutable fields get getter and setter
-            sb.AppendLine($"{indent}    get => {model.SourceFieldName}.{member.Name};");
             sb.AppendLine($"{indent}    set => {model.SourceFieldName}.{member.Name} = value;");
         }
 

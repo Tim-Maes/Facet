@@ -44,6 +44,13 @@ public sealed class WrapperAttribute : Attribute
     public bool IncludeFields { get; set; } = false;
 
     /// <summary>
+    /// When true, generates read-only properties (getters only) that cannot modify the source object.
+    /// When false (default), generates mutable properties with both getters and setters.
+    /// Useful for creating immutable facades or read-only views of domain objects.
+    /// </summary>
+    public bool ReadOnly { get; set; } = false;
+
+    /// <summary>
     /// When true, copies attributes from the source type members to the generated wrapper members.
     /// Only copies attributes that are valid on the target (excludes internal compiler attributes and non-copiable attributes).
     /// Default is false.

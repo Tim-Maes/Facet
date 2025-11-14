@@ -34,6 +34,7 @@ internal static class WrapperModelBuilder
         var includeFields = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.IncludeFields, false);
         var copyAttributes = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.CopyAttributes, false);
         var useFullName = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.UseFullName, false);
+        var readOnly = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.ReadOnly, false);
 
         // Infer the type kind and whether it's a record from the target type declaration
         var (typeKind, isRecord) = TypeAnalyzer.InferTypeKind(targetSymbol);
@@ -78,7 +79,8 @@ internal static class WrapperModelBuilder
             typeXmlDocumentation,
             containingTypes,
             useFullName,
-            copyAttributes);
+            copyAttributes,
+            readOnly);
     }
 
     #region Private Helper Methods

@@ -20,6 +20,7 @@ internal sealed class WrapperTargetModel : IEquatable<WrapperTargetModel>
     public ImmutableArray<string> ContainingTypes { get; }
     public bool UseFullName { get; }
     public bool CopyAttributes { get; }
+    public bool ReadOnly { get; }
     public string SourceFieldName { get; }
 
     public WrapperTargetModel(
@@ -35,6 +36,7 @@ internal sealed class WrapperTargetModel : IEquatable<WrapperTargetModel>
         ImmutableArray<string> containingTypes = default,
         bool useFullName = false,
         bool copyAttributes = false,
+        bool readOnly = false,
         string sourceFieldName = "_source")
     {
         Name = name;
@@ -49,6 +51,7 @@ internal sealed class WrapperTargetModel : IEquatable<WrapperTargetModel>
         ContainingTypes = containingTypes.IsDefault ? ImmutableArray<string>.Empty : containingTypes;
         UseFullName = useFullName;
         CopyAttributes = copyAttributes;
+        ReadOnly = readOnly;
         SourceFieldName = sourceFieldName;
     }
 
@@ -69,6 +72,7 @@ internal sealed class WrapperTargetModel : IEquatable<WrapperTargetModel>
             && ContainingTypes.SequenceEqual(other.ContainingTypes)
             && UseFullName == other.UseFullName
             && CopyAttributes == other.CopyAttributes
+            && ReadOnly == other.ReadOnly
             && SourceFieldName == other.SourceFieldName;
     }
 
@@ -88,6 +92,7 @@ internal sealed class WrapperTargetModel : IEquatable<WrapperTargetModel>
             hash = hash * 31 + (TypeXmlDocumentation?.GetHashCode() ?? 0);
             hash = hash * 31 + UseFullName.GetHashCode();
             hash = hash * 31 + CopyAttributes.GetHashCode();
+            hash = hash * 31 + ReadOnly.GetHashCode();
             hash = hash * 31 + (SourceFieldName?.GetHashCode() ?? 0);
             hash = hash * 31 + Members.Length.GetHashCode();
 
