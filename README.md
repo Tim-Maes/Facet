@@ -38,12 +38,7 @@ You can think of it like **carving out a specific facet** of a gem:
 
 - The part you care about
 - Leave the rest behind.
-
-**Two complementary patterns:**
-
-- **`[Facet]`** - Generate value-based copies (DTOs, projections) for data transfer and serialization
-- **`[Wrapper]`** - Generate reference-based delegates (facades, decorators) for runtime object access
-
+- 
 ## :clipboard: Documentation
 
 - **[Documentation & Guides](docs/README.md)**
