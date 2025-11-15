@@ -36,6 +36,9 @@ internal static class WrapperModelBuilder
         var useFullName = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.UseFullName, false);
         var readOnly = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.ReadOnly, false);
 
+        // Extract nested wrapper mappings
+        var nestedWrapperMappings = AttributeParser.ExtractNestedWrapperMappings(attribute, context.SemanticModel.Compilation);
+
         // Infer the type kind and whether it's a record from the target type declaration
         var (typeKind, isRecord) = TypeAnalyzer.InferTypeKind(targetSymbol);
 
@@ -50,6 +53,7 @@ internal static class WrapperModelBuilder
             isIncludeMode,
             includeFields,
             copyAttributes,
+            nestedWrapperMappings,
             token);
 
         // Determine full name
@@ -92,6 +96,7 @@ internal static class WrapperModelBuilder
         bool isIncludeMode,
         bool includeFields,
         bool copyAttributes,
+        Dictionary<string, (string childWrapperTypeName, string sourceTypeName)> nestedWrapperMappings,
         CancellationToken token)
     {
         var members = new List<FacetMember>();
@@ -113,11 +118,11 @@ internal static class WrapperModelBuilder
 
             if (member is IPropertySymbol property && property.DeclaredAccessibility == Accessibility.Public)
             {
-                ProcessProperty(property, copyAttributes, members, addedMembers);
+                ProcessProperty(property, copyAttributes, nestedWrapperMappings, members, addedMembers);
             }
             else if (includeFields && member is IFieldSymbol field && field.DeclaredAccessibility == Accessibility.Public)
             {
-                ProcessField(field, copyAttributes, members, addedMembers);
+                ProcessField(field, copyAttributes, nestedWrapperMappings, members, addedMembers);
             }
         }
 
@@ -127,44 +132,73 @@ internal static class WrapperModelBuilder
     private static void ProcessProperty(
         IPropertySymbol property,
         bool copyAttributes,
+        Dictionary<string, (string childWrapperTypeName, string sourceTypeName)> nestedWrapperMappings,
         List<FacetMember> members,
         HashSet<string> addedMembers)
     {
         var memberXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(property);
         var typeName = GeneratorUtilities.GetTypeNameWithNullability(property.Type);
+        var propertyTypeName = property.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+        bool isNestedWrapper = false;
+        string? nestedWrapperSourceTypeName = null;
+
+        // Check if this property's type matches a nested wrapper source type
+        if (nestedWrapperMappings.TryGetValue(propertyTypeName, out var nestedMapping))
+        {
+            // Replace the type name with the nested wrapper type
+            bool isNullable = property.Type.NullableAnnotation == NullableAnnotation.Annotated;
+            typeName = isNullable ? nestedMapping.childWrapperTypeName + "?" : nestedMapping.childWrapperTypeName;
+            isNestedWrapper = true;
+            nestedWrapperSourceTypeName = nestedMapping.sourceTypeName;
+        }
 
         // Extract copiable attributes if requested
         var attributes = copyAttributes
             ? AttributeProcessor.ExtractCopiableAttributes(property, FacetMemberKind.Property)
             : new List<string>();
 
-        // Wrappers always have get/set properties (no init-only or required for V1 POC)
         members.Add(new FacetMember(
             property.Name,
             typeName,
             FacetMemberKind.Property,
             property.Type.IsValueType,
-            false, // isInitOnly - wrappers are mutable
-            false, // isRequired - skip for V1
+            false, // isInitOnly
+            false, // isRequired
             false, // isReadonly
             memberXmlDocumentation,
-            false, // isNestedFacet - skip for V1
-            null,  // nestedFacetSourceTypeName
+            isNestedWrapper,
+            nestedWrapperSourceTypeName,
             attributes,
-            false, // isCollection - skip for V1
+            false, // isCollection
             null,  // collectionWrapper
-            typeName)); // sourceMemberTypeName
+            GeneratorUtilities.GetTypeNameWithNullability(property.Type))); // sourceMemberTypeName
         addedMembers.Add(property.Name);
     }
 
     private static void ProcessField(
         IFieldSymbol field,
         bool copyAttributes,
+        Dictionary<string, (string childWrapperTypeName, string sourceTypeName)> nestedWrapperMappings,
         List<FacetMember> members,
         HashSet<string> addedMembers)
     {
         var memberXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(field);
         var typeName = GeneratorUtilities.GetTypeNameWithNullability(field.Type);
+        var fieldTypeName = field.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+        bool isNestedWrapper = false;
+        string? nestedWrapperSourceTypeName = null;
+
+        // Check if this field's type matches a nested wrapper source type
+        if (nestedWrapperMappings.TryGetValue(fieldTypeName, out var nestedMapping))
+        {
+            // Replace the type name with the nested wrapper type
+            bool isNullable = field.Type.NullableAnnotation == NullableAnnotation.Annotated;
+            typeName = isNullable ? nestedMapping.childWrapperTypeName + "?" : nestedMapping.childWrapperTypeName;
+            isNestedWrapper = true;
+            nestedWrapperSourceTypeName = nestedMapping.sourceTypeName;
+        }
 
         // Extract copiable attributes if requested
         var attributes = copyAttributes
@@ -177,15 +211,15 @@ internal static class WrapperModelBuilder
             FacetMemberKind.Field,
             field.Type.IsValueType,
             false, // isInitOnly
-            false, // isRequired - skip for V1
+            false, // isRequired
             field.IsReadOnly,
             memberXmlDocumentation,
-            false, // isNestedFacet
-            null,
+            isNestedWrapper,
+            nestedWrapperSourceTypeName,
             attributes,
             false, // isCollection
             null,
-            typeName));
+            GeneratorUtilities.GetTypeNameWithNullability(field.Type)));
         addedMembers.Add(field.Name);
     }
 

@@ -54,6 +54,48 @@ internal static class AttributeParser
     }
 
     /// <summary>
+    /// Extracts nested wrapper mappings from the NestedWrappers parameter.
+    /// Returns a dictionary mapping source type full names to nested wrapper type information.
+    /// </summary>
+    public static Dictionary<string, (string childWrapperTypeName, string sourceTypeName)> ExtractNestedWrapperMappings(
+        AttributeData attribute,
+        Compilation compilation)
+    {
+        var mappings = new Dictionary<string, (string, string)>();
+
+        var childrenArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == FacetConstants.AttributeNames.NestedWrappers);
+        if (childrenArg.Value.Kind != TypedConstantKind.Error && !childrenArg.Value.IsNull)
+        {
+            if (childrenArg.Value.Kind == TypedConstantKind.Array)
+            {
+                foreach (var childValue in childrenArg.Value.Values)
+                {
+                    if (childValue.Value is INamedTypeSymbol childWrapperType)
+                    {
+                        // Find the Wrapper attribute on the child type to get its source type
+                        var childWrapperAttr = childWrapperType.GetAttributes()
+                            .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == FacetConstants.WrapperAttributeFullName);
+
+                        if (childWrapperAttr != null && childWrapperAttr.ConstructorArguments.Length > 0)
+                        {
+                            if (childWrapperAttr.ConstructorArguments[0].Value is INamedTypeSymbol childSourceType)
+                            {
+                                var sourceTypeName = childSourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                                var childWrapperTypeName = childWrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+                                // Map the source type to the child wrapper type
+                                mappings[sourceTypeName] = (childWrapperTypeName, sourceTypeName);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return mappings;
+    }
+
+    /// <summary>
     /// Gets a named argument value from the attribute, or returns the default value if not found.
     /// </summary>
     public static T GetNamedArg<T>(
