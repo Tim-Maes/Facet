@@ -532,7 +532,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             {
                 sb.AppendLine($"        source => new {dtoName}");
                 sb.AppendLine("        {");
-                
+
                 // Only include non-readonly fields in the object initializer for projections too
                 var initializableMembers = members.Where(m => !m.IsReadOnly).ToList();
                 for (int i = 0; i < initializableMembers.Count; i++)
@@ -541,7 +541,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                     var comma = i == initializableMembers.Count - 1 ? "" : ",";
                     sb.AppendLine($"            {member.Name} = source.{member.Name}{comma}");
                 }
-                
+
                 sb.AppendLine("        };");
             }
             else
@@ -549,6 +549,50 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 sb.AppendLine($"        source => new {dtoName}(source);");
             }
         }
+
+        // Generate BackTo method
+        sb.AppendLine();
+        sb.AppendLine($"    /// <summary>");
+        sb.AppendLine($"    /// Converts this instance of <see cref=\"{dtoName}\"/> back to an instance of the source type <see cref=\"{sourceTypeName}\"/>.");
+        sb.AppendLine($"    /// </summary>");
+        sb.AppendLine($"    /// <returns>An instance of <see cref=\"{sourceTypeName}\"/> with properties mapped from this DTO.</returns>");
+        sb.AppendLine($"    public {model.SourceTypeName} BackTo()");
+        sb.AppendLine("    {");
+        sb.AppendLine($"        return new {model.SourceTypeName}");
+        sb.AppendLine("        {");
+
+        // Map all members back to the source
+        var backToMembers = members.Where(m => !m.IsReadOnly).ToList();
+        for (int i = 0; i < backToMembers.Count; i++)
+        {
+            var member = backToMembers[i];
+            var comma = i == backToMembers.Count - 1 ? "" : ",";
+
+            // Find the corresponding source member to check nullability
+            var sourceMember = model.Members.FirstOrDefault(sm => sm.Name == member.Name);
+
+            // If the DTO member is nullable but the source is not, use GetValueOrDefault()
+            if (member.TypeName.EndsWith("?") && sourceMember != null && !sourceMember.TypeName.EndsWith("?"))
+            {
+                if (sourceMember.IsValueType)
+                {
+                    // For value types, use GetValueOrDefault()
+                    sb.AppendLine($"            {member.Name} = this.{member.Name}.GetValueOrDefault(){comma}");
+                }
+                else
+                {
+                    // For reference types, use ?? operator with default
+                    sb.AppendLine($"            {member.Name} = this.{member.Name} ?? default!{comma}");
+                }
+            }
+            else
+            {
+                sb.AppendLine($"            {member.Name} = this.{member.Name}{comma}");
+            }
+        }
+
+        sb.AppendLine("        };");
+        sb.AppendLine("    }");
 
         sb.AppendLine("}");
 
