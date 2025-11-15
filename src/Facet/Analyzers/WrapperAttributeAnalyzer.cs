@@ -125,10 +125,8 @@ public class WrapperAttributeAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        // Get all public properties/fields from source type
-        var sourceMembers = new HashSet<string>(sourceType.GetMembers()
-            .Where(m => m.DeclaredAccessibility == Accessibility.Public &&
-                       (m.Kind == SymbolKind.Property || m.Kind == SymbolKind.Field))
+        // Get all public properties/fields from source type (including inherited)
+        var sourceMembers = new HashSet<string>(GetAllPublicMembers(sourceType)
             .Select(m => m.Name));
 
         // Check Exclude parameter (constructor parameter)
@@ -214,5 +212,30 @@ public class WrapperAttributeAnalyzer : DiagnosticAnalyzer
             }
         }
         return false;
+    }
+
+    private static IEnumerable<ISymbol> GetAllPublicMembers(INamedTypeSymbol type)
+    {
+        var visited = new HashSet<string>();
+        var current = type;
+
+        while (current != null)
+        {
+            foreach (var member in current.GetMembers())
+            {
+                if (member.DeclaredAccessibility == Accessibility.Public &&
+                    !visited.Contains(member.Name) &&
+                    (member.Kind == SymbolKind.Property || member.Kind == SymbolKind.Field))
+                {
+                    visited.Add(member.Name);
+                    yield return member;
+                }
+            }
+
+            current = current.BaseType;
+
+            if (current?.SpecialType == SpecialType.System_Object)
+                break;
+        }
     }
 }

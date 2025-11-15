@@ -191,3 +191,7 @@ public partial record UserQueryDto;
 
 [Facet(typeof(UserWithEnum), NullableProperties = true, GenerateBackTo = false)]
 public partial class UserWithEnumQueryDto;
+
+// Test for excluding inherited property from base class
+[Facet(typeof(Category), "Id")]
+public partial record UpdateCategoryViewModel;

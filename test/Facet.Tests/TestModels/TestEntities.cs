@@ -95,3 +95,15 @@ public class EntityWithFields
     public int Age;
     public string Email { get; set; } = string.Empty;
 }
+
+// Test entities for inherited property exclusion
+public abstract class BaseEntity<TPkKey>
+{
+    public TPkKey Id { get; set; } = default!;
+}
+
+public class Category : BaseEntity<uint>
+{
+    public required string Name { get; set; }
+    public string? Description { get; set; }
+}
