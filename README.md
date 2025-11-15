@@ -24,15 +24,17 @@
 
 ---
 
-**Facet** is a C# source generator that lets you define **projections** (Facets) directly from your domain models.
+**Facet** is a C# source generator that lets you define **projections** (Facets) directly from your domain models, and generates everything you need to use them.
+
+## :gem: What is Facetting?
+
+Facetting is the process of defining **focused views** of a larger model at compile time. 
 
 Instead of manually writing boilerplate, **Facet** allows you to declare what you want, and generates everything else.
 
 Generate classes, records, structs, or record structs with constructors, LINQ projections, and supports custom mappers, flattening, wrapping, nesting... all at compile time, with zero runtime cost.
 
-## :gem: What is Facetting?
-
-Facetting is the process of defining **focused views** of a larger model at compile time. You can think of it like **carving out a specific facet** of a gem:
+You can think of it like **carving out a specific facet** of a gem:
 
 - Take the part you care about
 - Leave the rest behind.
