@@ -51,6 +51,12 @@ public sealed class WrapperAttribute : Attribute
     public bool ReadOnly { get; set; } = false;
 
     /// <summary>
+    /// An array of nested wrapper types for complex/nested properties.
+    /// When specified, properties with matching types will be automatically wrapped.
+    /// </summary>
+    public Type[]? NestedWrappers { get; set; }
+
+    /// <summary>
     /// When true, copies attributes from the source type members to the generated wrapper members.
     /// Only copies attributes that are valid on the target (excludes internal compiler attributes and non-copiable attributes).
     /// Default is false.
