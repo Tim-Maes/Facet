@@ -84,9 +84,8 @@ public class GenerateDtosAttributeAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        // Get all public properties from the type
-        var typeProperties = new HashSet<string>(namedType.GetMembers()
-            .Where(m => m.DeclaredAccessibility == Accessibility.Public && m.Kind == SymbolKind.Property)
+        // Get all public properties from the type (including inherited)
+        var typeProperties = new HashSet<string>(GetAllPublicProperties(namedType)
             .Select(m => m.Name));
 
         // Analyze each attribute
@@ -134,6 +133,31 @@ public class GenerateDtosAttributeAnalyzer : DiagnosticAnalyzer
                     }
                 }
             }
+        }
+    }
+
+    private static IEnumerable<ISymbol> GetAllPublicProperties(INamedTypeSymbol type)
+    {
+        var visited = new HashSet<string>();
+        var current = type;
+
+        while (current != null)
+        {
+            foreach (var member in current.GetMembers())
+            {
+                if (member.DeclaredAccessibility == Accessibility.Public &&
+                    !visited.Contains(member.Name) &&
+                    member.Kind == SymbolKind.Property)
+                {
+                    visited.Add(member.Name);
+                    yield return member;
+                }
+            }
+
+            current = current.BaseType;
+
+            if (current?.SpecialType == SpecialType.System_Object)
+                break;
         }
     }
 }

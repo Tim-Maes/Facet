@@ -117,4 +117,28 @@ public class InheritanceTests
         employeeDto.GetType().GetProperty("EmployeeId").Should().NotBeNull();
         managerDto.GetType().GetProperty("TeamName").Should().NotBeNull();
     }
+
+    [Fact]
+    public void ToFacet_ShouldExcludeInheritedProperty_FromGenericBaseClass()
+    {
+        // Arrange - tests that we can exclude Id inherited from BaseEntity<uint>
+        var category = new Category
+        {
+            Id = 42,
+            Name = "Electronics",
+            Description = "Electronic devices and accessories"
+        };
+
+        // Act
+        var dto = category.ToFacet<Category, UpdateCategoryViewModel>();
+
+        // Assert
+        dto.Should().NotBeNull();
+        dto.Name.Should().Be("Electronics");
+        dto.Description.Should().Be("Electronic devices and accessories");
+
+        // The Id property should NOT exist in the DTO (it was excluded)
+        var dtoType = dto.GetType();
+        dtoType.GetProperty("Id").Should().BeNull("Id should be excluded from UpdateCategoryViewModel");
+    }
 }
