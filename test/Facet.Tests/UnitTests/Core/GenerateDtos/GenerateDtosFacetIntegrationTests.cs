@@ -173,11 +173,95 @@ public class GenerateDtosFacetIntegrationTests
         // Act & Assert - Verify the generated DTOs have the [Facet] attribute
         var responseType = typeof(TestUserResponse);
         var facetAttributes = responseType.GetCustomAttributes(typeof(FacetAttribute), false);
-        
+
         facetAttributes.Should().NotBeEmpty("Generated DTOs should have [Facet] attribute");
-        
+
         var facetAttribute = (FacetAttribute)facetAttributes[0];
         facetAttribute.SourceType.Should().Be(typeof(TestUser));
+    }
+
+    [Fact]
+    public void BackTo_Should_Work_WithGeneratedDtos()
+    {
+        // Arrange - Create a DTO with some values
+        var responseDto = new TestUserResponse
+        {
+            Id = 42,
+            FirstName = "Jane",
+            LastName = "Smith",
+            Email = "jane@example.com",
+            IsActive = true
+        };
+
+        // Act
+        var user = responseDto.BackTo();
+
+        // Assert - Verify all properties are mapped correctly
+        user.Should().NotBeNull();
+        user.Id.Should().Be(42);
+        user.FirstName.Should().Be("Jane");
+        user.LastName.Should().Be("Smith");
+        user.Email.Should().Be("jane@example.com");
+        user.IsActive.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BackTo_Extension_Should_Work_WithGeneratedDtos()
+    {
+        // Arrange
+        var responseDto = new TestUserResponse
+        {
+            Id = 123,
+            FirstName = "Bob",
+            LastName = "Johnson",
+            Email = "bob@example.com",
+            IsActive = false
+        };
+
+        // Act
+        var user = responseDto.BackTo<TestUserResponse, TestUser>();
+
+        // Assert
+        user.Should().NotBeNull();
+        user.Id.Should().Be(123);
+        user.FirstName.Should().Be("Bob");
+        user.LastName.Should().Be("Johnson");
+        user.Email.Should().Be("bob@example.com");
+        user.IsActive.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BackTo_Should_Work_WithCreateRequest()
+    {
+        // Arrange - Create a Create DTO (which excludes Id)
+        var assembly = Assembly.GetAssembly(typeof(TestUser));
+        var createRequestType = assembly?.GetType("Facet.Tests.TestModels.CreateTestUserRequest");
+
+        if (createRequestType != null)
+        {
+            var createRequest = Activator.CreateInstance(createRequestType);
+            var firstNameProp = createRequestType.GetProperty("FirstName");
+            var lastNameProp = createRequestType.GetProperty("LastName");
+            var emailProp = createRequestType.GetProperty("Email");
+
+            firstNameProp?.SetValue(createRequest, "Alice");
+            lastNameProp?.SetValue(createRequest, "Williams");
+            emailProp?.SetValue(createRequest, "alice@example.com");
+
+            // Act 
+            var backToMethod = createRequestType.GetMethod("BackTo");
+            backToMethod.Should().NotBeNull("CreateTestUserRequest should have a BackTo method");
+
+            var user = backToMethod!.Invoke(createRequest, null) as TestUser;
+
+            // Assert
+            user.Should().NotBeNull();
+            user.FirstName.Should().Be("Alice");
+            user.LastName.Should().Be("Williams");
+            user.Email.Should().Be("alice@example.com");
+            // Id should be default since it's excluded from Create DTOs
+            user.Id.Should().Be(default(int));
+        }
     }
 
     #region Helper Methods
