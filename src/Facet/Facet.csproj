@@ -5,7 +5,7 @@
         <IsPackable>true</IsPackable>
         <PackageId>Facet</PackageId>
         <Description>A Roslyn source generator for models and projections.</Description>
-        <PackageTags>source-generator dto projection redaction facet</PackageTags>
+        <PackageTags>source-generator dto projection facet mapper</PackageTags>
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <Title>Facet</Title>
         <PackageReadmeFile>README.md</PackageReadmeFile>
