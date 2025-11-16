@@ -6,6 +6,7 @@
     <!-- Common package properties -->
     <Authors>Tim Maes</Authors>
     <RepositoryUrl>https://github.com/Tim-Maes/Facet</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
@@ -38,14 +39,15 @@
     <DebugType>portable</DebugType>
     <DebugSymbols>true</DebugSymbols>
 
-    <!-- Embed all source files in the PDB -->
-    <EmbedAllSources>true</EmbedAllSources>
-  </PropertyGroup>
-
-  <!-- Deterministic builds for packable projects in Release configuration -->
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <Deterministic Condition="'$(IsPackable)' == 'true'">true</Deterministic>
-    <ContinuousIntegrationBuild Condition="'$(IsPackable)' == 'true'">true</ContinuousIntegrationBuild>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    
+    <!-- Enable deterministic builds for packable projects (required for proper SourceLink) -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    
+    <!-- Additional properties for symbol packages -->
+    <EnableSourceLink>true</EnableSourceLink>
+    <AllowedOutputExtensionsInPackageBuildOutputFolder>$(AllowedOutputExtensionsInPackageBuildOutputFolder);.pdb</AllowedOutputExtensionsInPackageBuildOutputFolder>
   </PropertyGroup>
 
   <!-- SourceLink package references for packable projects -->
