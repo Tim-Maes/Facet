@@ -4,7 +4,7 @@
         <TargetFramework>netstandard2.0</TargetFramework>
         <IsPackable>true</IsPackable>
         <PackageId>Facet</PackageId>
-        <Description>A Roslyn source generator for lean DTOs.</Description>
+        <Description>A Roslyn source generator for models and projections.</Description>
         <PackageTags>source-generator dto projection redaction facet</PackageTags>
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <Title>Facet</Title>
