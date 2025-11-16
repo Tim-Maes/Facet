@@ -54,7 +54,7 @@ jobs:
       run: dotnet test --configuration Release --no-build --verbosity normal
     
     - name: Pack NuGet packages
-      run: dotnet pack --configuration Release --no-build --output ./artifacts
+      run: dotnet pack --configuration Release --no-build --include-symbols -p:SymbolPackageFormat=snupkg --output ./artifacts
     
     - name: List generated packages
       run: ls -la ./artifacts/
@@ -62,48 +62,38 @@ jobs:
     - name: Publish to NuGet
       shell: pwsh
       run: |
-        foreach ($file in Get-ChildItem "./artifacts" -Recurse -Include *.nupkg) {
+        foreach ($file in Get-ChildItem "./artifacts" -Recurse -Include *.nupkg,*.snupkg) {
           Write-Host "Processing package: $($file.Name)"
 
-          if ($file.Name -like "Facet.Mapping.Expressions.*.nupkg") {
+          # Determine which API key to use based on package name
+          $apiKey = $null
+          if ($file.Name -like "Facet.Mapping.Expressions.*") {
             Write-Host "Publishing Facet.Mapping.Expressions package..."
-            dotnet nuget push $file `
-              --api-key "${{ secrets.NUGET_API_KEY_EXPRESSIONS }}" `
-              --source https://api.nuget.org/v3/index.json `
-              --skip-duplicate
-          } elseif ($file.Name -like "Facet.Mapping.*.nupkg") {
+            $apiKey = "${{ secrets.NUGET_API_KEY_EXPRESSIONS }}"
+          } elseif ($file.Name -like "Facet.Mapping.*") {
             Write-Host "Publishing Facet.Mapping package..."
-            dotnet nuget push $file `
-              --api-key "${{ secrets.NUGET_MAP_API_KEY }}" `
-              --source https://api.nuget.org/v3/index.json `
-              --skip-duplicate
-          } elseif ($file.Name -like "Facet.Extensions.EFCore.Mapping.*.nupkg") {
+            $apiKey = "${{ secrets.NUGET_MAP_API_KEY }}"
+          } elseif ($file.Name -like "Facet.Extensions.EFCore.Mapping.*") {
             Write-Host "Publishing Facet.Extensions.EFCore.Mapping package..."
-            dotnet nuget push $file `
-              --api-key "${{ secrets.NUGET_API_KEY_EXTENSIONS_EF_MAPPING }}" `
-              --source https://api.nuget.org/v3/index.json `
-              --skip-duplicate
-          } elseif ($file.Name -like "Facet.Extensions.EFCore.*.nupkg") {
+            $apiKey = "${{ secrets.NUGET_API_KEY_EXTENSIONS_EF_MAPPING }}"
+          } elseif ($file.Name -like "Facet.Extensions.EFCore.*") {
             Write-Host "Publishing Facet.Extensions.EFCore package..."
-            dotnet nuget push $file `
-              --api-key "${{ secrets.NUGET_API_KEY_EXTENSIONS_EF }}" `
-              --source https://api.nuget.org/v3/index.json `
-              --skip-duplicate
-          } elseif ($file.Name -like "Facet.Extensions.*.nupkg") {
+            $apiKey = "${{ secrets.NUGET_API_KEY_EXTENSIONS_EF }}"
+          } elseif ($file.Name -like "Facet.Extensions.*") {
             Write-Host "Publishing Facet.Extensions package..."
-            dotnet nuget push $file `
-              --api-key "${{ secrets.NUGET_API_KEY_EXTENSIONS }}" `
-              --source https://api.nuget.org/v3/index.json `
-              --skip-duplicate
-          } elseif ($file.Name -like "Facet.*.nupkg") {
+            $apiKey = "${{ secrets.NUGET_API_KEY_EXTENSIONS }}"
+          } elseif ($file.Name -like "Facet.*") {
             Write-Host "Publishing Facet package..."
-            dotnet nuget push $file `
-              --api-key "${{ secrets.NUGET_API_KEY }}" `
-              --source https://api.nuget.org/v3/index.json `
-              --skip-duplicate
+            $apiKey = "${{ secrets.NUGET_API_KEY }}"
           } else {
             Write-Host "Skipping unknown package: $($file.Name)"
+            continue
           }
+
+          dotnet nuget push $file `
+            --api-key $apiKey `
+            --source https://api.nuget.org/v3/index.json `
+            --skip-duplicate
         }
     
     - name: Commit version update

@@ -12,7 +12,8 @@
 
     <!-- Common build properties for packable projects -->
     <IsPackable Condition="'$(IsPackable)' == ''">false</IsPackable>
-    <GeneratePackageOnBuild Condition="'$(IsPackable)' == 'true'">true</GeneratePackageOnBuild>
+    <!-- NOTE: Use 'dotnet pack -c Release' instead of GeneratePackageOnBuild to ensure symbols are properly included in .snupkg files -->
+    <!-- <GeneratePackageOnBuild Condition="'$(IsPackable)' == 'true'">true</GeneratePackageOnBuild> -->
 
     <!-- Generate XML documentation files for all packable projects -->
     <GenerateDocumentationFile Condition="'$(IsPackable)' == 'true'">true</GenerateDocumentationFile>
@@ -36,13 +37,16 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
 
-    <!-- Deterministic builds -->
+    <!-- Deterministic builds - always enable for Release builds or CI -->
     <Deterministic>true</Deterministic>
-    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+    <ContinuousIntegrationBuild Condition="'$(Configuration)' == 'Release' OR '$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
 
-    <!-- Embed debugging information in the DLL -->
-    <DebugType>embedded</DebugType>
+    <!-- Portable PDB for separate symbol packages -->
+    <DebugType>portable</DebugType>
     <DebugSymbols>true</DebugSymbols>
+
+    <!-- Embed all source files in the PDB -->
+    <EmbedAllSources>true</EmbedAllSources>
   </PropertyGroup>
 
   <!-- SourceLink package references for packable projects -->
