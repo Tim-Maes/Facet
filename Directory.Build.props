@@ -14,12 +14,39 @@
     <IsPackable Condition="'$(IsPackable)' == ''">false</IsPackable>
     <GeneratePackageOnBuild Condition="'$(IsPackable)' == 'true'">true</GeneratePackageOnBuild>
 
+    <!-- Generate XML documentation files for all packable projects -->
+    <GenerateDocumentationFile Condition="'$(IsPackable)' == 'true'">true</GenerateDocumentationFile>
+
     <!--
       Suppress MSB3277 System.Collections.Immutable version conflicts.
       This is expected: Facet (netstandard2.0 source generator) uses Roslyn which requires v9.0,
       while net8.0 framework provides v8.0. The build system correctly resolves to v8.0 for
       net8.0 targets. These warnings are informational and don't indicate a problem.
+
+      Suppress CS1591: Missing XML comment for publicly visible type or member.
     -->
-    <NoWarn>$(NoWarn);MSB3277</NoWarn>
+    <NoWarn>$(NoWarn);MSB3277;1591</NoWarn>
   </PropertyGroup>
+
+  <!-- SourceLink configuration for debugging support -->
+  <PropertyGroup Condition="'$(IsPackable)' == 'true'">
+    <!-- Enable SourceLink for packages -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+    <!-- Deterministic builds -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+
+    <!-- Embed debugging information in the DLL -->
+    <DebugType>embedded</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+
+  <!-- SourceLink package references for packable projects -->
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+  </ItemGroup>
 </Project>
