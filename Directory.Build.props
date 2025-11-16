@@ -9,14 +9,12 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
     <!-- Common build properties for packable projects -->
     <IsPackable Condition="'$(IsPackable)' == ''">false</IsPackable>
     <!-- NOTE: Use 'dotnet pack -c Release' instead of GeneratePackageOnBuild to ensure symbols are properly included in .snupkg files -->
     <!-- <GeneratePackageOnBuild Condition="'$(IsPackable)' == 'true'">true</GeneratePackageOnBuild> -->
-
-    <!-- Generate XML documentation files for all packable projects -->
-    <GenerateDocumentationFile Condition="'$(IsPackable)' == 'true'">true</GenerateDocumentationFile>
 
     <!--
       Suppress MSB3277 System.Collections.Immutable version conflicts.
@@ -33,13 +31,8 @@
   <PropertyGroup Condition="'$(IsPackable)' == 'true'">
     <!-- Enable SourceLink for packages -->
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-
-    <!-- Deterministic builds - always enable for Release builds or CI -->
-    <Deterministic>true</Deterministic>
-    <ContinuousIntegrationBuild Condition="'$(Configuration)' == 'Release' OR '$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
 
     <!-- Portable PDB for separate symbol packages -->
     <DebugType>portable</DebugType>
@@ -47,6 +40,12 @@
 
     <!-- Embed all source files in the PDB -->
     <EmbedAllSources>true</EmbedAllSources>
+  </PropertyGroup>
+
+  <!-- Deterministic builds for packable projects in Release configuration -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <Deterministic Condition="'$(IsPackable)' == 'true'">true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(IsPackable)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
   <!-- SourceLink package references for packable projects -->
