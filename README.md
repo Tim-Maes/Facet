@@ -26,15 +26,14 @@
 
 **Facet** is a C# source generator that automatically creates DTOs, mappings, and LINQ projections from your domain models at compile time, eliminating boilerplate with zero runtime cost.
 
-## :gem: What is Facetting?
+## :gem: What is a Facet?
 
-Facetting is the process of defining **focused views** of a larger model at compile time. 
-Instead of manually writing boilerplate, **Facet** allows you to declare what you want, and generates everything else.
+Think of your domain model as a **gem with many facets**—different views for different purposes:
+- Public APIs need a facet without sensitive data
+- Admin endpoints need a different facet with additional fields
+- Database queries need efficient projections
 
-You can think of it like **carving out a specific facet** of a gem:
-
-- Take the part you care about
-- Leave the rest behind.
+Instead of manually creating each facet, **Facet** auto-generates them from a single source of truth.
 
 ## :clipboard: Documentation
 
@@ -46,7 +45,7 @@ You can think of it like **carving out a specific facet** of a gem:
 ## :star: Features
 
 **Code Generation**
-- Generate classes, records, structs, or record structs from existing types
+- Generate DTOs as classes, records, structs, or record structs
 - Constructors & LINQ projection expressions
 - Handle complex nested objects & collections automatically
 - Preserve XML documentation
@@ -57,16 +56,18 @@ You can think of it like **carving out a specific facet** of a gem:
 - Custom mapping configurations (sync & async)
 - Expression transformation utilities for business logic reuse
 
-**Advanced Patterns**
+**Additional Patterns**
 - **Flatten** nested objects into top-level properties
 - **Wrapper** pattern for reference-based delegation (facades, decorators, ViewModels)
 - **Auto-generate CRUD DTOs** (Create, Update, Response, Query, Upsert)
 
 **Integration**
 - Full **Entity Framework Core** support with automatic navigation loading
-- Zero runtime cost - everything happens at compile time
+- Works with any LINQ provider (via Facet.Extensions)
+- Expression tree transformation for predicates & selectors
+- Zero runtime cost and no reflection, everything happens at compile time
 
-## 🚀 Quick Start
+## :rocket: Quick Start
 
 <details>
   <summary>Installation</summary>
