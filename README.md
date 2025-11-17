@@ -24,15 +24,12 @@
 
 ---
 
-**Facet** is a C# source generator that lets you define **projections** (Facets) directly from your domain models, and generates everything you need to use them.
+**Facet** is a C# source generator that automatically creates DTOs, mappings, and LINQ projections from your domain models at compile time, eliminating boilerplate with zero runtime cost.
 
 ## :gem: What is Facetting?
 
 Facetting is the process of defining **focused views** of a larger model at compile time. 
-
 Instead of manually writing boilerplate, **Facet** allows you to declare what you want, and generates everything else.
-
-Generate classes, records, structs, or record structs with constructors, LINQ projections, and supports custom mappers, flattening, wrapping, nesting... all at compile time, with zero runtime cost.
 
 You can think of it like **carving out a specific facet** of a gem:
 
@@ -46,23 +43,28 @@ You can think of it like **carving out a specific facet** of a gem:
 - [Configure generated files output location](docs/12_GeneratedFilesOutput.md)
 - [Comprehensive article about Facetting](https://tim-maes.com/blog/2025/09/28/facets-in-dotnet-(2)/)
 
-## :star: Core Features
+## :star: Features
 
-- :white_check_mark: Generate classes, records, structs, or record structs from existing types
-- :white_check_mark: Handle **complex and nested objects & collections**
-- :white_check_mark: Define what to include, or exclude, or add
-- :white_check_mark: Constructors & LINQ projection expressions
-- :white_check_mark: **Copy data validation attributes**
-- :white_check_mark: Full mapping support with custom mapping configurations
-- :white_check_mark: **Expression transformation** and mapping utilities
-- :white_check_mark: Preserve member and type XML documentation
-- :white_check_mark: **EF Core** integration
+**Code Generation**
+- Generate classes, records, structs, or record structs from existing types
+- Constructors & LINQ projection expressions
+- Handle complex nested objects & collections automatically
+- Preserve XML documentation
 
-## :heavy_plus_sign: Additional
+**Configuration & Customization**
+- Include/exclude properties with simple attributes
+- Copy data validation attributes
+- Custom mapping configurations (sync & async)
+- Expression transformation utilities for business logic reuse
 
-- :white_check_mark: Auto generate complete CRUD DTO sets
-- :white_check_mark: **Flatten** nested objects into top-level properties
-- :white_check_mark: **Wrapper** pattern for reference-based property delegation (facades, decorators, ViewModels)
+**Advanced Patterns**
+- **Flatten** nested objects into top-level properties
+- **Wrapper** pattern for reference-based delegation (facades, decorators, ViewModels)
+- **Auto-generate CRUD DTOs** (Create, Update, Response, Query, Upsert)
+
+**Integration**
+- Full **Entity Framework Core** support with automatic navigation loading
+- Zero runtime cost - everything happens at compile time
 
 ## 🚀 Quick Start
 
@@ -710,11 +712,23 @@ Facet is modular and consists of several NuGet packages:
 
 - **[Facet.Extensions.EFCore.Mapping](https://github.com/Tim-Maes/Facet/tree/master/src/Facet.Extensions.EFCore.Mapping)**: Advanced custom async mapper support for EF Core queries. Enables complex mappings that cannot be expressed as SQL projections 
 
-## :chart_with_upwards_trend: Performance Benchmarks
+## :chart_with_upwards_trend: Performance Benchmarks & comparison
+
+### Comparison
+
+| Facet | AutoMapper | Mapperly | Mapster |
+|-------|------------|----------|---------|
+| :white_check_mark: Compile-time generation | :x: Runtime reflection | :white_check_mark: Source generation | :warning: Runtime codegen |
+| :white_check_mark: EF Core LINQ projections | :x: Manual Select() | :white_check_mark: Manual setup | :warning: Manual setup |
+| :white_check_mark: Auto navigation loading | :x: Manual .Include() | :x: Manual .Include() | :x: Manual .Include() |
+| :white_check_mark: Flatten, Wrapper, CRUD gen | :x: No | :x: No | :warning: Limited |
+| :white_check_mark: Expression transformation | :x: No | :x: No | :x: No |
+
+**Facet is the only tool that combines compile-time generation with deep EF Core integration.**
+
+### Single Mapping benchmark
 
 Facet delivers competitive performance across different mapping scenarios. Here's how it compares to popular alternatives:
-
-### Single Mapping
 
 | Library  | Mean Time | Memory Allocated | Performance vs Facet |
 |----------|-----------|------------------|---------------------|
