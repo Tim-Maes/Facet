@@ -28,7 +28,7 @@
 
 ## :gem: What is a Facet?
 
-Think of your domain model as a **gem with many facets**, different views for different purposes:
+Think of your domain model as a **gem with many facets**! Different views for different purposes:
 - Public APIs need a facet without sensitive data
 - Admin endpoints need a different facet with additional fields
 - Database queries need efficient projections
