@@ -622,6 +622,12 @@ internal static class FlattenModelBuilder
         var value = arg.Value.Value;
         if (value is T typedValue) return typedValue;
 
+        // Handle enum types - Roslyn returns enums as their underlying int value
+        if (typeof(T).IsEnum && value is int intValue)
+        {
+            return (T)(object)intValue;
+        }
+
         return defaultValue;
     }
 }
