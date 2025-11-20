@@ -207,7 +207,7 @@ public class NullablePropertiesWithNestedFacetsTests
     }
 
     [Fact]
-    public void BackTo_ShouldHandleNullableProperties_WithoutCompilationErrors()
+    public void ToSource_ShouldHandleNullableProperties_WithoutCompilationErrors()
     {
         // Arrange
         var dto = new ChunkEmbedding1024Dto
@@ -225,7 +225,7 @@ public class NullablePropertiesWithNestedFacetsTests
         };
 
         // Act
-        var entity = dto.BackTo();
+        var entity = dto.ToSource();
 
         // Assert
         entity.Should().NotBeNull();
@@ -238,7 +238,7 @@ public class NullablePropertiesWithNestedFacetsTests
     }
 
     [Fact]
-    public void BackTo_ShouldHandleNullNestedFacet_WithNullableProperties()
+    public void ToSource_ShouldHandleNullNestedFacet_WithNullableProperties()
     {
         // Arrange
         var dto = new NullableWorkerFacet
@@ -249,7 +249,7 @@ public class NullablePropertiesWithNestedFacetsTests
         };
 
         // Act
-        var entity = dto.BackTo();
+        var entity = dto.ToSource();
 
         // Assert
         entity.Should().NotBeNull();
@@ -259,7 +259,7 @@ public class NullablePropertiesWithNestedFacetsTests
     }
 
     [Fact]
-    public void BackTo_ShouldMapNonNullNestedFacet_WithNullableProperties()
+    public void ToSource_ShouldMapNonNullNestedFacet_WithNullableProperties()
     {
         // Arrange
         var dto = new NullableWorkerFacet
@@ -275,7 +275,7 @@ public class NullablePropertiesWithNestedFacetsTests
         };
 
         // Act
-        var entity = dto.BackTo();
+        var entity = dto.ToSource();
 
         // Assert
         entity.Should().NotBeNull();

@@ -204,7 +204,7 @@ public class ComplexTypeFacetsTests
     }
 
     [Fact]
-    public void BackTo_ShouldMapBackToSourceType_WithSimpleNestedType()
+    public void ToSource_ShouldMapBackToSourceType_WithSimpleNestedType()
     {
         // Arrange
         var originalCompany = new CompanyEntity
@@ -225,24 +225,24 @@ public class ComplexTypeFacetsTests
         var dto = new CompanyFacet(originalCompany);
 
         // Act
-        var mappedBack = dto.BackTo();
+        var mapped = dto.ToSource();
 
         // Assert
-        mappedBack.Should().NotBeNull();
-        mappedBack.Id.Should().Be(1);
-        mappedBack.Name.Should().Be("Test Corp");
-        mappedBack.Industry.Should().Be("Testing");
+        mapped.Should().NotBeNull();
+        mapped.Id.Should().Be(1);
+        mapped.Name.Should().Be("Test Corp");
+        mapped.Industry.Should().Be("Testing");
 
-        mappedBack.HeadquartersAddress.Should().NotBeNull();
-        mappedBack.HeadquartersAddress.Street.Should().Be("111 Test St");
-        mappedBack.HeadquartersAddress.City.Should().Be("Test City");
-        mappedBack.HeadquartersAddress.State.Should().Be("TC");
-        mappedBack.HeadquartersAddress.ZipCode.Should().Be("12345");
-        mappedBack.HeadquartersAddress.Country.Should().Be("Testland");
+        mapped.HeadquartersAddress.Should().NotBeNull();
+        mapped.HeadquartersAddress.Street.Should().Be("111 Test St");
+        mapped.HeadquartersAddress.City.Should().Be("Test City");
+        mapped.HeadquartersAddress.State.Should().Be("TC");
+        mapped.HeadquartersAddress.ZipCode.Should().Be("12345");
+        mapped.HeadquartersAddress.Country.Should().Be("Testland");
     }
 
     [Fact]
-    public void BackTo_ShouldMapBackToSourceType_WithMultipleNestedTypes()
+    public void ToSource_ShouldMapBackToSourceType_WithMultipleNestedTypes()
     {
         // Arrange
         var originalEmployee = new StaffMember
@@ -281,33 +281,33 @@ public class ComplexTypeFacetsTests
         var dto = new StaffMemberFacet(originalEmployee);
 
         // Act
-        var mappedBack = dto.BackTo();
+        var mapped = dto.ToSource();
 
         // Assert
-        mappedBack.Should().NotBeNull();
-        mappedBack.Id.Should().Be(3);
-        mappedBack.FirstName.Should().Be("Alice");
-        mappedBack.LastName.Should().Be("Johnson");
-        mappedBack.Email.Should().Be("alice@example.com");
-        mappedBack.HireDate.Should().Be(new DateTime(2019, 6, 1));
+        mapped.Should().NotBeNull();
+        mapped.Id.Should().Be(3);
+        mapped.FirstName.Should().Be("Alice");
+        mapped.LastName.Should().Be("Johnson");
+        mapped.Email.Should().Be("alice@example.com");
+        mapped.HireDate.Should().Be(new DateTime(2019, 6, 1));
 
         // Excluded properties should have default values
-        mappedBack.PasswordHash.Should().BeEmpty();
-        mappedBack.Salary.Should().Be(0m);
+        mapped.PasswordHash.Should().BeEmpty();
+        mapped.Salary.Should().Be(0m);
 
         // Company should be mapped back
-        mappedBack.Company.Should().NotBeNull();
-        mappedBack.Company.Id.Should().Be(30);
-        mappedBack.Company.Name.Should().Be("Example Co");
-        mappedBack.Company.Industry.Should().Be("Examples");
-        mappedBack.Company.HeadquartersAddress.Should().NotBeNull();
-        mappedBack.Company.HeadquartersAddress.Street.Should().Be("200 Example Rd");
-        mappedBack.Company.HeadquartersAddress.City.Should().Be("Example City");
+        mapped.Company.Should().NotBeNull();
+        mapped.Company.Id.Should().Be(30);
+        mapped.Company.Name.Should().Be("Example Co");
+        mapped.Company.Industry.Should().Be("Examples");
+        mapped.Company.HeadquartersAddress.Should().NotBeNull();
+        mapped.Company.HeadquartersAddress.Street.Should().Be("200 Example Rd");
+        mapped.Company.HeadquartersAddress.City.Should().Be("Example City");
 
         // HomeAddress should be mapped back
-        mappedBack.HomeAddress.Should().NotBeNull();
-        mappedBack.HomeAddress.Street.Should().Be("300 Home St");
-        mappedBack.HomeAddress.City.Should().Be("Home Town");
+        mapped.HomeAddress.Should().NotBeNull();
+        mapped.HomeAddress.Street.Should().Be("300 Home St");
+        mapped.HomeAddress.City.Should().Be("Home Town");
     }
 
     [Fact]

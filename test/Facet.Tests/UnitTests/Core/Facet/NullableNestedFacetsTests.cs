@@ -156,7 +156,7 @@ public class NullableNestedFacetsTests
     }
 
     [Fact]
-    public void BackTo_ShouldHandleNullNestedFacet_Correctly()
+    public void ToSource_ShouldHandleNullNestedFacet_Correctly()
     {
         // Arrange
         var dto = new DataTableFacetDto
@@ -168,7 +168,7 @@ public class NullableNestedFacetsTests
         };
 
         // Act
-        var entity = dto.BackTo();
+        var entity = dto.ToSource();
 
         // Assert
         entity.Should().NotBeNull();
@@ -179,7 +179,7 @@ public class NullableNestedFacetsTests
     }
 
     [Fact]
-    public void BackTo_ShouldMapNonNullNestedFacet_Correctly()
+    public void ToSource_ShouldMapNonNullNestedFacet_Correctly()
     {
         // Arrange
         var dto = new DataTableFacetDto
@@ -195,7 +195,7 @@ public class NullableNestedFacetsTests
         };
 
         // Act
-        var entity = dto.BackTo();
+        var entity = dto.ToSource();
 
         // Assert
         entity.Should().NotBeNull();
@@ -270,7 +270,7 @@ public class NullableNestedFacetsTests
     }
 
     [Fact]
-    public void BackTo_ShouldHandleNullCollectionNestedFacet_Correctly()
+    public void ToSource_ShouldHandleNullCollectionNestedFacet_Correctly()
     {
         // Arrange
         var dto = new OrganizationDto
@@ -281,7 +281,7 @@ public class NullableNestedFacetsTests
         };
 
         // Act
-        var entity = dto.BackTo();
+        var entity = dto.ToSource();
 
         // Assert
         entity.Should().NotBeNull();

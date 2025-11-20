@@ -546,8 +546,8 @@ public class CircularReferenceTests
 
         var facet = new AuthorFacetWithDepth(author);
 
-        // Act - BackTo should work even with circular references
-        var mappedAuthor = facet.BackTo();
+        // Act - ToSource should work even with circular references
+        var mappedAuthor = facet.ToSource();
 
         // Assert
         mappedAuthor.Should().NotBeNull();

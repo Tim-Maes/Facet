@@ -80,7 +80,7 @@ public class NullableCollectionNestedFacetsTests
     }
 
     [Fact]
-    public void BackTo_ShouldHandleCollectionNestedFacet_WithNullableProperties()
+    public void ToSource_ShouldHandleCollectionNestedFacet_WithNullableProperties()
     {
         // Arrange
         var dto = new StringIdentifierLookupDto
@@ -95,7 +95,7 @@ public class NullableCollectionNestedFacetsTests
         };
 
         // Act
-        var entity = dto.BackTo();
+        var entity = dto.ToSource();
 
         // Assert
         entity.Should().NotBeNull();
