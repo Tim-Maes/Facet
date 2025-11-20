@@ -106,6 +106,14 @@ internal static class AttributeParser
             .Value.Value is T t ? t : defaultValue;
 
     /// <summary>
+    /// Checks if a named argument exists in the attribute.
+    /// </summary>
+    public static bool HasNamedArg(
+        ImmutableArray<KeyValuePair<string, TypedConstant>> args,
+        string name)
+        => args.Any(kv => kv.Key == name);
+
+    /// <summary>
     /// Extracts the excluded members list from the attribute constructor arguments.
     /// </summary>
     public static HashSet<string> ExtractExcludedMembers(AttributeData attribute)

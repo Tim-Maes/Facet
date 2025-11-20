@@ -30,13 +30,13 @@ public static class FacetExtensions
                 return ps.Length == 1;
             });
 
-    // Cached MethodInfo for BackTo<TFacet, TFacetSource>(TFacet)
+    // Cached MethodInfo for ToSource<TFacet, TFacetSource>(TFacet)
     private static readonly MethodInfo _toFacetSourceTwoGenericMethod =
         typeof(FacetExtensions)
             .GetMethods(BindingFlags.Public | BindingFlags.Static)
             .First(m =>
             {
-                if (m.Name != nameof(BackTo)) return false;
+                if (m.Name != nameof(ToSource)) return false;
                 var ga = m.GetGenericArguments();
                 if (ga.Length != 2) return false;
                 var ps = m.GetParameters();
@@ -108,20 +108,34 @@ public static class FacetExtensions
     }
 
     /// <summary>
-    /// Maps a single facet instance to the specified source type by invoking its generated BackTo method.
+    /// Maps a single facet instance to the specified source type by invoking its generated ToSource method.
     /// </summary>
     /// <typeparam name="TFacet">The facet type that is annotated with [Facet(typeof(TFacetSource))].</typeparam>
     /// <typeparam name="TFacetSource">The entity type to map to.</typeparam>
     /// <param name="facet">The facet instance to map.</param>
     /// <returns>A new <typeparamref name="TFacetSource"/> instance populated from <paramref name="facet"/>.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="facet"/> is <c>null</c>.</exception>
-    public static TFacetSource BackTo<TFacet, TFacetSource>(this TFacet facet)
+    public static TFacetSource ToSource<TFacet, TFacetSource>(this TFacet facet)
         where TFacet : class
         where TFacetSource : class
     {
-        if (facet is null) throw new ArgumentNullException(nameof(facet));    
+        if (facet is null) throw new ArgumentNullException(nameof(facet));
         return FacetSourceCache<TFacet, TFacetSource>.Mapper(facet);
     }
+
+    /// <summary>
+    /// Maps a single facet instance to the specified source type by invoking its generated ToSource method.
+    /// </summary>
+    /// <typeparam name="TFacet">The facet type that is annotated with [Facet(typeof(TFacetSource))].</typeparam>
+    /// <typeparam name="TFacetSource">The entity type to map to.</typeparam>
+    /// <param name="facet">The facet instance to map.</param>
+    /// <returns>A new <typeparamref name="TFacetSource"/> instance populated from <paramref name="facet"/>.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="facet"/> is <c>null</c>.</exception>
+    [Obsolete("Use ToSource instead. This method will be removed in a future version.")]
+    public static TFacetSource BackTo<TFacet, TFacetSource>(this TFacet facet)
+        where TFacet : class
+        where TFacetSource : class
+        => ToSource<TFacet, TFacetSource>(facet);
 
     /// <summary>
     /// Converts the specified facet object to an instance of the source type that the facet was created from.
@@ -133,9 +147,9 @@ public static class FacetExtensions
     /// <exception cref="InvalidOperationException">Thrown if: <list type="bullet"> <item><description>The facet type is not
     /// annotated with <c>[Facet(typeof(...))]</c>.</description></item> <item><description>The target type does not match
     /// the declared source type for the facet.</description></item> <item><description>The
-    /// conversion process fails due to a missing BackTo method on the facet.</description></item>
+    /// conversion process fails due to a missing ToSource method on the facet.</description></item>
     /// </list></exception>
-    public static TFacetSource BackTo<TFacetSource>(this object facet)
+    public static TFacetSource ToSource<TFacetSource>(this object facet)
         where TFacetSource : class
     {
         if (facet is null) throw new ArgumentNullException(nameof(facet));
@@ -143,7 +157,7 @@ public static class FacetExtensions
         var facetType = facet.GetType();
         var declaredSource = GetDeclaredSourceType(facetType)
             ?? throw new InvalidOperationException(
-                $"Type '{facetType.FullName}' must be annotated with [Facet(typeof(...))] to use BackTo<{typeof(TFacetSource).Name}>().");
+                $"Type '{facetType.FullName}' must be annotated with [Facet(typeof(...))] to use ToSource<{typeof(TFacetSource).Name}>().");
 
         if (declaredSource != typeof(TFacetSource))
         {
@@ -156,11 +170,28 @@ public static class FacetExtensions
         if (forwarded is null)
         {
             throw new InvalidOperationException(
-                $"Unable to map facet '{facetType.FullName}' to '{typeof(TFacetSource).FullName}'. Ensure the facet has a generated BackTo method.");
+                $"Unable to map facet '{facetType.FullName}' to '{typeof(TFacetSource).FullName}'. Ensure the facet has a generated ToSource method.");
         }
 
         return (TFacetSource)forwarded;
     }
+
+    /// <summary>
+    /// Converts the specified facet object to an instance of the source type that the facet was created from.
+    /// </summary>
+    /// <typeparam name="TFacetSource">The source type to which the facet object will be converted. Must be a reference type.</typeparam>
+    /// <param name="facet">The facet object to be converted. Cannot be <see langword="null"/>.</param>
+    /// <returns>An instance of the source type <typeparamref name="TFacetSource"/> created from the facet object.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if <paramref name="facet"/> is <see langword="null"/>.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if: <list type="bullet"> <item><description>The facet type is not
+    /// annotated with <c>[Facet(typeof(...))]</c>.</description></item> <item><description>The target type does not match
+    /// the declared source type for the facet.</description></item> <item><description>The
+    /// conversion process fails due to a missing ToSource method on the facet.</description></item>
+    /// </list></exception>
+    [Obsolete("Use ToSource instead. This method will be removed in a future version.")]
+    public static TFacetSource BackTo<TFacetSource>(this object facet)
+        where TFacetSource : class
+        => ToSource<TFacetSource>(facet);
 
     /// <summary>
     /// Maps an <see cref="IEnumerable{TSource}"/> to an <see cref="IEnumerable{TTarget}"/>
@@ -180,7 +211,7 @@ public static class FacetExtensions
 
     /// <summary>
     /// Maps an <see cref="IEnumerable{TFacet}"/> to an <see cref="IEnumerable{TFacetSource}"/>
-    /// via the generated BackTo method of the facet type.
+    /// via the generated ToSource method of the facet type.
     /// </summary>
     /// <typeparam name="TFacet">The facet type, which must be annotated with [Facet(typeof(TFacetSource))].</typeparam>
     /// <typeparam name="TFacetSource">The facet source type.</typeparam>
@@ -192,21 +223,21 @@ public static class FacetExtensions
         where TFacetSource : class
     {
         if (facets is null) throw new ArgumentNullException(nameof(facets));
-        return facets.Select(f => f.BackTo<TFacet, TFacetSource>());
+        return facets.Select(f => f.ToSource<TFacet, TFacetSource>());
     }
     
     /// <summary>
     /// Maps an <see cref="IEnumerable"/> of facet objects to an <see cref="IEnumerable{TFacetSource}"/>
-    /// via the generated BackTo method of each facet type.
+    /// via the generated ToSource method of each facet type.
     /// </summary>
     /// <remarks>
-    /// This method lazily converts each non-null facet object by calling <see cref="BackTo{TFacetSource}(object)"/> on each element.
+    /// This method lazily converts each non-null facet object by calling <see cref="ToSource{TFacetSource}(object)"/> on each element.
     /// Only non-null elements are processed; nulls are skipped. The operation uses deferred execution and
     /// preserves the order of the source sequence.
     /// <para>
-    /// Note: Each facet object must be annotated with <c>[Facet(typeof(TFacetSource))]</c> and have a generated BackTo method.
-    /// If a facet type is not properly annotated or lacks the required BackTo method, the underlying
-    /// <see cref="BackTo{TFacetSource}(object)"/> may throw <see cref="InvalidOperationException"/> at iteration time.
+    /// Note: Each facet object must be annotated with <c>[Facet(typeof(TFacetSource))]</c> and have a generated ToSource method.
+    /// If a facet type is not properly annotated or lacks the required ToSource method, the underlying
+    /// <see cref="ToSource{TFacetSource}(object)"/> may throw <see cref="InvalidOperationException"/> at iteration time.
     /// </para>
     /// </remarks>
     /// <typeparam name="TFacetSource">The facet source type to map back to. Must be a reference type.</typeparam>
@@ -214,7 +245,7 @@ public static class FacetExtensions
     /// <returns>An <see cref="IEnumerable{TFacetSource}"/> containing source instances mapped from the non-null facet objects in the input collection.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="facets"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
-    /// Thrown at iteration time if any facet object is not annotated with <c>[Facet(typeof(TFacetSource))]</c> or lacks a generated BackTo method.
+    /// Thrown at iteration time if any facet object is not annotated with <c>[Facet(typeof(TFacetSource))]</c> or lacks a generated ToSource method.
     /// </exception>
     public static IEnumerable<TFacetSource> SelectFacetSources<TFacetSource>(this IEnumerable facets)
         where TFacetSource : class
@@ -223,7 +254,7 @@ public static class FacetExtensions
         foreach (var item in facets)
         {
             if (item is null) continue;
-            yield return item.BackTo<TFacetSource>();
+            yield return item.ToSource<TFacetSource>();
         }
     }
 

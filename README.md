@@ -164,7 +164,7 @@ Create focused facets for different scenarios:
   [Facet(typeof(User),
       Include = ["FirstName", "LastName", "Email", "Department", "IsActive"],
       NullableProperties = true,
-      GenerateBackTo = false)]
+      GenerateToSource = false)]
   public partial record UserFilterDto;
 
   // 4. Validation-Aware DTO - Copy data annotations
@@ -231,8 +231,8 @@ public partial class UserFacet { }
 var userFacet = user.ToFacet<UserFacet>();
 var userFacet = user.ToFacet<User, UserFacet>(); //Much faster
 
-var user = userFacet.BackTo<User>();
-var user = userFacet.BackTo<UserFacet, User>(); //Much faster
+var user = userFacet.ToSource<User>();
+var user = userFacet.ToSource<UserFacet, User>(); //Much faster
 
 var users = users.SelectFacets<UserFacet>();
 var users = users.SelectFacets<User, UserFacet>(); //Much faster

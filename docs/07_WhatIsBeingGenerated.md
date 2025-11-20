@@ -67,7 +67,7 @@ public partial class PersonContactInfo
     }
     public static Expression<Func<Project.Namespace.Person, PersonContactInfo>> Projection =>
         source => new PersonContactInfo(source);
-    public Project.Namespace.Person BackTo()
+    public Project.Namespace.Person ToSource()
     {
         return new Project.Namespace.Person
         {
@@ -361,7 +361,7 @@ public partial class UserMinimal
     }
     public static Expression<Func<Project.Namespace.ModernUser, UserMinimal>> Projection =>
         source => new UserMinimal(source);
-    public Project.Namespace.ModernUser BackTo()
+    public Project.Namespace.ModernUser ToSource()
     {
         return new Project.Namespace.ModernUser
         {
@@ -703,7 +703,7 @@ public class Product
     public DateTime CreatedAt { get; set; }
 }
 
-[Facet(typeof(Product), "CreatedAt", NullableProperties = true, GenerateBackTo = false)]
+[Facet(typeof(Product), "CreatedAt", NullableProperties = true, GenerateToSource = false)]
 public partial class ProductQueryDto { }
 ```
 
@@ -729,7 +729,7 @@ public partial class ProductQueryDto
     public static Expression<Func<Project.Namespace.Product, ProductQueryDto>> Projection =>
         source => new ProductQueryDto(source);
 
-    // Note: No BackTo() method generated when GenerateBackTo = false
+    // Note: No ToSource() method generated when GenerateToSource = false
 }
 ```
 
@@ -756,9 +756,9 @@ public partial class PersonNoParamless { }
 [Facet(typeof(Person), GenerateProjection = false)]
 public partial class PersonNoProjection { }
 
-// No BackTo method
-[Facet(typeof(Person), GenerateBackTo = false)]
-public partial class PersonNoBackTo { }
+// No ToSource method
+[Facet(typeof(Person), GenerateToSource = false)]
+public partial class PersonNoToSource { }
 ```
 
 **Generated for GenerateConstructor = false:**
@@ -830,7 +830,7 @@ public partial class PersonDto
     public static Expression<Func<Project.Namespace.Person, PersonDto>> Projection =>
         source => new PersonDto(source);
 
-    public Project.Namespace.Person BackTo()
+    public Project.Namespace.Person ToSource()
     {
         return new Project.Namespace.Person
         {
@@ -931,11 +931,11 @@ public class Product
     public DateTime CreatedAt { get; set; }
 }
 
-// Query DTO: nullable properties, no BackTo, exclude internal fields
+// Query DTO: nullable properties, no ToSource, exclude internal fields
 [Facet(typeof(Product),
        "InternalNotes", "CreatedAt",
        NullableProperties = true,
-       GenerateBackTo = false)]
+       GenerateToSource = false)]
 public partial record ProductQueryDto { }
 
 // API Response: exclude internal fields, preserve docs
@@ -967,7 +967,7 @@ public partial record ProductQueryDto
     public static Expression<Func<Project.Namespace.Product, ProductQueryDto>> Projection =>
         source => new ProductQueryDto(source);
 
-    // No BackTo() - GenerateBackTo = false
+    // No ToSource() - GenerateToSource = false
 }
 ```
 

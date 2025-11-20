@@ -63,10 +63,17 @@ public sealed class FacetAttribute : Attribute
     public bool GenerateProjection { get; set; } = true;
 
     /// <summary>
+    /// Whether to generate a method to map from the facet type back to the source type.
+    /// Default is true to facilitate two-way mapping scenarios.
+    /// </summary>
+    public bool GenerateToSource { get; set; } = true;
+
+    /// <summary>
     /// Whether to generate a method to map back from the facet type to the source type.
     /// Default is true to facilitate two-way mapping scenarios.
     /// </summary>
-    public bool GenerateBackTo { get; set; } = true;
+    [Obsolete("Use GenerateToSource instead. This property will be removed in a future version.")]
+    public bool GenerateBackTo { get => GenerateToSource; set => GenerateToSource = value; }
 
     /// <summary>
     /// Controls whether generated properties should preserve init-only modifiers from source properties.

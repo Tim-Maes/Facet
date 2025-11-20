@@ -6,7 +6,7 @@ namespace Facet;
 
 /// <summary>
 /// Provides a cached <see cref="Func{TFacet, TFacetSource}"/> mapping delegate used by
-/// <c>BackTo&lt;TFacet, TFacetSource&gt;</c> to efficiently construct <typeparamref name="TFacetSource"/> instances
+/// <c>ToSource&lt;TFacet, TFacetSource&gt;</c> to efficiently construct <typeparamref name="TFacetSource"/> instances
 /// from <typeparamref name="TFacet"/> values.
 /// </summary>
 /// <typeparam name="TFacet">The facet type that is annotated with [Facet(typeof(TFacetSource))].</typeparam>
@@ -29,8 +29,16 @@ internal static class FacetSourceCache<TFacet, TFacetSource>
 
     private static Func<TFacet, TFacetSource> CreateMapper()
     {
-        // Look for the BackTo() method on the facet type
+        // Look for the ToSource() method first (new name), then BackTo() for backwards compatibility
         var toEntityMethod = typeof(TFacet).GetMethod(
+            "ToSource",
+            BindingFlags.Public | BindingFlags.Instance,
+            null,
+            Type.EmptyTypes,
+            null);
+
+        // Fall back to BackTo for backwards compatibility with older generated code
+        toEntityMethod ??= typeof(TFacet).GetMethod(
             "BackTo",
             BindingFlags.Public | BindingFlags.Instance,
             null,
@@ -39,15 +47,15 @@ internal static class FacetSourceCache<TFacet, TFacetSource>
 
         if (toEntityMethod != null && toEntityMethod.ReturnType == typeof(TFacetSource))
         {
-            // Create a delegate that calls the BackTo() method on the facet instance
+            // Create a delegate that calls the ToSource/BackTo method on the facet instance
             var param = Expression.Parameter(typeof(TFacet), "facet");
             var call = Expression.Call(param, toEntityMethod);
             return Expression.Lambda<Func<TFacet, TFacetSource>>(call, param).Compile();
         }
 
-        // If no BackTo method is found, provide a helpful error message
+        // If no ToSource/BackTo method is found, provide a helpful error message
         throw new InvalidOperationException(
             $"Unable to map {typeof(TFacet).Name} to {typeof(TFacetSource).Name}: " +
-            $"no BackTo() method found on the facet type. Ensure the facet is properly generated with source generation.");
+            $"no ToSource() method found on the facet type. Ensure the facet is properly generated with source generation.");
     }
 }

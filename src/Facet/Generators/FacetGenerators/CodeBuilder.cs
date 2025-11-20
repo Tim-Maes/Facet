@@ -103,10 +103,10 @@ internal static class CodeBuilder
             ProjectionGenerator.GenerateProjectionProperty(sb, model, memberIndent, facetLookup);
         }
 
-        // Generate reverse mapping method (BackTo)
-        if (model.GenerateBackTo)
+        // Generate reverse mapping method (ToSource)
+        if (model.GenerateToSource)
         {
-            BackToGenerator.GenerateBackToMethod(sb, model);
+            ToSourceGenerator.Generate(sb, model);
         }
 
         sb.AppendLine($"{containingTypeIndent}}}");

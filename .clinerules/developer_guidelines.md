@@ -57,7 +57,7 @@ Each generator defines target models that capture attribute data:
 - `FacetMember` — Represents properties/fields with metadata (nullability, init-only, required)
 
 ### Extension Methods (src/Facet.Extensions/)
-- Static extension methods for `ToFacet<T>()`, `SelectFacets<T>()`, `BackTo<T>()`
+- Static extension methods for `ToFacet<T>()`, `SelectFacets<T>()`, `ToSource<T>()`
 - Generic overloads: parameterless (`ToFacet<TTarget>()`) and typed (`ToFacet<TSource, TTarget>()`)
 - Typed versions are faster due to avoiding reflection
 - Always provide both sync and async variants where applicable

@@ -35,7 +35,10 @@ internal static class ModelBuilder
         var generateConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateConstructor, true);
         var generateParameterlessConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateParameterlessConstructor, true);
         var generateProjection = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateProjection, true);
-        var generateBackTo = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateBackTo, true);
+        // Support both GenerateToSource (new) and GenerateBackTo (deprecated) for backward compatibility
+        var generateToSource = AttributeParser.HasNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateToSource)
+            ? AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateToSource, true)
+            : AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateBackTo, true);
         var configurationTypeName = AttributeParser.ExtractConfigurationTypeName(attribute);
 
         // Infer the type kind and whether it's a record from the target type declaration
@@ -104,7 +107,7 @@ internal static class ModelBuilder
             generateConstructor,
             generateParameterlessConstructor,
             generateProjection,
-            generateBackTo,
+            generateToSource,
             sourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             sourceContainingTypes,
             configurationTypeName,
@@ -204,7 +207,7 @@ internal static class ModelBuilder
 
         if (!shouldIncludeMember)
         {
-            // If this is a required member that was excluded, track it for BackTo generation
+            // If this is a required member that was excluded, track it for ToSource generation
             if (isRequired)
             {
                 excludedRequiredMembers.Add(new FacetMember(
@@ -321,7 +324,7 @@ internal static class ModelBuilder
 
         if (!shouldIncludeMember)
         {
-            // If this is a required field that was excluded, track it for BackTo generation
+            // If this is a required field that was excluded, track it for ToSource generation
             if (isRequired)
             {
                 excludedRequiredMembers.Add(new FacetMember(
