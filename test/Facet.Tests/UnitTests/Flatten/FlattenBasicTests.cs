@@ -271,4 +271,65 @@ public class FlattenBasicTests
         Assert.Equal(0, dto.Id);
         Assert.Null(dto.FirstName);
     }
+
+    [Fact]
+    public void PersonFlatLeafOnlyDto_ShouldUseLeafOnlyPropertyNames()
+    {
+        // Arrange
+        var person = new Person
+        {
+            Id = 1,
+            FirstName = "John",
+            LastName = "Doe",
+            DateOfBirth = new DateTime(1990, 1, 1),
+            Address = new Address
+            {
+                Street = "123 Main St",
+                City = "Springfield",
+                ZipCode = "12345",
+                Country = new Country
+                {
+                    Name = "USA",
+                    Code = "US"
+                }
+            },
+            ContactInfo = new ContactInfo
+            {
+                Email = "john@example.com",
+                Phone = "555-1234"
+            }
+        };
+
+        // Act
+        var dto = new PersonFlatLeafOnlyDto(person);
+
+        // Assert - verify leaf-only naming (not prefixed with parent names)
+        var type = typeof(PersonFlatLeafOnlyDto);
+
+        // Root properties should exist as-is
+        Assert.Equal(1, dto.Id);
+        Assert.Equal("John", dto.FirstName);
+        Assert.Equal("Doe", dto.LastName);
+
+        // Nested properties should use leaf names only
+        Assert.NotNull(type.GetProperty("Street"));
+        Assert.NotNull(type.GetProperty("City"));
+        Assert.NotNull(type.GetProperty("ZipCode"));
+        Assert.NotNull(type.GetProperty("Name"));
+        Assert.NotNull(type.GetProperty("Code"));
+        Assert.NotNull(type.GetProperty("Email"));
+        Assert.NotNull(type.GetProperty("Phone"));
+
+        // Prefixed names should NOT exist
+        Assert.Null(type.GetProperty("AddressStreet"));
+        Assert.Null(type.GetProperty("AddressCity"));
+        Assert.Null(type.GetProperty("AddressCountryName"));
+        Assert.Null(type.GetProperty("ContactInfoEmail"));
+
+        // Verify values
+        Assert.Equal("123 Main St", type.GetProperty("Street")!.GetValue(dto));
+        Assert.Equal("Springfield", type.GetProperty("City")!.GetValue(dto));
+        Assert.Equal("USA", type.GetProperty("Name")!.GetValue(dto));
+        Assert.Equal("john@example.com", type.GetProperty("Email")!.GetValue(dto));
+    }
 }
