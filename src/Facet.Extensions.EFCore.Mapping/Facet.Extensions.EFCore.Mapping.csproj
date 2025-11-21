@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+        <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
         <IsPackable>true</IsPackable>
         <PackageId>Facet.Extensions.EFCore.Mapping</PackageId>
         <Description>Advanced custom async mapper support for Facet with EF Core queries. Enables complex mappings that cannot be expressed as SQL projections.</Description>
