@@ -74,7 +74,7 @@ internal static class CodeBuilder
             GeneratePositionalDeclaration(sb, model, keyword, containingTypeIndent);
         }
 
-        sb.AppendLine($"{containingTypeIndent}public partial {keyword} {model.Name}");
+        sb.AppendLine($"{containingTypeIndent}{model.Accessibility} partial {keyword} {model.Name}");
         sb.AppendLine($"{containingTypeIndent}{{");
 
         var memberIndent = containingTypeIndent + "    ";
@@ -134,7 +134,8 @@ internal static class CodeBuilder
         var containingTypeIndent = "";
         foreach (var containingType in model.ContainingTypes)
         {
-            sb.AppendLine($"{containingTypeIndent}public partial class {containingType}");
+            // Don't specify accessibility for containing types - they're already defined in user code
+            sb.AppendLine($"{containingTypeIndent}partial class {containingType}");
             sb.AppendLine($"{containingTypeIndent}{{");
             containingTypeIndent += "    ";
         }
@@ -176,7 +177,7 @@ internal static class CodeBuilder
                 }
                 return param;
             }));
-        sb.AppendLine($"{indent}public partial {keyword} {model.Name}({parameters});");
+        sb.AppendLine($"{indent}{model.Accessibility} partial {keyword} {model.Name}({parameters});");
     }
 
     #endregion

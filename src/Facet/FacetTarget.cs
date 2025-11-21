@@ -13,6 +13,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public string FullName { get; }
     public TypeKind TypeKind { get; }
     public bool IsRecord { get; }
+    public string Accessibility { get; }
     public bool GenerateConstructor { get; }
     public bool GenerateParameterlessConstructor { get; }
     public bool GenerateExpressionProjection { get; }
@@ -38,6 +39,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         string fullName,
         TypeKind typeKind,
         bool isRecord,
+        string accessibility,
         bool generateConstructor,
         bool generateParameterlessConstructor,
         bool generateExpressionProjection,
@@ -62,6 +64,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         FullName = fullName;
         TypeKind = typeKind;
         IsRecord = isRecord;
+        Accessibility = accessibility;
         GenerateConstructor = generateConstructor;
         GenerateParameterlessConstructor = generateParameterlessConstructor;
         GenerateExpressionProjection = generateExpressionProjection;
@@ -92,6 +95,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && FullName == other.FullName
             && TypeKind == other.TypeKind
             && IsRecord == other.IsRecord
+            && Accessibility == other.Accessibility
             && GenerateConstructor == other.GenerateConstructor
             && GenerateParameterlessConstructor == other.GenerateParameterlessConstructor
             && GenerateExpressionProjection == other.GenerateExpressionProjection
@@ -123,6 +127,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + (FullName?.GetHashCode() ?? 0);
             hash = hash * 31 + TypeKind.GetHashCode();
             hash = hash * 31 + IsRecord.GetHashCode();
+            hash = hash * 31 + (Accessibility?.GetHashCode() ?? 0);
             hash = hash * 31 + GenerateConstructor.GetHashCode();
             hash = hash * 31 + GenerateParameterlessConstructor.GetHashCode();
             hash = hash * 31 + GenerateExpressionProjection.GetHashCode();

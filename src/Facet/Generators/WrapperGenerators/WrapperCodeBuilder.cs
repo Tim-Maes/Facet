@@ -97,7 +97,8 @@ internal static class WrapperCodeBuilder
         var containingTypeIndent = "";
         foreach (var containingType in model.ContainingTypes)
         {
-            sb.AppendLine($"{containingTypeIndent}public partial class {containingType}");
+            // Don't specify accessibility for containing types - they're already defined in user code
+            sb.AppendLine($"{containingTypeIndent}partial class {containingType}");
             sb.AppendLine($"{containingTypeIndent}{{");
             containingTypeIndent += "    ";
         }
