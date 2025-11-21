@@ -15,13 +15,14 @@ public class StringIdentifier
 }
 
 // Facet DTOs
-[Facet(typeof(StringLookup), NullableProperties = true)]
+[Facet(typeof(StringLookup), NullableProperties = true, GenerateToSource = true)]
 public partial class StringLookupDto;
 
 [Facet(typeof(StringIdentifier),
     Include = [nameof(StringIdentifier.Id), nameof(StringIdentifier.Name), nameof(StringIdentifier.StringLookups)],
     NestedFacets = [typeof(StringLookupDto)],
-    NullableProperties = true)]
+    NullableProperties = true,
+    GenerateToSource = true)]
 public partial class StringIdentifierLookupDto;
 
 public class NullableCollectionNestedFacetsTests

@@ -33,7 +33,8 @@ internal static class ExpressionBuilder
                 member, sourceVariableName, isNullable, maxDepth, useDepthParameter, preserveReferences);
         }
 
-        return $"{sourceVariableName}.{member.Name}";
+        // Use SourcePropertyName for accessing the source property (supports MapFrom)
+        return $"{sourceVariableName}.{member.SourcePropertyName}";
     }
 
     /// <summary>
@@ -128,6 +129,9 @@ internal static class ExpressionBuilder
                 ? ExtractElementTypeFromCollectionTypeName(member.SourceMemberTypeName)
                 : elementTypeName);
 
+        // Use SourcePropertyName for accessing the source property (supports MapFrom)
+        var sourcePropName = member.SourcePropertyName;
+
         // Check if we should stop due to max depth
         if (useDepthParameter && maxDepth > 0)
         {
@@ -136,8 +140,8 @@ internal static class ExpressionBuilder
                 : "__processed";
 
             var sourceCollection = preserveReferences
-                ? $"{sourceVariableName}.{member.Name}.Distinct(System.Collections.Generic.ReferenceEqualityComparer.Instance).Cast<{sourceElementTypeName}>()"
-                : $"{sourceVariableName}.{member.Name}";
+                ? $"{sourceVariableName}.{sourcePropName}.Distinct(System.Collections.Generic.ReferenceEqualityComparer.Instance).Cast<{sourceElementTypeName}>()"
+                : $"{sourceVariableName}.{sourcePropName}";
 
             var projection = preserveReferences
                 ? $"{sourceCollection}.Select(x => __processed != null && __processed.Contains(x) ? null : new {elementTypeName}(x, __depth + 1, {updatedProcessed})).Where(x => x != null)"
@@ -148,7 +152,7 @@ internal static class ExpressionBuilder
 
             if (isNullable)
             {
-                return $"__depth < {maxDepth} && {sourceVariableName}.{member.Name} != null ? {collectionExpression} : null";
+                return $"__depth < {maxDepth} && {sourceVariableName}.{sourcePropName} != null ? {collectionExpression} : null";
             }
 
             return $"__depth < {maxDepth} ? {collectionExpression} : null";
@@ -160,8 +164,8 @@ internal static class ExpressionBuilder
                 : "__processed";
 
             var sourceCollection = preserveReferences && useDepthParameter
-                ? $"{sourceVariableName}.{member.Name}.Distinct(System.Collections.Generic.ReferenceEqualityComparer.Instance).Cast<{sourceElementTypeName}>()"
-                : $"{sourceVariableName}.{member.Name}";
+                ? $"{sourceVariableName}.{sourcePropName}.Distinct(System.Collections.Generic.ReferenceEqualityComparer.Instance).Cast<{sourceElementTypeName}>()"
+                : $"{sourceVariableName}.{sourcePropName}";
 
             var projection = useDepthParameter
                 ? (preserveReferences
@@ -174,7 +178,7 @@ internal static class ExpressionBuilder
 
             if (isNullable)
             {
-                return $"{sourceVariableName}.{member.Name} != null ? {collectionExpression} : null";
+                return $"{sourceVariableName}.{sourcePropName} != null ? {collectionExpression} : null";
             }
 
             return collectionExpression;
@@ -190,6 +194,8 @@ internal static class ExpressionBuilder
         bool preserveReferences)
     {
         var nonNullableTypeName = member.TypeName.TrimEnd('?');
+        // Use SourcePropertyName for accessing the source property (supports MapFrom)
+        var sourcePropName = member.SourcePropertyName;
 
         // Build the constructor call with reference checking if needed
         string BuildConstructorCall(string sourceExpr)
@@ -214,22 +220,22 @@ internal static class ExpressionBuilder
         // Check if we should stop due to max depth
         if (useDepthParameter && maxDepth > 0)
         {
-            var constructorCall = BuildConstructorCall($"{sourceVariableName}.{member.Name}");
+            var constructorCall = BuildConstructorCall($"{sourceVariableName}.{sourcePropName}");
 
             if (isNullable)
             {
-                return $"__depth < {maxDepth} && {sourceVariableName}.{member.Name} != null ? {constructorCall} : null";
+                return $"__depth < {maxDepth} && {sourceVariableName}.{sourcePropName} != null ? {constructorCall} : null";
             }
 
             return $"__depth < {maxDepth} ? {constructorCall} : null";
         }
         else
         {
-            var constructorCall = BuildConstructorCall($"{sourceVariableName}.{member.Name}");
+            var constructorCall = BuildConstructorCall($"{sourceVariableName}.{sourcePropName}");
 
             if (isNullable)
             {
-                return $"{sourceVariableName}.{member.Name} != null ? {constructorCall} : null";
+                return $"{sourceVariableName}.{sourcePropName} != null ? {constructorCall} : null";
             }
 
             // Use the nested facet's generated constructor

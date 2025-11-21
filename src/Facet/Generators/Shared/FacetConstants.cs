@@ -37,6 +37,11 @@ internal static class FacetConstants
     public const string WrapperAttributeFullName = "Facet.WrapperAttribute";
 
     /// <summary>
+    /// The fully qualified name of the MapFromAttribute.
+    /// </summary>
+    public const string MapFromAttributeFullName = "Facet.MapFromAttribute";
+
+    /// <summary>
     /// The default maximum depth for nested facet traversal to prevent stack overflow.
     /// </summary>
     public const int DefaultMaxDepth = 10;

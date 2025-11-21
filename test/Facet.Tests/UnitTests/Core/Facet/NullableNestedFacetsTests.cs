@@ -32,22 +32,25 @@ public class OrganizationEntity
 }
 
 // Facet DTOs with nullable nested facets
-[Facet(typeof(DataTableExtendedDataEntity))]
+[Facet(typeof(DataTableExtendedDataEntity), GenerateToSource = true)]
 public partial record DataTableExtendedDataDto;
 
 [Facet(
     typeof(DataTableEntity),
-    NestedFacets = [typeof(DataTableExtendedDataDto)])]
+    NestedFacets = [typeof(DataTableExtendedDataDto)],
+    GenerateToSource = true)]
 public partial record DataTableFacetDto;
 
 [Facet(
     typeof(PersonEntity),
-    NestedFacets = [typeof(AddressFacet)])]
+    NestedFacets = [typeof(AddressFacet)],
+    GenerateToSource = true)]
 public partial record PersonDto;
 
 [Facet(
     typeof(OrganizationEntity),
-    NestedFacets = [typeof(PersonDto)])]
+    NestedFacets = [typeof(PersonDto)],
+    GenerateToSource = true)]
 public partial record OrganizationDto;
 
 public class NullableNestedFacetsTests

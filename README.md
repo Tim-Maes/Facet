@@ -58,12 +58,13 @@ Click on a section to expand/collapse
 
 <details>
   <summary>Configuration & customization</summary>
-  
+
 - Include/exclude properties with simple attributes
 - Copy data validation attributes
 - Custom mapping configurations (sync & async)
 - Expression transformation utilities for business logic reuse
-  
+- **Property mapping with `[MapFrom]`** for declarative property renaming
+
 </details>
 
 <details>
@@ -277,6 +278,77 @@ public partial class UserDto
     public int Age { get; set; }
 }
 ```
+</details>
+
+<details>
+  <summary>Property Mapping with [MapFrom]</summary>
+
+Rename properties declaratively without custom mapping configurations:
+
+```csharp
+public class User
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public string Email { get; set; }
+}
+
+[Facet(typeof(User), GenerateToSource = true)]
+public partial class UserDto
+{
+    // Simple property rename
+    [MapFrom("FirstName")]
+    public string Name { get; set; } = string.Empty;
+
+    // Rename multiple properties
+    [MapFrom("LastName")]
+    public string FamilyName { get; set; } = string.Empty;
+}
+
+// Usage
+var user = new User { Id = 1, FirstName = "John", LastName = "Doe", Email = "john@example.com" };
+var dto = new UserDto(user);
+// dto.Name = "John" (mapped from FirstName)
+// dto.FamilyName = "Doe" (mapped from LastName)
+
+// Reverse mapping works automatically
+var entity = dto.ToSource();
+// entity.FirstName = "John" (mapped from Name)
+// entity.LastName = "Doe" (mapped from FamilyName)
+
+// Projections also work
+var dtos = users.Select(UserDto.Projection).ToList();
+```
+
+#### Controlling Reversibility and Projection Inclusion
+
+```csharp
+[Facet(typeof(User), GenerateToSource = true)]
+public partial class UserDto
+{
+    // Non-reversible mapping (one-way only, not included in ToSource)
+    [MapFrom("FirstName", Reversible = false)]
+    public string DisplayName { get; set; } = string.Empty;
+
+    // Exclude from EF Core projection (for client-side computed values)
+    [MapFrom("ComplexField", IncludeInProjection = false)]
+    public string Computed { get; set; } = string.Empty;
+}
+```
+
+#### When to Use MapFrom vs Custom Configuration
+
+| Use Case | MapFrom | Custom Config |
+|----------|---------|---------------|
+| Simple property rename | :white_check_mark: | :x: Overkill |
+| Multiple renames | :white_check_mark: | :x: Overkill |
+| Computed values | :x: | :white_check_mark: |
+| Async operations | :x: | :white_check_mark: |
+| Complex transformations | :x: | :white_check_mark: |
+
+**Note**: MapFrom and custom configurations can be combined. Auto-generated mappings (including MapFrom) are applied first, then the custom mapper is called.
+
 </details>
 
 <details>

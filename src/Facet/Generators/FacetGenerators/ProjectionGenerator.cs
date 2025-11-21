@@ -82,17 +82,36 @@ internal static class ProjectionGenerator
         // Track which facet types we're currently processing to detect circular references
         var visitedTypes = new HashSet<string> { model.Name };
 
+        var outputIndex = 0;
         for (int i = 0; i < memberCount; i++)
         {
             var member = members[i];
-            var comma = i < memberCount - 1 ? "," : "";
+
+            // Skip members that should not be included in projection (MapFromIncludeInProjection = false)
+            if (!member.MapFromIncludeInProjection)
+                continue;
+
+            var comma = outputIndex < memberCount - 1 ? "," : "";
             var memberIndent = indent + "    ";
 
             // Generate the property assignment
             var projectionValue = GetProjectionValueExpression(member, "source", memberIndent, facetLookup, visitedTypes, 0, model.MaxDepth);
-            sb.Append($"{memberIndent}{member.Name} = {projectionValue}{comma}");
+            sb.Append($"{memberIndent}{member.Name} = {projectionValue}");
 
-            // Add newline
+            // Add comma and newline
+            outputIndex++;
+            // Check if this is the last included member
+            bool isLastIncluded = true;
+            for (int j = i + 1; j < memberCount; j++)
+            {
+                if (members[j].MapFromIncludeInProjection)
+                {
+                    isLastIncluded = false;
+                    break;
+                }
+            }
+            if (!isLastIncluded)
+                sb.Append(",");
             sb.AppendLine();
         }
 
@@ -124,8 +143,8 @@ internal static class ProjectionGenerator
             return BuildSingleNestedProjection(member, sourceVariableName, isNullable, indent, facetLookup, visitedTypes, currentDepth, maxDepth);
         }
 
-        // Regular property - direct assignment
-        return $"{sourceVariableName}.{member.Name}";
+        // Regular property - direct assignment using SourcePropertyName (supports MapFrom)
+        return $"{sourceVariableName}.{member.SourcePropertyName}";
     }
 
     private static string BuildCollectionProjection(
@@ -144,12 +163,15 @@ internal static class ProjectionGenerator
             return "null";
         }
 
+        // Use SourcePropertyName for accessing the source property (supports MapFrom)
+        var sourcePropName = member.SourcePropertyName;
+
         // For collection nested facets, use Select with nested projection
         var elementTypeName = ExpressionBuilder.ExtractElementTypeFromCollectionTypeName(member.TypeName);
         var nonNullableElementType = elementTypeName.TrimEnd('?');
 
         var collectionProjection = GenerateNestedCollectionProjection(
-            $"{sourceVariableName}.{member.Name}",
+            $"{sourceVariableName}.{sourcePropName}",
             nonNullableElementType,
             member.NestedFacetSourceTypeName!,
             member.CollectionWrapper!,
@@ -160,7 +182,7 @@ internal static class ProjectionGenerator
 
         if (isNullable)
         {
-            return $"{sourceVariableName}.{member.Name} != null ? {collectionProjection} : null";
+            return $"{sourceVariableName}.{sourcePropName} != null ? {collectionProjection} : null";
         }
 
         return collectionProjection;
@@ -183,9 +205,12 @@ internal static class ProjectionGenerator
             return "null";
         }
 
+        // Use SourcePropertyName for accessing the source property (supports MapFrom)
+        var sourcePropName = member.SourcePropertyName;
+
         // For single nested facets, inline expand the nested facet's members
         var nonNullableTypeName = member.TypeName.TrimEnd('?');
-        var nestedSourceExpression = $"{sourceVariableName}.{member.Name}";
+        var nestedSourceExpression = $"{sourceVariableName}.{sourcePropName}";
 
         // Extract simple type name for circular reference check
         var simpleTypeName = nonNullableTypeName.Replace("global::", "").Split('.', ':').Last();

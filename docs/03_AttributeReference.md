@@ -29,7 +29,7 @@ public partial class MyFacet { }
 | `GenerateParameterlessConstructor` | `bool` | Generate a parameterless constructor for testing and initialization (default: true). |
 | `Configuration`                | `Type?`   | Custom mapping config type (see [Custom Mapping](04_CustomMapping.md)).      |
 | `GenerateProjection`           | `bool`    | Generate a static LINQ projection (default: true).                          |
-| `GenerateToSource`             | `bool`    | Generate a method to map back from facet to source type (default: true).    |
+| `GenerateToSource`             | `bool`    | Generate a method to map back from facet to source type (default: false).    |
 | `PreserveInitOnlyProperties`   | `bool`    | Preserve init-only modifiers from source properties (default: true for records). |
 | `PreserveRequiredProperties`   | `bool`    | Preserve required modifiers from source properties (default: true for records). |
 | `NullableProperties`           | `bool`    | Make all properties nullable in the generated facet (default: false). |
