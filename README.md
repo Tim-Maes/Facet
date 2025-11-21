@@ -44,28 +44,46 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 
 ## :star: Features
 
-**Code Generation**
+Click on a section to expand/collapse
+
+<details>
+  <summary>Code Generation</summary>
+  
 - Generate DTOs as classes, records, structs, or record structs
 - Constructors & LINQ projection expressions
 - Handle complex nested objects & collections automatically
 - Preserve XML documentation
+  
+</details>
 
-**Configuration & Customization**
+<details>
+  <summary>Configuration & customization</summary>
+  
 - Include/exclude properties with simple attributes
 - Copy data validation attributes
 - Custom mapping configurations (sync & async)
 - Expression transformation utilities for business logic reuse
+  
+</details>
 
-**Additional Patterns**
+<details>
+  <summary>Additional Features</summary>
+  
 - **Flatten** nested objects into top-level properties
 - **Wrapper** pattern for reference-based delegation (facades, decorators, ViewModels)
 - **Auto-generate CRUD DTOs** (Create, Update, Response, Query, Upsert)
 
-**Integration**
+</details> 
+
+<details>
+  <summary>Integration</summary>
+
 - Full **Entity Framework Core** support with automatic navigation loading
 - Works with any LINQ provider (via Facet.Extensions)
 - Expression tree transformation for predicates & selectors
 - Zero runtime cost and no reflection, everything happens at compile time
+
+</details>
 
 ## :rocket: Quick Start
 
