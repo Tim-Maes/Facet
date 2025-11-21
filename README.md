@@ -323,7 +323,7 @@ var entity = dto.ToSource();
 // entity.LastName = "Doe" (mapped from FamilyName)
 
 // Projections also work
-var dtos = users.Select(UserDto.Projection).ToList();
+var dtos = users.SelectFacet<UserDto>().ToList();
 ```
 
 #### Controlling Reversibility and Projection Inclusion

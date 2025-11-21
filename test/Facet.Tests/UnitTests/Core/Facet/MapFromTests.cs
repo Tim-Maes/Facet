@@ -28,7 +28,7 @@ public class MapFromCompanyEntity
 [Facet(typeof(MapFromTestEntity), GenerateToSource = true)]
 public partial class MapFromSimpleFacet
 {
-    [MapFrom("FirstName", Reversible = true)]
+    [MapFrom(nameof(MapFromTestEntity.FirstName), Reversible = true)]
     public string Name { get; set; } = string.Empty;
 }
 
@@ -36,10 +36,10 @@ public partial class MapFromSimpleFacet
 [Facet(typeof(MapFromTestEntity), GenerateToSource = true)]
 public partial class MapFromMultipleFacet
 {
-    [MapFrom("FirstName", Reversible = true)]
+    [MapFrom(nameof(MapFromTestEntity.FirstName), Reversible = true)]
     public string GivenName { get; set; } = string.Empty;
 
-    [MapFrom("LastName", Reversible = true)]
+    [MapFrom(nameof(MapFromTestEntity.LastName), Reversible = true)]
     public string FamilyName { get; set; } = string.Empty;
 }
 
@@ -47,7 +47,7 @@ public partial class MapFromMultipleFacet
 [Facet(typeof(MapFromTestEntity), GenerateToSource = true)]
 public partial class MapFromNonReversibleFacet
 {
-    [MapFrom("FirstName", Reversible = false)]
+    [MapFrom(nameof(MapFromTestEntity.FirstName), Reversible = false)]
     public string Name { get; set; } = string.Empty;
 }
 
@@ -55,7 +55,7 @@ public partial class MapFromNonReversibleFacet
 [Facet(typeof(MapFromTestEntity), GenerateToSource = true)]
 public partial class MapFromNoProjectionFacet
 {
-    [MapFrom("FirstName", IncludeInProjection = false)]
+    [MapFrom(nameof(MapFromTestEntity.FirstName), IncludeInProjection = false)]
     public string Name { get; set; } = string.Empty;
 }
 
@@ -64,11 +64,11 @@ public partial class MapFromNoProjectionFacet
 public partial class MapFromComputedFacet
 {
     // Computed from FirstName - cannot be reversed
-    [MapFrom("FirstName")]
+    [MapFrom(nameof(MapFromTestEntity.FirstName))]
     public string DisplayName { get; set; } = string.Empty;
 
     // Computed from LastName - cannot be reversed
-    [MapFrom("LastName")]
+    [MapFrom(nameof(MapFromTestEntity.LastName))]
     public string Surname { get; set; } = string.Empty;
 }
 
@@ -77,7 +77,7 @@ public partial class MapFromComputedFacet
 public partial class MapFromExpressionFacet
 {
     // Computed expression - cannot be reversed
-    [MapFrom("FirstName + \" \" + LastName")]
+    [MapFrom(nameof(MapFromTestEntity.FirstName) + " + \" \" + " + nameof(MapFromTestEntity.LastName))]
     public string FullName { get; set; } = string.Empty;
 }
 
@@ -85,7 +85,7 @@ public partial class MapFromExpressionFacet
 [Facet(typeof(MapFromCompanyEntity), GenerateToSource = true)]
 public partial class MapFromCompanyFacet
 {
-    [MapFrom("CompanyName", Reversible = true)]
+    [MapFrom(nameof(MapFromCompanyEntity.CompanyName), Reversible = true)]
     public string Name { get; set; } = string.Empty;
 }
 
