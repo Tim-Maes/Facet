@@ -740,6 +740,8 @@ Facet is modular and consists of several NuGet packages:
 
 ## Contributors
 
+Facet wouldn't be the same without these awesome contributors. Thank you!
+
 <a href="https://github.com/Tim-Maes/Facet/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=Tim-Maes/Facet" />
 </a>
