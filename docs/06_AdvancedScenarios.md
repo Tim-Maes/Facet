@@ -224,13 +224,13 @@ public partial record CompanyDto
         : this(source.Id, source.Name, new AddressDto(source.HeadquartersAddress)) // Automatic nesting
     { }
 
-    public Company BackTo()
+    public Company ToSource()
     {
         return new Company
         {
             Id = this.Id,
             Name = this.Name,
-            HeadquartersAddress = this.HeadquartersAddress.BackTo() // Automatic reverse mapping
+            HeadquartersAddress = this.HeadquartersAddress.ToSource() // Automatic reverse mapping
         };
     }
 }
@@ -253,7 +253,7 @@ var companies = await dbContext.Companies
 
 1. **No Manual Property Declarations**: Don't redeclare nested properties
 2. **Automatic Constructor Mapping**: Nested constructors are called automatically
-3. **BackTo Support**: Reverse mapping works for nested structures
+3. **ToSource Support**: Reverse mapping works for nested structures
 4. **EF Core Compatible**: Projections work in database queries
 5. **Multi-Level Support**: Handle 3+ levels of nesting
 
@@ -345,8 +345,8 @@ public OrderDto(Order source)
     Items = source.Items.Select(x => new OrderItemDto(x)).ToList();
 }
 
-// Generated BackTo method
-public Order BackTo()
+// Generated ToSource method
+public Order ToSource()
 {
     return new Order
     {
@@ -355,7 +355,7 @@ public Order BackTo()
         OrderDate = this.OrderDate,
 
         // Maps each DTO back to entity
-        Items = this.Items.Select(x => x.BackTo()).ToList()
+        Items = this.Items.Select(x => x.ToSource()).ToList()
     };
 }
 ```
@@ -604,7 +604,7 @@ public async Task<ActionResult<OrderDto>> GetOrder(int id)
 
 1. **Automatic Collection Mapping**: No manual LINQ Select calls needed
 2. **Type Safety**: Compiler-verified collection element types
-3. **Bidirectional Support**: Both forward and reverse (`BackTo()`) mapping
+3. **Bidirectional Support**: Both forward and reverse (`ToSource()`) mapping
 4. **EF Core Optimized**: Works efficiently with database projections
 5. **Preserves Collection Types**: Lists stay lists, arrays stay arrays
 6. **Multi-Level Support**: Unlimited nesting depth for collections
@@ -689,7 +689,7 @@ public class Product
 }
 
 // All properties become nullable for flexible querying
-[Facet(typeof(Product), "CreatedAt", NullableProperties = true, GenerateBackTo = false)]
+[Facet(typeof(Product), "CreatedAt", NullableProperties = true, GenerateToSource = false)]
 public partial class ProductQueryDto;
 
 // Usage: Only specify the fields you want to filter on
@@ -713,7 +713,7 @@ var results = products.Where(p =>
 
 ```csharp
 // Create a patch model where only non-null fields are updated
-[Facet(typeof(User), "Id", "CreatedAt", NullableProperties = true, GenerateBackTo = false)]
+[Facet(typeof(User), "Id", "CreatedAt", NullableProperties = true, GenerateToSource = false)]
 public partial class UserPatchDto;
 
 // Usage: Only update specific fields
@@ -743,7 +743,7 @@ void ApplyPatch(User user, UserPatchDto patch)
 
 ### Important Considerations
 
-1. **Disable GenerateBackTo**: When using `NullableProperties = true`, set `GenerateBackTo = false` since mapping nullable properties back to non-nullable source properties is not logically sound.
+1. **Disable GenerateToSource**: When using `NullableProperties = true`, set `GenerateToSource = false` since mapping nullable properties back to non-nullable source properties is not logically sound.
 
 2. **Constructor Behavior**: The generated constructor will still map from source to nullable properties correctly.
 
@@ -751,7 +751,7 @@ void ApplyPatch(User user, UserPatchDto patch)
 
 ```csharp
 // Similar to GenerateDtos Query DTO
-[Facet(typeof(Product), NullableProperties = true, GenerateBackTo = false)]
+[Facet(typeof(Product), NullableProperties = true, GenerateToSource = false)]
 public partial record ProductQueryRecord;
 ```
 
@@ -779,7 +779,7 @@ public class UsersController : ControllerBase
     [HttpPost]
     public IActionResult CreateUser(UserCreateDto dto)
     {
-        var user = dto.BackTo();
+        var user = dto.ToSource();
         // Save user...
     }
 }
@@ -842,23 +842,23 @@ public partial class UserFullDto;
 // Generated: all properties except Password
 ```
 
-## BackTo Method Behavior with Include
+## ToSource Method Behavior with Include
 
-When using Include mode, the `BackTo()` method generates source objects with default values for non-included properties:
+When using Include mode, the `ToSource()` method generates source objects with default values for non-included properties:
 
 ```csharp
 [Facet(typeof(User), Include = new[] { "FirstName", "LastName", "Email" })]
 public partial class UserContactDto;
 
 var dto = new UserContactDto();
-var backToUser = dto.BackTo(); 
+var sourceUser = dto.ToSource();
 
-// backToUser.FirstName = dto.FirstName (copied)
-// backToUser.LastName = dto.LastName (copied)  
-// backToUser.Email = dto.Email (copied)
-// backToUser.Id = 0 (default for int)
-// backToUser.Password = string.Empty (default for string)
-// backToUser.IsActive = false (default for bool)
+// sourceUser.FirstName = dto.FirstName (copied)
+// sourceUser.LastName = dto.LastName (copied)
+// sourceUser.Email = dto.Email (copied)
+// sourceUser.Id = 0 (default for int)
+// sourceUser.Password = string.Empty (default for string)
+// sourceUser.IsActive = false (default for bool)
 ```
 
 ## Attribute Copying for Validation and Metadata

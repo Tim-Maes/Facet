@@ -38,11 +38,11 @@ internal static class ExpressionBuilder
 
     /// <summary>
     /// Gets the appropriate value expression for mapping back to the source type (backward mapping: facet to source).
-    /// For child facets, returns "this.PropertyName.BackTo()" with null checks if nullable.
-    /// For collection child facets, returns "this.PropertyName.Select(x => x.BackTo()).ToList()" with null checks if nullable.
+    /// For child facets, returns "this.PropertyName.ToSource()" with null checks if nullable.
+    /// For collection child facets, returns "this.PropertyName.Select(x => x.ToSource()).ToList()" with null checks if nullable.
     /// For regular members, returns "this.PropertyName" with nullable-to-non-nullable conversion if needed.
     /// </summary>
-    public static string GetBackToValueExpression(FacetMember member)
+    public static string GetToSourceValueExpression(FacetMember member)
     {
         // Check if the member type is nullable (ends with ?)
         bool facetTypeIsNullable = member.TypeName.Contains("?");
@@ -52,11 +52,11 @@ internal static class ExpressionBuilder
 
         if (member.IsNestedFacet && member.IsCollection)
         {
-            return BuildCollectionBackToExpression(member, facetTypeIsNullable);
+            return BuildCollectionToSourceExpression(member, facetTypeIsNullable);
         }
         else if (member.IsNestedFacet)
         {
-            return BuildSingleBackToExpression(member, facetTypeIsNullable);
+            return BuildSingleToSourceExpression(member, facetTypeIsNullable);
         }
 
         // For regular properties/fields:
@@ -237,10 +237,10 @@ internal static class ExpressionBuilder
         }
     }
 
-    private static string BuildCollectionBackToExpression(FacetMember member, bool facetTypeIsNullable)
+    private static string BuildCollectionToSourceExpression(FacetMember member, bool facetTypeIsNullable)
     {
         // Use LINQ Select to map each element back
-        var projection = $"this.{member.Name}.Select(x => x.BackTo())";
+        var projection = $"this.{member.Name}.Select(x => x.ToSource())";
 
         // Convert back to the appropriate collection type
         var collectionExpression = WrapCollectionProjection(projection, member.CollectionWrapper!);
@@ -254,16 +254,16 @@ internal static class ExpressionBuilder
         return collectionExpression;
     }
 
-    private static string BuildSingleBackToExpression(FacetMember member, bool facetTypeIsNullable)
+    private static string BuildSingleToSourceExpression(FacetMember member, bool facetTypeIsNullable)
     {
         // Add null check for nullable nested facets
         if (facetTypeIsNullable)
         {
-            return $"this.{member.Name} != null ? this.{member.Name}.BackTo() : null";
+            return $"this.{member.Name} != null ? this.{member.Name}.ToSource() : null";
         }
 
-        // Use the child facet's generated BackTo method
-        return $"this.{member.Name}.BackTo()";
+        // Use the child facet's generated ToSource method
+        return $"this.{member.Name}.ToSource()";
     }
 
     private static string WrapCollectionProjection(string projection, string collectionWrapper)

@@ -37,7 +37,7 @@ Facet includes comprehensive Roslyn analyzers that provide real-time feedback in
 
 #### Description
 
-When using extension methods like `ToFacet<T>()`, `BackTo<T>()`, `SelectFacet<T>()`, etc., the target type must be annotated with the `[Facet]` attribute.
+When using extension methods like `ToFacet<T>()`, `ToSource<T>()`, `SelectFacet<T>()`, etc., the target type must be annotated with the `[Facet]` attribute.
 
 #### Bad Code
 

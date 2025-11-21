@@ -241,24 +241,24 @@ public class CollectionNestedFacetsTests
         var dto = new OrderFacet(order);
 
         // Act
-        var backToOrder = dto.BackTo();
+        var mappedOrder = dto.ToSource();
 
         // Assert
-        backToOrder.Should().NotBeNull();
-        backToOrder.Id.Should().Be(1);
-        backToOrder.OrderNumber.Should().Be("ORD-2025-001");
-        backToOrder.Items.Should().HaveCount(2);
-        backToOrder.Items.Should().AllBeOfType<OrderItemEntity>();
+        mappedOrder.Should().NotBeNull();
+        mappedOrder.Id.Should().Be(1);
+        mappedOrder.OrderNumber.Should().Be("ORD-2025-001");
+        mappedOrder.Items.Should().HaveCount(2);
+        mappedOrder.Items.Should().AllBeOfType<OrderItemEntity>();
 
-        backToOrder.Items[0].Id.Should().Be(1);
-        backToOrder.Items[0].ProductName.Should().Be("Laptop");
-        backToOrder.Items[0].Price.Should().Be(1200.00m);
+        mappedOrder.Items[0].Id.Should().Be(1);
+        mappedOrder.Items[0].ProductName.Should().Be("Laptop");
+        mappedOrder.Items[0].Price.Should().Be(1200.00m);
 
-        backToOrder.ShippingAddress.Street.Should().Be("123 Main St");
+        mappedOrder.ShippingAddress.Street.Should().Be("123 Main St");
     }
 
     [Fact]
-    public void BackTo_ShouldMapArrayCollectionBackToSource()
+    public void ToSource_ShouldMapArrayCollectionBackToSource()
     {
         // Arrange
         var team = new TeamEntity
@@ -285,21 +285,21 @@ public class CollectionNestedFacetsTests
         var dto = new TeamFacet(team);
 
         // Act
-        var backToTeam = dto.BackTo();
+        var mappedTeam = dto.ToSource();
 
         // Assert
-        backToTeam.Should().NotBeNull();
-        backToTeam.Id.Should().Be(10);
-        backToTeam.Name.Should().Be("Development Team");
-        backToTeam.Members.Should().HaveCount(1);
-        backToTeam.Members.Should().BeOfType<StaffMember[]>();
+        mappedTeam.Should().NotBeNull();
+        mappedTeam.Id.Should().Be(10);
+        mappedTeam.Name.Should().Be("Development Team");
+        mappedTeam.Members.Should().HaveCount(1);
+        mappedTeam.Members.Should().BeOfType<StaffMember[]>();
 
-        backToTeam.Members[0].FirstName.Should().Be("Alice");
-        backToTeam.Members[0].LastName.Should().Be("Johnson");
+        mappedTeam.Members[0].FirstName.Should().Be("Alice");
+        mappedTeam.Members[0].LastName.Should().Be("Johnson");
     }
 
     [Fact]
-    public void BackTo_ShouldMapICollectionBackToSource()
+    public void ToSource_ShouldMapICollectionBackToSource()
     {
         // Arrange
         var project = new ProjectEntity
@@ -316,17 +316,17 @@ public class CollectionNestedFacetsTests
         var dto = new ProjectFacet(project);
 
         // Act
-        var backToProject = dto.BackTo();
+        var mappedProject = dto.ToSource();
 
         // Assert
-        backToProject.Should().NotBeNull();
-        backToProject.Id.Should().Be(500);
-        backToProject.Name.Should().Be("Project Phoenix");
-        backToProject.Teams.Should().HaveCount(2);
-        backToProject.Teams.Should().AllBeOfType<TeamEntity>();
+        mappedProject.Should().NotBeNull();
+        mappedProject.Id.Should().Be(500);
+        mappedProject.Name.Should().Be("Project Phoenix");
+        mappedProject.Teams.Should().HaveCount(2);
+        mappedProject.Teams.Should().AllBeOfType<TeamEntity>();
 
-        backToProject.Teams.ElementAt(0).Name.Should().Be("Backend Team");
-        backToProject.Teams.ElementAt(1).Name.Should().Be("Frontend Team");
+        mappedProject.Teams.ElementAt(0).Name.Should().Be("Backend Team");
+        mappedProject.Teams.ElementAt(1).Name.Should().Be("Frontend Team");
     }
 
     [Fact]

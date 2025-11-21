@@ -29,7 +29,7 @@ public partial class MyFacet { }
 | `GenerateParameterlessConstructor` | `bool` | Generate a parameterless constructor for testing and initialization (default: true). |
 | `Configuration`                | `Type?`   | Custom mapping config type (see [Custom Mapping](04_CustomMapping.md)).      |
 | `GenerateProjection`           | `bool`    | Generate a static LINQ projection (default: true).                          |
-| `GenerateBackTo`               | `bool`    | Generate a method to map back from facet to source type (default: true).    |
+| `GenerateToSource`             | `bool`    | Generate a method to map back from facet to source type (default: true).    |
 | `PreserveInitOnlyProperties`   | `bool`    | Preserve init-only modifiers from source properties (default: true for records). |
 | `PreserveRequiredProperties`   | `bool`    | Preserve required modifiers from source properties (default: true for records). |
 | `NullableProperties`           | `bool`    | Make all properties nullable in the generated facet (default: false). |
@@ -103,7 +103,7 @@ public partial record UserDto;
 ### Nullable Properties for Query Models
 ```csharp
 // Make all properties nullable for query/filter scenarios
-[Facet(typeof(Product), "InternalNotes", NullableProperties = true, GenerateBackTo = false)]
+[Facet(typeof(Product), "InternalNotes", NullableProperties = true, GenerateToSource = false)]
 public partial class ProductQueryDto;
 
 // Usage: All fields are optional for filtering
@@ -115,7 +115,7 @@ var query = new ProductQueryDto
 };
 ```
 
-**Note:** When using `NullableProperties = true`, it's recommended to set `GenerateBackTo = false` since mapping nullable properties back to non-nullable source properties is not logically sound.
+**Note:** When using `NullableProperties = true`, it's recommended to set `GenerateToSource = false` since mapping nullable properties back to non-nullable source properties is not logically sound.
 
 ### Nested Facets for Composing DTOs
 ```csharp
@@ -148,8 +148,8 @@ var employeeDto = new EmployeeDto(employee);
 // employeeDto.Company.HeadquartersAddress is AddressDto
 // employeeDto.HomeAddress is AddressDto
 
-// BackTo also handles nested types automatically
-var mappedEmployee = employeeDto.BackTo();
+// ToSource also handles nested types automatically
+var mappedEmployee = employeeDto.ToSource();
 // All nested objects are properly reconstructed
 ```
 
@@ -158,11 +158,11 @@ var mappedEmployee = employeeDto.BackTo();
 - For each match, it replaces the property type with the nested facet type
 - Constructors automatically call `new NestedFacetType(source.Property)` for nested properties
 - Projections work seamlessly for EF Core queries through constructor chaining
-- BackTo methods call `.BackTo()` on nested facets to reconstruct the original type hierarchy
+- ToSource methods call `.ToSource()` on nested facets to reconstruct the original type hierarchy
 
 **Benefits:**
 - No manual property declarations for nested types
-- Automatic mapping in constructors, projections, and BackTo methods
+- Automatic mapping in constructors, projections, and ToSource methods
 - Works with multiple levels of nesting
 - Supports multiple nested facets on the same parent type
 
@@ -188,7 +188,7 @@ var mappedEmployee = employeeDto.BackTo();
 **Important considerations:**
 - Value types (int, bool, DateTime, enums) become nullable (int?, bool?, etc.)
 - Reference types (string, objects) remain reference types but are marked nullable
-- Disable `GenerateBackTo` to avoid mapping issues from nullable to non-nullable types
+- Disable `GenerateToSource` to avoid mapping issues from nullable to non-nullable types
 
 ## Attribute Copying
 

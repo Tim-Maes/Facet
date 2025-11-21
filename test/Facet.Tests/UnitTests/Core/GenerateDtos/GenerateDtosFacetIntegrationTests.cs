@@ -6,7 +6,7 @@ namespace Facet.Tests.UnitTests.Core.GenerateDtos;
 
 /// <summary>
 /// Tests to verify that DTOs generated with [GenerateDtos] work as proper Facets
-/// and can use ToFacet, SelectFacets, BackTo, and other Facet extension methods.
+/// and can use ToFacet, SelectFacets, ToSource, and other Facet extension methods.
 /// </summary>
 public class GenerateDtosFacetIntegrationTests
 {
@@ -181,7 +181,7 @@ public class GenerateDtosFacetIntegrationTests
     }
 
     [Fact]
-    public void BackTo_Should_Work_WithGeneratedDtos()
+    public void ToSource_Should_Work_WithGeneratedDtos()
     {
         // Arrange - Create a DTO with some values
         var responseDto = new TestUserResponse
@@ -194,7 +194,7 @@ public class GenerateDtosFacetIntegrationTests
         };
 
         // Act
-        var user = responseDto.BackTo();
+        var user = responseDto.ToSource();
 
         // Assert - Verify all properties are mapped correctly
         user.Should().NotBeNull();
@@ -206,7 +206,7 @@ public class GenerateDtosFacetIntegrationTests
     }
 
     [Fact]
-    public void BackTo_Extension_Should_Work_WithGeneratedDtos()
+    public void ToSource_Extension_Should_Work_WithGeneratedDtos()
     {
         // Arrange
         var responseDto = new TestUserResponse
@@ -219,7 +219,7 @@ public class GenerateDtosFacetIntegrationTests
         };
 
         // Act
-        var user = responseDto.BackTo<TestUserResponse, TestUser>();
+        var user = responseDto.ToSource<TestUserResponse, TestUser>();
 
         // Assert
         user.Should().NotBeNull();
@@ -231,7 +231,7 @@ public class GenerateDtosFacetIntegrationTests
     }
 
     [Fact]
-    public void BackTo_Should_Work_WithCreateRequest()
+    public void ToSource_Should_Work_WithCreateRequest()
     {
         // Arrange - Create a Create DTO (which excludes Id)
         var assembly = Assembly.GetAssembly(typeof(TestUser));
@@ -248,11 +248,11 @@ public class GenerateDtosFacetIntegrationTests
             lastNameProp?.SetValue(createRequest, "Williams");
             emailProp?.SetValue(createRequest, "alice@example.com");
 
-            // Act 
-            var backToMethod = createRequestType.GetMethod("BackTo");
-            backToMethod.Should().NotBeNull("CreateTestUserRequest should have a BackTo method");
+            // Act
+            var toSourceMethod = createRequestType.GetMethod("ToSource");
+            toSourceMethod.Should().NotBeNull("CreateTestUserRequest should have a ToSource method");
 
-            var user = backToMethod!.Invoke(createRequest, null) as TestUser;
+            var user = toSourceMethod!.Invoke(createRequest, null) as TestUser;
 
             // Assert
             user.Should().NotBeNull();

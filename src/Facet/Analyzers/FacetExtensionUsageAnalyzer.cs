@@ -54,14 +54,14 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
             case "ToFacet":
                 AnalyzeToFacetCall(context, method, invocation, memberAccess, false);
                 break;
-            case "BackTo":
-                AnalyzeBackToCall(context, method, invocation, memberAccess, false);
+            case "ToSource":
+                AnalyzeToSourceCall(context, method, invocation, memberAccess, false);
                 break;
             case "SelectFacets":
                 AnalyzeToFacetCall(context, method, invocation, memberAccess, true);
                 break;
             case "SelectFacetSources":
-                AnalyzeBackToCall(context, method, invocation, memberAccess, true);
+                AnalyzeToSourceCall(context, method, invocation, memberAccess, true);
                 break;
         }
     }
@@ -107,13 +107,13 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
         }
     }
 
-    private static void AnalyzeBackToCall(SyntaxNodeAnalysisContext context, IMethodSymbol method, InvocationExpressionSyntax invocation, MemberAccessExpressionSyntax memberAccess, bool isCollection)
+    private static void AnalyzeToSourceCall(SyntaxNodeAnalysisContext context, IMethodSymbol method, InvocationExpressionSyntax invocation, MemberAccessExpressionSyntax memberAccess, bool isCollection)
     {
         if (method.TypeArguments.Length == 0) return;
 
         if (method.TypeArguments.Length == 2)
         {
-            // BackTo<TFacet, TFacetSource>(this TFacet facet)
+            // ToSource<TFacet, TFacetSource>(this TFacet facet)
             var facetType = method.TypeArguments[0];
             if (!HasFacetAttribute(facetType))
             {
@@ -126,7 +126,7 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
         }
         else if (method.TypeArguments.Length == 1)
         {
-            // BackTo<TFacetSource>(this object facet)
+            // ToSource<TFacetSource>(this object facet)
             // We need to check the actual type of the object being called on
             var objectExpression = memberAccess.Expression;
             var objectTypeInfo = context.SemanticModel.GetTypeInfo(objectExpression);

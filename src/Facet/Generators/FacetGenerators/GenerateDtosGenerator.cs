@@ -550,23 +550,23 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             }
         }
 
-        // Generate BackTo method
+        // Generate ToSource method
         sb.AppendLine();
         sb.AppendLine($"    /// <summary>");
         sb.AppendLine($"    /// Converts this instance of <see cref=\"{dtoName}\"/> back to an instance of the source type <see cref=\"{sourceTypeName}\"/>.");
         sb.AppendLine($"    /// </summary>");
         sb.AppendLine($"    /// <returns>An instance of <see cref=\"{sourceTypeName}\"/> with properties mapped from this DTO.</returns>");
-        sb.AppendLine($"    public {model.SourceTypeName} BackTo()");
+        sb.AppendLine($"    public {model.SourceTypeName} ToSource()");
         sb.AppendLine("    {");
         sb.AppendLine($"        return new {model.SourceTypeName}");
         sb.AppendLine("        {");
 
         // Map all members back to the source
-        var backToMembers = members.Where(m => !m.IsReadOnly).ToList();
-        for (int i = 0; i < backToMembers.Count; i++)
+        var toSourceMembers = members.Where(m => !m.IsReadOnly).ToList();
+        for (int i = 0; i < toSourceMembers.Count; i++)
         {
-            var member = backToMembers[i];
-            var comma = i == backToMembers.Count - 1 ? "" : ",";
+            var member = toSourceMembers[i];
+            var comma = i == toSourceMembers.Count - 1 ? "" : ",";
 
             // Find the corresponding source member to check nullability
             var sourceMember = model.Members.FirstOrDefault(sm => sm.Name == member.Name);
@@ -593,6 +593,15 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
         sb.AppendLine("        };");
         sb.AppendLine("    }");
+
+        // Generate deprecated BackTo method that calls ToSource
+        sb.AppendLine();
+        sb.AppendLine($"    /// <summary>");
+        sb.AppendLine($"    /// Converts this instance of <see cref=\"{dtoName}\"/> back to an instance of the source type <see cref=\"{sourceTypeName}\"/>.");
+        sb.AppendLine($"    /// </summary>");
+        sb.AppendLine($"    /// <returns>An instance of <see cref=\"{sourceTypeName}\"/> with properties mapped from this DTO.</returns>");
+        sb.AppendLine("    [global::System.Obsolete(\"Use ToSource() instead. This method will be removed in a future version.\")]");
+        sb.AppendLine($"    public {model.SourceTypeName} BackTo() => ToSource();");
 
         sb.AppendLine("}");
 

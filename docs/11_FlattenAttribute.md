@@ -45,7 +45,7 @@ public partial class PersonFlatDto
 - **ID Filtering**: Optional `IgnoreNestedIds` to exclude foreign keys and nested IDs
 - **FK Clash Detection**: Optional `IgnoreForeignKeyClashes` to eliminate duplicate foreign key data
 - **Naming Strategies**: Prefix or leaf-only naming
-- **One-Way Operation**: Flattening is intentionally one-way (no BackTo method)
+- **One-Way Operation**: Flattening is intentionally one-way (no ToSource method)
 
 ## Usage
 
@@ -547,9 +547,9 @@ var dtos = await dbContext.People
     .ToListAsync();
 ```
 
-## Why No BackTo Method?
+## Why No ToSource Method?
 
-Unlike the `[Facet]` attribute, flattened types **do not** generate `BackTo` methods. This is intentional because:
+Unlike the `[Facet]` attribute, flattened types **do not** generate `ToSource` methods. This is intentional because:
 
 1. **Ambiguity**: It's unclear which flattened properties map to which nested objects
 2. **Data Loss**: Flattening is lossy - you can't reliably reconstruct the original hierarchy
@@ -764,7 +764,7 @@ public partial class ProductExportDto { }
 |---------|-------------|-------------------------------|
 | **Property Structure** | All properties at top level | Preserves nested structure |
 | **Naming** | `AddressStreet` | `Address.Street` |
-| **BackTo Method** | No (one-way only) | Yes (bidirectional) |
+| **ToSource Method** | No (one-way only) | Yes (bidirectional) |
 | **Use Case** | API responses, reports, exports | Full CRUD, domain mapping |
 | **Setup** | Single attribute, automatic | Requires defining each nested facet |
 | **Flexibility** | Less (automatic) | More (explicit control) |

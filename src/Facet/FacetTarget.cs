@@ -16,7 +16,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public bool GenerateConstructor { get; }
     public bool GenerateParameterlessConstructor { get; }
     public bool GenerateExpressionProjection { get; }
-    public bool GenerateBackTo { get; }
+    public bool GenerateToSource { get; }
     public string SourceTypeName { get; }
     public ImmutableArray<string> SourceContainingTypes { get; }
     public string? ConfigurationTypeName { get; }
@@ -41,7 +41,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         bool generateConstructor,
         bool generateParameterlessConstructor,
         bool generateExpressionProjection,
-        bool generateBackTo,
+        bool generateToSource,
         string sourceTypeName,
         ImmutableArray<string> sourceContainingTypes,
         string? configurationTypeName,
@@ -65,7 +65,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         GenerateConstructor = generateConstructor;
         GenerateParameterlessConstructor = generateParameterlessConstructor;
         GenerateExpressionProjection = generateExpressionProjection;
-        GenerateBackTo = generateBackTo;
+        GenerateToSource = generateToSource;
         SourceTypeName = sourceTypeName;
         SourceContainingTypes = sourceContainingTypes.IsDefault ? ImmutableArray<string>.Empty : sourceContainingTypes;
         ConfigurationTypeName = configurationTypeName;
