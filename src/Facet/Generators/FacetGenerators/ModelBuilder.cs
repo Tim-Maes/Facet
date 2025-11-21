@@ -37,8 +37,8 @@ internal static class ModelBuilder
         var generateProjection = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateProjection, true);
         // Support both GenerateToSource (new) and GenerateBackTo (deprecated) for backward compatibility
         var generateToSource = AttributeParser.HasNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateToSource)
-            ? AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateToSource, true)
-            : AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateBackTo, true);
+            ? AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateToSource, false)
+            : AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateBackTo, false);
         var configurationTypeName = AttributeParser.ExtractConfigurationTypeName(attribute);
 
         // Infer the type kind and whether it's a record from the target type declaration
@@ -71,6 +71,10 @@ internal static class ModelBuilder
         // Extract nested facets parameter and build mapping from source type to child facet type
         var nestedFacetMappings = AttributeParser.ExtractNestedFacetMappings(attribute, context.SemanticModel.Compilation);
 
+        // Extract MapFrom attribute mappings from target type properties
+        var expressionMembers = new List<FacetMember>();
+        var mapFromMappings = ExtractMapFromMappings(targetSymbol, expressionMembers, nullableProperties);
+
         // Extract type-level XML documentation from the source type
         var typeXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(sourceType);
 
@@ -86,7 +90,14 @@ internal static class ModelBuilder
             nullableProperties,
             copyAttributes,
             nestedFacetMappings,
+            mapFromMappings,
             token);
+
+        // Add expression-based members (from MapFrom with expressions)
+        if (expressionMembers.Count > 0)
+        {
+            members = members.AddRange(expressionMembers);
+        }
 
         // Determine full name
         var useFullName = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.UseFullName, false);
@@ -150,6 +161,7 @@ internal static class ModelBuilder
         bool nullableProperties,
         bool copyAttributes,
         Dictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings,
+        Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName)> mapFromMappings,
         CancellationToken token)
     {
         var members = new List<FacetMember>();
@@ -180,6 +192,7 @@ internal static class ModelBuilder
                     nullableProperties,
                     copyAttributes,
                     nestedFacetMappings,
+                    mapFromMappings,
                     members,
                     excludedRequiredMembers,
                     addedMembers);
@@ -212,13 +225,17 @@ internal static class ModelBuilder
         bool nullableProperties,
         bool copyAttributes,
         Dictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings,
+        Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName)> mapFromMappings,
         List<FacetMember> members,
         List<FacetMember> excludedRequiredMembers,
         HashSet<string> addedMembers)
     {
         var memberXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(property);
 
-        if (!shouldIncludeMember)
+        // Check if this source property has a MapFrom attribute pointing to it
+        var hasMapFrom = mapFromMappings.TryGetValue(property.Name, out var mapFromInfo);
+
+        if (!shouldIncludeMember && !hasMapFrom)
         {
             // If this is a required member that was excluded, track it for ToSource generation
             if (isRequired)
@@ -304,8 +321,26 @@ internal static class ModelBuilder
             ? AttributeProcessor.ExtractCopiableAttributes(property, FacetMemberKind.Property)
             : new List<string>();
 
+        // Determine final member name and mapping properties
+        var memberName = hasMapFrom ? mapFromInfo.targetName : property.Name;
+        var mapFromSource = hasMapFrom ? mapFromInfo.source : null;
+        var mapFromReversible = hasMapFrom ? mapFromInfo.reversible : true;
+        var mapFromIncludeInProjection = hasMapFrom ? mapFromInfo.includeInProjection : true;
+        var sourcePropertyName = property.Name; // Always use the actual source property name
+        var isUserDeclared = hasMapFrom; // User declared the property with [MapFrom]
+
+        // If user declared, use their type name instead
+        if (hasMapFrom && !string.IsNullOrEmpty(mapFromInfo.typeName))
+        {
+            typeName = mapFromInfo.typeName;
+            if (nullableProperties)
+            {
+                typeName = GeneratorUtilities.MakeNullable(typeName);
+            }
+        }
+
         members.Add(new FacetMember(
-            property.Name,
+            memberName,
             typeName,
             FacetMemberKind.Property,
             property.Type.IsValueType,
@@ -318,8 +353,13 @@ internal static class ModelBuilder
             attributes,
             isCollection,
             collectionWrapper,
-            sourceMemberTypeName));
-        addedMembers.Add(property.Name);
+            sourceMemberTypeName,
+            mapFromSource,
+            mapFromReversible,
+            mapFromIncludeInProjection,
+            sourcePropertyName,
+            isUserDeclared));
+        addedMembers.Add(memberName);
     }
 
     private static void ProcessField(
@@ -383,6 +423,109 @@ internal static class ModelBuilder
             null,  // No collection wrapper for fields
             sourceMemberTypeName));
         addedMembers.Add(field.Name);
+    }
+
+    /// <summary>
+    /// Extracts MapFrom attribute mappings from the target type's properties.
+    /// Returns a dictionary mapping source property names to (targetName, source, reversible, includeInProjection, typeName).
+    /// Also returns a list of expression-based members that should be added directly.
+    /// </summary>
+    private static Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName)> ExtractMapFromMappings(
+        INamedTypeSymbol targetSymbol,
+        List<FacetMember> expressionMembers,
+        bool nullableProperties)
+    {
+        var mappings = new Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName)>();
+
+        // Get all members from the target type (user-declared properties)
+        foreach (var member in targetSymbol.GetMembers())
+        {
+            if (member is not IPropertySymbol property) continue;
+
+            // Look for MapFrom attribute
+            foreach (var attr in property.GetAttributes())
+            {
+                if (attr.AttributeClass?.ToDisplayString() == FacetConstants.MapFromAttributeFullName)
+                {
+                    // Get the Source constructor argument
+                    if (attr.ConstructorArguments.Length > 0 && attr.ConstructorArguments[0].Value is string source)
+                    {
+                        // Get named arguments
+                        var reversible = false;
+                        var includeInProjection = true;
+
+                        foreach (var namedArg in attr.NamedArguments)
+                        {
+                            if (namedArg.Key == "Reversible" && namedArg.Value.Value is bool rev)
+                            {
+                                reversible = rev;
+                            }
+                            else if (namedArg.Key == "IncludeInProjection" && namedArg.Value.Value is bool incProj)
+                            {
+                                includeInProjection = incProj;
+                            }
+                        }
+
+                        // Get the property type name
+                        var typeName = GeneratorUtilities.GetTypeNameWithNullability(property.Type);
+                        if (nullableProperties)
+                        {
+                            typeName = GeneratorUtilities.MakeNullable(typeName);
+                        }
+
+                        // Check if this is an expression (contains operators or spaces)
+                        if (IsExpression(source))
+                        {
+                            // Expression-based member - add directly to members list
+                            expressionMembers.Add(new FacetMember(
+                                property.Name,
+                                typeName,
+                                FacetMemberKind.Property,
+                                property.Type.IsValueType,
+                                false, // isInitOnly
+                                false, // isRequired
+                                false, // isReadOnly
+                                null,  // xmlDocumentation
+                                false, // isNestedFacet
+                                null,  // nestedFacetSourceTypeName
+                                null,  // attributes
+                                false, // isCollection
+                                null,  // collectionWrapper
+                                null,  // sourceMemberTypeName
+                                source, // mapFromSource
+                                reversible,
+                                includeInProjection,
+                                property.Name, // sourcePropertyName (use target name as placeholder)
+                                true)); // isUserDeclared
+                        }
+                        else
+                        {
+                            // Simple property rename - map to source property
+                            var sourcePropertyName = source.Contains(".") ? source.Split('.')[0] : source;
+                            mappings[sourcePropertyName] = (property.Name, source, reversible, includeInProjection, typeName);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        return mappings;
+    }
+
+    /// <summary>
+    /// Determines if the source string is an expression (contains operators, spaces, etc.)
+    /// </summary>
+    private static bool IsExpression(string source)
+    {
+        return source.Contains(" ") ||
+               source.Contains("+") ||
+               source.Contains("-") ||
+               source.Contains("*") ||
+               source.Contains("/") ||
+               source.Contains("(") ||
+               source.Contains("?") ||
+               source.Contains(":");
     }
 
     #endregion

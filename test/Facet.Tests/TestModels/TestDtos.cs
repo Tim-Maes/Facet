@@ -3,33 +3,33 @@ using Facet.Mapping;
 
 namespace Facet.Tests.TestModels;
 
-[Facet(typeof(User), "Password", "CreatedAt")]
-public partial class UserDto 
+[Facet(typeof(User), "Password", "CreatedAt", GenerateToSource = true)]
+public partial class UserDto
 {
     public string FullName { get; set; } = string.Empty;
     public int Age { get; set; }
 }
 
-[Facet(typeof(Product), "InternalNotes")]
+[Facet(typeof(Product), "InternalNotes", GenerateToSource = true)]
 public partial record ProductDto;
 
-[Facet(typeof(Employee), "Password", "Salary", "CreatedAt")]
+[Facet(typeof(Employee), "Password", "Salary", "CreatedAt", GenerateToSource = true)]
 public partial class EmployeeDto;
 
-[Facet(typeof(Manager), "Password", "Salary", "Budget", "CreatedAt")]
+[Facet(typeof(Manager), "Password", "Salary", "Budget", "CreatedAt", GenerateToSource = true)]
 public partial class ManagerDto;
 
-[Facet(typeof(ClassicUser))]
+[Facet(typeof(ClassicUser), GenerateToSource = true)]
 public partial record ClassicUserDto;
 
-[Facet(typeof(ModernUser), "PasswordHash", "Bio")]
+[Facet(typeof(ModernUser), "PasswordHash", "Bio", GenerateToSource = true)]
 public partial record ModernUserDto
 {
     public string FullName { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
 }
 
-[Facet(typeof(UserWithEnum))]
+[Facet(typeof(UserWithEnum), GenerateToSource = true)]
 public partial class UserWithEnumDto;
 
 [Facet(typeof(User), "Password", "CreatedAt")]
@@ -38,11 +38,11 @@ public partial record struct UserSummary;
 [Facet(typeof(Product), "InternalNotes", "CreatedAt")]
 public partial struct ProductSummary;
 
-[Facet(typeof(EventLog), "Source")]
+[Facet(typeof(EventLog), "Source", GenerateToSource = true)]
 public partial class EventLogDto;
 
 // Include functionality test DTOs
-[Facet(typeof(User), Include = new[] { "FirstName", "LastName", "Email" })]
+[Facet(typeof(User), Include = new[] { "FirstName", "LastName", "Email" }, GenerateToSource = true)]
 public partial class UserIncludeDto;
 
 [Facet(typeof(User), Include = new[] { "FirstName" })]

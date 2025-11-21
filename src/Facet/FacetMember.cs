@@ -21,7 +21,33 @@ internal sealed class FacetMember : IEquatable<FacetMember>
     public string? CollectionWrapper { get; }
     public string? SourceMemberTypeName { get; }
 
-    public FacetMember(string name, string typeName, FacetMemberKind kind, bool isValueType, bool isInitOnly = false, bool isRequired = false, bool isReadOnly = false, string? xmlDocumentation = null, bool isNestedFacet = false, string? nestedFacetSourceTypeName = null, IReadOnlyList<string>? attributes = null, bool isCollection = false, string? collectionWrapper = null, string? sourceMemberTypeName = null)
+    // MapFrom attribute properties
+    public string? MapFromSource { get; }
+    public bool MapFromReversible { get; }
+    public bool MapFromIncludeInProjection { get; }
+    public string SourcePropertyName { get; }
+    public bool IsUserDeclared { get; }
+
+    public FacetMember(
+        string name,
+        string typeName,
+        FacetMemberKind kind,
+        bool isValueType,
+        bool isInitOnly = false,
+        bool isRequired = false,
+        bool isReadOnly = false,
+        string? xmlDocumentation = null,
+        bool isNestedFacet = false,
+        string? nestedFacetSourceTypeName = null,
+        IReadOnlyList<string>? attributes = null,
+        bool isCollection = false,
+        string? collectionWrapper = null,
+        string? sourceMemberTypeName = null,
+        string? mapFromSource = null,
+        bool mapFromReversible = false,
+        bool mapFromIncludeInProjection = true,
+        string? sourcePropertyName = null,
+        bool isUserDeclared = false)
     {
         Name = name;
         TypeName = typeName;
@@ -37,6 +63,11 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         IsCollection = isCollection;
         CollectionWrapper = collectionWrapper;
         SourceMemberTypeName = sourceMemberTypeName;
+        MapFromSource = mapFromSource;
+        MapFromReversible = mapFromReversible;
+        MapFromIncludeInProjection = mapFromIncludeInProjection;
+        SourcePropertyName = sourcePropertyName ?? name;
+        IsUserDeclared = isUserDeclared;
     }
 
     public bool Equals(FacetMember? other) =>
@@ -53,6 +84,11 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         IsCollection == other.IsCollection &&
         CollectionWrapper == other.CollectionWrapper &&
         SourceMemberTypeName == other.SourceMemberTypeName &&
+        MapFromSource == other.MapFromSource &&
+        MapFromReversible == other.MapFromReversible &&
+        MapFromIncludeInProjection == other.MapFromIncludeInProjection &&
+        SourcePropertyName == other.SourcePropertyName &&
+        IsUserDeclared == other.IsUserDeclared &&
         Attributes.SequenceEqual(other.Attributes);
 
     public override bool Equals(object? obj) => obj is FacetMember other && Equals(other);
@@ -74,6 +110,11 @@ internal sealed class FacetMember : IEquatable<FacetMember>
             hash = hash * 31 + IsCollection.GetHashCode();
             hash = hash * 31 + (CollectionWrapper?.GetHashCode() ?? 0);
             hash = hash * 31 + (SourceMemberTypeName?.GetHashCode() ?? 0);
+            hash = hash * 31 + (MapFromSource?.GetHashCode() ?? 0);
+            hash = hash * 31 + MapFromReversible.GetHashCode();
+            hash = hash * 31 + MapFromIncludeInProjection.GetHashCode();
+            hash = hash * 31 + SourcePropertyName.GetHashCode();
+            hash = hash * 31 + IsUserDeclared.GetHashCode();
             hash = hash * 31 + Attributes.Count.GetHashCode();
             foreach (var attr in Attributes)
                 hash = hash * 31 + (attr?.GetHashCode() ?? 0);

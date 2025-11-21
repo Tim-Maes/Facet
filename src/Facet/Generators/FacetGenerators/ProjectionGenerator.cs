@@ -82,17 +82,36 @@ internal static class ProjectionGenerator
         // Track which facet types we're currently processing to detect circular references
         var visitedTypes = new HashSet<string> { model.Name };
 
+        var outputIndex = 0;
         for (int i = 0; i < memberCount; i++)
         {
             var member = members[i];
-            var comma = i < memberCount - 1 ? "," : "";
+
+            // Skip members that should not be included in projection (MapFromIncludeInProjection = false)
+            if (!member.MapFromIncludeInProjection)
+                continue;
+
+            var comma = outputIndex < memberCount - 1 ? "," : "";
             var memberIndent = indent + "    ";
 
             // Generate the property assignment
             var projectionValue = GetProjectionValueExpression(member, "source", memberIndent, facetLookup, visitedTypes, 0, model.MaxDepth);
-            sb.Append($"{memberIndent}{member.Name} = {projectionValue}{comma}");
+            sb.Append($"{memberIndent}{member.Name} = {projectionValue}");
 
-            // Add newline
+            // Add comma and newline
+            outputIndex++;
+            // Check if this is the last included member
+            bool isLastIncluded = true;
+            for (int j = i + 1; j < memberCount; j++)
+            {
+                if (members[j].MapFromIncludeInProjection)
+                {
+                    isLastIncluded = false;
+                    break;
+                }
+            }
+            if (!isLastIncluded)
+                sb.Append(",");
             sb.AppendLine();
         }
 
@@ -124,8 +143,14 @@ internal static class ProjectionGenerator
             return BuildSingleNestedProjection(member, sourceVariableName, isNullable, indent, facetLookup, visitedTypes, currentDepth, maxDepth);
         }
 
-        // Regular property - direct assignment
-        return $"{sourceVariableName}.{member.Name}";
+        // Check if this is a MapFrom expression (contains operators or spaces)
+        if (member.MapFromSource != null && IsExpression(member.MapFromSource))
+        {
+            return TransformExpression(member.MapFromSource, sourceVariableName);
+        }
+
+        // Regular property - direct assignment using SourcePropertyName (supports MapFrom)
+        return $"{sourceVariableName}.{member.SourcePropertyName}";
     }
 
     private static string BuildCollectionProjection(
@@ -144,12 +169,15 @@ internal static class ProjectionGenerator
             return "null";
         }
 
+        // Use SourcePropertyName for accessing the source property (supports MapFrom)
+        var sourcePropName = member.SourcePropertyName;
+
         // For collection nested facets, use Select with nested projection
         var elementTypeName = ExpressionBuilder.ExtractElementTypeFromCollectionTypeName(member.TypeName);
         var nonNullableElementType = elementTypeName.TrimEnd('?');
 
         var collectionProjection = GenerateNestedCollectionProjection(
-            $"{sourceVariableName}.{member.Name}",
+            $"{sourceVariableName}.{sourcePropName}",
             nonNullableElementType,
             member.NestedFacetSourceTypeName!,
             member.CollectionWrapper!,
@@ -160,7 +188,7 @@ internal static class ProjectionGenerator
 
         if (isNullable)
         {
-            return $"{sourceVariableName}.{member.Name} != null ? {collectionProjection} : null";
+            return $"{sourceVariableName}.{sourcePropName} != null ? {collectionProjection} : null";
         }
 
         return collectionProjection;
@@ -183,9 +211,12 @@ internal static class ProjectionGenerator
             return "null";
         }
 
+        // Use SourcePropertyName for accessing the source property (supports MapFrom)
+        var sourcePropName = member.SourcePropertyName;
+
         // For single nested facets, inline expand the nested facet's members
         var nonNullableTypeName = member.TypeName.TrimEnd('?');
-        var nestedSourceExpression = $"{sourceVariableName}.{member.Name}";
+        var nestedSourceExpression = $"{sourceVariableName}.{sourcePropName}";
 
         // Extract simple type name for circular reference check
         var simpleTypeName = nonNullableTypeName.Replace("global::", "").Split('.', ':').Last();
@@ -367,5 +398,96 @@ internal static class ProjectionGenerator
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Determines if the source string is an expression (contains operators, spaces, etc.)
+    /// </summary>
+    private static bool IsExpression(string source)
+    {
+        return source.Contains(" ") ||
+               source.Contains("+") ||
+               source.Contains("-") ||
+               source.Contains("*") ||
+               source.Contains("/") ||
+               source.Contains("(") ||
+               source.Contains("?") ||
+               source.Contains(":");
+    }
+
+    /// <summary>
+    /// Transforms a MapFrom expression by prefixing identifiers with the source variable name.
+    /// </summary>
+    private static string TransformExpression(string expression, string sourceVariableName)
+    {
+        var result = new StringBuilder();
+        var identifier = new StringBuilder();
+        bool inString = false;
+        char stringChar = '\0';
+
+        for (int i = 0; i < expression.Length; i++)
+        {
+            char c = expression[i];
+
+            if ((c == '"' || c == '\'') && (i == 0 || expression[i - 1] != '\\'))
+            {
+                if (!inString)
+                {
+                    inString = true;
+                    stringChar = c;
+                }
+                else if (c == stringChar)
+                {
+                    inString = false;
+                }
+
+                FlushIdentifier(result, identifier, sourceVariableName);
+                result.Append(c);
+                continue;
+            }
+
+            if (inString)
+            {
+                result.Append(c);
+                continue;
+            }
+
+            if (char.IsLetterOrDigit(c) || c == '_')
+            {
+                identifier.Append(c);
+            }
+            else
+            {
+                FlushIdentifier(result, identifier, sourceVariableName);
+                result.Append(c);
+            }
+        }
+
+        FlushIdentifier(result, identifier, sourceVariableName);
+        return result.ToString();
+    }
+
+    private static void FlushIdentifier(StringBuilder result, StringBuilder identifier, string sourceVariableName)
+    {
+        if (identifier.Length > 0)
+        {
+            var id = identifier.ToString();
+            if (!IsKeyword(id) && !char.IsDigit(id[0]))
+            {
+                result.Append($"{sourceVariableName}.");
+            }
+            result.Append(id);
+            identifier.Clear();
+        }
+    }
+
+    private static bool IsKeyword(string identifier)
+    {
+        return identifier switch
+        {
+            "true" or "false" or "null" or "new" or "typeof" or "nameof" or
+            "is" or "as" or "in" or "out" or "ref" or "this" or "base" => true,
+            _ => false
+        };
     }
 }

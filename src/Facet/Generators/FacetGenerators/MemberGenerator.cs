@@ -15,6 +15,10 @@ internal static class MemberGenerator
     {
         foreach (var m in model.Members)
         {
+            // Skip user-declared properties (those with [MapFrom] attribute)
+            if (m.IsUserDeclared)
+                continue;
+
             // Generate member XML documentation if available
             if (!string.IsNullOrWhiteSpace(m.XmlDocumentation))
             {

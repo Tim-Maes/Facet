@@ -57,27 +57,29 @@ public class NullableEmployeeEntity
 }
 
 // Facet DTOs - see GitHub issue #116
-[Facet(typeof(Chunk))]
+[Facet(typeof(Chunk), GenerateToSource = true)]
 public partial class ChunkDto;
 
-[Facet(typeof(EmbeddingModel))]
+[Facet(typeof(EmbeddingModel), GenerateToSource = true)]
 public partial class EmbeddingModelDto;
 
 [Facet(
     typeof(ChunkEmbedding1024),
     exclude: [nameof(ChunkEmbedding1024.ModelIdFkNavigation)],
     NestedFacets = [typeof(ChunkDto), typeof(EmbeddingModelDto)],
-    NullableProperties = true)]
+    NullableProperties = true,
+    GenerateToSource = true)]
 public partial class ChunkEmbedding1024Dto;
 
 // Test facets for nested facets with nullable properties
-[Facet(typeof(NullableCompanyEntity), NullableProperties = true)]
+[Facet(typeof(NullableCompanyEntity), NullableProperties = true, GenerateToSource = true)]
 public partial class NullableCompanyFacet;
 
 [Facet(
     typeof(NullableWorkerEntity),
     NestedFacets = [typeof(NullableCompanyFacet)],
-    NullableProperties = true)]
+    NullableProperties = true,
+    GenerateToSource = true)]
 public partial class NullableWorkerFacet;
 
 // Test facets for collection nested facets with nullable properties

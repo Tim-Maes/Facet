@@ -58,12 +58,13 @@ Click on a section to expand/collapse
 
 <details>
   <summary>Configuration & customization</summary>
-  
+
 - Include/exclude properties with simple attributes
 - Copy data validation attributes
 - Custom mapping configurations (sync & async)
 - Expression transformation utilities for business logic reuse
-  
+- **Property mapping with `[MapFrom]`** for declarative property renaming
+
 </details>
 
 <details>
@@ -277,6 +278,86 @@ public partial class UserDto
     public int Age { get; set; }
 }
 ```
+</details>
+
+<details>
+  <summary>Property Mapping with [MapFrom]</summary>
+
+Rename properties declaratively without custom mapping configurations:
+
+```csharp
+public class User
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public string Email { get; set; }
+}
+
+[Facet(typeof(User), GenerateToSource = true)]
+public partial class UserDto
+{
+    // Type-safe property rename with reverse mapping
+    [MapFrom(nameof(User.FirstName), Reversible = true)]
+    public string Name { get; set; } = string.Empty;
+
+    // Rename multiple properties
+    [MapFrom(nameof(User.LastName), Reversible = true)]
+    public string FamilyName { get; set; } = string.Empty;
+
+    // Computed expression (not reversible)
+    [MapFrom("FirstName + \" \" + LastName")]
+    public string FullName { get; set; } = string.Empty;
+}
+
+// Usage
+var user = new User { Id = 1, FirstName = "John", LastName = "Doe", Email = "john@example.com" };
+var dto = new UserDto(user);
+// dto.Name = "John" (mapped from FirstName)
+// dto.FamilyName = "Doe" (mapped from LastName)
+// dto.FullName = "John Doe" (computed expression)
+
+// Reverse mapping works automatically
+var entity = dto.ToSource();
+// entity.FirstName = "John" (mapped from Name)
+// entity.LastName = "Doe" (mapped from FamilyName)
+
+// Projections also work
+var dtos = users.SelectFacet<UserDto>().ToList();
+```
+
+#### Controlling Reversibility and Projection Inclusion
+
+```csharp
+[Facet(typeof(User), GenerateToSource = true)]
+public partial class UserDto
+{
+    // Reversible mapping (included in ToSource) - opt-in
+    [MapFrom(nameof(User.FirstName), Reversible = true)]
+    public string Name { get; set; } = string.Empty;
+
+    // Default: not reversible (one-way, source → DTO only)
+    [MapFrom(nameof(User.LastName))]
+    public string DisplayName { get; set; } = string.Empty;
+
+    // Exclude from EF Core projection (for client-side computed values)
+    [MapFrom("Name.ToUpper()", IncludeInProjection = false)]
+    public string UpperName { get; set; } = string.Empty;
+}
+```
+
+#### When to Use MapFrom vs Custom Configuration
+
+| Use Case | MapFrom | Custom Config |
+|----------|---------|---------------|
+| Simple property rename | :white_check_mark: Best choice | Overkill |
+| Multiple renames | :white_check_mark: Best choice | Overkill |
+| Computed values (expressions) | :white_check_mark: Supported | Alternative |
+| Async operations | :x: | :white_check_mark: Required |
+| Complex transformations | :x: | :white_check_mark: Required |
+
+**Note**: MapFrom and custom configurations can be combined. Auto-generated mappings (including MapFrom) are applied first, then the custom mapper is called.
+
 </details>
 
 <details>

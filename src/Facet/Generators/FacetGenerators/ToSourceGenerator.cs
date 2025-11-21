@@ -48,8 +48,11 @@ internal static class ToSourceGenerator
     private static void GeneratePositionalToSource(StringBuilder sb, FacetTargetModel model)
     {
         // For source types with positional constructors (like records), use positional syntax
+        // Only include members that are reversible
         var constructorArgs = string.Join(", ",
-            model.Members.Select(m => ExpressionBuilder.GetToSourceValueExpression(m)));
+            model.Members
+                .Where(m => m.MapFromReversible)
+                .Select(m => ExpressionBuilder.GetToSourceValueExpression(m)));
         sb.AppendLine($"        return new {model.SourceTypeName}({constructorArgs});");
     }
 
@@ -61,11 +64,16 @@ internal static class ToSourceGenerator
 
         var propertyAssignments = new List<string>();
 
-        // Add assignments for included properties
+        // Add assignments for included properties (only if reversible)
         foreach (var member in model.Members)
         {
+            // Skip non-reversible members
+            if (!member.MapFromReversible)
+                continue;
+
             var toSourceValue = ExpressionBuilder.GetToSourceValueExpression(member);
-            propertyAssignments.Add($"            {member.Name} = {toSourceValue}");
+            // Use SourcePropertyName for the target property name (supports MapFrom)
+            propertyAssignments.Add($"            {member.SourcePropertyName} = {toSourceValue}");
         }
 
         // Add default values for excluded required members

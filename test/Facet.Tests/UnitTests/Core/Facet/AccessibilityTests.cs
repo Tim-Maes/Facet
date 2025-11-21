@@ -8,11 +8,11 @@ public class AccessibilityTestEntity
 }
 
 // Internal facet - should generate with internal accessibility
-[Facet(typeof(AccessibilityTestEntity))]
+[Facet(typeof(AccessibilityTestEntity), GenerateToSource = true)]
 internal partial class InternalFacet;
 
 // Public facet - should generate with public accessibility
-[Facet(typeof(AccessibilityTestEntity))]
+[Facet(typeof(AccessibilityTestEntity), GenerateToSource = true)]
 public partial class PublicFacet;
 
 public class AccessibilityTests

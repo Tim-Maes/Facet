@@ -41,21 +41,23 @@ public class DepartmentEntity
 }
 
 // Facet DTOs
-[Facet(typeof(AddressEntity))]
+[Facet(typeof(AddressEntity), GenerateToSource = true)]
 public partial record AddressFacet;
 
 [Facet(
     typeof(CompanyEntity),
-    NestedFacets = [typeof(AddressFacet)])]
+    NestedFacets = [typeof(AddressFacet)],
+    GenerateToSource = true)]
 public partial record CompanyFacet;
 
 [Facet(
     typeof(StaffMember),
     exclude: ["PasswordHash", "Salary"],
-    NestedFacets = [typeof(CompanyFacet), typeof(AddressFacet)])]
+    NestedFacets = [typeof(CompanyFacet), typeof(AddressFacet)],
+    GenerateToSource = true)]
 public partial record StaffMemberFacet;
 
-[Facet(typeof(DepartmentEntity), NestedFacets = [typeof(CompanyFacet), typeof(StaffMemberFacet)])]
+[Facet(typeof(DepartmentEntity), NestedFacets = [typeof(CompanyFacet), typeof(StaffMemberFacet)], GenerateToSource = true)]
 public partial record DepartmentFacet;
 
 // Collection nested facets test models
@@ -91,14 +93,14 @@ public class ProjectEntity
 }
 
 // Collection nested facet DTOs
-[Facet(typeof(OrderItemEntity))]
+[Facet(typeof(OrderItemEntity), GenerateToSource = true)]
 public partial record OrderItemFacet;
 
-[Facet(typeof(OrderEntity), NestedFacets = [typeof(OrderItemFacet), typeof(AddressFacet)])]
+[Facet(typeof(OrderEntity), NestedFacets = [typeof(OrderItemFacet), typeof(AddressFacet)], GenerateToSource = true)]
 public partial record OrderFacet;
 
-[Facet(typeof(TeamEntity), NestedFacets = [typeof(StaffMemberFacet)])]
+[Facet(typeof(TeamEntity), NestedFacets = [typeof(StaffMemberFacet)], GenerateToSource = true)]
 public partial record TeamFacet;
 
-[Facet(typeof(ProjectEntity), NestedFacets = [typeof(TeamFacet)])]
+[Facet(typeof(ProjectEntity), NestedFacets = [typeof(TeamFacet)], GenerateToSource = true)]
 public partial record ProjectFacet;

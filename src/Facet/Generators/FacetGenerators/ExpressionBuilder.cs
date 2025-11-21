@@ -33,7 +33,14 @@ internal static class ExpressionBuilder
                 member, sourceVariableName, isNullable, maxDepth, useDepthParameter, preserveReferences);
         }
 
-        return $"{sourceVariableName}.{member.Name}";
+        // Check if this is a MapFrom expression (contains operators or spaces)
+        if (member.MapFromSource != null && IsExpression(member.MapFromSource))
+        {
+            return TransformExpression(member.MapFromSource, sourceVariableName);
+        }
+
+        // Use SourcePropertyName for accessing the source property (supports MapFrom)
+        return $"{sourceVariableName}.{member.SourcePropertyName}";
     }
 
     /// <summary>
@@ -128,6 +135,9 @@ internal static class ExpressionBuilder
                 ? ExtractElementTypeFromCollectionTypeName(member.SourceMemberTypeName)
                 : elementTypeName);
 
+        // Use SourcePropertyName for accessing the source property (supports MapFrom)
+        var sourcePropName = member.SourcePropertyName;
+
         // Check if we should stop due to max depth
         if (useDepthParameter && maxDepth > 0)
         {
@@ -136,8 +146,8 @@ internal static class ExpressionBuilder
                 : "__processed";
 
             var sourceCollection = preserveReferences
-                ? $"{sourceVariableName}.{member.Name}.Distinct(System.Collections.Generic.ReferenceEqualityComparer.Instance).Cast<{sourceElementTypeName}>()"
-                : $"{sourceVariableName}.{member.Name}";
+                ? $"{sourceVariableName}.{sourcePropName}.Distinct(System.Collections.Generic.ReferenceEqualityComparer.Instance).Cast<{sourceElementTypeName}>()"
+                : $"{sourceVariableName}.{sourcePropName}";
 
             var projection = preserveReferences
                 ? $"{sourceCollection}.Select(x => __processed != null && __processed.Contains(x) ? null : new {elementTypeName}(x, __depth + 1, {updatedProcessed})).Where(x => x != null)"
@@ -148,7 +158,7 @@ internal static class ExpressionBuilder
 
             if (isNullable)
             {
-                return $"__depth < {maxDepth} && {sourceVariableName}.{member.Name} != null ? {collectionExpression} : null";
+                return $"__depth < {maxDepth} && {sourceVariableName}.{sourcePropName} != null ? {collectionExpression} : null";
             }
 
             return $"__depth < {maxDepth} ? {collectionExpression} : null";
@@ -160,8 +170,8 @@ internal static class ExpressionBuilder
                 : "__processed";
 
             var sourceCollection = preserveReferences && useDepthParameter
-                ? $"{sourceVariableName}.{member.Name}.Distinct(System.Collections.Generic.ReferenceEqualityComparer.Instance).Cast<{sourceElementTypeName}>()"
-                : $"{sourceVariableName}.{member.Name}";
+                ? $"{sourceVariableName}.{sourcePropName}.Distinct(System.Collections.Generic.ReferenceEqualityComparer.Instance).Cast<{sourceElementTypeName}>()"
+                : $"{sourceVariableName}.{sourcePropName}";
 
             var projection = useDepthParameter
                 ? (preserveReferences
@@ -174,7 +184,7 @@ internal static class ExpressionBuilder
 
             if (isNullable)
             {
-                return $"{sourceVariableName}.{member.Name} != null ? {collectionExpression} : null";
+                return $"{sourceVariableName}.{sourcePropName} != null ? {collectionExpression} : null";
             }
 
             return collectionExpression;
@@ -190,6 +200,8 @@ internal static class ExpressionBuilder
         bool preserveReferences)
     {
         var nonNullableTypeName = member.TypeName.TrimEnd('?');
+        // Use SourcePropertyName for accessing the source property (supports MapFrom)
+        var sourcePropName = member.SourcePropertyName;
 
         // Build the constructor call with reference checking if needed
         string BuildConstructorCall(string sourceExpr)
@@ -214,22 +226,22 @@ internal static class ExpressionBuilder
         // Check if we should stop due to max depth
         if (useDepthParameter && maxDepth > 0)
         {
-            var constructorCall = BuildConstructorCall($"{sourceVariableName}.{member.Name}");
+            var constructorCall = BuildConstructorCall($"{sourceVariableName}.{sourcePropName}");
 
             if (isNullable)
             {
-                return $"__depth < {maxDepth} && {sourceVariableName}.{member.Name} != null ? {constructorCall} : null";
+                return $"__depth < {maxDepth} && {sourceVariableName}.{sourcePropName} != null ? {constructorCall} : null";
             }
 
             return $"__depth < {maxDepth} ? {constructorCall} : null";
         }
         else
         {
-            var constructorCall = BuildConstructorCall($"{sourceVariableName}.{member.Name}");
+            var constructorCall = BuildConstructorCall($"{sourceVariableName}.{sourcePropName}");
 
             if (isNullable)
             {
-                return $"{sourceVariableName}.{member.Name} != null ? {constructorCall} : null";
+                return $"{sourceVariableName}.{sourcePropName} != null ? {constructorCall} : null";
             }
 
             // Use the nested facet's generated constructor
@@ -276,6 +288,103 @@ internal static class ExpressionBuilder
             FacetConstants.CollectionWrappers.IEnumerable => projection,
             FacetConstants.CollectionWrappers.Array => $"{projection}.ToArray()",
             _ => projection
+        };
+    }
+
+    /// <summary>
+    /// Determines if the source string is an expression (contains operators, spaces, etc.)
+    /// rather than a simple property name.
+    /// </summary>
+    private static bool IsExpression(string source)
+    {
+        // If it contains any of these, it's an expression
+        return source.Contains(" ") ||
+               source.Contains("+") ||
+               source.Contains("-") ||
+               source.Contains("*") ||
+               source.Contains("/") ||
+               source.Contains("(") ||
+               source.Contains("?") ||
+               source.Contains(":");
+    }
+
+    /// <summary>
+    /// Transforms a MapFrom expression by prefixing identifiers with the source variable name.
+    /// For example: "FirstName + \" \" + LastName" becomes "source.FirstName + \" \" + source.LastName"
+    /// </summary>
+    private static string TransformExpression(string expression, string sourceVariableName)
+    {
+        var result = new System.Text.StringBuilder();
+        var identifier = new System.Text.StringBuilder();
+        bool inString = false;
+        char stringChar = '\0';
+
+        for (int i = 0; i < expression.Length; i++)
+        {
+            char c = expression[i];
+
+            // Track string literals
+            if ((c == '"' || c == '\'') && (i == 0 || expression[i - 1] != '\\'))
+            {
+                if (!inString)
+                {
+                    inString = true;
+                    stringChar = c;
+                }
+                else if (c == stringChar)
+                {
+                    inString = false;
+                }
+
+                FlushIdentifier(result, identifier, sourceVariableName);
+                result.Append(c);
+                continue;
+            }
+
+            if (inString)
+            {
+                result.Append(c);
+                continue;
+            }
+
+            // Build identifiers
+            if (char.IsLetterOrDigit(c) || c == '_')
+            {
+                identifier.Append(c);
+            }
+            else
+            {
+                FlushIdentifier(result, identifier, sourceVariableName);
+                result.Append(c);
+            }
+        }
+
+        FlushIdentifier(result, identifier, sourceVariableName);
+        return result.ToString();
+    }
+
+    private static void FlushIdentifier(System.Text.StringBuilder result, System.Text.StringBuilder identifier, string sourceVariableName)
+    {
+        if (identifier.Length > 0)
+        {
+            var id = identifier.ToString();
+            // Don't prefix keywords or numbers
+            if (!IsKeyword(id) && !char.IsDigit(id[0]))
+            {
+                result.Append($"{sourceVariableName}.");
+            }
+            result.Append(id);
+            identifier.Clear();
+        }
+    }
+
+    private static bool IsKeyword(string identifier)
+    {
+        return identifier switch
+        {
+            "true" or "false" or "null" or "new" or "typeof" or "nameof" or
+            "is" or "as" or "in" or "out" or "ref" or "this" or "base" => true,
+            _ => false
         };
     }
 

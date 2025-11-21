@@ -178,7 +178,7 @@ internal static class ConstructorGenerator
             {
                 // Regular mutable properties - copy first, then apply custom mapping
                 foreach (var m in model.Members)
-                    sb.AppendLine($"        this.{m.Name} = source.{m.Name};");
+                    sb.AppendLine($"        this.{m.Name} = source.{m.SourcePropertyName};");
                 sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
             }
             else
@@ -263,7 +263,7 @@ internal static class ConstructorGenerator
         {
             // Regular mutable properties - copy first, then apply custom mapping
             foreach (var m in model.Members)
-                sb.AppendLine($"        this.{m.Name} = source.{m.Name};");
+                sb.AppendLine($"        this.{m.Name} = source.{m.SourcePropertyName};");
             sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
         }
         else
