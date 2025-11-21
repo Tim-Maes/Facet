@@ -297,12 +297,12 @@ public class User
 [Facet(typeof(User), GenerateToSource = true)]
 public partial class UserDto
 {
-    // Simple property rename
-    [MapFrom("FirstName")]
+    // Simple property rename with reverse mapping
+    [MapFrom("FirstName", Reversible = true)]
     public string Name { get; set; } = string.Empty;
 
     // Rename multiple properties
-    [MapFrom("LastName")]
+    [MapFrom("LastName", Reversible = true)]
     public string FamilyName { get; set; } = string.Empty;
 }
 
@@ -327,8 +327,12 @@ var dtos = users.Select(UserDto.Projection).ToList();
 [Facet(typeof(User), GenerateToSource = true)]
 public partial class UserDto
 {
-    // Non-reversible mapping (one-way only, not included in ToSource)
-    [MapFrom("FirstName", Reversible = false)]
+    // Reversible mapping (included in ToSource) - opt-in
+    [MapFrom("FirstName", Reversible = true)]
+    public string Name { get; set; } = string.Empty;
+
+    // Default: not reversible (one-way, source → DTO only)
+    [MapFrom("LastName")]
     public string DisplayName { get; set; } = string.Empty;
 
     // Exclude from EF Core projection (for client-side computed values)

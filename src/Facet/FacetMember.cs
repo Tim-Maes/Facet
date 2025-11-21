@@ -44,7 +44,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         string? collectionWrapper = null,
         string? sourceMemberTypeName = null,
         string? mapFromSource = null,
-        bool mapFromReversible = true,
+        bool mapFromReversible = false,
         bool mapFromIncludeInProjection = true,
         string? sourcePropertyName = null,
         bool isUserDeclared = false)

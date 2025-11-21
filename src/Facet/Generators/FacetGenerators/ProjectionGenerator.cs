@@ -143,6 +143,12 @@ internal static class ProjectionGenerator
             return BuildSingleNestedProjection(member, sourceVariableName, isNullable, indent, facetLookup, visitedTypes, currentDepth, maxDepth);
         }
 
+        // Check if this is a MapFrom expression (contains operators or spaces)
+        if (member.MapFromSource != null && IsExpression(member.MapFromSource))
+        {
+            return TransformExpression(member.MapFromSource, sourceVariableName);
+        }
+
         // Regular property - direct assignment using SourcePropertyName (supports MapFrom)
         return $"{sourceVariableName}.{member.SourcePropertyName}";
     }
@@ -392,5 +398,96 @@ internal static class ProjectionGenerator
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Determines if the source string is an expression (contains operators, spaces, etc.)
+    /// </summary>
+    private static bool IsExpression(string source)
+    {
+        return source.Contains(" ") ||
+               source.Contains("+") ||
+               source.Contains("-") ||
+               source.Contains("*") ||
+               source.Contains("/") ||
+               source.Contains("(") ||
+               source.Contains("?") ||
+               source.Contains(":");
+    }
+
+    /// <summary>
+    /// Transforms a MapFrom expression by prefixing identifiers with the source variable name.
+    /// </summary>
+    private static string TransformExpression(string expression, string sourceVariableName)
+    {
+        var result = new StringBuilder();
+        var identifier = new StringBuilder();
+        bool inString = false;
+        char stringChar = '\0';
+
+        for (int i = 0; i < expression.Length; i++)
+        {
+            char c = expression[i];
+
+            if ((c == '"' || c == '\'') && (i == 0 || expression[i - 1] != '\\'))
+            {
+                if (!inString)
+                {
+                    inString = true;
+                    stringChar = c;
+                }
+                else if (c == stringChar)
+                {
+                    inString = false;
+                }
+
+                FlushIdentifier(result, identifier, sourceVariableName);
+                result.Append(c);
+                continue;
+            }
+
+            if (inString)
+            {
+                result.Append(c);
+                continue;
+            }
+
+            if (char.IsLetterOrDigit(c) || c == '_')
+            {
+                identifier.Append(c);
+            }
+            else
+            {
+                FlushIdentifier(result, identifier, sourceVariableName);
+                result.Append(c);
+            }
+        }
+
+        FlushIdentifier(result, identifier, sourceVariableName);
+        return result.ToString();
+    }
+
+    private static void FlushIdentifier(StringBuilder result, StringBuilder identifier, string sourceVariableName)
+    {
+        if (identifier.Length > 0)
+        {
+            var id = identifier.ToString();
+            if (!IsKeyword(id) && !char.IsDigit(id[0]))
+            {
+                result.Append($"{sourceVariableName}.");
+            }
+            result.Append(id);
+            identifier.Clear();
+        }
+    }
+
+    private static bool IsKeyword(string identifier)
+    {
+        return identifier switch
+        {
+            "true" or "false" or "null" or "new" or "typeof" or "nameof" or
+            "is" or "as" or "in" or "out" or "ref" or "this" or "base" => true,
+            _ => false
+        };
     }
 }

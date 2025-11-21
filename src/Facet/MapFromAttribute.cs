@@ -68,13 +68,15 @@ public sealed class MapFromAttribute : Attribute
 
     /// <summary>
     /// Whether this mapping can be reversed in the ToSource method.
-    /// Default is true for simple property mappings.
+    /// Default is false (opt-in).
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Set to false for:
+    /// Set to true when you need the mapping to be included in ToSource().
+    /// Keep as false (default) for:
     /// </para>
     /// <list type="bullet">
+    /// <item><description>Read-only DTOs that don't need reverse mapping</description></item>
     /// <item><description>Computed expressions that cannot be reversed</description></item>
     /// <item><description>Navigation property paths (e.g., "Company.Name")</description></item>
     /// <item><description>One-way mappings where reverse mapping doesn't make sense</description></item>
@@ -83,7 +85,7 @@ public sealed class MapFromAttribute : Attribute
     /// When false, the property will not be included in the ToSource method output.
     /// </para>
     /// </remarks>
-    public bool Reversible { get; set; } = true;
+    public bool Reversible { get; set; } = false;
 
     /// <summary>
     /// Whether to include this mapping in the generated Projection expression.

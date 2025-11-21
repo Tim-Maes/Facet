@@ -19,10 +19,10 @@ public class User
 [Facet(typeof(User), GenerateToSource = true)]
 public partial class UserDto
 {
-    [MapFrom("FirstName")]
+    [MapFrom("FirstName", Reversible = true)]
     public string Name { get; set; } = string.Empty;
 
-    [MapFrom("LastName")]
+    [MapFrom("LastName", Reversible = true)]
     public string FamilyName { get; set; } = string.Empty;
 }
 ```
@@ -76,18 +76,26 @@ public string Name { get; set; }
 
 ### Reversible
 
-Controls whether the mapping is included in `ToSource()`. Default is `true`.
+Controls whether the mapping is included in `ToSource()`. Default is `false` (opt-in).
 
 ```csharp
-// This property will NOT be mapped back to the source
-[MapFrom("FirstName", Reversible = false)]
+// This property WILL be mapped back to the source
+[MapFrom("FirstName", Reversible = true)]
+public string Name { get; set; } = string.Empty;
+
+// This property will NOT be mapped back (default)
+[MapFrom("LastName")]
 public string DisplayName { get; set; } = string.Empty;
 ```
 
-Use `Reversible = false` for:
+Use `Reversible = true` when:
+- You need the mapping to work both ways (source ↔ DTO)
+- The property should be included in `ToSource()` output
+
+Keep `Reversible = false` (default) for:
 - One-way mappings (source → DTO only)
+- Read-only DTOs that don't need reverse mapping
 - Properties that shouldn't modify the source entity
-- Read-only computed displays
 
 ### IncludeInProjection
 
@@ -112,22 +120,22 @@ Use `IncludeInProjection = false` for:
 [Facet(typeof(Customer), GenerateToSource = true)]
 public partial class CustomerDto
 {
-    [MapFrom("CompanyName")]
+    [MapFrom("CompanyName", Reversible = true)]
     public string Company { get; set; } = string.Empty;
 
-    [MapFrom("ContactName")]
+    [MapFrom("ContactName", Reversible = true)]
     public string Contact { get; set; } = string.Empty;
 }
 ```
 
-### One-Way Mapping
+### One-Way Mapping (Default)
 
 ```csharp
-[Facet(typeof(Product), GenerateToSource = true)]
+[Facet(typeof(Product))]
 public partial class ProductDto
 {
-    // Display-only property, don't map back
-    [MapFrom("Name", Reversible = false)]
+    // Display-only property, default is not reversible
+    [MapFrom("Name")]
     public string ProductTitle { get; set; } = string.Empty;
 }
 ```
@@ -140,7 +148,7 @@ MapFrom works with nested facets too:
 [Facet(typeof(Company), GenerateToSource = true)]
 public partial class CompanyDto
 {
-    [MapFrom("CompanyName")]
+    [MapFrom("CompanyName", Reversible = true)]
     public string Name { get; set; } = string.Empty;
 }
 
@@ -167,10 +175,10 @@ public class UserMapper : IFacetMapConfiguration<User, UserDto>
 [Facet(typeof(User), Configuration = typeof(UserMapper), GenerateToSource = true)]
 public partial class UserDto
 {
-    [MapFrom("FirstName")]
+    [MapFrom("FirstName", Reversible = true)]
     public string Name { get; set; } = string.Empty;
 
-    [MapFrom("LastName")]
+    [MapFrom("LastName", Reversible = true)]
     public string FamilyName { get; set; } = string.Empty;
 
     public string FullName { get; set; } = string.Empty;

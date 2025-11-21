@@ -28,7 +28,7 @@ public class MapFromCompanyEntity
 [Facet(typeof(MapFromTestEntity), GenerateToSource = true)]
 public partial class MapFromSimpleFacet
 {
-    [MapFrom("FirstName")]
+    [MapFrom("FirstName", Reversible = true)]
     public string Name { get; set; } = string.Empty;
 }
 
@@ -36,10 +36,10 @@ public partial class MapFromSimpleFacet
 [Facet(typeof(MapFromTestEntity), GenerateToSource = true)]
 public partial class MapFromMultipleFacet
 {
-    [MapFrom("FirstName")]
+    [MapFrom("FirstName", Reversible = true)]
     public string GivenName { get; set; } = string.Empty;
 
-    [MapFrom("LastName")]
+    [MapFrom("LastName", Reversible = true)]
     public string FamilyName { get; set; } = string.Empty;
 }
 
@@ -59,11 +59,33 @@ public partial class MapFromNoProjectionFacet
     public string Name { get; set; } = string.Empty;
 }
 
+// Computed value - one-way mapping (default Reversible = false)
+[Facet(typeof(MapFromTestEntity), GenerateToSource = true)]
+public partial class MapFromComputedFacet
+{
+    // Computed from FirstName - cannot be reversed
+    [MapFrom("FirstName")]
+    public string DisplayName { get; set; } = string.Empty;
+
+    // Computed from LastName - cannot be reversed
+    [MapFrom("LastName")]
+    public string Surname { get; set; } = string.Empty;
+}
+
+// Computed expression - FirstName + LastName = FullName
+[Facet(typeof(MapFromTestEntity), GenerateToSource = true)]
+public partial class MapFromExpressionFacet
+{
+    // Computed expression - cannot be reversed
+    [MapFrom("FirstName + \" \" + LastName")]
+    public string FullName { get; set; } = string.Empty;
+}
+
 // Nested facet with company
 [Facet(typeof(MapFromCompanyEntity), GenerateToSource = true)]
 public partial class MapFromCompanyFacet
 {
-    [MapFrom("CompanyName")]
+    [MapFrom("CompanyName", Reversible = true)]
     public string Name { get; set; } = string.Empty;
 }
 
@@ -331,5 +353,118 @@ public class MapFromTests
         properties.Select(p => p.Name).Should().Contain("FamilyName");
         properties.Select(p => p.Name).Should().NotContain("FirstName");
         properties.Select(p => p.Name).Should().NotContain("LastName");
+    }
+
+    [Fact]
+    public void Constructor_ShouldMapComputedValues()
+    {
+        // Arrange
+        var entity = new MapFromTestEntity
+        {
+            Id = 1,
+            FirstName = "John",
+            LastName = "Doe",
+            Email = "john@example.com",
+            Age = 30
+        };
+
+        // Act
+        var facet = new MapFromComputedFacet(entity);
+
+        // Assert
+        facet.Should().NotBeNull();
+        facet.Id.Should().Be(1);
+        facet.DisplayName.Should().Be("John"); // Mapped from FirstName
+        facet.Surname.Should().Be("Doe"); // Mapped from LastName
+        facet.Email.Should().Be("john@example.com");
+        facet.Age.Should().Be(30);
+    }
+
+    [Fact]
+    public void ToSource_ShouldNotIncludeComputedValues_WhenReversibleIsFalse()
+    {
+        // Arrange
+        var facet = new MapFromComputedFacet
+        {
+            Id = 2,
+            DisplayName = "Jane", // Should NOT map back (Reversible = false by default)
+            Surname = "Smith", // Should NOT map back (Reversible = false by default)
+            Email = "jane@example.com",
+            Age = 25
+        };
+
+        // Act
+        var entity = facet.ToSource();
+
+        // Assert
+        entity.Should().NotBeNull();
+        entity.Id.Should().Be(2);
+        // FirstName and LastName should be default because mappings are not reversible
+        entity.FirstName.Should().BeEmpty();
+        entity.LastName.Should().BeEmpty();
+        entity.Email.Should().Be("jane@example.com");
+        entity.Age.Should().Be(25);
+    }
+
+    [Fact]
+    public void Projection_ShouldMapComputedValues()
+    {
+        // Arrange
+        var entities = new[]
+        {
+            new MapFromTestEntity { Id = 1, FirstName = "Alice", LastName = "Brown", Email = "alice@example.com", Age = 28 }
+        }.AsQueryable();
+
+        // Act
+        var facets = entities.Select(MapFromComputedFacet.Projection).ToList();
+
+        // Assert
+        facets.Should().HaveCount(1);
+        facets[0].Id.Should().Be(1);
+        facets[0].DisplayName.Should().Be("Alice");
+        facets[0].Surname.Should().Be("Brown");
+    }
+
+    [Fact]
+    public void Constructor_ShouldMapExpressionToFullName()
+    {
+        // Arrange
+        var entity = new MapFromTestEntity
+        {
+            Id = 1,
+            FirstName = "John",
+            LastName = "Doe",
+            Email = "john@example.com",
+            Age = 30
+        };
+
+        // Act
+        var facet = new MapFromExpressionFacet(entity);
+
+        // Assert
+        facet.Should().NotBeNull();
+        facet.Id.Should().Be(1);
+        facet.FullName.Should().Be("John Doe"); // Computed from FirstName + " " + LastName
+        facet.Email.Should().Be("john@example.com");
+        facet.Age.Should().Be(30);
+    }
+
+    [Fact]
+    public void Projection_ShouldMapExpressionToFullName()
+    {
+        // Arrange
+        var entities = new[]
+        {
+            new MapFromTestEntity { Id = 1, FirstName = "Alice", LastName = "Smith", Email = "alice@example.com", Age = 28 },
+            new MapFromTestEntity { Id = 2, FirstName = "Bob", LastName = "Jones", Email = "bob@example.com", Age = 35 }
+        }.AsQueryable();
+
+        // Act
+        var facets = entities.Select(MapFromExpressionFacet.Projection).ToList();
+
+        // Assert
+        facets.Should().HaveCount(2);
+        facets[0].FullName.Should().Be("Alice Smith");
+        facets[1].FullName.Should().Be("Bob Jones");
     }
 }
