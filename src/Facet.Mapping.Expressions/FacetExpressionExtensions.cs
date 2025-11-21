@@ -19,10 +19,6 @@ public static class FacetExpressionExtensions
     /// <param name="sourcePredicate">The original predicate expression</param>
     /// <returns>A transformed predicate that works with the target type</returns>
     /// <example>
-    /// <code>
-    /// Expression&lt;Func&lt;User, bool&gt;&gt; sourcePredicate = u => u.IsActive && u.Age > 18;
-    /// Expression&lt;Func&lt;UserDto, bool&gt;&gt; targetPredicate = sourcePredicate.MapToFacet&lt;UserDto&gt;();
-    /// </code>
     /// </example>
     public static Expression<Func<TTarget, bool>> MapToFacet<TTarget>(
         this LambdaExpression sourcePredicate)
@@ -116,14 +112,6 @@ public static class FacetExpressionExtensions
     /// <typeparam name="T">The input type for the predicates</typeparam>
     /// <param name="predicates">The predicates to combine</param>
     /// <returns>A single predicate expression that represents the AND of all input predicates</returns>
-    /// <example>
-    /// <code>
-    /// var predicate1 = (Expression&lt;Func&lt;User, bool&gt;&gt;)(u => u.IsActive);
-    /// var predicate2 = (Expression&lt;Func&lt;User, bool&gt;&gt;)(u => u.Age > 18);
-    /// var combined = FacetExpressionExtensions.CombineWithAnd(predicate1, predicate2);
-    /// // Result: u => u.IsActive && u.Age > 18
-    /// </code>
-    /// </example>
     public static Expression<Func<T, bool>> CombineWithAnd<T>(
         params Expression<Func<T, bool>>[] predicates)
     {

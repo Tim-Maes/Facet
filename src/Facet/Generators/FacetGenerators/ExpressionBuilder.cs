@@ -88,8 +88,6 @@ internal static class ExpressionBuilder
 
     /// <summary>
     /// Extracts the element type name from a collection type name.
-    /// For example: "global::System.Collections.Generic.List<global::MyNamespace.MyType>" => "global::MyNamespace.MyType"
-    /// Also handles nullable collections: "List<MyType>?" => "MyType"
     /// </summary>
     public static string ExtractElementTypeFromCollectionTypeName(string collectionTypeName)
     {
