@@ -127,5 +127,12 @@ public enum FlattenNamingStrategy
     /// Example: Address.Street becomes "Street"
     /// Warning: This can cause name collisions if multiple nested objects have properties with the same name.
     /// </summary>
-    LeafOnly = 1
+    LeafOnly = 1,
+
+    /// <summary>
+    /// Use leaf property name, but add immediate parent name prefix when collisions occur.
+    /// Example: Position.Name and Type.Name become "PositionName" and "TypeName"
+    /// Non-colliding properties use leaf names only.
+    /// </summary>
+    SmartLeaf = 2
 }
