@@ -44,6 +44,18 @@ internal static class ModelBuilder
         // Infer the type kind and whether it's a record from the target type declaration
         var (typeKind, isRecord) = TypeAnalyzer.InferTypeKind(targetSymbol);
 
+        // Get the accessibility modifier
+        var accessibility = targetSymbol.DeclaredAccessibility switch
+        {
+            Accessibility.Public => "public",
+            Accessibility.Internal => "internal",
+            Accessibility.Protected => "protected",
+            Accessibility.ProtectedOrInternal => "protected internal",
+            Accessibility.ProtectedAndInternal => "private protected",
+            Accessibility.Private => "private",
+            _ => "public"
+        };
+
         // For record types, default to preserving init-only and required modifiers
         // unless explicitly overridden by the user
         var preserveInitOnlyDefault = isRecord;
@@ -104,6 +116,7 @@ internal static class ModelBuilder
             fullName,
             typeKind,
             isRecord,
+            accessibility,
             generateConstructor,
             generateParameterlessConstructor,
             generateProjection,
