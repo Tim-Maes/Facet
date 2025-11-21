@@ -350,11 +350,11 @@ public partial class UserDto
 
 | Use Case | MapFrom | Custom Config |
 |----------|---------|---------------|
-| Simple property rename | ✅ Best choice | Overkill |
-| Multiple renames | ✅ Best choice | Overkill |
-| Computed values (expressions) | ✅ Supported | Alternative |
-| Async operations | ❌ | ✅ Required |
-| Complex transformations | ❌ | ✅ Required |
+| Simple property rename | :white_check_mark: Best choice | Overkill |
+| Multiple renames | :white_check_mark: Best choice | Overkill |
+| Computed values (expressions) | :white_check_mark: Supported | Alternative |
+| Async operations | :x: | :white_check_mark: Required |
+| Complex transformations | :x: | :white_check_mark: Required |
 
 **Note**: MapFrom and custom configurations can be combined. Auto-generated mappings (including MapFrom) are applied first, then the custom mapper is called.
 
