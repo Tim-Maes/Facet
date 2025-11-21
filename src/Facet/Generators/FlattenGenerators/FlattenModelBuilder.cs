@@ -144,6 +144,23 @@ internal static class FlattenModelBuilder
             ? CollectAllForeignKeyPaths(sourceType, includeFields, namingStrategy, new List<string>(), new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default), collectionTypeCache, 0, maxDepth)
             : new HashSet<string>();
 
+        // For SmartLeaf, we need to identify collisions first
+        var collidingLeafNames = new HashSet<string>();
+        if (namingStrategy == FlattenNamingStrategy.SmartLeaf)
+        {
+            collidingLeafNames = IdentifyCollidingLeafNames(
+                sourceType,
+                excludedPaths,
+                maxDepth,
+                includeFields,
+                ignoreNestedIds,
+                ignoreForeignKeyClashes,
+                foreignKeyPaths,
+                collectionTypeCache,
+                leafTypeCache,
+                token);
+        }
+
         // Start recursive discovery
         DiscoverPropertiesRecursive(
             sourceType,
@@ -159,12 +176,165 @@ internal static class FlattenModelBuilder
             foreignKeyPaths,
             properties,
             seenNames,
+            collidingLeafNames,
             new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default),
             collectionTypeCache,
             leafTypeCache,
             token);
 
         return properties.ToImmutableArray();
+    }
+
+    private static HashSet<string> IdentifyCollidingLeafNames(
+        INamedTypeSymbol sourceType,
+        HashSet<string> excludedPaths,
+        int maxDepth,
+        bool includeFields,
+        bool ignoreNestedIds,
+        bool ignoreForeignKeyClashes,
+        HashSet<string> foreignKeyPaths,
+        Dictionary<ITypeSymbol, bool> collectionTypeCache,
+        Dictionary<ITypeSymbol, bool> leafTypeCache,
+        CancellationToken token)
+    {
+        var leafNameCounts = new Dictionary<string, int>();
+
+        CollectLeafNamesRecursive(
+            sourceType,
+            "",
+            new List<string>(),
+            0,
+            maxDepth,
+            excludedPaths,
+            includeFields,
+            ignoreNestedIds,
+            ignoreForeignKeyClashes,
+            foreignKeyPaths,
+            leafNameCounts,
+            new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default),
+            collectionTypeCache,
+            leafTypeCache,
+            token);
+
+        // Return only names that appear more than once
+        return new HashSet<string>(leafNameCounts
+            .Where(kvp => kvp.Value > 1)
+            .Select(kvp => kvp.Key));
+    }
+
+    private static void CollectLeafNamesRecursive(
+        ITypeSymbol currentType,
+        string currentPath,
+        List<string> pathSegments,
+        int depth,
+        int maxDepth,
+        HashSet<string> excludedPaths,
+        bool includeFields,
+        bool ignoreNestedIds,
+        bool ignoreForeignKeyClashes,
+        HashSet<string> foreignKeyPaths,
+        Dictionary<string, int> leafNameCounts,
+        HashSet<ITypeSymbol> visitedTypes,
+        Dictionary<ITypeSymbol, bool> collectionTypeCache,
+        Dictionary<ITypeSymbol, bool> leafTypeCache,
+        CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+
+        if (maxDepth > 0 && depth >= maxDepth) return;
+        if (depth >= 10) return;
+
+        if (!visitedTypes.Add(currentType)) return;
+
+        if (currentType is not INamedTypeSymbol namedType) return;
+
+        var members = includeFields
+            ? namedType.GetMembers().Where(m => m is IPropertySymbol or IFieldSymbol)
+            : namedType.GetMembers().OfType<IPropertySymbol>();
+
+        foreach (var member in members)
+        {
+            token.ThrowIfCancellationRequested();
+
+            if (member.DeclaredAccessibility != Accessibility.Public) continue;
+
+            var memberName = member.Name;
+            ITypeSymbol memberType;
+
+            if (member is IPropertySymbol property)
+            {
+                memberType = property.Type;
+            }
+            else if (member is IFieldSymbol field)
+            {
+                memberType = field.Type;
+            }
+            else
+            {
+                continue;
+            }
+
+            var newPath = string.IsNullOrEmpty(currentPath) ? memberName : $"{currentPath}.{memberName}";
+
+            if (IsExcluded(newPath, excludedPaths)) continue;
+
+            if (ignoreNestedIds && IsIdProperty(memberName))
+            {
+                if (depth > 0 || memberName != "Id")
+                {
+                    continue;
+                }
+            }
+
+            var newPathSegments = new List<string>(pathSegments) { memberName };
+            var leafName = memberName;
+
+            // For SmartLeaf, use LeafOnly naming to identify collisions
+            var flattenedName = GenerateFlattenedName(newPathSegments, FlattenNamingStrategy.LeafOnly);
+
+            if (ignoreForeignKeyClashes && depth > 0 && foreignKeyPaths.Contains(flattenedName))
+            {
+                continue;
+            }
+
+            if (IsCollectionType(memberType, collectionTypeCache))
+            {
+                continue;
+            }
+
+            if (ShouldFlattenAsLeaf(memberType, leafTypeCache))
+            {
+                if (leafNameCounts.ContainsKey(leafName))
+                {
+                    leafNameCounts[leafName]++;
+                }
+                else
+                {
+                    leafNameCounts[leafName] = 1;
+                }
+            }
+            else
+            {
+                CollectLeafNamesRecursive(
+                    memberType,
+                    newPath,
+                    newPathSegments,
+                    depth + 1,
+                    maxDepth,
+                    excludedPaths,
+                    includeFields,
+                    ignoreNestedIds,
+                    ignoreForeignKeyClashes,
+                    foreignKeyPaths,
+                    leafNameCounts,
+                    visitedTypes,
+                    collectionTypeCache,
+                    leafTypeCache,
+                    token);
+            }
+        }
+
+        visitedTypes.Remove(currentType);
     }
 
     private static HashSet<string> CollectAllForeignKeyPaths(
@@ -286,6 +456,7 @@ internal static class FlattenModelBuilder
         HashSet<string> foreignKeyPaths,
         List<FlattenProperty> properties,
         HashSet<string> seenNames,
+        HashSet<string> collidingLeafNames,
         HashSet<ITypeSymbol> visitedTypes,
         Dictionary<ITypeSymbol, bool> collectionTypeCache,
         Dictionary<ITypeSymbol, bool> leafTypeCache,
@@ -348,7 +519,7 @@ internal static class FlattenModelBuilder
 
             var newPathSegments = new List<string>(pathSegments) { memberName };
 
-            var flattenedName = GenerateFlattenedName(newPathSegments, namingStrategy);
+            var flattenedName = GenerateFlattenedName(newPathSegments, namingStrategy, collidingLeafNames);
 
             if (ignoreForeignKeyClashes && depth > 0 && foreignKeyPaths.Contains(flattenedName))
             {
@@ -420,6 +591,7 @@ internal static class FlattenModelBuilder
                     foreignKeyPaths,
                     properties,
                     seenNames,
+                    collidingLeafNames,
                     visitedTypes,
                     collectionTypeCache,
                     leafTypeCache,
@@ -603,11 +775,27 @@ internal static class FlattenModelBuilder
         return false;
     }
 
-    private static string GenerateFlattenedName(List<string> pathSegments, FlattenNamingStrategy strategy)
+    private static string GenerateFlattenedName(List<string> pathSegments, FlattenNamingStrategy strategy, HashSet<string>? collidingLeafNames = null)
     {
         if (strategy == FlattenNamingStrategy.LeafOnly)
         {
             return pathSegments.Last();
+        }
+
+        if (strategy == FlattenNamingStrategy.SmartLeaf)
+        {
+            var leafName = pathSegments.Last();
+
+            // If this leaf name collides with another, use parent + leaf
+            if (collidingLeafNames != null && collidingLeafNames.Contains(leafName) && pathSegments.Count >= 2)
+            {
+                // Use immediate parent + leaf name
+                var parentName = pathSegments[pathSegments.Count - 2];
+                return parentName + leafName;
+            }
+
+            // No collision, use leaf only
+            return leafName;
         }
 
         // Prefix strategy (default)

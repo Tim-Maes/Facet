@@ -180,3 +180,81 @@ public partial class OrderWithFksFlatDto
     // Should skip: Customer.Id, Customer.HomeAddressId, ShippingAddress.Id, Customer.HomeAddress.Id
     // Should include: CustomerName, CustomerEmail, ShippingAddressLine1, etc.
 }
+
+// Test models for SmartLeaf naming strategy
+public class Position
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+public class ItemType
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+public class ExtendedData
+{
+    public int Id { get; set; }
+    public int PositionId { get; set; }
+    public Position Position { get; set; } = null!;
+    public int TypeId { get; set; }
+    public ItemType Type { get; set; } = null!;
+}
+
+public class DataItem
+{
+    public int Id { get; set; }
+    public string DataValue { get; set; } = string.Empty;
+    public int ExtendedDataId { get; set; }
+    public ExtendedData ExtendedData { get; set; } = null!;
+}
+
+[Flatten(typeof(DataItem), NamingStrategy = FlattenNamingStrategy.SmartLeaf, IgnoreNestedIds = true)]
+public partial class DataItemSmartLeafDto
+{
+    // Expected properties:
+    // Id (root)
+    // DataValue (no collision)
+    // PositionName (collision resolved with parent)
+    // TypeName (collision resolved with parent)
+}
+
+[Flatten(typeof(DataItem), NamingStrategy = FlattenNamingStrategy.LeafOnly, IgnoreNestedIds = true)]
+public partial class DataItemLeafOnlyDto
+{
+    // Expected properties with numeric suffixes:
+    // Id, DataValue, Name, Name2
+}
+
+// Test model with multiple collisions from same parent
+public class CatalogProduct
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+}
+
+public class CatalogCategory
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+}
+
+public class ProductCatalog
+{
+    public int Id { get; set; }
+    public CatalogProduct Product { get; set; } = null!;
+    public CatalogCategory Category { get; set; } = null!;
+}
+
+[Flatten(typeof(ProductCatalog), NamingStrategy = FlattenNamingStrategy.SmartLeaf, IgnoreNestedIds = true)]
+public partial class ProductCatalogSmartLeafDto
+{
+    // Expected properties:
+    // Id
+    // ProductName, ProductCode (collisions resolved)
+    // CategoryName, CategoryCode (collisions resolved)
+}
