@@ -4,7 +4,7 @@ The `[MapFrom]` attribute provides declarative property mapping, allowing you to
 
 ## Basic Usage
 
-Use `[MapFrom]` on properties in your Facet class to specify which source property to map from:
+Use `[MapFrom]` on properties in your Facet class to specify which source property to map from. Use `nameof()` for type-safe property references:
 
 ```csharp
 public class User
@@ -19,10 +19,10 @@ public class User
 [Facet(typeof(User), GenerateToSource = true)]
 public partial class UserDto
 {
-    [MapFrom("FirstName", Reversible = true)]
+    [MapFrom(nameof(User.FirstName), Reversible = true)]
     public string Name { get; set; } = string.Empty;
 
-    [MapFrom("LastName", Reversible = true)]
+    [MapFrom(nameof(User.LastName), Reversible = true)]
     public string FamilyName { get; set; } = string.Empty;
 }
 ```
@@ -67,11 +67,20 @@ var entity = dto.ToSource();
 
 ### Source (Required)
 
-The source property name to map from:
+The source property name or expression to map from. Use `nameof()` for type-safe references:
 
 ```csharp
-[MapFrom("FirstName")]
+// Type-safe property reference (recommended)
+[MapFrom(nameof(User.FirstName))]
 public string Name { get; set; }
+
+// Expression with multiple properties (string required)
+[MapFrom(nameof(User.FirstName) + " + \" \" + " + nameof(User.LastName))]
+public string FullName { get; set; }
+
+// Or simply use a string for expressions
+[MapFrom("FirstName + \" \" + LastName")]
+public string FullName { get; set; }
 ```
 
 ### Reversible
@@ -80,11 +89,11 @@ Controls whether the mapping is included in `ToSource()`. Default is `false` (op
 
 ```csharp
 // This property WILL be mapped back to the source
-[MapFrom("FirstName", Reversible = true)]
+[MapFrom(nameof(User.FirstName), Reversible = true)]
 public string Name { get; set; } = string.Empty;
 
 // This property will NOT be mapped back (default)
-[MapFrom("LastName")]
+[MapFrom(nameof(User.LastName))]
 public string DisplayName { get; set; } = string.Empty;
 ```
 
@@ -120,10 +129,10 @@ Use `IncludeInProjection = false` for:
 [Facet(typeof(Customer), GenerateToSource = true)]
 public partial class CustomerDto
 {
-    [MapFrom("CompanyName", Reversible = true)]
+    [MapFrom(nameof(Customer.CompanyName), Reversible = true)]
     public string Company { get; set; } = string.Empty;
 
-    [MapFrom("ContactName", Reversible = true)]
+    [MapFrom(nameof(Customer.ContactName), Reversible = true)]
     public string Contact { get; set; } = string.Empty;
 }
 ```
@@ -135,10 +144,34 @@ public partial class CustomerDto
 public partial class ProductDto
 {
     // Display-only property, default is not reversible
-    [MapFrom("Name")]
+    [MapFrom(nameof(Product.Name))]
     public string ProductTitle { get; set; } = string.Empty;
 }
 ```
+
+### Computed Expressions
+
+Use expressions to combine or transform properties:
+
+```csharp
+[Facet(typeof(User))]
+public partial class UserDto
+{
+    // Concatenate first and last name
+    [MapFrom("FirstName + \" \" + LastName")]
+    public string FullName { get; set; } = string.Empty;
+
+    // Mathematical expressions
+    [MapFrom("Price * Quantity")]
+    public decimal Total { get; set; }
+
+    // Method calls (works in constructor, may not translate to SQL)
+    [MapFrom("Name.ToUpper()")]
+    public string UpperName { get; set; } = string.Empty;
+}
+```
+
+**Note:** Complex expressions may not translate to SQL in EF Core projections. Use `IncludeInProjection = false` for expressions that require client-side evaluation.
 
 ### With Nested Facets
 
@@ -148,7 +181,7 @@ MapFrom works with nested facets too:
 [Facet(typeof(Company), GenerateToSource = true)]
 public partial class CompanyDto
 {
-    [MapFrom("CompanyName", Reversible = true)]
+    [MapFrom(nameof(Company.CompanyName), Reversible = true)]
     public string Name { get; set; } = string.Empty;
 }
 
@@ -175,10 +208,10 @@ public class UserMapper : IFacetMapConfiguration<User, UserDto>
 [Facet(typeof(User), Configuration = typeof(UserMapper), GenerateToSource = true)]
 public partial class UserDto
 {
-    [MapFrom("FirstName", Reversible = true)]
+    [MapFrom(nameof(User.FirstName), Reversible = true)]
     public string Name { get; set; } = string.Empty;
 
-    [MapFrom("LastName", Reversible = true)]
+    [MapFrom(nameof(User.LastName), Reversible = true)]
     public string FamilyName { get; set; } = string.Empty;
 
     public string FullName { get; set; } = string.Empty;
@@ -189,25 +222,26 @@ public partial class UserDto
 
 | Scenario | MapFrom | Custom Config |
 |----------|---------|---------------|
-| Simple property rename | :white_check_mark: Best choice | Overkill |
-| Multiple renames | :white_check_mark: Best choice | Overkill |
-| Computed values (e.g., concatenation) | :x: | :white_check_mark: Required |
-| Async operations | :x: | :white_check_mark: Required |
-| Complex transformations | :x: | :white_check_mark: Required |
-| Type conversions | :x: | :white_check_mark: Required |
-| Conditional logic | :x: | :white_check_mark: Required |
+| Simple property rename | ✅ Best choice | Overkill |
+| Multiple renames | ✅ Best choice | Overkill |
+| Computed values (e.g., concatenation) | ✅ Supported | Alternative |
+| Mathematical expressions | ✅ Supported | Alternative |
+| Async operations | ❌ | ✅ Required |
+| Complex transformations | ❌ | ✅ Required |
+| Type conversions | ❌ | ✅ Required |
+| Conditional logic | ❌ | ✅ Required |
 
 ## Best Practices
 
-1. **Use for simple renames only** - For computed values or transformations, use custom mapping
-2. **Set Reversible = false for display properties** - If the DTO property shouldn't update the source
-3. **Consider projection compatibility** - Set IncludeInProjection = false for complex client-side logic
+1. **Use `nameof()` for type safety** - Prevents typos and enables refactoring support
+2. **Set Reversible = false for computed properties** - Expressions can't be reversed
+3. **Consider projection compatibility** - Set `IncludeInProjection = false` for expressions that can't translate to SQL
 4. **Combine with custom mappers when needed** - MapFrom handles the basics, custom mapper handles the rest
 
 ## Limitations
 
-- **Simple property access only** - Cannot use expressions like `"FirstName + LastName"`
 - **Same type required** - Source and target property types must match
 - **No nested path support** - Cannot use `"Company.Name"` (use nested facets instead)
+- **Expressions are not reversible** - Computed expressions are one-way (source → DTO only)
 
-For complex scenarios, use [Custom Mapping](04_CustomMapping.md) instead.
+For complex scenarios like async operations or conditional logic, use [Custom Mapping](04_CustomMapping.md) instead.

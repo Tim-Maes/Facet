@@ -297,13 +297,17 @@ public class User
 [Facet(typeof(User), GenerateToSource = true)]
 public partial class UserDto
 {
-    // Simple property rename with reverse mapping
-    [MapFrom("FirstName", Reversible = true)]
+    // Type-safe property rename with reverse mapping
+    [MapFrom(nameof(User.FirstName), Reversible = true)]
     public string Name { get; set; } = string.Empty;
 
     // Rename multiple properties
-    [MapFrom("LastName", Reversible = true)]
+    [MapFrom(nameof(User.LastName), Reversible = true)]
     public string FamilyName { get; set; } = string.Empty;
+
+    // Computed expression (not reversible)
+    [MapFrom("FirstName + \" \" + LastName")]
+    public string FullName { get; set; } = string.Empty;
 }
 
 // Usage
@@ -311,6 +315,7 @@ var user = new User { Id = 1, FirstName = "John", LastName = "Doe", Email = "joh
 var dto = new UserDto(user);
 // dto.Name = "John" (mapped from FirstName)
 // dto.FamilyName = "Doe" (mapped from LastName)
+// dto.FullName = "John Doe" (computed expression)
 
 // Reverse mapping works automatically
 var entity = dto.ToSource();
@@ -328,16 +333,16 @@ var dtos = users.Select(UserDto.Projection).ToList();
 public partial class UserDto
 {
     // Reversible mapping (included in ToSource) - opt-in
-    [MapFrom("FirstName", Reversible = true)]
+    [MapFrom(nameof(User.FirstName), Reversible = true)]
     public string Name { get; set; } = string.Empty;
 
     // Default: not reversible (one-way, source → DTO only)
-    [MapFrom("LastName")]
+    [MapFrom(nameof(User.LastName))]
     public string DisplayName { get; set; } = string.Empty;
 
     // Exclude from EF Core projection (for client-side computed values)
-    [MapFrom("ComplexField", IncludeInProjection = false)]
-    public string Computed { get; set; } = string.Empty;
+    [MapFrom("Name.ToUpper()", IncludeInProjection = false)]
+    public string UpperName { get; set; } = string.Empty;
 }
 ```
 
@@ -345,11 +350,11 @@ public partial class UserDto
 
 | Use Case | MapFrom | Custom Config |
 |----------|---------|---------------|
-| Simple property rename | :white_check_mark: | :x: Overkill |
-| Multiple renames | :white_check_mark: | :x: Overkill |
-| Computed values | :x: | :white_check_mark: |
-| Async operations | :x: | :white_check_mark: |
-| Complex transformations | :x: | :white_check_mark: |
+| Simple property rename | ✅ Best choice | Overkill |
+| Multiple renames | ✅ Best choice | Overkill |
+| Computed values (expressions) | ✅ Supported | Alternative |
+| Async operations | ❌ | ✅ Required |
+| Complex transformations | ❌ | ✅ Required |
 
 **Note**: MapFrom and custom configurations can be combined. Auto-generated mappings (including MapFrom) are applied first, then the custom mapper is called.
 
