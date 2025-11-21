@@ -727,29 +727,8 @@ Facet is modular and consists of several NuGet packages:
 
 **Facet is the only tool that combines compile-time generation with deep EF Core integration.**
 
-### Single Mapping benchmark
+## Contributors
 
-Facet delivers competitive performance across different mapping scenarios. Here's how it compares to popular alternatives:
-
-| Library  | Mean Time | Memory Allocated | Performance vs Facet |
-|----------|-----------|------------------|---------------------|
-| **Facet** | 15.93 ns | 136 B | **Baseline** |
-| Mapperly | 15.09 ns | 128 B | 5% faster, 6% less memory |
-| Mapster  | 21.90 ns | 128 B | 38% slower, 6% less memory |
-
-### Collection Mapping (10 items)
-
-| Library  | Mean Time | Memory Allocated | Performance vs Facet |
-|----------|-----------|------------------|---------------------|
-| Mapster  | 192.55 ns | 1,416 B | **10% faster, 10% less memory** |
-| **Facet** | 207.32 ns | 1,568 B | **Baseline** |
-| Mapperly | 222.50 ns | 1,552 B | 7% slower, 1% less memory |
-
-For this benchmark we used the `<TSource, TTarget>` methods. 
-
-**Insights:**
-> - **Single mapping**: All three libraries perform similarly with sub-nanosecond differences
-> - **Collection mapping**: Mapster has a slight edge for bulk operations, while Facet and Mapperly are very close
-> - **Memory efficiency**: All libraries are within ~10% of each other for memory allocation
-> - **Compile-time generation**: Both Facet and Mapperly benefit from zero-runtime-cost source generation
-
+<a href="https://github.com/Tim-Maes/Facet/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Tim-Maes/Facet" />
+</a>
