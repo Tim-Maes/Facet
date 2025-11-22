@@ -1,9 +1,6 @@
-using Facet.Tests.TestModels;
-using Facet.Mapping;
-
 namespace Facet.Tests.TestModels;
 
-[Facet(typeof(User), "Password", "CreatedAt", GenerateToSource = true)]
+[Facet(typeof(User), "Password", "CreatedAt", GenerateToSource = true, SourceSignature = "5b10b9aa")]
 public partial class UserDto
 {
     public string FullName { get; set; } = string.Empty;
