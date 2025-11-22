@@ -28,6 +28,11 @@ internal sealed class FacetMember : IEquatable<FacetMember>
     public string SourcePropertyName { get; }
     public bool IsUserDeclared { get; }
 
+    // MapWhen attribute properties
+    public IReadOnlyList<string> MapWhenConditions { get; }
+    public string? MapWhenDefault { get; }
+    public bool MapWhenIncludeInProjection { get; }
+
     public FacetMember(
         string name,
         string typeName,
@@ -47,7 +52,10 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         bool mapFromReversible = false,
         bool mapFromIncludeInProjection = true,
         string? sourcePropertyName = null,
-        bool isUserDeclared = false)
+        bool isUserDeclared = false,
+        IReadOnlyList<string>? mapWhenConditions = null,
+        string? mapWhenDefault = null,
+        bool mapWhenIncludeInProjection = true)
     {
         Name = name;
         TypeName = typeName;
@@ -68,6 +76,9 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         MapFromIncludeInProjection = mapFromIncludeInProjection;
         SourcePropertyName = sourcePropertyName ?? name;
         IsUserDeclared = isUserDeclared;
+        MapWhenConditions = mapWhenConditions ?? Array.Empty<string>();
+        MapWhenDefault = mapWhenDefault;
+        MapWhenIncludeInProjection = mapWhenIncludeInProjection;
     }
 
     public bool Equals(FacetMember? other) =>
@@ -89,7 +100,10 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         MapFromIncludeInProjection == other.MapFromIncludeInProjection &&
         SourcePropertyName == other.SourcePropertyName &&
         IsUserDeclared == other.IsUserDeclared &&
-        Attributes.SequenceEqual(other.Attributes);
+        MapWhenDefault == other.MapWhenDefault &&
+        MapWhenIncludeInProjection == other.MapWhenIncludeInProjection &&
+        Attributes.SequenceEqual(other.Attributes) &&
+        MapWhenConditions.SequenceEqual(other.MapWhenConditions);
 
     public override bool Equals(object? obj) => obj is FacetMember other && Equals(other);
 
@@ -115,9 +129,14 @@ internal sealed class FacetMember : IEquatable<FacetMember>
             hash = hash * 31 + MapFromIncludeInProjection.GetHashCode();
             hash = hash * 31 + SourcePropertyName.GetHashCode();
             hash = hash * 31 + IsUserDeclared.GetHashCode();
+            hash = hash * 31 + (MapWhenDefault?.GetHashCode() ?? 0);
+            hash = hash * 31 + MapWhenIncludeInProjection.GetHashCode();
             hash = hash * 31 + Attributes.Count.GetHashCode();
             foreach (var attr in Attributes)
                 hash = hash * 31 + (attr?.GetHashCode() ?? 0);
+            hash = hash * 31 + MapWhenConditions.Count.GetHashCode();
+            foreach (var cond in MapWhenConditions)
+                hash = hash * 31 + (cond?.GetHashCode() ?? 0);
             return hash;
         }
     }
