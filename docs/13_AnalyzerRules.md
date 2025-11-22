@@ -23,6 +23,7 @@ Facet includes comprehensive Roslyn analyzers that provide real-time feedback in
 | [FAC015](#fac015) | Error | Usage | Invalid source type in [Flatten] |
 | [FAC016](#fac016) | Warning | Performance | Unusual MaxDepth in [Flatten] |
 | [FAC017](#fac017) | Info | Usage | LeafOnly naming collision risk |
+| [FAC022](#fac022) | Warning | SourceTracking | Source entity structure changed |
 
 ---
 
@@ -604,6 +605,51 @@ public partial class PersonFlat { }
 
 // Generates: HomeAddressStreet, HomeAddressCity, WorkAddressStreet, WorkAddressCity
 ```
+
+---
+
+## Source Signature Analyzers
+
+### FAC022
+
+**Source entity structure changed**
+
+- **Severity**: Warning
+- **Category**: SourceTracking
+
+#### Description
+
+When you set `SourceSignature` on a `[Facet]` attribute, the analyzer computes a hash of the source type's properties and compares it to the stored signature. This warning is raised when the source entity's structure changes.
+
+#### Code Triggering Warning
+
+```csharp
+public class User
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string Email { get; set; }  // New property added
+}
+
+[Facet(typeof(User), SourceSignature = "oldvalue")]  // ⚠️ FAC022
+public partial class UserDto { }
+```
+
+#### Resolution
+
+Use the provided code fix to update the signature, or manually update it:
+
+```csharp
+[Facet(typeof(User), SourceSignature = "newvalue")]  // ✅ OK
+public partial class UserDto { }
+```
+
+#### Notes
+
+- The signature is an 8-character hash computed from property names and types
+- Respects `Include`/`Exclude` filters when computing the signature
+- A code fix provider automatically offers to update the signature
+- See [Source Signature Change Tracking](16_SourceSignature.md) for details
 
 ---
 

@@ -37,6 +37,7 @@ public partial class MyFacet { }
 | `UseFullName`                  | `bool`    | Use full type name in generated file names to avoid collisions (default: false). |
 | `MaxDepth`                     | `int`     | Maximum depth for nested facet recursion to prevent stack overflow (default: 3). Set to 0 for unlimited (not recommended). See [Circular Reference Protection](#circular-reference-protection) below. |
 | `PreserveReferences`           | `bool`    | Enable runtime circular reference detection using object tracking (default: true). See [Circular Reference Protection](#circular-reference-protection) below. |
+| `SourceSignature`              | `string?` | Hash signature to track source entity changes. Emits FAC022 warning when source structure changes. See [Source Signature Change Tracking](16_SourceSignature.md). |
 
 ## Include vs Exclude
 
