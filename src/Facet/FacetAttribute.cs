@@ -136,6 +136,14 @@ public sealed class FacetAttribute : Attribute
     public bool PreserveReferences { get; set; } = true;
 
     /// <summary>
+    /// Optional signature to track source entity structure changes.
+    /// When set, emits a compile-time warning if the source entity's properties change.
+    /// This helps detect unintended API changes when source models are modified.
+    /// The signature is a hash computed from property names and types.
+    /// </summary>
+    public string? SourceSignature { get; set; }
+
+    /// <summary>
     /// Creates a new FacetAttribute that targets a given source type and excludes specified members.
     /// </summary>
     /// <param name="sourceType">The type to generate from.</param>

@@ -69,10 +69,11 @@ Click on a section to expand/collapse
 
 <details>
   <summary>Additional Features</summary>
-  
+
 - **Flatten** nested objects into top-level properties
 - **Wrapper** pattern for reference-based delegation (facades, decorators, ViewModels)
 - **Auto-generate CRUD DTOs** (Create, Update, Response, Query, Upsert)
+- **Source signature tracking** for detecting breaking changes when source entities change
 
 </details> 
 
@@ -83,6 +84,7 @@ Click on a section to expand/collapse
 - Works with any LINQ provider (via Facet.Extensions)
 - Expression tree transformation for predicates & selectors
 - Zero runtime cost and no reflection, everything happens at compile time
+- Supports **.NET 8, .NET 9, and .NET 10** (LTS)
 
 </details>
 
@@ -793,6 +795,62 @@ Console.WriteLine(view.Name);  // "Desktop"
 | **Memory** | Duplicates data | No duplication |
 | **Changes** | Independent | Synchronized to source |
 | **Use Case** | DTOs, EF projections | Facades, ViewModels |
+
+</details>
+
+<details>
+  <summary>Source Signature Tracking for Breaking Change Detection</summary>
+
+Track changes to your source entities and get compile-time warnings when the structure changes. This helps prevent unintended API breaking changes when your EF Core models are modified.
+
+#### Basic Usage
+
+```csharp
+// Without tracking (default behavior)
+[Facet(typeof(User))]
+public partial class UserDto;
+
+// With change detection - add a SourceSignature
+[Facet(typeof(User), SourceSignature = "a1b2c3d4")]
+public partial class UserDto;
+```
+
+#### How It Works
+
+1. The signature is an 8-character hash based on property names and types
+2. When the source entity changes (properties added/removed/renamed), the hash changes
+3. A compile-time warning (FAC022) alerts you to review and acknowledge the change
+
+#### Example Warning
+
+When someone adds a new property to the `User` entity:
+
+```
+warning FAC022: Source entity 'User' structure has changed.
+Update SourceSignature to 'e5f6g7h8' to acknowledge this change.
+```
+
+#### IDE Code Fix
+
+In Visual Studio or Rider, click the lightbulb to automatically update the signature:
+
+**"Update SourceSignature to 'e5f6g7h8'"**
+
+#### Benefits
+
+| Benefit | Description |
+|---------|-------------|
+| **Prevents data exposure** | New sensitive fields don't silently appear in API responses |
+| **Catches breaking changes** | Removed fields are detected before runtime errors |
+| **Explicit acknowledgment** | Forces review of changes before they reach production |
+| **Opt-in** | Only active when you set a SourceSignature |
+
+#### Workflow
+
+1. During development, use Facet without signatures for flexibility
+2. Before release, add `SourceSignature` to lock the API contract
+3. When source entities change, the warning reminds you to review
+4. Update the signature to acknowledge intentional changes
 
 </details>
 

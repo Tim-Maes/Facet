@@ -2,9 +2,12 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Facet.Analyzers;
 
@@ -94,6 +97,16 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "MaxDepth values should typically be between 1 and 10 for most scenarios.");
 
+    // FAC022: Source signature mismatch
+    public static readonly DiagnosticDescriptor SourceSignatureMismatchRule = new DiagnosticDescriptor(
+        "FAC022",
+        "Source entity structure changed",
+        "Source entity '{0}' structure has changed. Update SourceSignature to '{1}' to acknowledge this change.",
+        "Facet.SourceTracking",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "The source entity's structure has changed since the SourceSignature was set. Review the changes and update the signature to acknowledge them.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(
         MissingPartialKeywordRule,
         InvalidPropertyNameRule,
@@ -102,7 +115,8 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         InvalidNestedFacetRule,
         CircularReferenceWarningRule,
         IncludeAndExcludeBothSpecifiedRule,
-        MaxDepthWarningRule);
+        MaxDepthWarningRule,
+        SourceSignatureMismatchRule);
 
     public override void Initialize(AnalysisContext context)
     {
@@ -198,6 +212,8 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         var nestedFacetsArg = facetAttr.NamedArguments.FirstOrDefault(a => a.Key == "NestedFacets");
         var maxDepthArg = facetAttr.NamedArguments.FirstOrDefault(a => a.Key == "MaxDepth");
         var preserveReferencesArg = facetAttr.NamedArguments.FirstOrDefault(a => a.Key == "PreserveReferences");
+        var sourceSignatureArg = facetAttr.NamedArguments.FirstOrDefault(a => a.Key == "SourceSignature");
+        var includeFieldsArg = facetAttr.NamedArguments.FirstOrDefault(a => a.Key == "IncludeFields");
 
         // Check Include parameter
         if (!includeArg.Equals(default) && !includeArg.Value.IsNull && includeArg.Value.Kind == TypedConstantKind.Array)
@@ -311,6 +327,42 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
                 facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation());
             context.ReportDiagnostic(diagnostic);
         }
+
+        // Check SourceSignature
+        if (!sourceSignatureArg.Equals(default) && !sourceSignatureArg.Value.IsNull)
+        {
+            if (sourceSignatureArg.Value.Value is string expectedSignature && !string.IsNullOrEmpty(expectedSignature))
+            {
+                // Get IncludeFields value
+                bool includeFields = false;
+                if (!includeFieldsArg.Equals(default) && includeFieldsArg.Value.Value is bool includeFieldsValue)
+                {
+                    includeFields = includeFieldsValue;
+                }
+
+                // Get exclude values from constructor
+                var excludeValues = facetAttr.ConstructorArguments.Length > 1
+                    ? facetAttr.ConstructorArguments[1].Values
+                    : ImmutableArray<TypedConstant>.Empty;
+
+                // Get include value
+                var includeValue = !includeArg.Equals(default) ? includeArg.Value : default;
+
+                // Compute actual signature
+                var actualSignature = ComputeSourceSignature(sourceType, excludeValues, includeValue, includeFields);
+
+                // Compare signatures
+                if (!string.Equals(expectedSignature, actualSignature, StringComparison.OrdinalIgnoreCase))
+                {
+                    var diagnostic = Diagnostic.Create(
+                        SourceSignatureMismatchRule,
+                        facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
+                        sourceType.ToDisplayString(),
+                        actualSignature);
+                    context.ReportDiagnostic(diagnostic);
+                }
+            }
+        }
     }
 
     private static void ReportInvalidPropertyName(
@@ -409,5 +461,66 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
             if (current?.SpecialType == SpecialType.System_Object)
                 break;
         }
+    }
+
+    private static string ComputeSourceSignature(
+        INamedTypeSymbol sourceType,
+        ImmutableArray<TypedConstant> excludeValues,
+        TypedConstant includeValue,
+        bool includeFields)
+    {
+        // Get all public members from source type
+        var allMembers = GetAllPublicMembers(sourceType).ToList();
+
+        // Build exclude set
+        var excludeSet = new HashSet<string>();
+        foreach (var item in excludeValues)
+        {
+            if (item.Value is string name && !string.IsNullOrEmpty(name))
+                excludeSet.Add(name);
+        }
+
+        // Build include set if specified
+        HashSet<string>? includeSet = null;
+        if (!includeValue.IsNull && includeValue.Kind == TypedConstantKind.Array)
+        {
+            includeSet = new HashSet<string>();
+            foreach (var item in includeValue.Values)
+            {
+                if (item.Value is string name && !string.IsNullOrEmpty(name))
+                    includeSet.Add(name);
+            }
+        }
+
+        // Filter and format members
+        var filteredMembers = allMembers
+            .Where(m =>
+            {
+                if (m.Kind == SymbolKind.Field && !includeFields)
+                    return false;
+
+                if (includeSet != null)
+                    return includeSet.Contains(m.Name);
+
+                return !excludeSet.Contains(m.Name);
+            })
+            .OrderBy(m => m.Name)
+            .Select(m =>
+            {
+                var typeName = m switch
+                {
+                    IPropertySymbol prop => prop.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                    IFieldSymbol field => field.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                    _ => "unknown"
+                };
+                return $"{m.Name}:{typeName}";
+            });
+
+        var combined = string.Join("|", filteredMembers);
+
+        // Compute short hash
+        using var sha256 = SHA256.Create();
+        var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(combined));
+        return BitConverter.ToString(hashBytes).Replace("-", "").Substring(0, 8).ToLowerInvariant();
     }
 }
