@@ -75,6 +75,9 @@ internal static class ModelBuilder
         var expressionMembers = new List<FacetMember>();
         var mapFromMappings = ExtractMapFromMappings(targetSymbol, expressionMembers, nullableProperties);
 
+        // Extract MapWhen attribute mappings from target type properties
+        var mapWhenMappings = ExtractMapWhenMappings(targetSymbol);
+
         // Extract type-level XML documentation from the source type
         var typeXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(sourceType);
 
@@ -91,6 +94,7 @@ internal static class ModelBuilder
             copyAttributes,
             nestedFacetMappings,
             mapFromMappings,
+            mapWhenMappings,
             token);
 
         // Add expression-based members (from MapFrom with expressions)
@@ -162,6 +166,7 @@ internal static class ModelBuilder
         bool copyAttributes,
         Dictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings,
         Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName)> mapFromMappings,
+        Dictionary<string, (List<string> conditions, string? defaultValue, bool includeInProjection)> mapWhenMappings,
         CancellationToken token)
     {
         var members = new List<FacetMember>();
@@ -193,6 +198,7 @@ internal static class ModelBuilder
                     copyAttributes,
                     nestedFacetMappings,
                     mapFromMappings,
+                    mapWhenMappings,
                     members,
                     excludedRequiredMembers,
                     addedMembers);
@@ -226,6 +232,7 @@ internal static class ModelBuilder
         bool copyAttributes,
         Dictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings,
         Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName)> mapFromMappings,
+        Dictionary<string, (List<string> conditions, string? defaultValue, bool includeInProjection)> mapWhenMappings,
         List<FacetMember> members,
         List<FacetMember> excludedRequiredMembers,
         HashSet<string> addedMembers)
@@ -327,7 +334,15 @@ internal static class ModelBuilder
         var mapFromReversible = hasMapFrom ? mapFromInfo.reversible : true;
         var mapFromIncludeInProjection = hasMapFrom ? mapFromInfo.includeInProjection : true;
         var sourcePropertyName = property.Name; // Always use the actual source property name
-        var isUserDeclared = hasMapFrom; // User declared the property with [MapFrom]
+
+        // Get MapWhen conditions for this property (keyed by target property name)
+        var hasMapWhen = mapWhenMappings.TryGetValue(memberName, out var mapWhenInfo);
+
+        // User declared the property with [MapFrom] or [MapWhen]
+        var isUserDeclared = hasMapFrom || hasMapWhen;
+        var mapWhenConditions = hasMapWhen ? mapWhenInfo.conditions : null;
+        var mapWhenDefault = hasMapWhen ? mapWhenInfo.defaultValue : null;
+        var mapWhenIncludeInProjection = hasMapWhen ? mapWhenInfo.includeInProjection : true;
 
         // If user declared, use their type name instead
         if (hasMapFrom && !string.IsNullOrEmpty(mapFromInfo.typeName))
@@ -358,7 +373,10 @@ internal static class ModelBuilder
             mapFromReversible,
             mapFromIncludeInProjection,
             sourcePropertyName,
-            isUserDeclared));
+            isUserDeclared,
+            mapWhenConditions,
+            mapWhenDefault,
+            mapWhenIncludeInProjection));
         addedMembers.Add(memberName);
     }
 
@@ -526,6 +544,82 @@ internal static class ModelBuilder
                source.Contains("(") ||
                source.Contains("?") ||
                source.Contains(":");
+    }
+
+    /// <summary>
+    /// Extracts MapWhen attribute mappings from the target type's properties.
+    /// Returns a dictionary mapping property names to (conditions, defaultValue, includeInProjection).
+    /// </summary>
+    private static Dictionary<string, (List<string> conditions, string? defaultValue, bool includeInProjection)> ExtractMapWhenMappings(
+        INamedTypeSymbol targetSymbol)
+    {
+        var mappings = new Dictionary<string, (List<string> conditions, string? defaultValue, bool includeInProjection)>();
+
+        // Get all members from the target type (user-declared properties)
+        foreach (var member in targetSymbol.GetMembers())
+        {
+            if (member is not IPropertySymbol property) continue;
+
+            var conditions = new List<string>();
+            string? defaultValue = null;
+            bool includeInProjection = true;
+
+            // Look for MapWhen attributes (can have multiple)
+            foreach (var attr in property.GetAttributes())
+            {
+                if (attr.AttributeClass?.ToDisplayString() == FacetConstants.MapWhenAttributeFullName)
+                {
+                    // Get the Condition constructor argument
+                    if (attr.ConstructorArguments.Length > 0 && attr.ConstructorArguments[0].Value is string condition)
+                    {
+                        conditions.Add(condition);
+
+                        // Get named arguments
+                        foreach (var namedArg in attr.NamedArguments)
+                        {
+                            if (namedArg.Key == "Default" && namedArg.Value.Value != null)
+                            {
+                                // Convert the default value to a string representation
+                                defaultValue = ConvertDefaultValueToString(namedArg.Value);
+                            }
+                            else if (namedArg.Key == "IncludeInProjection" && namedArg.Value.Value is bool incProj)
+                            {
+                                includeInProjection = incProj;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (conditions.Count > 0)
+            {
+                mappings[property.Name] = (conditions, defaultValue, includeInProjection);
+            }
+        }
+
+        return mappings;
+    }
+
+    /// <summary>
+    /// Converts a TypedConstant default value to its C# string representation.
+    /// </summary>
+    private static string? ConvertDefaultValueToString(TypedConstant value)
+    {
+        if (value.IsNull)
+            return "null";
+
+        return value.Value switch
+        {
+            string s => $"\"{s.Replace("\"", "\\\"")}\"",
+            char c => $"'{c}'",
+            bool b => b ? "true" : "false",
+            int i => i.ToString(),
+            long l => $"{l}L",
+            float f => $"{f}f",
+            double d => $"{d}d",
+            decimal m => $"{m}m",
+            _ => value.Value?.ToString()
+        };
     }
 
     #endregion

@@ -144,13 +144,24 @@ internal static class ProjectionGenerator
         }
 
         // Check if this is a MapFrom expression (contains operators or spaces)
+        string valueExpression;
         if (member.MapFromSource != null && IsExpression(member.MapFromSource))
         {
-            return TransformExpression(member.MapFromSource, sourceVariableName);
+            valueExpression = TransformExpression(member.MapFromSource, sourceVariableName);
+        }
+        else
+        {
+            // Regular property - direct assignment using SourcePropertyName (supports MapFrom)
+            valueExpression = $"{sourceVariableName}.{member.SourcePropertyName}";
         }
 
-        // Regular property - direct assignment using SourcePropertyName (supports MapFrom)
-        return $"{sourceVariableName}.{member.SourcePropertyName}";
+        // Apply MapWhen conditions if present and IncludeInProjection is true
+        if (member.MapWhenConditions.Count > 0 && member.MapWhenIncludeInProjection)
+        {
+            valueExpression = WrapWithMapWhenCondition(member, valueExpression, sourceVariableName);
+        }
+
+        return valueExpression;
     }
 
     private static string BuildCollectionProjection(
@@ -441,7 +452,7 @@ internal static class ProjectionGenerator
                     inString = false;
                 }
 
-                FlushIdentifier(result, identifier, sourceVariableName);
+                FlushIdentifier(result, identifier, sourceVariableName, expression, i);
                 result.Append(c);
                 continue;
             }
@@ -458,21 +469,25 @@ internal static class ProjectionGenerator
             }
             else
             {
-                FlushIdentifier(result, identifier, sourceVariableName);
+                FlushIdentifier(result, identifier, sourceVariableName, expression, i);
                 result.Append(c);
             }
         }
 
-        FlushIdentifier(result, identifier, sourceVariableName);
+        FlushIdentifier(result, identifier, sourceVariableName, expression, expression.Length);
         return result.ToString();
     }
 
-    private static void FlushIdentifier(StringBuilder result, StringBuilder identifier, string sourceVariableName)
+    private static void FlushIdentifier(StringBuilder result, StringBuilder identifier, string sourceVariableName, string expression, int currentIndex)
     {
         if (identifier.Length > 0)
         {
             var id = identifier.ToString();
-            if (!IsKeyword(id) && !char.IsDigit(id[0]))
+            // Don't prefix keywords, numbers, type names (followed by '.'), or member access (preceded by '.')
+            var identifierStartIndex = currentIndex - identifier.Length;
+            var isPrecededByDot = identifierStartIndex > 0 && expression[identifierStartIndex - 1] == '.';
+
+            if (!IsKeyword(id) && !char.IsDigit(id[0]) && !IsLikelyTypeName(id, expression, currentIndex) && !isPrecededByDot)
             {
                 result.Append($"{sourceVariableName}.");
             }
@@ -486,8 +501,65 @@ internal static class ProjectionGenerator
         return identifier switch
         {
             "true" or "false" or "null" or "new" or "typeof" or "nameof" or
-            "is" or "as" or "in" or "out" or "ref" or "this" or "base" => true,
+            "is" or "as" or "in" or "out" or "ref" or "this" or "base" or
+            "default" or "string" or "int" or "bool" or "decimal" or "double" or
+            "float" or "long" or "short" or "byte" or "char" or "object" => true,
             _ => false
+        };
+    }
+
+    /// <summary>
+    /// Checks if an identifier appears to be a type name (starts with uppercase and is followed by '.')
+    /// This helps avoid prefixing enum type names like OrderStatus in "OrderStatus.Completed".
+    /// </summary>
+    private static bool IsLikelyTypeName(string identifier, string expression, int identifierEndIndex)
+    {
+        // If identifier starts with uppercase and is followed by '.', it's likely a type name
+        if (identifier.Length > 0 && char.IsUpper(identifier[0]))
+        {
+            if (identifierEndIndex < expression.Length && expression[identifierEndIndex] == '.')
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Wraps a value expression with MapWhen condition(s), generating a ternary expression.
+    /// </summary>
+    private static string WrapWithMapWhenCondition(FacetMember member, string valueExpression, string sourceVariableName)
+    {
+        // Combine multiple conditions with &&
+        var combinedCondition = string.Join(" && ", member.MapWhenConditions.Select(c =>
+            $"({TransformExpression(c, sourceVariableName)})"));
+
+        // Determine the default value
+        var defaultValue = member.MapWhenDefault ?? GetDefaultValueForType(member.TypeName);
+
+        return $"{combinedCondition} ? {valueExpression} : {defaultValue}";
+    }
+
+    /// <summary>
+    /// Gets an appropriate default value for a type name.
+    /// </summary>
+    private static string GetDefaultValueForType(string typeName)
+    {
+        // Handle nullable types
+        if (typeName.EndsWith("?"))
+            return "default";
+
+        // Handle common value types
+        return typeName switch
+        {
+            "bool" => "false",
+            "byte" or "sbyte" or "short" or "ushort" or "int" or "uint" or "long" or "ulong" => "0",
+            "float" => "0f",
+            "double" => "0d",
+            "decimal" => "0m",
+            "char" => "'\\0'",
+            "string" => "default",
+            _ => "default"
         };
     }
 }

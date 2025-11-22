@@ -436,4 +436,49 @@ public partial record ProductDto;
 
 ---
 
+## MapWhen Attribute
+
+The `[MapWhen]` attribute enables conditional property mapping based on source values.
+
+### Basic Usage
+
+```csharp
+[Facet(typeof(Order))]
+public partial class OrderDto
+{
+    [MapWhen("Status == OrderStatus.Completed")]
+    public DateTime? CompletedAt { get; set; }
+}
+```
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `Condition` | `string` | The condition expression to evaluate (required) |
+| `Default` | `object?` | Custom default value when condition is false |
+| `IncludeInProjection` | `bool` | Include condition in Projection expression (default: true) |
+
+### Supported Conditions
+
+- Boolean: `[MapWhen("IsActive")]`
+- Equality: `[MapWhen("Status == OrderStatus.Completed")]`
+- Null checks: `[MapWhen("Email != null")]`
+- Comparisons: `[MapWhen("Age >= 18")]`
+- Negation: `[MapWhen("!IsDeleted")]`
+
+### Multiple Conditions
+
+Multiple attributes are combined with AND logic:
+
+```csharp
+[MapWhen("IsActive")]
+[MapWhen("Status == OrderStatus.Completed")]
+public DateTime? CompletedAt { get; set; }
+```
+
+See [MapWhen Conditional Mapping](17_MapWhen.md) for full documentation.
+
+---
+
 See [Custom Mapping](04_CustomMapping.md) for advanced scenarios.

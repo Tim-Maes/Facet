@@ -42,6 +42,11 @@ internal static class FacetConstants
     public const string MapFromAttributeFullName = "Facet.MapFromAttribute";
 
     /// <summary>
+    /// The fully qualified name of the MapWhenAttribute.
+    /// </summary>
+    public const string MapWhenAttributeFullName = "Facet.MapWhenAttribute";
+
+    /// <summary>
     /// The default maximum depth for nested facet traversal to prevent stack overflow.
     /// </summary>
     public const int DefaultMaxDepth = 10;

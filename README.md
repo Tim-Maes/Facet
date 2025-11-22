@@ -64,6 +64,7 @@ Click on a section to expand/collapse
 - Custom mapping configurations (sync & async)
 - Expression transformation utilities for business logic reuse
 - **Property mapping with `[MapFrom]`** for declarative property renaming
+- **Conditional mapping with `[MapWhen]`** for status-dependent fields
 
 </details>
 
@@ -359,6 +360,90 @@ public partial class UserDto
 | Complex transformations | :x: | :white_check_mark: Required |
 
 **Note**: MapFrom and custom configurations can be combined. Auto-generated mappings (including MapFrom) are applied first, then the custom mapper is called.
+
+</details>
+
+<details>
+  <summary>Conditional Mapping with [MapWhen]</summary>
+
+Map properties only when specific conditions are met. Perfect for status-dependent fields, null checks, or role-based data exposure:
+
+```csharp
+public class Order
+{
+    public int Id { get; set; }
+    public OrderStatus Status { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public string? TrackingNumber { get; set; }
+    public bool IsActive { get; set; }
+    public string? Email { get; set; }
+}
+
+[Facet(typeof(Order))]
+public partial class OrderDto
+{
+    // Only map when status is Completed
+    [MapWhen("Status == OrderStatus.Completed")]
+    public DateTime? CompletedAt { get; set; }
+
+    // Only map when not cancelled
+    [MapWhen("Status != OrderStatus.Cancelled")]
+    public string? TrackingNumber { get; set; }
+
+    // Boolean condition
+    [MapWhen("IsActive")]
+    public string? Email { get; set; }
+}
+
+// Usage
+var order = new Order
+{
+    Id = 1,
+    Status = OrderStatus.Completed,
+    CompletedAt = DateTime.Now,
+    IsActive = true,
+    Email = "user@example.com"
+};
+
+var dto = new OrderDto(order);
+// dto.CompletedAt = DateTime.Now (condition true)
+// dto.Email = "user@example.com" (IsActive is true)
+
+var pendingOrder = new Order { Status = OrderStatus.Pending, Email = "test@example.com" };
+var pendingDto = new OrderDto(pendingOrder);
+// pendingDto.CompletedAt = null (condition false)
+```
+
+#### Multiple Conditions (AND Logic)
+
+```csharp
+[Facet(typeof(Order))]
+public partial class SecureOrderDto
+{
+    // Both conditions must be true
+    [MapWhen("IsActive")]
+    [MapWhen("Status == OrderStatus.Completed")]
+    public DateTime? CompletedAt { get; set; }
+}
+```
+
+#### Supported Conditions
+
+- **Boolean**: `[MapWhen("IsActive")]`
+- **Equality**: `[MapWhen("Status == OrderStatus.Completed")]`
+- **Inequality**: `[MapWhen("Status != OrderStatus.Cancelled")]`
+- **Null checks**: `[MapWhen("Email != null")]`
+- **Comparisons**: `[MapWhen("Age >= 18")]`
+- **Negation**: `[MapWhen("!IsDeleted")]`
+
+#### Works with EF Core Projections
+
+```csharp
+var orders = await dbContext.Orders
+    .Where(o => o.IsActive)
+    .SelectFacet<OrderDto>()  // Conditions included in SQL
+    .ToListAsync();
+```
 
 </details>
 
