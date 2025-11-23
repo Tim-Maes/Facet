@@ -125,6 +125,9 @@ internal static class ModelBuilder
         // Check if the source type has a positional constructor
         var hasPositionalConstructor = TypeAnalyzer.HasPositionalConstructor(sourceType);
 
+        // Collect base class member names to avoid generating duplicate properties
+        var baseClassMemberNames = GetBaseClassMemberNames(targetSymbol);
+
         return new FacetTargetModel(
             targetSymbol.Name,
             ns,
@@ -149,7 +152,8 @@ internal static class ModelBuilder
             nullableProperties,
             copyAttributes,
             maxDepth,
-            preserveReferences);
+            preserveReferences,
+            baseClassMemberNames);
     }
 
     #region Private Helper Methods
@@ -544,6 +548,35 @@ internal static class ModelBuilder
                source.Contains("(") ||
                source.Contains("?") ||
                source.Contains(":");
+    }
+
+    /// <summary>
+    /// Gets all member names from the target type's base classes.
+    /// This is used to avoid generating properties that already exist in base classes.
+    /// </summary>
+    private static ImmutableArray<string> GetBaseClassMemberNames(INamedTypeSymbol targetSymbol)
+    {
+        var memberNames = new List<string>();
+
+        // Walk up the inheritance chain
+        var baseType = targetSymbol.BaseType;
+        while (baseType != null && baseType.SpecialType != SpecialType.System_Object)
+        {
+            foreach (var member in baseType.GetMembers())
+            {
+                if (member is IPropertySymbol property && property.DeclaredAccessibility == Accessibility.Public)
+                {
+                    memberNames.Add(property.Name);
+                }
+                else if (member is IFieldSymbol field && field.DeclaredAccessibility == Accessibility.Public && !field.IsImplicitlyDeclared)
+                {
+                    memberNames.Add(field.Name);
+                }
+            }
+            baseType = baseType.BaseType;
+        }
+
+        return memberNames.ToImmutableArray();
     }
 
     /// <summary>

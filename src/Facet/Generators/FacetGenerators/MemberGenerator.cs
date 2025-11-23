@@ -13,10 +13,17 @@ internal static class MemberGenerator
     /// </summary>
     public static void GenerateMembers(StringBuilder sb, FacetTargetModel model, string memberIndent)
     {
+        // Create a HashSet for efficient lookup of base class member names
+        var baseClassMembers = new System.Collections.Generic.HashSet<string>(model.BaseClassMemberNames);
+
         foreach (var m in model.Members)
         {
-            // Skip user-declared properties (those with [MapFrom] attribute)
+            // Skip user-declared properties (those with [MapFrom] or [MapWhen] attribute)
             if (m.IsUserDeclared)
+                continue;
+
+            // Skip properties that already exist in base classes to avoid "hides inherited member" warning
+            if (baseClassMembers.Contains(m.Name))
                 continue;
 
             // Generate member XML documentation if available
