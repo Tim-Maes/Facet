@@ -32,6 +32,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public bool CopyAttributes { get; }
     public int MaxDepth { get; }
     public bool PreserveReferences { get; }
+    public ImmutableArray<string> BaseClassMemberNames { get; }
 
     public FacetTargetModel(
         string name,
@@ -57,7 +58,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         bool nullableProperties = false,
         bool copyAttributes = false,
         int maxDepth = 0,
-        bool preserveReferences = false)
+        bool preserveReferences = false,
+        ImmutableArray<string> baseClassMemberNames = default)
     {
         Name = name;
         Namespace = @namespace;
@@ -83,6 +85,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         CopyAttributes = copyAttributes;
         MaxDepth = maxDepth;
         PreserveReferences = preserveReferences;
+        BaseClassMemberNames = baseClassMemberNames.IsDefault ? ImmutableArray<string>.Empty : baseClassMemberNames;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -112,7 +115,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && NullableProperties == other.NullableProperties
             && CopyAttributes == other.CopyAttributes
             && MaxDepth == other.MaxDepth
-            && PreserveReferences == other.PreserveReferences;
+            && PreserveReferences == other.PreserveReferences
+            && BaseClassMemberNames.SequenceEqual(other.BaseClassMemberNames);
     }
 
     public override bool Equals(object? obj) => obj is FacetTargetModel other && Equals(other);
@@ -154,6 +158,9 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
 
             foreach (var excludedMember in ExcludedRequiredMembers)
                 hash = hash * 31 + excludedMember.GetHashCode();
+
+            foreach (var baseClassMember in BaseClassMemberNames)
+                hash = hash * 31 + (baseClassMember?.GetHashCode() ?? 0);
 
             return hash;
         }
