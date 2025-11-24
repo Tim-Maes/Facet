@@ -120,7 +120,7 @@ public static class FacetExpressionExtensions
         if (predicates.Length == 1) return predicates[0];
 
         var parameter = Expression.Parameter(typeof(T), "x");
-        Expression body = null;
+        Expression? body = null;
 
         foreach (var predicate in predicates)
         {
@@ -154,7 +154,7 @@ public static class FacetExpressionExtensions
         if (predicates.Length == 1) return predicates[0];
 
         var parameter = Expression.Parameter(typeof(T), "x");
-        Expression body = null;
+        Expression? body = null;
 
         foreach (var predicate in predicates)
         {

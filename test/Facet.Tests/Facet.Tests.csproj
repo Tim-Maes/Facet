@@ -33,9 +33,4 @@
     <ProjectReference Include="..\..\src\Facet.Mapping.Expressions\Facet.Mapping.Expressions.csproj" />
   </ItemGroup>
 
-  <!-- Resolve System.Collections.Immutable version conflict -->
-  <ItemGroup>
-    <PackageReference Include="System.Collections.Immutable" />
-  </ItemGroup>
-
 </Project>

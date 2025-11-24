@@ -23,12 +23,6 @@ internal static class CodeGenerationHelpers
             "System.Linq.Expressions"
         };
 
-        // Add System.ComponentModel.DataAnnotations if any member has attributes
-        if (model.CopyAttributes && model.Members.Any(m => m.Attributes.Count > 0))
-        {
-            namespaces.Add("System.ComponentModel.DataAnnotations");
-        }
-
         // If the source type is nested in another type, don't add it as a regular namespace
         // It will be handled by CollectStaticUsingTypes instead
         if (model.SourceContainingTypes.Length == 0)
@@ -40,8 +34,16 @@ internal static class CodeGenerationHelpers
             }
         }
 
+        // Single pass through members to collect namespaces and check for attributes
+        bool needAttributeNamespace = model.CopyAttributes;
         foreach (var member in model.Members)
         {
+            if (needAttributeNamespace && member.Attributes.Count > 0)
+            {
+                namespaces.Add("System.ComponentModel.DataAnnotations");
+                needAttributeNamespace = false;
+            }
+
             var memberTypeNamespace = ExtractNamespaceFromFullyQualifiedType(member.TypeName);
             if (!string.IsNullOrWhiteSpace(memberTypeNamespace))
             {
@@ -86,10 +88,7 @@ internal static class CodeGenerationHelpers
             var sourceTypeName = model.SourceTypeName;
 
             // Remove global:: prefix if present
-            if (sourceTypeName.StartsWith("global::"))
-            {
-                sourceTypeName = sourceTypeName.Substring(8);
-            }
+            sourceTypeName = GeneratorUtilities.StripGlobalPrefix(sourceTypeName);
 
             // Remove generic parameters if present
             var genericIndex = sourceTypeName.IndexOf('<');
@@ -126,12 +125,6 @@ internal static class CodeGenerationHelpers
             "System"
         };
 
-        // Add System.ComponentModel.DataAnnotations if any member has attributes
-        if (model.CopyAttributes && model.Members.Any(m => m.Attributes.Count > 0))
-        {
-            namespaces.Add("System.ComponentModel.DataAnnotations");
-        }
-
         // Add the source type namespace
         if (model.SourceContainingTypes.Length == 0)
         {
@@ -142,9 +135,16 @@ internal static class CodeGenerationHelpers
             }
         }
 
-        // Add namespaces for member types
+        // Single pass through members to collect namespaces and check for attributes
+        bool needAttributeNamespace = model.CopyAttributes;
         foreach (var member in model.Members)
         {
+            if (needAttributeNamespace && member.Attributes.Count > 0)
+            {
+                namespaces.Add("System.ComponentModel.DataAnnotations");
+                needAttributeNamespace = false;
+            }
+
             var memberTypeNamespace = ExtractNamespaceFromFullyQualifiedType(member.TypeName);
             if (!string.IsNullOrWhiteSpace(memberTypeNamespace))
             {
@@ -172,9 +172,7 @@ internal static class CodeGenerationHelpers
             return null;
 
         // Remove global:: prefix if present
-        var typeName = fullyQualifiedTypeName.StartsWith("global::")
-            ? fullyQualifiedTypeName.Substring(8)
-            : fullyQualifiedTypeName;
+        var typeName = GeneratorUtilities.StripGlobalPrefix(fullyQualifiedTypeName);
 
         var genericIndex = typeName.IndexOf('<');
         if (genericIndex > 0)
@@ -280,7 +278,7 @@ internal static class CodeGenerationHelpers
 
             return lines.Count > 0 ? string.Join("\n", lines) : string.Empty;
         }
-        catch
+        catch (System.Xml.XmlException)
         {
             // If XML parsing fails, return empty string rather than crashing the generator
             return string.Empty;

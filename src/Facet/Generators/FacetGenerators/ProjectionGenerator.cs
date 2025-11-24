@@ -77,40 +77,25 @@ internal static class ProjectionGenerator
         sb.AppendLine($"{indent}{{");
 
         var members = model.Members;
-        var memberCount = members.Length;
 
         // Track which facet types we're currently processing to detect circular references
         var visitedTypes = new HashSet<string> { model.Name };
 
-        var outputIndex = 0;
-        for (int i = 0; i < memberCount; i++)
+        // Pre-filter included members to avoid O(n²) comma placement check
+        var includedMembers = members.Where(m => m.MapFromIncludeInProjection).ToArray();
+        var includedCount = includedMembers.Length;
+
+        for (int i = 0; i < includedCount; i++)
         {
-            var member = members[i];
-
-            // Skip members that should not be included in projection (MapFromIncludeInProjection = false)
-            if (!member.MapFromIncludeInProjection)
-                continue;
-
-            var comma = outputIndex < memberCount - 1 ? "," : "";
+            var member = includedMembers[i];
             var memberIndent = indent + "    ";
 
             // Generate the property assignment
             var projectionValue = GetProjectionValueExpression(member, "source", memberIndent, facetLookup, visitedTypes, 0, model.MaxDepth);
             sb.Append($"{memberIndent}{member.Name} = {projectionValue}");
 
-            // Add comma and newline
-            outputIndex++;
-            // Check if this is the last included member
-            bool isLastIncluded = true;
-            for (int j = i + 1; j < memberCount; j++)
-            {
-                if (members[j].MapFromIncludeInProjection)
-                {
-                    isLastIncluded = false;
-                    break;
-                }
-            }
-            if (!isLastIncluded)
+            // Add comma if not the last member
+            if (i < includedCount - 1)
                 sb.Append(",");
             sb.AppendLine();
         }
@@ -230,7 +215,7 @@ internal static class ProjectionGenerator
         var nestedSourceExpression = $"{sourceVariableName}.{sourcePropName}";
 
         // Extract simple type name for circular reference check
-        var simpleTypeName = nonNullableTypeName.Replace("global::", "").Split('.', ':').Last();
+        var simpleTypeName = nonNullableTypeName.Replace(Shared.GeneratorUtilities.GlobalPrefix, "").Split('.', ':').Last();
 
         // Check for circular reference - if we're already processing this type, use constructor
         if (visitedTypes.Contains(simpleTypeName))
@@ -333,7 +318,7 @@ internal static class ProjectionGenerator
         int maxDepth = 0)
     {
         // Extract simple type name for circular reference check
-        var simpleTypeName = elementFacetTypeName.Replace("global::", "").Split('.', ':').Last();
+        var simpleTypeName = elementFacetTypeName.Replace(Shared.GeneratorUtilities.GlobalPrefix, "").Split('.', ':').Last();
 
         // Check for circular reference
         if (visitedTypes.Contains(simpleTypeName))
@@ -387,7 +372,7 @@ internal static class ProjectionGenerator
     {
         // Strip "global::" prefix and extract simple name
         var lookupName = typeName
-            .Replace("global::", "")
+            .Replace(Shared.GeneratorUtilities.GlobalPrefix, "")
             .Split('.', ':')
             .Last();
 
@@ -411,119 +396,9 @@ internal static class ProjectionGenerator
         return null;
     }
 
-    /// <summary>
-    /// Determines if the source string is an expression (contains operators, spaces, etc.)
-    /// </summary>
-    private static bool IsExpression(string source)
-    {
-        return source.Contains(" ") ||
-               source.Contains("+") ||
-               source.Contains("-") ||
-               source.Contains("*") ||
-               source.Contains("/") ||
-               source.Contains("(") ||
-               source.Contains("?") ||
-               source.Contains(":");
-    }
-
-    /// <summary>
-    /// Transforms a MapFrom expression by prefixing identifiers with the source variable name.
-    /// </summary>
-    private static string TransformExpression(string expression, string sourceVariableName)
-    {
-        var result = new StringBuilder();
-        var identifier = new StringBuilder();
-        bool inString = false;
-        char stringChar = '\0';
-
-        for (int i = 0; i < expression.Length; i++)
-        {
-            char c = expression[i];
-
-            if ((c == '"' || c == '\'') && (i == 0 || expression[i - 1] != '\\'))
-            {
-                if (!inString)
-                {
-                    inString = true;
-                    stringChar = c;
-                }
-                else if (c == stringChar)
-                {
-                    inString = false;
-                }
-
-                FlushIdentifier(result, identifier, sourceVariableName, expression, i);
-                result.Append(c);
-                continue;
-            }
-
-            if (inString)
-            {
-                result.Append(c);
-                continue;
-            }
-
-            if (char.IsLetterOrDigit(c) || c == '_')
-            {
-                identifier.Append(c);
-            }
-            else
-            {
-                FlushIdentifier(result, identifier, sourceVariableName, expression, i);
-                result.Append(c);
-            }
-        }
-
-        FlushIdentifier(result, identifier, sourceVariableName, expression, expression.Length);
-        return result.ToString();
-    }
-
-    private static void FlushIdentifier(StringBuilder result, StringBuilder identifier, string sourceVariableName, string expression, int currentIndex)
-    {
-        if (identifier.Length > 0)
-        {
-            var id = identifier.ToString();
-            // Don't prefix keywords, numbers, type names (followed by '.'), or member access (preceded by '.')
-            var identifierStartIndex = currentIndex - identifier.Length;
-            var isPrecededByDot = identifierStartIndex > 0 && expression[identifierStartIndex - 1] == '.';
-
-            if (!IsKeyword(id) && !char.IsDigit(id[0]) && !IsLikelyTypeName(id, expression, currentIndex) && !isPrecededByDot)
-            {
-                result.Append($"{sourceVariableName}.");
-            }
-            result.Append(id);
-            identifier.Clear();
-        }
-    }
-
-    private static bool IsKeyword(string identifier)
-    {
-        return identifier switch
-        {
-            "true" or "false" or "null" or "new" or "typeof" or "nameof" or
-            "is" or "as" or "in" or "out" or "ref" or "this" or "base" or
-            "default" or "string" or "int" or "bool" or "decimal" or "double" or
-            "float" or "long" or "short" or "byte" or "char" or "object" => true,
-            _ => false
-        };
-    }
-
-    /// <summary>
-    /// Checks if an identifier appears to be a type name (starts with uppercase and is followed by '.')
-    /// This helps avoid prefixing enum type names like OrderStatus in "OrderStatus.Completed".
-    /// </summary>
-    private static bool IsLikelyTypeName(string identifier, string expression, int identifierEndIndex)
-    {
-        // If identifier starts with uppercase and is followed by '.', it's likely a type name
-        if (identifier.Length > 0 && char.IsUpper(identifier[0]))
-        {
-            if (identifierEndIndex < expression.Length && expression[identifierEndIndex] == '.')
-            {
-                return true;
-            }
-        }
-        return false;
-    }
+    // Expression parsing methods delegated to shared ExpressionHelper
+    private static bool IsExpression(string source) => ExpressionHelper.IsExpression(source);
+    private static string TransformExpression(string expression, string sourceVariableName) => ExpressionHelper.TransformExpression(expression, sourceVariableName);
 
     /// <summary>
     /// Wraps a value expression with MapWhen condition(s), generating a ternary expression.
@@ -535,31 +410,9 @@ internal static class ProjectionGenerator
             $"({TransformExpression(c, sourceVariableName)})"));
 
         // Determine the default value
-        var defaultValue = member.MapWhenDefault ?? GetDefaultValueForType(member.TypeName);
+        var defaultValue = member.MapWhenDefault ?? Shared.GeneratorUtilities.GetDefaultValueForType(member.TypeName);
 
         return $"{combinedCondition} ? {valueExpression} : {defaultValue}";
     }
 
-    /// <summary>
-    /// Gets an appropriate default value for a type name.
-    /// </summary>
-    private static string GetDefaultValueForType(string typeName)
-    {
-        // Handle nullable types
-        if (typeName.EndsWith("?"))
-            return "default";
-
-        // Handle common value types
-        return typeName switch
-        {
-            "bool" => "false",
-            "byte" or "sbyte" or "short" or "ushort" or "int" or "uint" or "long" or "ulong" => "0",
-            "float" => "0f",
-            "double" => "0d",
-            "decimal" => "0m",
-            "char" => "'\\0'",
-            "string" => "default",
-            _ => "default"
-        };
-    }
 }
