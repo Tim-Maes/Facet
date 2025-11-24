@@ -93,6 +93,10 @@ internal static class FlattenToGenerator
             if (nestedFacet != null)
             {
                 // Map properties from the nested facet using the "item" variable
+                // Use the collection property name as the prefix (e.g., "Extended" from "Extended" property)
+                // rather than the facet type name (e.g., "ExtendedFacet")
+                var collectionPropertyName = collectionMember.Name;
+                
                 foreach (var nestedMember in nestedFacet.Members.Where(m => !m.IsCollection && !m.IsNestedFacet))
                 {
                     // Check if this property name exists in the parent to avoid duplication
@@ -102,12 +106,18 @@ internal static class FlattenToGenerator
                     }
                     else
                     {
-                        // Property name collision - need to use a different name in the target
-                        // The user should have defined it with a prefix like "ExtendedName"
-                        // We'll try common patterns but this is a heuristic
-                        var itemTypeName = ExtractSimpleName(nestedFacetTypeName);
-                        var prefixedName = $"{itemTypeName}{nestedMember.Name}";
-                        sb.AppendLine($"{indent}        // {prefixedName} = item.{nestedMember.Name}, // Uncomment and adjust property name if needed");
+                        // Property name collision - try to use a prefixed name based on the collection property name
+                        // E.g., if collection is "Extended" and member is "Name", try "ExtendedName"
+                        // Skip Id properties since they're often ignored in flattened outputs (IgnoreNestedIds)
+                        if (nestedMember.Name.Equals("Id", System.StringComparison.Ordinal))
+                        {
+                            // Skip nested Id - it would conflict with parent Id
+                            // User can manually add ExtendedId property if they need it
+                            continue;
+                        }
+                        
+                        var prefixedName = $"{collectionPropertyName}{nestedMember.Name}";
+                        sb.AppendLine($"{indent}        {prefixedName} = item.{nestedMember.Name},");
                     }
                 }
             }

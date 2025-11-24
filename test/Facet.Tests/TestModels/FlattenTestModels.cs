@@ -293,7 +293,8 @@ public partial class DataFlattenedDto
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     
-    // Properties from ExtendedEntity (collection item) - using prefix to avoid collision
+    // Properties from ExtendedEntity (collection item)
+    // Note: ExtendedName avoids collision with parent's Name property
     public string ExtendedName { get; set; } = string.Empty;
     public int DataValue { get; set; }
 }
