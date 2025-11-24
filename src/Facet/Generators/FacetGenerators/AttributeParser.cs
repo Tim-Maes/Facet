@@ -164,4 +164,31 @@ internal static class AttributeParser
             .Value.Value?
             .ToString();
     }
+
+    /// <summary>
+    /// Extracts the FlattenTo types from the FlattenTo parameter.
+    /// Returns a list of fully qualified type names of flatten target types.
+    /// </summary>
+    public static ImmutableArray<string> ExtractFlattenToTypes(AttributeData attribute)
+    {
+        var flattenToArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == FacetConstants.AttributeNames.FlattenTo);
+        if (flattenToArg.Value.Kind != TypedConstantKind.Error && !flattenToArg.Value.IsNull)
+        {
+            if (flattenToArg.Value.Kind == TypedConstantKind.Array)
+            {
+                var types = new List<string>();
+                foreach (var typeValue in flattenToArg.Value.Values)
+                {
+                    if (typeValue.Value is INamedTypeSymbol flattenToType)
+                    {
+                        var typeName = flattenToType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                        types.Add(typeName);
+                    }
+                }
+                return types.ToImmutableArray();
+            }
+        }
+
+        return ImmutableArray<string>.Empty;
+    }
 }

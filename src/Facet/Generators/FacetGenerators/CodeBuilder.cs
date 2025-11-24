@@ -109,6 +109,12 @@ internal static class CodeBuilder
             ToSourceGenerator.Generate(sb, model);
         }
 
+        // Generate FlattenTo methods
+        if (model.FlattenToTypes.Length > 0)
+        {
+            FlattenToGenerator.Generate(sb, model, memberIndent, facetLookup);
+        }
+
         sb.AppendLine($"{containingTypeIndent}}}");
 
         // Close containing type braces

@@ -33,6 +33,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public int MaxDepth { get; }
     public bool PreserveReferences { get; }
     public ImmutableArray<string> BaseClassMemberNames { get; }
+    public ImmutableArray<string> FlattenToTypes { get; }
 
     public FacetTargetModel(
         string name,
@@ -59,7 +60,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         bool copyAttributes = false,
         int maxDepth = 0,
         bool preserveReferences = false,
-        ImmutableArray<string> baseClassMemberNames = default)
+        ImmutableArray<string> baseClassMemberNames = default,
+        ImmutableArray<string> flattenToTypes = default)
     {
         Name = name;
         Namespace = @namespace;
@@ -86,6 +88,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         MaxDepth = maxDepth;
         PreserveReferences = preserveReferences;
         BaseClassMemberNames = baseClassMemberNames.IsDefault ? ImmutableArray<string>.Empty : baseClassMemberNames;
+        FlattenToTypes = flattenToTypes.IsDefault ? ImmutableArray<string>.Empty : flattenToTypes;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -116,7 +119,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && CopyAttributes == other.CopyAttributes
             && MaxDepth == other.MaxDepth
             && PreserveReferences == other.PreserveReferences
-            && BaseClassMemberNames.SequenceEqual(other.BaseClassMemberNames);
+            && BaseClassMemberNames.SequenceEqual(other.BaseClassMemberNames)
+            && FlattenToTypes.SequenceEqual(other.FlattenToTypes);
     }
 
     public override bool Equals(object? obj) => obj is FacetTargetModel other && Equals(other);
@@ -161,6 +165,9 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
 
             foreach (var baseClassMember in BaseClassMemberNames)
                 hash = hash * 31 + (baseClassMember?.GetHashCode() ?? 0);
+
+            foreach (var flattenToType in FlattenToTypes)
+                hash = hash * 31 + (flattenToType?.GetHashCode() ?? 0);
 
             return hash;
         }
