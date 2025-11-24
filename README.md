@@ -962,7 +962,7 @@ Facet is modular and consists of several NuGet packages:
 
 **Facet is the only tool that combines compile-time generation with deep EF Core integration.**
 
-## Contributors
+## 💖 Contributors
 
 Facet wouldn't be the same without these awesome contributors. Thank you!
 
