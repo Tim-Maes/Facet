@@ -258,3 +258,42 @@ public partial class ProductCatalogSmartLeafDto
     // ProductName, ProductCode (collisions resolved)
     // CategoryName, CategoryCode (collisions resolved)
 }
+
+// Test models for FlattenTo feature
+public class DataEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public ICollection<ExtendedEntity> Extended { get; set; } = new List<ExtendedEntity>();
+}
+
+public class ExtendedEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public int DataValue { get; set; }
+}
+
+// Facet for ExtendedEntity
+[Facet(typeof(ExtendedEntity))]
+public partial class ExtendedFacet;
+
+// Facet for DataEntity with FlattenTo
+[Facet(typeof(DataEntity), NestedFacets = [typeof(ExtendedFacet)], FlattenTo = [typeof(DataFlattenedDto)])]
+public partial class DataFacet;
+
+// Flattened DTO that combines DataEntity and ExtendedEntity properties
+// The user manually specifies which properties from both parent and child they want
+// The FlattenTo method will populate these from DataFacet (parent) and each Extended item (child)
+public partial class DataFlattenedDto
+{
+    // Properties from DataEntity (parent)
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    
+    // Properties from ExtendedEntity (collection item) - using prefix to avoid collision
+    public string ExtendedName { get; set; } = string.Empty;
+    public int DataValue { get; set; }
+}

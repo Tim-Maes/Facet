@@ -144,6 +144,31 @@ public sealed class FacetAttribute : Attribute
     public string? SourceSignature { get; set; }
 
     /// <summary>
+    /// An array of flattened types that can be generated from this facet's collection properties.
+    /// When specified, the generator will create FlattenTo methods that unpack collection properties
+    /// into multiple rows of the specified flatten type, combining parent properties with each collection item.
+    /// The target types must be defined with the [Flatten] attribute specifying the collection element type.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Example usage:
+    /// <code>
+    /// [Facet(typeof(Data), NestedFacets = [typeof(ExtendedDto)], FlattenTo = [typeof(DataDtoFlattened)])]
+    /// public partial class DataDto;
+    /// 
+    /// [Flatten(typeof(Extended), IgnoreForeignKeyClashes = true, IgnoreNestedIds = true)]
+    /// public partial class DataDtoFlattened
+    /// {
+    ///     public string ExtendedName { get; set; }
+    ///     public int DataValue { get; set; }
+    /// }
+    /// </code>
+    /// This generates a FlattenTo() method that combines DataDto properties with each Extended item.
+    /// </para>
+    /// </remarks>
+    public Type[]? FlattenTo { get; set; }
+
+    /// <summary>
     /// Creates a new FacetAttribute that targets a given source type and excludes specified members.
     /// </summary>
     /// <param name="sourceType">The type to generate from.</param>

@@ -128,6 +128,9 @@ internal static class ModelBuilder
         // Collect base class member names to avoid generating duplicate properties
         var baseClassMemberNames = GetBaseClassMemberNames(targetSymbol);
 
+        // Extract FlattenTo types for generating collection flattening methods
+        var flattenToTypes = AttributeParser.ExtractFlattenToTypes(attribute);
+
         return new FacetTargetModel(
             targetSymbol.Name,
             ns,
@@ -153,7 +156,8 @@ internal static class ModelBuilder
             copyAttributes,
             maxDepth,
             preserveReferences,
-            baseClassMemberNames);
+            baseClassMemberNames,
+            flattenToTypes);
     }
 
     #region Private Helper Methods
