@@ -79,7 +79,7 @@ internal class ExpressionMapper
     /// <summary>
     /// Transforms an expression tree recursively.
     /// </summary>
-    private Expression TransformExpression(Expression expression, Dictionary<ParameterExpression, ParameterExpression> parameterMap)
+    private Expression TransformExpression(Expression? expression, Dictionary<ParameterExpression, ParameterExpression> parameterMap)
     {
         if (expression == null)
             return null!;

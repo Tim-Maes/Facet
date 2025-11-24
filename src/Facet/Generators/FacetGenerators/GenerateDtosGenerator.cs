@@ -17,6 +17,16 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     private const string GenerateDtosAttributeName = "Facet.GenerateDtosAttribute";
     private const string GenerateAuditableDtosAttributeName = "Facet.GenerateAuditableDtosAttribute";
 
+    // Diagnostic for generator internal errors
+    private static readonly DiagnosticDescriptor GeneratorErrorRule = new DiagnosticDescriptor(
+        "FAC100",
+        "GenerateDtos generator encountered an error",
+        "Error generating DTOs for type '{0}': {1}",
+        "Generator",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "The GenerateDtos source generator encountered an unexpected error while processing this type.");
+
     // Common audit field patterns
     private static readonly HashSet<string> DefaultAuditFields = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
     {
@@ -51,14 +61,26 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         var allTargets = generateDtosTargets.Collect().Combine(generateAuditableDtosTargets.Collect())
             .Select(static (combined, _) => combined.Left.Concat(combined.Right));
 
-        context.RegisterSourceOutput(allTargets, static (spc, models) =>
+        context.RegisterSourceOutput(allTargets, (spc, models) =>
         {
             foreach (var model in models)
             {
                 if (model != null)
                 {
                     spc.CancellationToken.ThrowIfCancellationRequested();
-                    GenerateDtosForModel(spc, model);
+                    try
+                    {
+                        GenerateDtosForModel(spc, model);
+                    }
+                    catch (Exception ex)
+                    {
+                        var diagnostic = Diagnostic.Create(
+                            GeneratorErrorRule,
+                            Location.None,
+                            GetSimpleTypeName(model.SourceTypeName),
+                            ex.Message);
+                        spc.ReportDiagnostic(diagnostic);
+                    }
                 }
             }
         });
@@ -198,10 +220,12 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 members.ToImmutableArray(),
                 useFullName);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Swallow exceptions to prevent generator crashes
-            // In a real scenario, you might want to emit a diagnostic instead
+            // Return null to skip this model, but the error is captured in the exception
+            // Note: In incremental generators, we can't report diagnostics from the transform phase.
+            // Consider adding error information to the model in the future to report in output phase.
+            System.Diagnostics.Debug.WriteLine($"GenerateDtos error for {sourceSymbol.Name}: {ex.Message}");
             return null;
         }
     }
@@ -212,58 +236,38 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
         var sourceTypeName = GetSimpleTypeName(model.SourceTypeName);
 
-        // Generate Create DTO
+        // Generate Create DTO (excludes ID fields)
         if ((model.Types & DtoTypes.Create) != 0)
         {
-            var createExclusions = new HashSet<string>(model.ExcludeProperties, System.StringComparer.OrdinalIgnoreCase);
-            foreach (var idField in IdFieldPatterns)
-            {
-                createExclusions.Add(idField);
-            }
-
-            var createMembers = model.Members.Where(m => !createExclusions.Contains(m.Name)).ToImmutableArray();
+            var createMembers = FilterMembers(model.Members, model.ExcludeProperties, IdFieldPatterns);
             var createDtoName = BuildDtoName(sourceTypeName, "Create", "Request", model.Prefix, model.Suffix);
-
             var createCode = GenerateDtoCode(model, createDtoName, createMembers, "Create");
-
             context.AddSource($"{GenerateFileDtoFullName(model, createDtoName)}", SourceText.From(createCode, Encoding.UTF8));
         }
 
-        // Generate Update DTO
+        // Generate Update DTO (includes ID for identification)
         if ((model.Types & DtoTypes.Update) != 0)
         {
-            var updateExclusions = new HashSet<string>(model.ExcludeProperties, System.StringComparer.OrdinalIgnoreCase);
-            // Don't exclude ID from Update DTOs (needed for identification)
-
-            var updateMembers = model.Members.Where(m => !updateExclusions.Contains(m.Name)).ToImmutableArray();
+            var updateMembers = FilterMembers(model.Members, model.ExcludeProperties);
             var updateDtoName = BuildDtoName(sourceTypeName, "Update", "Request", model.Prefix, model.Suffix);
-
             var updateCode = GenerateDtoCode(model, updateDtoName, updateMembers, "Update");
             context.AddSource($"{GenerateFileDtoFullName(model, updateDtoName)}", SourceText.From(updateCode, Encoding.UTF8));
         }
 
-        // Generate Upsert DTO
+        // Generate Upsert DTO (includes ID, can be null for create)
         if ((model.Types & DtoTypes.Upsert) != 0)
         {
-            var upsertExclusions = new HashSet<string>(model.ExcludeProperties, System.StringComparer.OrdinalIgnoreCase);
-            // Include ID in Upsert DTOs (can be null for create, populated for update)
-
-            var upsertMembers = model.Members.Where(m => !upsertExclusions.Contains(m.Name)).ToImmutableArray();
+            var upsertMembers = FilterMembers(model.Members, model.ExcludeProperties);
             var upsertDtoName = BuildDtoName(sourceTypeName, "Upsert", "Request", model.Prefix, model.Suffix);
-
             var upsertCode = GenerateDtoCode(model, upsertDtoName, upsertMembers, "Upsert");
             context.AddSource($"{GenerateFileDtoFullName(model, upsertDtoName)}", SourceText.From(upsertCode, Encoding.UTF8));
         }
 
-        // Generate Response DTO
+        // Generate Response DTO (all non-excluded properties)
         if ((model.Types & DtoTypes.Response) != 0)
         {
-            var responseExclusions = new HashSet<string>(model.ExcludeProperties, System.StringComparer.OrdinalIgnoreCase);
-            // Include all non-excluded properties for Response DTOs
-
-            var responseMembers = model.Members.Where(m => !responseExclusions.Contains(m.Name)).ToImmutableArray();
+            var responseMembers = FilterMembers(model.Members, model.ExcludeProperties);
             var responseDtoName = BuildDtoName(sourceTypeName, "", "Response", model.Prefix, model.Suffix);
-
             var responseCode = GenerateDtoCode(model, responseDtoName, responseMembers, "Response");
             context.AddSource($"{GenerateFileDtoFullName(model, responseDtoName)}", SourceText.From(responseCode, Encoding.UTF8));
         }
@@ -322,20 +326,72 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     private static string GetSimpleTypeName(string fullyQualifiedName)
     {
         // remove global:: prefix if present (for types in global namespace)
-        var name = fullyQualifiedName;
-        if (name.StartsWith("global::"))
-        {
-            name = name.Substring(8);
-        }
+        var name = Shared.GeneratorUtilities.StripGlobalPrefix(fullyQualifiedName);
 
         var parts = name.Split('.');
         return parts[parts.Length - 1];
     }
 
+    /// <summary>
+    /// Filters members by exclusion lists, returning only members not in any exclusion set.
+    /// </summary>
+    private static ImmutableArray<FacetMember> FilterMembers(
+        ImmutableArray<FacetMember> members,
+        ImmutableArray<string> baseExclusions,
+        HashSet<string>? additionalExclusions = null)
+    {
+        var exclusions = new HashSet<string>(baseExclusions, StringComparer.OrdinalIgnoreCase);
+
+        if (additionalExclusions != null)
+        {
+            foreach (var item in additionalExclusions)
+            {
+                exclusions.Add(item);
+            }
+        }
+
+        return members.Where(m => !exclusions.Contains(m.Name)).ToImmutableArray();
+    }
 
     private static string GenerateDtoCode(GenerateDtosTargetModel model, string dtoName, ImmutableArray<FacetMember> members, string purpose)
     {
         var sb = new StringBuilder();
+        var sourceTypeName = GetSimpleTypeName(model.SourceTypeName);
+        var hasInitOnlyProperties = members.Any(m => m.IsInitOnly);
+        var hasReadOnlyFields = members.Any(m => m.IsReadOnly);
+
+        // Generate file structure
+        GenerateDtoFileHeader(sb, model);
+        GenerateDtoTypeDeclaration(sb, model, dtoName, sourceTypeName, purpose);
+
+        // Generate members
+        GenerateDtoMembers(sb, members);
+
+        // Generate constructors if requested
+        if (model.GenerateConstructors)
+        {
+            GenerateDtoConstructors(sb, model, dtoName, sourceTypeName, members, hasInitOnlyProperties, hasReadOnlyFields);
+        }
+
+        // Generate projection if requested
+        if (model.GenerateProjections)
+        {
+            GenerateDtoProjection(sb, model, dtoName, sourceTypeName, members, hasInitOnlyProperties, hasReadOnlyFields);
+        }
+
+        // Generate ToSource method
+        GenerateDtoToSource(sb, model, dtoName, sourceTypeName, members);
+
+        // Generate deprecated BackTo method
+        GenerateDtoBackTo(sb, model, dtoName, sourceTypeName);
+
+        sb.AppendLine("}");
+
+        return sb.ToString();
+    }
+
+    private static void GenerateDtoFileHeader(StringBuilder sb, GenerateDtosTargetModel model)
+    {
         GenerateFileHeader(sb);
         sb.AppendLine("using System;");
         sb.AppendLine("using System.Linq.Expressions;");
@@ -354,7 +410,10 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             sb.AppendLine($"namespace {model.TargetNamespace};");
             sb.AppendLine();
         }
+    }
 
+    private static void GenerateDtoTypeDeclaration(StringBuilder sb, GenerateDtosTargetModel model, string dtoName, string sourceTypeName, string purpose)
+    {
         var keyword = model.OutputType switch
         {
             OutputType.Class => "class",
@@ -364,8 +423,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             _ => "record"
         };
 
-        var sourceTypeName = GetSimpleTypeName(model.SourceTypeName);
-
         sb.AppendLine($"/// <summary>");
         sb.AppendLine($"/// Generated {purpose} DTO for {sourceTypeName}.");
         sb.AppendLine($"/// </summary>");
@@ -373,184 +430,200 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         // Add [Facet] attribute to make it work with extension methods
         sb.AppendLine($"[Facet.Facet(typeof({model.SourceTypeName}))]");
 
-        var hasInitOnlyProperties = members.Any(m => m.IsInitOnly);
-
         sb.AppendLine($"public {keyword} {dtoName}");
         sb.AppendLine("{");
+    }
 
+    private static void GenerateDtoMembers(StringBuilder sb, ImmutableArray<FacetMember> members)
+    {
         foreach (var member in members)
         {
             if (member.Kind == FacetMemberKind.Property)
             {
-                var propDef = $"public {member.TypeName} {member.Name}";
-
-                if (member.IsInitOnly)
-                {
-                    propDef += " { get; init; }";
-                }
-                else
-                {
-                    propDef += " { get; set; }";
-                }
-
-                if (member.IsRequired)
-                {
-                    propDef = $"required {propDef}";
-                }
-
-                sb.AppendLine($"    {propDef}");
+                GenerateDtoProperty(sb, member);
             }
             else
             {
-                var fieldDef = $"public";
-                if (member.IsReadOnly)
-                {
-                    fieldDef += " readonly";
-                }
-                fieldDef += $" {member.TypeName} {member.Name}";
-                
-                // For readonly fields, we need to provide a default value since they can't be assigned in constructor
-                if (member.IsReadOnly)
-                {
-                    var defaultValue = GeneratorUtilities.GetDefaultValueForType(member.TypeName);
-                    fieldDef += $" = {defaultValue}";
-                }
-                
-                fieldDef += ";";
-                
-                if (member.IsRequired && !member.IsReadOnly)
-                {
-                    fieldDef = $"required {fieldDef}";
-                }
-                
-                sb.AppendLine($"    {fieldDef}");
+                GenerateDtoField(sb, member);
             }
         }
+    }
 
-        // Generate constructor if requested
-        if (model.GenerateConstructors)
+    private static void GenerateDtoProperty(StringBuilder sb, FacetMember member)
+    {
+        var propDef = $"public {member.TypeName} {member.Name}";
+
+        if (member.IsInitOnly)
         {
-            sb.AppendLine();
-            sb.AppendLine($"    /// <summary>");
-            sb.AppendLine($"    /// Initializes a new instance of the <see cref=\"{dtoName}\"/> class from the specified <see cref=\"{sourceTypeName}\"/>.");
-            sb.AppendLine($"    /// </summary>");
-            sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{sourceTypeName}\"/> object to copy data from.</param>");
-
-            var hasRequiredProperties = model.Members.Any(m => m.IsRequired);
-            if (hasRequiredProperties)
-            {
-        	    sb.AppendLine("    [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]");
-            }
-
-            sb.AppendLine($"    public {dtoName}({model.SourceTypeName} source)");
-            sb.AppendLine("    {");
-
-            // Only assign to non-init-only properties and non-readonly fields
-            var assignableMembers = members.Where(x => !x.IsInitOnly && !x.IsReadOnly).ToList();
-            
-            if (assignableMembers.Any())
-            {
-                foreach (var member in assignableMembers)
-                {
-                    sb.AppendLine($"        this.{member.Name} = source.{member.Name};");
-                }
-            }
-            else
-            {
-                // If there are no assignable members, add a comment to explain
-                sb.AppendLine("        // No assignable members to initialize from source");
-                sb.AppendLine("        // (all members are either init-only properties or readonly fields with default values)");
-            }
-
-            sb.AppendLine("    }");
-
-            // Add parameterless constructor
-            sb.AppendLine();
-            sb.AppendLine($"    /// <summary>");
-            sb.AppendLine($"    /// Initializes a new instance of the <see cref=\"{dtoName}\"/> class with default values.");
-            sb.AppendLine($"    /// </summary>");
-            sb.AppendLine($"    public {dtoName}()");
-            sb.AppendLine("    {");
-            sb.AppendLine("    }");
-
-            // Add static factory method for types with init-only properties or readonly fields
-            if (hasInitOnlyProperties || members.Any(m => m.IsReadOnly))
-            {
-                sb.AppendLine();
-                sb.AppendLine($"    /// <summary>");
-                sb.AppendLine($"    /// Creates a new instance of <see cref=\"{dtoName}\"/> from the specified <see cref=\"{sourceTypeName}\"/> with init-only properties.");
-                sb.AppendLine($"    /// </summary>");
-                sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{sourceTypeName}\"/> object to copy data from.</param>");
-                sb.AppendLine($"    /// <returns>A new <see cref=\"{dtoName}\"/> instance with all properties initialized from the source.</returns>");
-                
-                if (members.Any(m => m.IsReadOnly))
-                {
-                    sb.AppendLine($"    /// <remarks>");
-                    sb.AppendLine($"    /// Note: Readonly fields will use their default values and cannot be copied from the source.");
-                    sb.AppendLine($"    /// </remarks>");
-                }
-                
-                sb.AppendLine($"    public static {dtoName} FromSource({model.SourceTypeName} source)");
-                sb.AppendLine("    {");
-                sb.AppendLine($"        return new {dtoName}");
-                sb.AppendLine("        {");
-                
-                // Only include non-readonly fields in the object initializer
-                var initializableMembers = members.Where(m => !m.IsReadOnly).ToList();
-                for (int i = 0; i < initializableMembers.Count; i++)
-                {
-                    var member = initializableMembers[i];
-                    var comma = i == initializableMembers.Count - 1 ? "" : ",";
-                    sb.AppendLine($"            {member.Name} = source.{member.Name}{comma}");
-                }
-                
-                sb.AppendLine("        };");
-                sb.AppendLine("    }");
-            }
+            propDef += " { get; init; }";
         }
-
-        // Generate projection if requested
-        if (model.GenerateProjections)
+        else
         {
-            sb.AppendLine();
-            sb.AppendLine($"    /// <summary>");
-            sb.AppendLine($"    /// Gets the projection expression for converting <see cref=\"{sourceTypeName}\"/> to <see cref=\"{dtoName}\"/>.");
-            sb.AppendLine($"    /// Use this for LINQ and Entity Framework query projections.");
-            sb.AppendLine($"    /// </summary>");
-            sb.AppendLine($"    /// <value>An expression tree that can be used in LINQ queries for efficient database projections.</value>");
-            sb.AppendLine($"    /// <example>");
-            sb.AppendLine($"    /// <code>");
-            sb.AppendLine($"    /// var dtos = context.{sourceTypeName}s");
-            sb.AppendLine($"    ///     .Where(x => x.IsActive)");
-            sb.AppendLine($"    ///     .Select({dtoName}.Projection)");
-            sb.AppendLine($"    ///     .ToList();");
-            sb.AppendLine($"    /// </code>");
-            sb.AppendLine($"    /// </example>");
-            sb.AppendLine($"    public static Expression<Func<{model.SourceTypeName}, {dtoName}>> Projection =>");
-
-            if (hasInitOnlyProperties || members.Any(m => m.IsReadOnly))
-            {
-                sb.AppendLine($"        source => new {dtoName}");
-                sb.AppendLine("        {");
-
-                // Only include non-readonly fields in the object initializer for projections too
-                var initializableMembers = members.Where(m => !m.IsReadOnly).ToList();
-                for (int i = 0; i < initializableMembers.Count; i++)
-                {
-                    var member = initializableMembers[i];
-                    var comma = i == initializableMembers.Count - 1 ? "" : ",";
-                    sb.AppendLine($"            {member.Name} = source.{member.Name}{comma}");
-                }
-
-                sb.AppendLine("        };");
-            }
-            else
-            {
-                sb.AppendLine($"        source => new {dtoName}(source);");
-            }
+            propDef += " { get; set; }";
         }
 
-        // Generate ToSource method
+        if (member.IsRequired)
+        {
+            propDef = $"required {propDef}";
+        }
+
+        sb.AppendLine($"    {propDef}");
+    }
+
+    private static void GenerateDtoField(StringBuilder sb, FacetMember member)
+    {
+        var fieldDef = "public";
+        if (member.IsReadOnly)
+        {
+            fieldDef += " readonly";
+        }
+        fieldDef += $" {member.TypeName} {member.Name}";
+
+        // For readonly fields, we need to provide a default value since they can't be assigned in constructor
+        if (member.IsReadOnly)
+        {
+            var defaultValue = GeneratorUtilities.GetDefaultValueForType(member.TypeName);
+            fieldDef += $" = {defaultValue}";
+        }
+
+        fieldDef += ";";
+
+        if (member.IsRequired && !member.IsReadOnly)
+        {
+            fieldDef = $"required {fieldDef}";
+        }
+
+        sb.AppendLine($"    {fieldDef}");
+    }
+
+    private static void GenerateDtoConstructors(StringBuilder sb, GenerateDtosTargetModel model, string dtoName, string sourceTypeName, ImmutableArray<FacetMember> members, bool hasInitOnlyProperties, bool hasReadOnlyFields)
+    {
+        sb.AppendLine();
+        sb.AppendLine($"    /// <summary>");
+        sb.AppendLine($"    /// Initializes a new instance of the <see cref=\"{dtoName}\"/> class from the specified <see cref=\"{sourceTypeName}\"/>.");
+        sb.AppendLine($"    /// </summary>");
+        sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{sourceTypeName}\"/> object to copy data from.</param>");
+
+        var hasRequiredProperties = model.Members.Any(m => m.IsRequired);
+        if (hasRequiredProperties)
+        {
+            sb.AppendLine("    [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]");
+        }
+
+        sb.AppendLine($"    public {dtoName}({model.SourceTypeName} source)");
+        sb.AppendLine("    {");
+
+        // Only assign to non-init-only properties and non-readonly fields
+        var assignableMembers = members.Where(x => !x.IsInitOnly && !x.IsReadOnly).ToArray();
+
+        if (assignableMembers.Length > 0)
+        {
+            foreach (var member in assignableMembers)
+            {
+                sb.AppendLine($"        this.{member.Name} = source.{member.Name};");
+            }
+        }
+        else
+        {
+            // If there are no assignable members, add a comment to explain
+            sb.AppendLine("        // No assignable members to initialize from source");
+            sb.AppendLine("        // (all members are either init-only properties or readonly fields with default values)");
+        }
+
+        sb.AppendLine("    }");
+
+        // Add parameterless constructor
+        sb.AppendLine();
+        sb.AppendLine($"    /// <summary>");
+        sb.AppendLine($"    /// Initializes a new instance of the <see cref=\"{dtoName}\"/> class with default values.");
+        sb.AppendLine($"    /// </summary>");
+        sb.AppendLine($"    public {dtoName}()");
+        sb.AppendLine("    {");
+        sb.AppendLine("    }");
+
+        // Add static factory method for types with init-only properties or readonly fields
+        if (hasInitOnlyProperties || hasReadOnlyFields)
+        {
+            GenerateDtoFromSourceFactory(sb, model, dtoName, sourceTypeName, members, hasReadOnlyFields);
+        }
+    }
+
+    private static void GenerateDtoFromSourceFactory(StringBuilder sb, GenerateDtosTargetModel model, string dtoName, string sourceTypeName, ImmutableArray<FacetMember> members, bool hasReadOnlyFields)
+    {
+        sb.AppendLine();
+        sb.AppendLine($"    /// <summary>");
+        sb.AppendLine($"    /// Creates a new instance of <see cref=\"{dtoName}\"/> from the specified <see cref=\"{sourceTypeName}\"/> with init-only properties.");
+        sb.AppendLine($"    /// </summary>");
+        sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{sourceTypeName}\"/> object to copy data from.</param>");
+        sb.AppendLine($"    /// <returns>A new <see cref=\"{dtoName}\"/> instance with all properties initialized from the source.</returns>");
+
+        if (hasReadOnlyFields)
+        {
+            sb.AppendLine($"    /// <remarks>");
+            sb.AppendLine($"    /// Note: Readonly fields will use their default values and cannot be copied from the source.");
+            sb.AppendLine($"    /// </remarks>");
+        }
+
+        sb.AppendLine($"    public static {dtoName} FromSource({model.SourceTypeName} source)");
+        sb.AppendLine("    {");
+        sb.AppendLine($"        return new {dtoName}");
+        sb.AppendLine("        {");
+
+        // Only include non-readonly fields in the object initializer
+        var initializableMembers = members.Where(m => !m.IsReadOnly).ToArray();
+        for (int i = 0; i < initializableMembers.Length; i++)
+        {
+            var member = initializableMembers[i];
+            var comma = i == initializableMembers.Length - 1 ? "" : ",";
+            sb.AppendLine($"            {member.Name} = source.{member.Name}{comma}");
+        }
+
+        sb.AppendLine("        };");
+        sb.AppendLine("    }");
+    }
+
+    private static void GenerateDtoProjection(StringBuilder sb, GenerateDtosTargetModel model, string dtoName, string sourceTypeName, ImmutableArray<FacetMember> members, bool hasInitOnlyProperties, bool hasReadOnlyFields)
+    {
+        sb.AppendLine();
+        sb.AppendLine($"    /// <summary>");
+        sb.AppendLine($"    /// Gets the projection expression for converting <see cref=\"{sourceTypeName}\"/> to <see cref=\"{dtoName}\"/>.");
+        sb.AppendLine($"    /// Use this for LINQ and Entity Framework query projections.");
+        sb.AppendLine($"    /// </summary>");
+        sb.AppendLine($"    /// <value>An expression tree that can be used in LINQ queries for efficient database projections.</value>");
+        sb.AppendLine($"    /// <example>");
+        sb.AppendLine($"    /// <code>");
+        sb.AppendLine($"    /// var dtos = context.{sourceTypeName}s");
+        sb.AppendLine($"    ///     .Where(x => x.IsActive)");
+        sb.AppendLine($"    ///     .Select({dtoName}.Projection)");
+        sb.AppendLine($"    ///     .ToList();");
+        sb.AppendLine($"    /// </code>");
+        sb.AppendLine($"    /// </example>");
+        sb.AppendLine($"    public static Expression<Func<{model.SourceTypeName}, {dtoName}>> Projection =>");
+
+        if (hasInitOnlyProperties || hasReadOnlyFields)
+        {
+            sb.AppendLine($"        source => new {dtoName}");
+            sb.AppendLine("        {");
+
+            // Only include non-readonly fields in the object initializer for projections too
+            var initializableMembers = members.Where(m => !m.IsReadOnly).ToArray();
+            for (int i = 0; i < initializableMembers.Length; i++)
+            {
+                var member = initializableMembers[i];
+                var comma = i == initializableMembers.Length - 1 ? "" : ",";
+                sb.AppendLine($"            {member.Name} = source.{member.Name}{comma}");
+            }
+
+            sb.AppendLine("        };");
+        }
+        else
+        {
+            sb.AppendLine($"        source => new {dtoName}(source);");
+        }
+    }
+
+    private static void GenerateDtoToSource(StringBuilder sb, GenerateDtosTargetModel model, string dtoName, string sourceTypeName, ImmutableArray<FacetMember> members)
+    {
         sb.AppendLine();
         sb.AppendLine($"    /// <summary>");
         sb.AppendLine($"    /// Converts this instance of <see cref=\"{dtoName}\"/> back to an instance of the source type <see cref=\"{sourceTypeName}\"/>.");
@@ -562,11 +635,11 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine("        {");
 
         // Map all members back to the source
-        var toSourceMembers = members.Where(m => !m.IsReadOnly).ToList();
-        for (int i = 0; i < toSourceMembers.Count; i++)
+        var toSourceMembers = members.Where(m => !m.IsReadOnly).ToArray();
+        for (int i = 0; i < toSourceMembers.Length; i++)
         {
             var member = toSourceMembers[i];
-            var comma = i == toSourceMembers.Count - 1 ? "" : ",";
+            var comma = i == toSourceMembers.Length - 1 ? "" : ",";
 
             // Find the corresponding source member to check nullability
             var sourceMember = model.Members.FirstOrDefault(sm => sm.Name == member.Name);
@@ -593,7 +666,10 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
         sb.AppendLine("        };");
         sb.AppendLine("    }");
+    }
 
+    private static void GenerateDtoBackTo(StringBuilder sb, GenerateDtosTargetModel model, string dtoName, string sourceTypeName)
+    {
         // Generate deprecated BackTo method that calls ToSource
         sb.AppendLine();
         sb.AppendLine($"    /// <summary>");
@@ -602,10 +678,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine($"    /// <returns>An instance of <see cref=\"{sourceTypeName}\"/> with properties mapped from this DTO.</returns>");
         sb.AppendLine("    [global::System.Obsolete(\"Use ToSource() instead. This method will be removed in a future version.\")]");
         sb.AppendLine($"    public {model.SourceTypeName} BackTo() => ToSource();");
-
-        sb.AppendLine("}");
-
-        return sb.ToString();
     }
 
     private static void GenerateFileHeader(StringBuilder sb)

@@ -10,6 +10,21 @@ namespace Facet.Generators.Shared;
 internal static class GeneratorUtilities
 {
     /// <summary>
+    /// The global namespace prefix used in fully qualified type names.
+    /// </summary>
+    public const string GlobalPrefix = "global::";
+
+    /// <summary>
+    /// Strips the global:: prefix from a type name if present.
+    /// </summary>
+    public static string StripGlobalPrefix(string typeName)
+    {
+        return typeName.StartsWith(GlobalPrefix)
+            ? typeName.Substring(GlobalPrefix.Length)
+            : typeName;
+    }
+
+    /// <summary>
     /// Gets the type name with proper nullability information preserved.
     /// </summary>
     /// <param name="typeSymbol">The type symbol to get the name from.</param>
@@ -132,7 +147,7 @@ internal static class GeneratorUtilities
     public static string GetDefaultValueForType(string typeName)
     {
         // Remove global:: prefix if present
-        var cleanTypeName = typeName.StartsWith("global::") ? typeName.Substring(8) : typeName;
+        var cleanTypeName = StripGlobalPrefix(typeName);
 
         // Handle nullable types
         if (cleanTypeName.EndsWith("?"))

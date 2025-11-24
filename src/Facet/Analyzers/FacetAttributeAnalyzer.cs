@@ -156,212 +156,236 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeFacetAttribute(SymbolAnalysisContext context, INamedTypeSymbol targetType, AttributeData facetAttr)
     {
-        // Get the source type (first constructor argument)
-        if (facetAttr.ConstructorArguments.Length == 0)
+        // Validate and get source type
+        if (!TryGetSourceType(context, facetAttr, out var sourceType))
             return;
-
-        var sourceTypeArg = facetAttr.ConstructorArguments[0];
-        if (sourceTypeArg.Value is not INamedTypeSymbol sourceType)
-        {
-            // Invalid source type
-            var diagnostic = Diagnostic.Create(
-                InvalidSourceTypeRule,
-                facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
-                sourceTypeArg.ToCSharpString());
-            context.ReportDiagnostic(diagnostic);
-            return;
-        }
-
-        // Check if source type is accessible
-        if (sourceType.TypeKind == TypeKind.Error)
-        {
-            var diagnostic = Diagnostic.Create(
-                InvalidSourceTypeRule,
-                facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
-                sourceType.ToDisplayString());
-            context.ReportDiagnostic(diagnostic);
-            return;
-        }
 
         // Get all public properties/fields from source type (including inherited)
-        var sourceMembers = new HashSet<string>(GetAllPublicMembers(sourceType)
-            .Select(m => m.Name));
+        var sourceMembers = new HashSet<string>(GetAllPublicMembers(sourceType).Select(m => m.Name));
 
-        // Check Exclude parameter (constructor parameter)
-        if (facetAttr.ConstructorArguments.Length > 1)
+        // Extract named arguments
+        var namedArgs = new FacetNamedArguments(facetAttr.NamedArguments);
+
+        // Validate all parameters
+        ValidateExcludeParameter(context, facetAttr, sourceType, sourceMembers);
+        ValidateIncludeParameter(context, facetAttr, sourceType, sourceMembers, namedArgs.Include);
+        ValidateConfigurationType(context, facetAttr, sourceType, targetType, namedArgs.Configuration);
+        ValidateNestedFacets(context, facetAttr, namedArgs.NestedFacets);
+        ValidateCircularReferenceSafety(context, facetAttr, namedArgs);
+        ValidateSourceSignature(context, facetAttr, sourceType, namedArgs);
+    }
+
+    /// <summary>
+    /// Helper struct to hold extracted named arguments for cleaner parameter passing.
+    /// </summary>
+    private readonly struct FacetNamedArguments
+    {
+        public KeyValuePair<string, TypedConstant> Include { get; }
+        public KeyValuePair<string, TypedConstant> Configuration { get; }
+        public KeyValuePair<string, TypedConstant> NestedFacets { get; }
+        public KeyValuePair<string, TypedConstant> MaxDepth { get; }
+        public KeyValuePair<string, TypedConstant> PreserveReferences { get; }
+        public KeyValuePair<string, TypedConstant> SourceSignature { get; }
+        public KeyValuePair<string, TypedConstant> IncludeFields { get; }
+
+        public FacetNamedArguments(ImmutableArray<KeyValuePair<string, TypedConstant>> namedArguments)
         {
-            var excludeArg = facetAttr.ConstructorArguments[1];
-            if (!excludeArg.IsNull && excludeArg.Kind == TypedConstantKind.Array)
-            {
-                foreach (var item in excludeArg.Values)
-                {
-                    if (item.Value is string propertyName && !string.IsNullOrEmpty(propertyName))
-                    {
-                        if (!sourceMembers.Contains(propertyName))
-                        {
-                            ReportInvalidPropertyName(context, facetAttr, propertyName, "Exclude", sourceType, sourceMembers);
-                        }
-                    }
-                }
-            }
+            Include = namedArguments.FirstOrDefault(a => a.Key == "Include");
+            Configuration = namedArguments.FirstOrDefault(a => a.Key == "Configuration");
+            NestedFacets = namedArguments.FirstOrDefault(a => a.Key == "NestedFacets");
+            MaxDepth = namedArguments.FirstOrDefault(a => a.Key == "MaxDepth");
+            PreserveReferences = namedArguments.FirstOrDefault(a => a.Key == "PreserveReferences");
+            SourceSignature = namedArguments.FirstOrDefault(a => a.Key == "SourceSignature");
+            IncludeFields = namedArguments.FirstOrDefault(a => a.Key == "IncludeFields");
+        }
+    }
+
+    private static bool TryGetSourceType(SymbolAnalysisContext context, AttributeData facetAttr, out INamedTypeSymbol sourceType)
+    {
+        sourceType = null!;
+
+        if (facetAttr.ConstructorArguments.Length == 0)
+            return false;
+
+        var sourceTypeArg = facetAttr.ConstructorArguments[0];
+        if (sourceTypeArg.Value is not INamedTypeSymbol namedType)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                InvalidSourceTypeRule,
+                facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
+                sourceTypeArg.ToCSharpString()));
+            return false;
         }
 
-        // Check named arguments
-        var includeArg = facetAttr.NamedArguments.FirstOrDefault(a => a.Key == "Include");
-        var configurationArg = facetAttr.NamedArguments.FirstOrDefault(a => a.Key == "Configuration");
-        var nestedFacetsArg = facetAttr.NamedArguments.FirstOrDefault(a => a.Key == "NestedFacets");
-        var maxDepthArg = facetAttr.NamedArguments.FirstOrDefault(a => a.Key == "MaxDepth");
-        var preserveReferencesArg = facetAttr.NamedArguments.FirstOrDefault(a => a.Key == "PreserveReferences");
-        var sourceSignatureArg = facetAttr.NamedArguments.FirstOrDefault(a => a.Key == "SourceSignature");
-        var includeFieldsArg = facetAttr.NamedArguments.FirstOrDefault(a => a.Key == "IncludeFields");
-
-        // Check Include parameter
-        if (!includeArg.Equals(default) && !includeArg.Value.IsNull && includeArg.Value.Kind == TypedConstantKind.Array)
+        if (namedType.TypeKind == TypeKind.Error)
         {
-            // Check if both Include and Exclude are specified
-            bool hasExclude = facetAttr.ConstructorArguments.Length > 1 &&
-                             !facetAttr.ConstructorArguments[1].IsNull &&
-                             facetAttr.ConstructorArguments[1].Values.Length > 0;
-
-            if (hasExclude)
-            {
-                var diagnostic = Diagnostic.Create(
-                    IncludeAndExcludeBothSpecifiedRule,
-                    facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation());
-                context.ReportDiagnostic(diagnostic);
-            }
-
-            foreach (var item in includeArg.Value.Values)
-            {
-                if (item.Value is string propertyName && !string.IsNullOrEmpty(propertyName))
-                {
-                    if (!sourceMembers.Contains(propertyName))
-                    {
-                        ReportInvalidPropertyName(context, facetAttr, propertyName, "Include", sourceType, sourceMembers);
-                    }
-                }
-            }
+            context.ReportDiagnostic(Diagnostic.Create(
+                InvalidSourceTypeRule,
+                facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
+                namedType.ToDisplayString()));
+            return false;
         }
 
-        // Check Configuration type
-        if (!configurationArg.Equals(default) && !configurationArg.Value.IsNull)
+        sourceType = namedType;
+        return true;
+    }
+
+    private static void ValidateExcludeParameter(SymbolAnalysisContext context, AttributeData facetAttr, INamedTypeSymbol sourceType, HashSet<string> sourceMembers)
+    {
+        if (facetAttr.ConstructorArguments.Length <= 1)
+            return;
+
+        var excludeArg = facetAttr.ConstructorArguments[1];
+        if (excludeArg.IsNull || excludeArg.Kind != TypedConstantKind.Array)
+            return;
+
+        foreach (var item in excludeArg.Values)
         {
-            if (configurationArg.Value.Value is INamedTypeSymbol configurationType)
+            if (item.Value is string propertyName && !string.IsNullOrEmpty(propertyName) && !sourceMembers.Contains(propertyName))
             {
-                if (!ImplementsConfigurationInterface(configurationType, sourceType, targetType))
-                {
-                    var diagnostic = Diagnostic.Create(
-                        InvalidConfigurationTypeRule,
-                        facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
-                        configurationType.ToDisplayString(),
-                        sourceType.ToDisplayString(),
-                        targetType.ToDisplayString());
-                    context.ReportDiagnostic(diagnostic);
-                }
+                ReportInvalidPropertyName(context, facetAttr, propertyName, "Exclude", sourceType, sourceMembers);
             }
         }
+    }
 
-        // Check NestedFacets
-        if (!nestedFacetsArg.Equals(default) && !nestedFacetsArg.Value.IsNull && nestedFacetsArg.Value.Kind == TypedConstantKind.Array)
+    private static void ValidateIncludeParameter(SymbolAnalysisContext context, AttributeData facetAttr, INamedTypeSymbol sourceType, HashSet<string> sourceMembers, KeyValuePair<string, TypedConstant> includeArg)
+    {
+        if (includeArg.Equals(default) || includeArg.Value.IsNull || includeArg.Value.Kind != TypedConstantKind.Array)
+            return;
+
+        // Check if both Include and Exclude are specified
+        bool hasExclude = facetAttr.ConstructorArguments.Length > 1 &&
+                         !facetAttr.ConstructorArguments[1].IsNull &&
+                         facetAttr.ConstructorArguments[1].Values.Length > 0;
+
+        if (hasExclude)
         {
-            foreach (var item in nestedFacetsArg.Value.Values)
-            {
-                if (item.Value is INamedTypeSymbol nestedFacetType)
-                {
-                    if (!HasFacetAttribute(nestedFacetType))
-                    {
-                        var diagnostic = Diagnostic.Create(
-                            InvalidNestedFacetRule,
-                            facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
-                            nestedFacetType.ToDisplayString());
-                        context.ReportDiagnostic(diagnostic);
-                    }
-                }
-            }
+            context.ReportDiagnostic(Diagnostic.Create(
+                IncludeAndExcludeBothSpecifiedRule,
+                facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation()));
         }
 
-        // Check MaxDepth and PreserveReferences for circular reference safety
+        foreach (var item in includeArg.Value.Values)
+        {
+            if (item.Value is string propertyName && !string.IsNullOrEmpty(propertyName) && !sourceMembers.Contains(propertyName))
+            {
+                ReportInvalidPropertyName(context, facetAttr, propertyName, "Include", sourceType, sourceMembers);
+            }
+        }
+    }
+
+    private static void ValidateConfigurationType(SymbolAnalysisContext context, AttributeData facetAttr, INamedTypeSymbol sourceType, INamedTypeSymbol targetType, KeyValuePair<string, TypedConstant> configurationArg)
+    {
+        if (configurationArg.Equals(default) || configurationArg.Value.IsNull)
+            return;
+
+        if (configurationArg.Value.Value is INamedTypeSymbol configurationType && !ImplementsConfigurationInterface(configurationType, sourceType, targetType))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                InvalidConfigurationTypeRule,
+                facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
+                configurationType.ToDisplayString(),
+                sourceType.ToDisplayString(),
+                targetType.ToDisplayString()));
+        }
+    }
+
+    private static void ValidateNestedFacets(SymbolAnalysisContext context, AttributeData facetAttr, KeyValuePair<string, TypedConstant> nestedFacetsArg)
+    {
+        if (nestedFacetsArg.Equals(default) || nestedFacetsArg.Value.IsNull || nestedFacetsArg.Value.Kind != TypedConstantKind.Array)
+            return;
+
+        foreach (var item in nestedFacetsArg.Value.Values)
+        {
+            if (item.Value is INamedTypeSymbol nestedFacetType && !HasFacetAttribute(nestedFacetType))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InvalidNestedFacetRule,
+                    facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
+                    nestedFacetType.ToDisplayString()));
+            }
+        }
+    }
+
+    private static void ValidateCircularReferenceSafety(SymbolAnalysisContext context, AttributeData facetAttr, FacetNamedArguments namedArgs)
+    {
         int maxDepth = 10; // default
         bool preserveReferences = true; // default
 
-        if (!maxDepthArg.Equals(default) && maxDepthArg.Value.Value is int maxDepthValue)
+        if (!namedArgs.MaxDepth.Equals(default) && namedArgs.MaxDepth.Value.Value is int maxDepthValue)
         {
             maxDepth = maxDepthValue;
 
             // Validate MaxDepth range
             if (maxDepthValue < 0)
             {
-                var diagnostic = Diagnostic.Create(
+                context.ReportDiagnostic(Diagnostic.Create(
                     MaxDepthWarningRule,
                     facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
                     maxDepthValue,
-                    "MaxDepth cannot be negative");
-                context.ReportDiagnostic(diagnostic);
+                    "MaxDepth cannot be negative"));
             }
             else if (maxDepthValue > 100)
             {
-                var diagnostic = Diagnostic.Create(
+                context.ReportDiagnostic(Diagnostic.Create(
                     MaxDepthWarningRule,
                     facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
                     maxDepthValue,
-                    "This value is unusually large and may indicate a configuration error. Consider using a value between 1 and 10");
-                context.ReportDiagnostic(diagnostic);
+                    "This value is unusually large and may indicate a configuration error. Consider using a value between 1 and 10"));
             }
         }
 
-        if (!preserveReferencesArg.Equals(default) && preserveReferencesArg.Value.Value is bool preserveReferencesValue)
+        if (!namedArgs.PreserveReferences.Equals(default) && namedArgs.PreserveReferences.Value.Value is bool preserveReferencesValue)
         {
             preserveReferences = preserveReferencesValue;
         }
 
         // Check for circular reference risk
-        bool hasNestedFacets = !nestedFacetsArg.Equals(default) &&
-                              !nestedFacetsArg.Value.IsNull &&
-                              nestedFacetsArg.Value.Kind == TypedConstantKind.Array &&
-                              nestedFacetsArg.Value.Values.Length > 0;
+        bool hasNestedFacets = !namedArgs.NestedFacets.Equals(default) &&
+                              !namedArgs.NestedFacets.Value.IsNull &&
+                              namedArgs.NestedFacets.Value.Kind == TypedConstantKind.Array &&
+                              namedArgs.NestedFacets.Value.Values.Length > 0;
 
         if (hasNestedFacets && maxDepth == 0 && !preserveReferences)
         {
-            var diagnostic = Diagnostic.Create(
+            context.ReportDiagnostic(Diagnostic.Create(
                 CircularReferenceWarningRule,
-                facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation());
-            context.ReportDiagnostic(diagnostic);
+                facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation()));
         }
+    }
 
-        // Check SourceSignature
-        if (!sourceSignatureArg.Equals(default) && !sourceSignatureArg.Value.IsNull)
+    private static void ValidateSourceSignature(SymbolAnalysisContext context, AttributeData facetAttr, INamedTypeSymbol sourceType, FacetNamedArguments namedArgs)
+    {
+        if (namedArgs.SourceSignature.Equals(default) || namedArgs.SourceSignature.Value.IsNull)
+            return;
+
+        if (namedArgs.SourceSignature.Value.Value is not string expectedSignature || string.IsNullOrEmpty(expectedSignature))
+            return;
+
+        // Get IncludeFields value
+        bool includeFields = !namedArgs.IncludeFields.Equals(default) &&
+                            namedArgs.IncludeFields.Value.Value is bool includeFieldsValue &&
+                            includeFieldsValue;
+
+        // Get exclude values from constructor
+        var excludeValues = facetAttr.ConstructorArguments.Length > 1
+            ? facetAttr.ConstructorArguments[1].Values
+            : ImmutableArray<TypedConstant>.Empty;
+
+        // Get include value
+        var includeValue = !namedArgs.Include.Equals(default) ? namedArgs.Include.Value : default;
+
+        // Compute actual signature
+        var actualSignature = ComputeSourceSignature(sourceType, excludeValues, includeValue, includeFields);
+
+        // Compare signatures
+        if (!string.Equals(expectedSignature, actualSignature, StringComparison.OrdinalIgnoreCase))
         {
-            if (sourceSignatureArg.Value.Value is string expectedSignature && !string.IsNullOrEmpty(expectedSignature))
-            {
-                // Get IncludeFields value
-                bool includeFields = false;
-                if (!includeFieldsArg.Equals(default) && includeFieldsArg.Value.Value is bool includeFieldsValue)
-                {
-                    includeFields = includeFieldsValue;
-                }
-
-                // Get exclude values from constructor
-                var excludeValues = facetAttr.ConstructorArguments.Length > 1
-                    ? facetAttr.ConstructorArguments[1].Values
-                    : ImmutableArray<TypedConstant>.Empty;
-
-                // Get include value
-                var includeValue = !includeArg.Equals(default) ? includeArg.Value : default;
-
-                // Compute actual signature
-                var actualSignature = ComputeSourceSignature(sourceType, excludeValues, includeValue, includeFields);
-
-                // Compare signatures
-                if (!string.Equals(expectedSignature, actualSignature, StringComparison.OrdinalIgnoreCase))
-                {
-                    var diagnostic = Diagnostic.Create(
-                        SourceSignatureMismatchRule,
-                        facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
-                        sourceType.ToDisplayString(),
-                        actualSignature);
-                    context.ReportDiagnostic(diagnostic);
-                }
-            }
+            context.ReportDiagnostic(Diagnostic.Create(
+                SourceSignatureMismatchRule,
+                facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
+                sourceType.ToDisplayString(),
+                actualSignature));
         }
     }
 
