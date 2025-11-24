@@ -969,3 +969,9 @@ Facet wouldn't be the same without these awesome contributors. Thank you!
 <a href="https://github.com/Tim-Maes/Facet/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=Tim-Maes/Facet" />
 </a>
+
+## 💖 Backers & supporters
+
+<a href="https://github.com/kwpbartecautoid">
+  <img src="https://images.weserv.nl/?url=github.com/kwpbartecautoid.png&w=64&h=64&mask=circle" width="64" height="64" />
+</a>
