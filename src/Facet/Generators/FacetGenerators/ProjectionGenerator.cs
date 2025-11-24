@@ -77,40 +77,25 @@ internal static class ProjectionGenerator
         sb.AppendLine($"{indent}{{");
 
         var members = model.Members;
-        var memberCount = members.Length;
 
         // Track which facet types we're currently processing to detect circular references
         var visitedTypes = new HashSet<string> { model.Name };
 
-        var outputIndex = 0;
-        for (int i = 0; i < memberCount; i++)
+        // Pre-filter included members to avoid O(n²) comma placement check
+        var includedMembers = members.Where(m => m.MapFromIncludeInProjection).ToArray();
+        var includedCount = includedMembers.Length;
+
+        for (int i = 0; i < includedCount; i++)
         {
-            var member = members[i];
-
-            // Skip members that should not be included in projection (MapFromIncludeInProjection = false)
-            if (!member.MapFromIncludeInProjection)
-                continue;
-
-            var comma = outputIndex < memberCount - 1 ? "," : "";
+            var member = includedMembers[i];
             var memberIndent = indent + "    ";
 
             // Generate the property assignment
             var projectionValue = GetProjectionValueExpression(member, "source", memberIndent, facetLookup, visitedTypes, 0, model.MaxDepth);
             sb.Append($"{memberIndent}{member.Name} = {projectionValue}");
 
-            // Add comma and newline
-            outputIndex++;
-            // Check if this is the last included member
-            bool isLastIncluded = true;
-            for (int j = i + 1; j < memberCount; j++)
-            {
-                if (members[j].MapFromIncludeInProjection)
-                {
-                    isLastIncluded = false;
-                    break;
-                }
-            }
-            if (!isLastIncluded)
+            // Add comma if not the last member
+            if (i < includedCount - 1)
                 sb.Append(",");
             sb.AppendLine();
         }
@@ -230,7 +215,7 @@ internal static class ProjectionGenerator
         var nestedSourceExpression = $"{sourceVariableName}.{sourcePropName}";
 
         // Extract simple type name for circular reference check
-        var simpleTypeName = nonNullableTypeName.Replace("global::", "").Split('.', ':').Last();
+        var simpleTypeName = nonNullableTypeName.Replace(Shared.GeneratorUtilities.GlobalPrefix, "").Split('.', ':').Last();
 
         // Check for circular reference - if we're already processing this type, use constructor
         if (visitedTypes.Contains(simpleTypeName))
@@ -333,7 +318,7 @@ internal static class ProjectionGenerator
         int maxDepth = 0)
     {
         // Extract simple type name for circular reference check
-        var simpleTypeName = elementFacetTypeName.Replace("global::", "").Split('.', ':').Last();
+        var simpleTypeName = elementFacetTypeName.Replace(Shared.GeneratorUtilities.GlobalPrefix, "").Split('.', ':').Last();
 
         // Check for circular reference
         if (visitedTypes.Contains(simpleTypeName))
@@ -387,7 +372,7 @@ internal static class ProjectionGenerator
     {
         // Strip "global::" prefix and extract simple name
         var lookupName = typeName
-            .Replace("global::", "")
+            .Replace(Shared.GeneratorUtilities.GlobalPrefix, "")
             .Split('.', ':')
             .Last();
 
@@ -425,31 +410,9 @@ internal static class ProjectionGenerator
             $"({TransformExpression(c, sourceVariableName)})"));
 
         // Determine the default value
-        var defaultValue = member.MapWhenDefault ?? GetDefaultValueForType(member.TypeName);
+        var defaultValue = member.MapWhenDefault ?? Shared.GeneratorUtilities.GetDefaultValueForType(member.TypeName);
 
         return $"{combinedCondition} ? {valueExpression} : {defaultValue}";
     }
 
-    /// <summary>
-    /// Gets an appropriate default value for a type name.
-    /// </summary>
-    private static string GetDefaultValueForType(string typeName)
-    {
-        // Handle nullable types
-        if (typeName.EndsWith("?"))
-            return "default";
-
-        // Handle common value types
-        return typeName switch
-        {
-            "bool" => "false",
-            "byte" or "sbyte" or "short" or "ushort" or "int" or "uint" or "long" or "ulong" => "0",
-            "float" => "0f",
-            "double" => "0d",
-            "decimal" => "0m",
-            "char" => "'\\0'",
-            "string" => "default",
-            _ => "default"
-        };
-    }
 }

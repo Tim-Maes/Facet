@@ -278,7 +278,7 @@ internal static class CodeGenerationHelpers
 
             return lines.Count > 0 ? string.Join("\n", lines) : string.Empty;
         }
-        catch
+        catch (System.Xml.XmlException)
         {
             // If XML parsing fails, return empty string rather than crashing the generator
             return string.Empty;

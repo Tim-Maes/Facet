@@ -141,32 +141,9 @@ internal static class ExpressionBuilder
             $"({TransformExpression(c, sourceVariableName)})"));
 
         // Determine the default value
-        var defaultValue = member.MapWhenDefault ?? GetDefaultValueForType(member.TypeName);
+        var defaultValue = member.MapWhenDefault ?? Shared.GeneratorUtilities.GetDefaultValueForType(member.TypeName);
 
         return $"{combinedCondition} ? {valueExpression} : {defaultValue}";
-    }
-
-    /// <summary>
-    /// Gets an appropriate default value for a type name.
-    /// </summary>
-    private static string GetDefaultValueForType(string typeName)
-    {
-        // Handle nullable types
-        if (typeName.EndsWith("?"))
-            return "default";
-
-        // Handle common value types
-        return typeName switch
-        {
-            "bool" => "false",
-            "byte" or "sbyte" or "short" or "ushort" or "int" or "uint" or "long" or "ulong" => "0",
-            "float" => "0f",
-            "double" => "0d",
-            "decimal" => "0m",
-            "char" => "'\\0'",
-            "string" => "default",
-            _ => "default"
-        };
     }
 
     private static string BuildCollectionNestedFacetExpression(

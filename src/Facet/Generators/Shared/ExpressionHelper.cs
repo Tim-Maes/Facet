@@ -8,21 +8,15 @@ namespace Facet.Generators.Shared;
 /// </summary>
 internal static class ExpressionHelper
 {
+    private static readonly char[] ExpressionChars = { ' ', '+', '-', '*', '/', '(', '?', ':' };
+
     /// <summary>
     /// Determines if the source string is an expression (contains operators, spaces, etc.)
     /// rather than a simple property name.
     /// </summary>
     public static bool IsExpression(string source)
     {
-        // If it contains any of these, it's an expression
-        return source.Contains(" ") ||
-               source.Contains("+") ||
-               source.Contains("-") ||
-               source.Contains("*") ||
-               source.Contains("/") ||
-               source.Contains("(") ||
-               source.Contains("?") ||
-               source.Contains(":");
+        return source.IndexOfAny(ExpressionChars) >= 0;
     }
 
     /// <summary>

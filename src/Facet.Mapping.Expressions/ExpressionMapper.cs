@@ -340,11 +340,11 @@ internal class ExpressionMapper
                 originalMethod.GetParameters().Select(p => p.ParameterType).ToArray(),
                 null);
         }
-        catch
+        catch (AmbiguousMatchException)
         {
             // If we can't find an exact match, try by name only
             return targetType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                .FirstOrDefault(m => m.Name == originalMethod.Name && 
+                .FirstOrDefault(m => m.Name == originalMethod.Name &&
                                    m.GetParameters().Length == originalMethod.GetParameters().Length);
         }
     }
