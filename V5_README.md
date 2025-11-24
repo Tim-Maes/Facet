@@ -200,30 +200,6 @@ public partial class PersonFlat { }
 
 ---
 
-## Getting Help
-
-If you encounter issues during migration:
-
-1. **Check the documentation:**
-   - [Release Notes](RELEASE_NOTES_V5.md)
-   - [Attribute Reference](docs/03_AttributeReference.md)
-   - [Analyzer Rules](docs/13_AnalyzerRules.md)
-
-2. **Search existing issues:**
-   - https://github.com/Tim-Maes/Facet/issues
-
-3. **Create a new issue:**
-   - Include your alpha version
-   - Describe the migration issue
-   - Provide code samples
-   - Include error messages
-
-4. **Community support:**
-   - GitHub Discussions
-   - Stack Overflow (tag: `facet`)
-
----
-
 ## Success!
 
 Once you've completed these steps, you're successfully migrated to Facet 5.0.0 GA!
