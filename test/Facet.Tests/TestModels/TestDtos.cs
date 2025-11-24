@@ -180,13 +180,13 @@ public partial class NullableTestDto
 }
 
 // NullableProperties functionality test DTOs
-[Facet(typeof(Product), "InternalNotes", "CreatedAt", NullableProperties = true, GenerateBackTo = false)]
+[Facet(typeof(Product), "InternalNotes", "CreatedAt", NullableProperties = true, GenerateToSource = false)]
 public partial class ProductQueryDto;
 
-[Facet(typeof(User), "Password", "CreatedAt", NullableProperties = true, GenerateBackTo = false)]
+[Facet(typeof(User), "Password", "CreatedAt", NullableProperties = true, GenerateToSource = false)]
 public partial record UserQueryDto;
 
-[Facet(typeof(UserWithEnum), NullableProperties = true, GenerateBackTo = false)]
+[Facet(typeof(UserWithEnum), NullableProperties = true, GenerateToSource = false)]
 public partial class UserWithEnumQueryDto;
 
 // Test for excluding inherited property from base class

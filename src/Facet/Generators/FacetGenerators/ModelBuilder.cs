@@ -35,10 +35,7 @@ internal static class ModelBuilder
         var generateConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateConstructor, true);
         var generateParameterlessConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateParameterlessConstructor, true);
         var generateProjection = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateProjection, true);
-        // Support both GenerateToSource (new) and GenerateBackTo (deprecated) for backward compatibility
-        var generateToSource = AttributeParser.HasNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateToSource)
-            ? AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateToSource, false)
-            : AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateBackTo, false);
+        var generateToSource = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateToSource, false);
         var configurationTypeName = AttributeParser.ExtractConfigurationTypeName(attribute);
 
         // Infer the type kind and whether it's a record from the target type declaration

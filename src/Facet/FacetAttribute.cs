@@ -27,7 +27,7 @@ public sealed class FacetAttribute : Attribute
     public string[]? Include { get; set; }
 
     /// <summary>
-    /// Whether to include public fields from the source type (default: true).
+    /// Whether to include public fields from the source type (default: false).
     /// </summary>
     public bool IncludeFields { get; set; } = false;
 
@@ -67,13 +67,6 @@ public sealed class FacetAttribute : Attribute
     /// Default is false. Set to true to enable two-way mapping scenarios.
     /// </summary>
     public bool GenerateToSource { get; set; } = false;
-
-    /// <summary>
-    /// Whether to generate a method to map back from the facet type to the source type.
-    /// Default is false. Set to true to enable two-way mapping scenarios.
-    /// </summary>
-    [Obsolete("Use GenerateToSource instead. This property will be removed in a future version.")]
-    public bool GenerateBackTo { get => GenerateToSource; set => GenerateToSource = value; }
 
     /// <summary>
     /// Controls whether generated properties should preserve init-only modifiers from source properties.
