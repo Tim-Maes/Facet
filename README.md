@@ -972,6 +972,6 @@ Facet wouldn't be the same without these awesome contributors. Thank you!
 
 ## 💖 Backers & supporters
 
-<a href="https://github.com/kwpbartecautoid">
-  <img src="https://images.weserv.nl/?url=github.com/kwpbartecautoid.png&w=64&h=64&mask=circle" width="64" height="64" />
+<a href="https://github.com/pokeparadox">
+  <img src="https://images.weserv.nl/?url=github.com/pokeparadox.png&w=64&h=64&mask=circle" width="64" height="64" />
 </a>
