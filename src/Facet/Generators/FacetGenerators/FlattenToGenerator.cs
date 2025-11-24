@@ -50,9 +50,12 @@ internal static class FlattenToGenerator
         }
         else
         {
-            // For now, we'll assume the first collection property is the one to flatten
-            // In a more sophisticated implementation, we could detect which collection to use
-            // based on the flatten target type's source type
+            // Use the first nested facet collection property
+            // Note: If multiple collections exist, the first one will be used.
+            // In the future, this could be enhanced to:
+            // 1. Analyze the target flatten type to determine which collection it expects
+            // 2. Allow users to specify which collection to flatten via attribute parameter
+            // 3. Generate multiple FlattenTo methods for each collection
             var collectionMember = collectionMembers[0];
 
             sb.AppendLine($"{indent}    if ({collectionMember.Name} == null)");
@@ -153,8 +156,26 @@ internal static class FlattenToGenerator
         var startIndex = typeName.IndexOf('<');
         if (startIndex < 0) return string.Empty;
         
-        // Find the matching closing bracket
-        var endIndex = typeName.LastIndexOf('>');
+        // Find the matching closing bracket by counting brackets
+        var depth = 0;
+        var endIndex = -1;
+        for (var i = startIndex; i < typeName.Length; i++)
+        {
+            if (typeName[i] == '<')
+            {
+                depth++;
+            }
+            else if (typeName[i] == '>')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    endIndex = i;
+                    break;
+                }
+            }
+        }
+        
         if (endIndex < 0) return string.Empty;
         
         // Extract the type between the brackets

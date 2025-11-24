@@ -145,25 +145,51 @@ public sealed class FacetAttribute : Attribute
 
     /// <summary>
     /// An array of flattened types that can be generated from this facet's collection properties.
-    /// When specified, the generator will create FlattenTo methods that unpack collection properties
-    /// into multiple rows of the specified flatten type, combining parent properties with each collection item.
-    /// The target types must be defined with the [Flatten] attribute specifying the collection element type.
+    /// When specified, the generator will create FlattenTo() methods that unpack collection properties
+    /// into multiple rows of the specified type, combining parent properties with each collection item.
+    /// The target types should be classes/records that define the properties you want from both 
+    /// the parent and the collection items.
     /// </summary>
     /// <remarks>
     /// <para>
     /// Example usage:
     /// <code>
-    /// [Facet(typeof(Data), NestedFacets = [typeof(ExtendedDto)], FlattenTo = [typeof(DataDtoFlattened)])]
+    /// // Define the entities
+    /// public class Data 
+    /// { 
+    ///     public int Id { get; set; }
+    ///     public string Name { get; set; }
+    ///     public ICollection&lt;Extended&gt; Extended { get; set; }
+    /// }
+    /// 
+    /// public class Extended 
+    /// { 
+    ///     public int Id { get; set; }
+    ///     public string Name { get; set; }
+    ///     public int DataValue { get; set; }
+    /// }
+    /// 
+    /// // Define the facets
+    /// [Facet(typeof(Extended))]
+    /// public partial class ExtendedDto;
+    /// 
+    /// [Facet(typeof(Data), NestedFacets = [typeof(ExtendedDto)], FlattenTo = [typeof(DataFlattened)])]
     /// public partial class DataDto;
     /// 
-    /// [Flatten(typeof(Extended), IgnoreForeignKeyClashes = true, IgnoreNestedIds = true)]
-    /// public partial class DataDtoFlattened
+    /// // Define the flattened target (manually specify all properties you want)
+    /// public partial class DataFlattened
     /// {
+    ///     // From Data (parent)
+    ///     public int Id { get; set; }
+    ///     public string Name { get; set; }
+    ///     
+    ///     // From Extended (collection item) - prefix to avoid Name collision
     ///     public string ExtendedName { get; set; }
     ///     public int DataValue { get; set; }
     /// }
     /// </code>
-    /// This generates a FlattenTo() method that combines DataDto properties with each Extended item.
+    /// This generates a FlattenTo() method on DataDto that returns List&lt;DataFlattened&gt;,
+    /// with one row per Extended item, combining Data properties with each Extended item's properties.
     /// </para>
     /// </remarks>
     public Type[]? FlattenTo { get; set; }
