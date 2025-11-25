@@ -952,13 +952,15 @@ Facet is modular and consists of several NuGet packages:
 
 ## Comparison
 
-| Facet | AutoMapper | Mapperly | Mapster |
-|-------|------------|----------|---------|
-| :white_check_mark: Compile-time generation | :x: Runtime reflection | :white_check_mark: Source generation | :warning: Runtime codegen |
-| :white_check_mark: EF Core LINQ projections | :x: Manual Select() | :white_check_mark: Manual setup | :warning: Manual setup |
-| :white_check_mark: Auto navigation loading | :x: Manual .Include() | :x: Manual .Include() | :x: Manual .Include() |
-| :white_check_mark: Flatten, Wrapper, CRUD gen | :x: No | :x: No | :warning: Limited |
-| :white_check_mark: Expression transformation | :x: No | :x: No | :x: No |
+| Feature | Facet | AutoMapper | Mapperly | Mapster |
+|---------|-------|------------|----------|---------|
+| **Generation Time** | Compile | Runtime | Compile | Runtime |
+| **EF Core Projections** | :white_check_mark: Auto | :x: Manual | :warning: Manual | :warning: Manual |
+| **Navigation Loading** | :white_check_mark: Auto | :x: Manual | :x: Manual | :x: Manual |
+| **Flatten/Wrapper/CRUD** | :white_check_mark: Built-in | :x: | :x: | :warning: Limited |
+| **Expression Transform** | :white_check_mark: | :x: | :x: | :x: |
+| **Breaking Detection** | :white_check_mark: | :x: | :x: | :x: |
+| **Conditional Mapping** | :white_check_mark: MapWhen | :warning: Custom | :warning: Custom | :warning: Custom |
 
 **Facet is the only tool that combines compile-time generation with deep EF Core integration.**
 

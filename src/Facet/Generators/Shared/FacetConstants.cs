@@ -93,7 +93,6 @@ internal static class FacetConstants
         public const string GenerateParameterlessConstructor = "GenerateParameterlessConstructor";
         public const string GenerateProjection = "GenerateProjection";
         public const string GenerateToSource = "GenerateToSource";
-        public const string GenerateBackTo = "GenerateBackTo";
         public const string PreserveInitOnlyProperties = "PreserveInitOnlyProperties";
         public const string PreserveRequiredProperties = "PreserveRequiredProperties";
         public const string NullableProperties = "NullableProperties";
