@@ -102,16 +102,30 @@ internal static class ModelBuilder
 
         // Determine full name
         var useFullName = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.UseFullName, false);
-        string fullName = useFullName
-            ? targetSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).GetSafeName()
-            : targetSymbol.Name;
+
+        // Get containing types for nested classes
+        var containingTypes = TypeAnalyzer.GetContainingTypes(targetSymbol);
+
+        // For nested classes, automatically use hierarchical name to avoid collisions
+        // even if UseFullName is false
+        string fullName;
+        if (useFullName)
+        {
+            fullName = targetSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).GetSafeName();
+        }
+        else if (containingTypes.Length > 0)
+        {
+            // Build hierarchical name: ParentClass.NestedClass
+            fullName = string.Join(".", containingTypes) + "." + targetSymbol.Name;
+        }
+        else
+        {
+            fullName = targetSymbol.Name;
+        }
 
         var ns = targetSymbol.ContainingNamespace.IsGlobalNamespace
             ? null
             : targetSymbol.ContainingNamespace.ToDisplayString();
-
-        // Get containing types for nested classes
-        var containingTypes = TypeAnalyzer.GetContainingTypes(targetSymbol);
 
         // Get containing types for the source type (to detect nesting in static classes)
         var sourceContainingTypes = TypeAnalyzer.GetContainingTypes(sourceType);
