@@ -769,6 +769,131 @@ public partial class ProductExportDto { }
 | **Setup** | Single attribute, automatic | Requires defining each nested facet |
 | **Flexibility** | Less (automatic) | More (explicit control) |
 
+## FlattenTo Property (Unpack Collections to Rows)
+
+While the `[Flatten]` attribute flattens nested objects into a single DTO, the `FlattenTo` property on the `[Facet]` attribute unpacks collection properties into multiple rows. This is useful for reports, exports, and scenarios where you need to denormalize a parent-child relationship.
+
+### What is FlattenTo?
+
+FlattenTo transforms a facet with a collection property into multiple rows, combining the parent's properties with each collection item:
+
+```csharp
+// Source entities
+public class DataEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string Description { get; set; }
+    public ICollection<ExtendedEntity> Extended { get; set; }
+}
+
+public class ExtendedEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public int DataValue { get; set; }
+}
+
+// Facet for the collection item
+[Facet(typeof(ExtendedEntity))]
+public partial class ExtendedFacet;
+
+// Facet for the parent with FlattenTo
+[Facet(typeof(DataEntity),
+    NestedFacets = [typeof(ExtendedFacet)],
+    FlattenTo = [typeof(DataFlattenedDto)])]
+public partial class DataFacet;
+
+// Flattened target (you define the properties you want)
+public partial class DataFlattenedDto
+{
+    // Properties from parent (DataEntity)
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string Description { get; set; }
+
+    // Properties from collection item (ExtendedEntity)
+    // Use a prefix to avoid Name collision
+    public string ExtendedName { get; set; }
+    public int DataValue { get; set; }
+}
+```
+
+### Usage
+
+```csharp
+var entity = new DataEntity
+{
+    Id = 1,
+    Name = "Parent",
+    Description = "Parent Description",
+    Extended = new List<ExtendedEntity>
+    {
+        new() { Id = 10, Name = "Item 1", DataValue = 100 },
+        new() { Id = 20, Name = "Item 2", DataValue = 200 }
+    }
+};
+
+var facet = new DataFacet(entity);
+var rows = facet.FlattenTo();
+
+// Result: 2 rows
+// Row 1: { Id: 1, Name: "Parent", Description: "Parent Description", ExtendedName: "Item 1", DataValue: 100 }
+// Row 2: { Id: 1, Name: "Parent", Description: "Parent Description", ExtendedName: "Item 2", DataValue: 200 }
+```
+
+### Key Features
+
+- **Row-per-item output**: Creates one output row for each collection item
+- **Parent data replication**: Parent properties are copied to each row
+- **Type-safe**: Target types are defined explicitly with the properties you need
+- **Null-safe**: Returns empty list when collection is null or empty
+
+### Handling Name Collisions
+
+When both parent and child have properties with the same name, prefix the child property:
+
+```csharp
+public class FlattenedOutput
+{
+    // From parent
+    public int Id { get; set; }
+    public string Name { get; set; }
+
+    // From child - prefixed to avoid collision
+    public int ItemId { get; set; }      // Maps from child's Id
+    public string ItemName { get; set; } // Maps from child's Name
+}
+```
+
+### Use Cases
+
+**Report Generation:**
+```csharp
+var reportRows = invoices
+    .Select(i => new InvoiceFacet(i))
+    .SelectMany(f => f.FlattenTo())
+    .ToList();
+
+await GenerateExcelReport(reportRows);
+```
+
+**CSV Export:**
+```csharp
+var exportRows = orderFacet.FlattenTo();
+await csvWriter.WriteRecordsAsync(exportRows);
+```
+
+### Comparison: FlattenTo vs Flatten Attribute
+
+| Feature | `FlattenTo` property | `[Flatten]` attribute |
+|---------|---------------------|----------------------|
+| **Purpose** | Unpack collections to rows | Flatten nested objects to properties |
+| **Output** | Multiple rows (List) | Single object |
+| **Input** | Facet with collection | Entity with nested objects |
+| **Control** | You define target properties | Properties auto-generated |
+| **Use case** | Reports, exports | API responses, DTOs |
+
 ## See Also
 
 - [Facet Attribute Reference](03_AttributeReference.md)
