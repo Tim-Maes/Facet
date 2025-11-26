@@ -175,10 +175,14 @@ internal static class ConstructorGenerator
             }
             else if (hasCustomMapping)
             {
-                // Regular mutable properties - copy first, then apply custom mapping
+                // Regular mutable properties - initialize properly (including nested facets), then apply custom mapping
+                // This ensures nested facets are instantiated before custom mapping logic runs
                 foreach (var m in model.Members)
-                    sb.AppendLine($"        this.{m.Name} = source.{m.SourcePropertyName};");
-                sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
+                {
+                    var sourceValue = ExpressionBuilder.GetSourceValueExpression(m, "source");
+                    sb.AppendLine($"        this.{m.Name} = {sourceValue};");
+                }
+                sb.AppendLine($"        global::{model.ConfigurationTypeName}.Map(source, this);");
             }
             else
             {
@@ -195,7 +199,7 @@ internal static class ConstructorGenerator
         else if (hasCustomMapping && !model.HasExistingPrimaryConstructor)
         {
             // For positional records/record structs with custom mapping
-            sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
+            sb.AppendLine($"        global::{model.ConfigurationTypeName}.Map(source, this);");
         }
     }
 
@@ -242,7 +246,7 @@ internal static class ConstructorGenerator
         else if (hasCustomMapping && !model.HasExistingPrimaryConstructor)
         {
             // For positional records/record structs with custom mapping
-            sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
+            sb.AppendLine($"        global::{model.ConfigurationTypeName}.Map(source, this);");
         }
 
         sb.AppendLine("    }");
@@ -262,10 +266,15 @@ internal static class ConstructorGenerator
         }
         else if (hasCustomMapping)
         {
-            // Regular mutable properties - copy first, then apply custom mapping
+            // Regular mutable properties - initialize with depth tracking, then apply custom mapping
+            // This ensures nested facets are properly instantiated with depth parameters
+            // before custom mapping logic runs (which can override values if needed)
             foreach (var m in model.Members)
-                sb.AppendLine($"        this.{m.Name} = source.{m.SourcePropertyName};");
-            sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, this);");
+            {
+                var sourceValue = ExpressionBuilder.GetSourceValueExpression(m, "source", model.MaxDepth, true, model.PreserveReferences);
+                sb.AppendLine($"        this.{m.Name} = {sourceValue};");
+            }
+            sb.AppendLine($"        global::{model.ConfigurationTypeName}.Map(source, this);");
         }
         else
         {
