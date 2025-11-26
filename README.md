@@ -975,7 +975,7 @@ Note that these are perfomed by using the `<TSource, TDestination>` mapping meth
 | Facet            |  5.922 ns |     baseline |      40 B |             |
 | GenAdapt         |  5.746 ns | 1.03x faster |      40 B |  1.00x more |
 | Mapperly         |  6.227 ns | 1.05x slower |      40 B |  1.00x more |
-| MapsterBenchmark | 13.243 ns | 2.24x slower |      40 B |  1.00x more |
+| Mapster | 13.243 ns | 2.24x slower |      40 B |  1.00x more |
 | AutoMapper       | 31.459 ns | 5.31x slower |      40 B |  1.00x more |
 
 **Nested mapping**
@@ -985,7 +985,7 @@ Note that these are perfomed by using the `<TSource, TDestination>` mapping meth
 | Facet            |  5.497 ns |     baseline |      32 B |             |
 | GenAdapt         |  8.910 ns | 1.62x slower |      72 B |  2.25x more |
 | Mapperly         |  9.015 ns | 1.64x slower |      72 B |  2.25x more |
-| MapsterBenchmark | 17.743 ns | 3.23x slower |      72 B |  2.25x more |
+| Mapster | 17.743 ns | 3.23x slower |      72 B |  2.25x more |
 | AutoMapper       | 36.794 ns | 6.69x slower |      72 B |  2.25x more |
 
 
