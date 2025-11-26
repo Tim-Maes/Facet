@@ -967,7 +967,7 @@ Facet is modular and consists of several NuGet packages:
 ## Performance Benchmarks
 
 **Simple mapping**
-```
+
 | Method           | Mean      | Error     | StdDev    | Median    | Ratio        | RatioSD | Gen0   | Allocated | Alloc Ratio |
 |----------------- |----------:|----------:|----------:|----------:|-------------:|--------:|-------:|----------:|------------:|
 | Facet            |  5.922 ns | 0.1685 ns | 0.4916 ns |  5.716 ns |     baseline |         | 0.0032 |      40 B |             |
@@ -975,9 +975,9 @@ Facet is modular and consists of several NuGet packages:
 | Mapperly         |  6.227 ns | 0.2436 ns | 0.7143 ns |  6.215 ns | 1.05x slower |   0.16x | 0.0032 |      40 B |  1.00x more |
 | MapsterBenchmark | 13.243 ns | 0.2616 ns | 0.2319 ns | 13.168 ns | 2.24x slower |   0.21x | 0.0032 |      40 B |  1.00x more |
 | AutoMapper       | 31.459 ns | 0.2927 ns | 0.2285 ns | 31.430 ns | 5.31x slower |   0.49x | 0.0032 |      40 B |  1.00x more |
-```
+
 **Nested mapping**
-```
+
 | Method           | Mean      | Error     | StdDev    | Median    | Ratio        | RatioSD | Gen0   | Allocated | Alloc Ratio |
 |----------------- |----------:|----------:|----------:|----------:|-------------:|--------:|-------:|----------:|------------:|
 | Facet            |  5.497 ns | 0.1490 ns | 0.3392 ns |  5.388 ns |     baseline |         | 0.0025 |      32 B |             |
@@ -986,7 +986,7 @@ Facet is modular and consists of several NuGet packages:
 | MapsterBenchmark | 17.743 ns | 0.3327 ns | 0.4086 ns | 17.625 ns | 3.23x slower |   0.06x | 0.0057 |      72 B |  2.25x more |
 | AutoMapper       | 36.794 ns | 1.0735 ns | 3.1144 ns | 35.663 ns | 6.69x slower |   0.36x | 0.0057 |      72 B |  2.25x more |
 
-```
+
 
 ## 💖 Contributors
 
