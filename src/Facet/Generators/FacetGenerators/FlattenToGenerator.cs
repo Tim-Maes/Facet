@@ -99,30 +99,17 @@ internal static class FlattenToGenerator
                 // Use the collection property name as the prefix (e.g., "Extended" from "Extended" property)
                 // rather than the facet type name (e.g., "ExtendedFacet")
                 var collectionPropertyName = collectionMember.Name;
-                
-                foreach (var nestedMember in nestedFacet.Members.Where(m => !m.IsCollection && !m.IsNestedFacet))
-                {
-                    // Check if this property name exists in the parent to avoid duplication
-                    if (!nonCollectionMembers.Any(pm => pm.Name == nestedMember.Name))
-                    {
-                        sb.AppendLine($"{indent}        {nestedMember.Name} = item.{nestedMember.Name},");
-                    }
-                    else
-                    {
-                        // Property name collision - try to use a prefixed name based on the collection property name
-                        // E.g., if collection is "Extended" and member is "Name", try "ExtendedName"
-                        // Skip Id properties since they're often ignored in flattened outputs (IgnoreNestedIds)
-                        if (nestedMember.Name.Equals("Id", System.StringComparison.Ordinal))
-                        {
-                            // Skip nested Id - it would conflict with parent Id
-                            // User can manually add ExtendedId property if they need it
-                            continue;
-                        }
-                        
-                        var prefixedName = $"{collectionPropertyName}{nestedMember.Name}";
-                        sb.AppendLine($"{indent}        {prefixedName} = item.{nestedMember.Name},");
-                    }
-                }
+
+                // Recursively collect all scalar properties from nested facets
+                CollectNestedProperties(
+                    sb,
+                    nestedFacet,
+                    facetLookup,
+                    nonCollectionMembers,
+                    "item",
+                    collectionPropertyName,
+                    indent,
+                    maxDepth: 5);
             }
 
             // Close the object initializer
@@ -130,6 +117,113 @@ internal static class FlattenToGenerator
         }
 
         sb.AppendLine($"{indent}}}");
+    }
+
+    /// <summary>
+    /// Recursively collects scalar properties from a nested facet and its child nested facets.
+    /// Generates property assignments with proper navigation paths (e.g., item.Extended.ExtendedValue).
+    /// </summary>
+    private static void CollectNestedProperties(
+        StringBuilder sb,
+        FacetTargetModel facet,
+        Dictionary<string, FacetTargetModel> facetLookup,
+        List<FacetMember> parentMembers,
+        string navigationPath,
+        string prefix,
+        string indent,
+        int maxDepth,
+        int currentDepth = 0)
+    {
+        if (currentDepth >= maxDepth)
+        {
+            // Prevent infinite recursion in circular reference scenarios
+            return;
+        }
+
+        foreach (var member in facet.Members)
+        {
+            // Skip collection properties - we only flatten scalar values
+            if (member.IsCollection)
+            {
+                continue;
+            }
+
+            if (member.IsNestedFacet)
+            {
+                // This is a nested facet - recurse into it
+                var nestedFacetTypeName = member.TypeName?.Replace("?", "").Trim();
+
+                if (!string.IsNullOrEmpty(nestedFacetTypeName))
+                {
+                    // Try to find the nested facet in the lookup
+                    FacetTargetModel? nestedFacet = null;
+                    if (!facetLookup.TryGetValue(nestedFacetTypeName, out nestedFacet))
+                    {
+                        // Try just the simple name
+                        var simpleName = ExtractSimpleName(nestedFacetTypeName);
+                        facetLookup.TryGetValue(simpleName, out nestedFacet);
+                    }
+
+                    if (nestedFacet != null)
+                    {
+                        // Recursively collect properties from this nested facet
+                        // Build navigation path: item.Extended.SubProperty
+                        var newNavigationPath = $"{navigationPath}.{member.Name}";
+
+                        // Build prefix for collision handling
+                        // Keep the prefix simple - don't add every level
+                        var newPrefix = prefix;
+
+                        CollectNestedProperties(
+                            sb,
+                            nestedFacet,
+                            facetLookup,
+                            parentMembers,
+                            newNavigationPath,
+                            newPrefix,
+                            indent,
+                            maxDepth,
+                            currentDepth + 1);
+                    }
+                }
+            }
+            else
+            {
+                // Check if this is actually a scalar property or a navigation property
+                // Navigation properties that aren't configured as nested facets should be skipped
+                if (!IsScalarType(member.TypeName))
+                {
+                    // This is likely a navigation property (reference type) that's not configured as a nested facet
+                    // Skip it - the user needs to explicitly configure it as a nested facet if they want it included
+                    continue;
+                }
+
+                // This is a scalar property - add it to the flattened output
+                var propertyName = member.Name;
+                var navigationExpression = $"{navigationPath}.{propertyName}";
+
+                // Check if this property name exists in the parent to avoid duplication
+                if (!parentMembers.Any(pm => pm.Name == propertyName))
+                {
+                    sb.AppendLine($"{indent}        {propertyName} = {navigationExpression},");
+                }
+                else
+                {
+                    // Property name collision - use a prefixed name based on the collection property name
+                    // E.g., if collection is "Extended" and member is "Name", try "ExtendedName"
+                    // Skip Id properties since they're often ignored in flattened outputs
+                    if (propertyName.Equals("Id", System.StringComparison.Ordinal))
+                    {
+                        // Skip nested Id - it would conflict with parent Id
+                        // User can manually add a prefixed Id property if they need it
+                        continue;
+                    }
+
+                    var prefixedName = $"{prefix}{propertyName}";
+                    sb.AppendLine($"{indent}        {prefixedName} = {navigationExpression},");
+                }
+            }
+        }
     }
 
     private static string ExtractSimpleName(string fullyQualifiedName)
@@ -180,7 +274,69 @@ internal static class FlattenToGenerator
         
         // Extract the type between the brackets
         var innerType = typeName.Substring(startIndex + 1, endIndex - startIndex - 1).Trim();
-        
+
         return innerType;
+    }
+
+    /// <summary>
+    /// Determines if a type name represents a scalar/value type that should be included in flattening.
+    /// Returns false for reference types (navigation properties) that aren't configured as nested facets.
+    /// </summary>
+    private static bool IsScalarType(string? typeName)
+    {
+        if (string.IsNullOrEmpty(typeName)) return false;
+
+        // Remove nullable marker and global:: prefix
+        var cleanType = typeName.Replace("?", "").Replace("global::", "").Trim();
+
+        // Remove namespace qualifications to get just the type name
+        var lastDot = cleanType.LastIndexOf('.');
+        if (lastDot >= 0)
+        {
+            cleanType = cleanType.Substring(lastDot + 1);
+        }
+
+        // Check for known scalar/value types
+        // Primitives
+        if (cleanType == "int" || cleanType == "Int32" ||
+            cleanType == "long" || cleanType == "Int64" ||
+            cleanType == "short" || cleanType == "Int16" ||
+            cleanType == "byte" || cleanType == "Byte" ||
+            cleanType == "sbyte" || cleanType == "SByte" ||
+            cleanType == "uint" || cleanType == "UInt32" ||
+            cleanType == "ulong" || cleanType == "UInt64" ||
+            cleanType == "ushort" || cleanType == "UInt16" ||
+            cleanType == "bool" || cleanType == "Boolean" ||
+            cleanType == "float" || cleanType == "Single" ||
+            cleanType == "double" || cleanType == "Double" ||
+            cleanType == "char" || cleanType == "Char" ||
+            cleanType == "decimal" || cleanType == "Decimal")
+        {
+            return true;
+        }
+
+        // Common value types
+        if (cleanType == "DateTime" || cleanType == "DateTimeOffset" ||
+            cleanType == "TimeSpan" || cleanType == "Guid" ||
+            cleanType == "DateOnly" || cleanType == "TimeOnly")
+        {
+            return true;
+        }
+
+        // String (reference type but treated as scalar for flattening purposes)
+        if (cleanType == "string" || cleanType == "String")
+        {
+            return true;
+        }
+
+        // If it's a generic Nullable<T>, check the inner type
+        if (cleanType.StartsWith("Nullable<") || cleanType.StartsWith("Nullable`"))
+        {
+            var innerType = ExtractNestedTypeName(typeName);
+            return IsScalarType(innerType);
+        }
+
+        // Everything else is likely a reference type (navigation property)
+        return false;
     }
 }
