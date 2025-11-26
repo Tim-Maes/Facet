@@ -298,3 +298,57 @@ public partial class DataFlattenedDto
     public string ExtendedName { get; set; } = string.Empty;
     public int DataValue { get; set; }
 }
+
+// Test models for FlattenTo with lookup/junction tables and nested facets
+public class DataTableEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public ICollection<DataExtendedLookupEntity> ExtendedLookups { get; set; } = new List<DataExtendedLookupEntity>();
+}
+
+public class DataExtendedLookupEntity
+{
+    public int Id { get; set; }
+    public int DataId { get; set; }
+    public DataTableEntity Data { get; set; } = null!;
+    public int ExtendedId { get; set; }
+    public DataExtendedEntity Extended { get; set; } = null!;
+}
+
+public class DataExtendedEntity
+{
+    public int Id { get; set; }
+    public string ExtendedValue { get; set; } = string.Empty;
+    public int NumericValue { get; set; }
+}
+
+// Facets
+[Facet(typeof(DataExtendedEntity))]
+public partial class DataExtendedFacet;
+
+[Facet(typeof(DataExtendedLookupEntity),
+    NestedFacets = [typeof(DataExtendedFacet)])]
+public partial class DataExtendedLookupFacet;
+
+[Facet(typeof(DataTableEntity),
+    NestedFacets = [typeof(DataExtendedLookupFacet)],
+    FlattenTo = [typeof(DataTableFlattenedDto)])]
+public partial class DataTableFacet;
+
+// Flattened DTO - should include properties from both the lookup and the nested Extended entity
+public partial class DataTableFlattenedDto
+{
+    // From DataTableEntity (parent)
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+
+    // From DataExtendedLookupEntity (collection item)
+    public int DataId { get; set; }
+    public int ExtendedId { get; set; }
+
+    // From DataExtendedEntity (nested within collection item) - THIS IS THE BUG
+    // These properties should be populated by traversing through ExtendedLookups[].Extended.*
+    public string ExtendedValue { get; set; } = string.Empty;
+    public int NumericValue { get; set; }
+}

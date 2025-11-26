@@ -162,4 +162,70 @@ public class FlattenToTests
         Assert.Equal(10, flattened[0].DataValue);
         Assert.Equal(20, flattened[1].DataValue);
     }
+
+    [Fact]
+    public void FlattenTo_WithNestedFacetsInLookupTable_ShouldFlattenThroughNestedNavigation()
+    {
+        // Arrange - This tests the GitHub issue scenario with lookup tables
+        var data = new TestModels.DataTableEntity
+        {
+            Id = 1,
+            Name = "Main Data",
+            ExtendedLookups = new List<TestModels.DataExtendedLookupEntity>
+            {
+                new()
+                {
+                    Id = 10,
+                    DataId = 1,
+                    ExtendedId = 100,
+                    Extended = new TestModels.DataExtendedEntity
+                    {
+                        Id = 100,
+                        ExtendedValue = "First Extended Value",
+                        NumericValue = 42
+                    }
+                },
+                new()
+                {
+                    Id = 20,
+                    DataId = 1,
+                    ExtendedId = 200,
+                    Extended = new TestModels.DataExtendedEntity
+                    {
+                        Id = 200,
+                        ExtendedValue = "Second Extended Value",
+                        NumericValue = 99
+                    }
+                }
+            }
+        };
+
+        var facet = new TestModels.DataTableFacet(data);
+
+        // Act
+        var flattened = facet.FlattenTo();
+
+        // Assert
+        Assert.NotNull(flattened);
+        Assert.Equal(2, flattened.Count);
+
+        // First flattened row
+        Assert.Equal(1, flattened[0].Id);                    // From parent DataTableEntity
+        Assert.Equal("Main Data", flattened[0].Name);        // From parent DataTableEntity
+        Assert.Equal(1, flattened[0].DataId);                // From lookup DataExtendedLookupEntity
+        Assert.Equal(100, flattened[0].ExtendedId);          // From lookup DataExtendedLookupEntity
+
+        // CRITICAL: These should come from the nested Extended navigation property
+        // This is the bug - ExtendedValue and NumericValue are not populated
+        Assert.Equal("First Extended Value", flattened[0].ExtendedValue);  // From nested DataExtendedEntity
+        Assert.Equal(42, flattened[0].NumericValue);                        // From nested DataExtendedEntity
+
+        // Second flattened row
+        Assert.Equal(1, flattened[1].Id);
+        Assert.Equal("Main Data", flattened[1].Name);
+        Assert.Equal(1, flattened[1].DataId);
+        Assert.Equal(200, flattened[1].ExtendedId);
+        Assert.Equal("Second Extended Value", flattened[1].ExtendedValue);
+        Assert.Equal(99, flattened[1].NumericValue);
+    }
 }
