@@ -206,7 +206,25 @@ public static class FacetExtensions
         where TTarget : class
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
-        return source.Select(item => item.ToFacet<TSource, TTarget>());
+
+        var mapper = FacetCache<TSource, TTarget>.Mapper;
+
+        if (source is ICollection<TSource> collection)
+        {
+            var result = new List<TTarget>(collection.Count);
+            foreach (var item in source)
+            {
+                result.Add(mapper(item));
+            }
+            return result;
+        }
+
+        var list = new List<TTarget>();
+        foreach (var item in source)
+        {
+            list.Add(mapper(item));
+        }
+        return list;
     }
 
     /// <summary>
@@ -223,7 +241,25 @@ public static class FacetExtensions
         where TFacetSource : class
     {
         if (facets is null) throw new ArgumentNullException(nameof(facets));
-        return facets.Select(f => f.ToSource<TFacet, TFacetSource>());
+
+        var mapper = FacetSourceCache<TFacet, TFacetSource>.Mapper;
+
+        if (facets is ICollection<TFacet> collection)
+        {
+            var result = new List<TFacetSource>(collection.Count);
+            foreach (var facet in facets)
+            {
+                result.Add(mapper(facet));
+            }
+            return result;
+        }
+
+        var list = new List<TFacetSource>();
+        foreach (var facet in facets)
+        {
+            list.Add(mapper(facet));
+        }
+        return list;
     }
     
     /// <summary>

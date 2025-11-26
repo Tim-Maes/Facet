@@ -58,7 +58,8 @@ public class SuperQuickBenchmark
     [Benchmark(Description = "Facet - Collection (10 items)")]
     public List<UserBasicDto> FacetCollection()
     {
-        return _users.Select(u => u.ToFacet<UserBasicDto>()).ToList();
+        // Use optimized SelectFacets which pre-allocates and caches the mapper
+        return (List<UserBasicDto>)_users.SelectFacets<User, UserBasicDto>();
     }
 
     [Benchmark(Description = "Mapster - Collection (10 items)")]

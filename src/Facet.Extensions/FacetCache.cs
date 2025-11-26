@@ -1,6 +1,7 @@
 using System;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Reflection.Emit;
 
 namespace Facet;
 
@@ -38,19 +39,33 @@ internal static class FacetCache<TSource, TTarget>
 
         if (fromSource != null)
         {
-            // Compile a delegate to the static factory method
             return (Func<TSource, TTarget>)Delegate.CreateDelegate(
                 typeof(Func<TSource, TTarget>), fromSource);
         }
 
-        // Fallback to ctor(User)
         var ctor = typeof(TTarget).GetConstructor(new[] { typeof(TSource) });
 
         if (ctor != null)
         {
-            var param = Expression.Parameter(typeof(TSource), "src");
-            var newExpr = Expression.New(ctor, param);
-            return Expression.Lambda<Func<TSource, TTarget>>(newExpr, param).Compile();
+            var method = new DynamicMethod(
+                name: $"Create_{typeof(TTarget).Name}_From_{typeof(TSource).Name}",
+                returnType: typeof(TTarget),
+                parameterTypes: new[] { typeof(TSource) },
+                m: typeof(FacetCache<TSource, TTarget>).Module,
+                skipVisibility: true);
+
+            var il = method.GetILGenerator();
+
+            // Load the parameter onto the stack
+            il.Emit(OpCodes.Ldarg_0);
+
+            // Call the constructor
+            il.Emit(OpCodes.Newobj, ctor);
+
+            // Return the new instance
+            il.Emit(OpCodes.Ret);
+
+            return (Func<TSource, TTarget>)method.CreateDelegate(typeof(Func<TSource, TTarget>));
         }
 
         // If neither works, provide a helpful error message

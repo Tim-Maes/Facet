@@ -1,6 +1,7 @@
 using System;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Reflection.Emit;
 
 namespace Facet;
 
@@ -47,10 +48,25 @@ internal static class FacetSourceCache<TFacet, TFacetSource>
 
         if (toEntityMethod != null && toEntityMethod.ReturnType == typeof(TFacetSource))
         {
-            // Create a delegate that calls the ToSource/BackTo method on the facet instance
-            var param = Expression.Parameter(typeof(TFacet), "facet");
-            var call = Expression.Call(param, toEntityMethod);
-            return Expression.Lambda<Func<TFacet, TFacetSource>>(call, param).Compile();
+            var method = new DynamicMethod(
+                name: $"Call_{typeof(TFacet).Name}_ToSource",
+                returnType: typeof(TFacetSource),
+                parameterTypes: new[] { typeof(TFacet) },
+                m: typeof(FacetSourceCache<TFacet, TFacetSource>).Module,
+                skipVisibility: true);
+
+            var il = method.GetILGenerator();
+
+            // Load the facet parameter onto the stack
+            il.Emit(OpCodes.Ldarg_0);
+
+            // Call the ToSource/BackTo method
+            il.Emit(OpCodes.Callvirt, toEntityMethod);
+
+            // Return the result
+            il.Emit(OpCodes.Ret);
+
+            return (Func<TFacet, TFacetSource>)method.CreateDelegate(typeof(Func<TFacet, TFacetSource>));
         }
 
         // If no ToSource/BackTo method is found, provide a helpful error message

@@ -44,10 +44,9 @@ internal static class ConstructorGenerator
             GenerateDepthAwareConstructor(sb, model, isPositional, hasInitOnlyProperties, hasCustomMapping, hasRequiredProperties);
         }
 
-        // Add static factory method for types with init-only properties
-        if (!isPositional && hasInitOnlyProperties && !model.HasExistingPrimaryConstructor)
+        if (!isPositional && !model.HasExistingPrimaryConstructor)
         {
-            GenerateFromSourceFactoryMethod(sb, model, hasCustomMapping);
+            GenerateFromSourceFactoryMethod(sb, model, hasCustomMapping, needsDepthTracking);
         }
     }
 
@@ -281,25 +280,42 @@ internal static class ConstructorGenerator
         }
     }
 
-    private static void GenerateFromSourceFactoryMethod(StringBuilder sb, FacetTargetModel model, bool hasCustomMapping)
+    private static void GenerateFromSourceFactoryMethod(StringBuilder sb, FacetTargetModel model, bool hasCustomMapping, bool needsDepthTracking)
     {
         sb.AppendLine();
         sb.AppendLine("    /// <summary>");
-        sb.AppendLine($"    /// Creates a new instance of <see cref=\"{model.Name}\"/> from the specified <see cref=\"{CodeGenerationHelpers.GetSimpleTypeName(model.SourceTypeName)}\"/> with init-only properties.");
+        sb.AppendLine($"    /// Creates a new instance of <see cref=\"{model.Name}\"/> from the specified <see cref=\"{CodeGenerationHelpers.GetSimpleTypeName(model.SourceTypeName)}\".");
         sb.AppendLine("    /// </summary>");
         sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{CodeGenerationHelpers.GetSimpleTypeName(model.SourceTypeName)}\"/> object to copy data from.</param>");
         sb.AppendLine($"    /// <returns>A new <see cref=\"{model.Name}\"/> instance with all properties initialized from the source.</returns>");
+        sb.AppendLine("    /// <remarks>");
+        sb.AppendLine("    /// This static factory method provides optimal performance for runtime mapping by allowing");
+        sb.AppendLine("    /// direct delegate creation instead of expression compilation.");
+        sb.AppendLine("    /// </remarks>");
         sb.AppendLine($"    public static {model.Name} FromSource({model.SourceTypeName} source)");
         sb.AppendLine("    {");
 
-        if (hasCustomMapping)
+        if (needsDepthTracking)
         {
-            // For custom mapping with init-only properties, the mapper should create the instance
-            sb.AppendLine($"        // Custom mapper creates and returns the instance with init-only properties set");
-            sb.AppendLine($"        return {model.ConfigurationTypeName}.Map(source, null);");
+            if (model.PreserveReferences)
+            {
+                sb.AppendLine($"        return new {model.Name}(source, 0, new System.Collections.Generic.HashSet<object>(System.Collections.Generic.ReferenceEqualityComparer.Instance));");
+            }
+            else
+            {
+                sb.AppendLine($"        return new {model.Name}(source, 0, null);");
+            }
+        }
+        else if (hasCustomMapping)
+        {
+            sb.AppendLine($"        // Custom mapper creates and returns the instance");
+            sb.AppendLine($"        var instance = new {model.Name}();");
+            sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, instance);");
+            sb.AppendLine($"        return instance;");
         }
         else
         {
+            // For simple cases, use object initializer syntax for best performance
             sb.AppendLine($"        return new {model.Name}");
             sb.AppendLine("        {");
             foreach (var m in model.Members)
