@@ -966,25 +966,27 @@ Facet is modular and consists of several NuGet packages:
 
 ## Performance Benchmarks
 
+Note that these are perfomed by using the `<TSource, TDestination>` mapping method overloads wherever possible, as they are significantly faster than the `<TDestination>` versions.
+
 **Simple mapping**
 
-| Method           | Mean      | Error     | StdDev    | Median    | Ratio        | RatioSD | Gen0   | Allocated | Alloc Ratio |
-|----------------- |----------:|----------:|----------:|----------:|-------------:|--------:|-------:|----------:|------------:|
-| Facet            |  5.922 ns | 0.1685 ns | 0.4916 ns |  5.716 ns |     baseline |         | 0.0032 |      40 B |             |
-| GenAdapt         |  5.746 ns | 0.1849 ns | 0.5393 ns |  5.629 ns | 1.03x faster |   0.13x | 0.0032 |      40 B |  1.00x more |
-| Mapperly         |  6.227 ns | 0.2436 ns | 0.7143 ns |  6.215 ns | 1.05x slower |   0.16x | 0.0032 |      40 B |  1.00x more |
-| MapsterBenchmark | 13.243 ns | 0.2616 ns | 0.2319 ns | 13.168 ns | 2.24x slower |   0.21x | 0.0032 |      40 B |  1.00x more |
-| AutoMapper       | 31.459 ns | 0.2927 ns | 0.2285 ns | 31.430 ns | 5.31x slower |   0.49x | 0.0032 |      40 B |  1.00x more |
+| Method           | Mean      | Ratio        | Allocated | Alloc Ratio |
+|----------------- |----------:|-------------:|----------:|------------:|
+| Facet            |  5.922 ns |     baseline |      40 B |             |
+| GenAdapt         |  5.746 ns | 1.03x faster |      40 B |  1.00x more |
+| Mapperly         |  6.227 ns | 1.05x slower |      40 B |  1.00x more |
+| MapsterBenchmark | 13.243 ns | 2.24x slower |      40 B |  1.00x more |
+| AutoMapper       | 31.459 ns | 5.31x slower |      40 B |  1.00x more |
 
 **Nested mapping**
 
-| Method           | Mean      | Error     | StdDev    | Median    | Ratio        | RatioSD | Gen0   | Allocated | Alloc Ratio |
-|----------------- |----------:|----------:|----------:|----------:|-------------:|--------:|-------:|----------:|------------:|
-| Facet            |  5.497 ns | 0.1490 ns | 0.3392 ns |  5.388 ns |     baseline |         | 0.0025 |      32 B |             |
-| GenAdapt         |  8.910 ns | 0.2086 ns | 0.2142 ns |  8.893 ns | 1.62x slower |   0.10x | 0.0057 |      72 B |  2.25x more |
-| Mapperly         |  9.015 ns | 0.2448 ns | 0.7181 ns |  8.700 ns | 1.64x slower |   0.08x | 0.0057 |      72 B |  2.25x more |
-| MapsterBenchmark | 17.743 ns | 0.3327 ns | 0.4086 ns | 17.625 ns | 3.23x slower |   0.06x | 0.0057 |      72 B |  2.25x more |
-| AutoMapper       | 36.794 ns | 1.0735 ns | 3.1144 ns | 35.663 ns | 6.69x slower |   0.36x | 0.0057 |      72 B |  2.25x more |
+| Method           | Mean      | Ratio        | Allocated | Alloc Ratio |
+|----------------- |----------:|-------------:|----------:|------------:|
+| Facet            |  5.497 ns |     baseline |      32 B |             |
+| GenAdapt         |  8.910 ns | 1.62x slower |      72 B |  2.25x more |
+| Mapperly         |  9.015 ns | 1.64x slower |      72 B |  2.25x more |
+| MapsterBenchmark | 17.743 ns | 3.23x slower |      72 B |  2.25x more |
+| AutoMapper       | 36.794 ns | 6.69x slower |      72 B |  2.25x more |
 
 
 
