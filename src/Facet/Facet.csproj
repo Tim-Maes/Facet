@@ -12,12 +12,23 @@
         <GenerateAssemblyVersionAttribute>true</GenerateAssemblyVersionAttribute>
         <GenerateAssemblyFileVersionAttribute>true</GenerateAssemblyFileVersionAttribute>
         <GenerateAssemblyInformationalVersionAttribute>true</GenerateAssemblyInformationalVersionAttribute>
+
+        <!-- IMPORTANT: Prevent this DLL from being included as a regular dependency -->
+        <!-- This is critical for AOT compatibility and prevents Roslyn dependencies from leaking -->
+        <IncludeBuildOutput>false</IncludeBuildOutput>
+        <IncludeSymbols>false</IncludeSymbols>
+
         <!-- RS1038: Suppress Workspaces warning - CodeFixProvider needs Workspaces but only runs in IDE -->
-        <!-- TODO: Consider splitting analyzers and code fix providers into separate assemblies -->
         <NoWarn>$(NoWarn);RS1038</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
+        <!-- Reference to Facet.Attributes (will become a package dependency) -->
+        <ProjectReference Include="..\Facet.Attributes\Facet.Attributes.csproj"
+                          PrivateAssets="none"
+                          ReferenceOutputAssembly="true" />
+
+        <!-- Roslyn dependencies (MUST be PrivateAssets="all") -->
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" PrivateAssets="all" />
         <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
@@ -28,7 +39,33 @@
     </ItemGroup>
 
     <ItemGroup>
-        <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+        <!-- Pack the source generator DLL into the analyzers folder -->
+        <None Include="$(OutputPath)\$(AssemblyName).dll"
+              Pack="true"
+              PackagePath="analyzers/dotnet/cs"
+              Visible="false" />
+
+        <!-- Pack Facet.Attributes.dll into the analyzers folder (generator needs it at build time) -->
+        <None Include="$(OutputPath)\Facet.Attributes.dll"
+              Pack="true"
+              PackagePath="analyzers/dotnet/cs"
+              Visible="false" />
+
         <None Include="..\..\README.md" Pack="true" PackagePath="" />
+    </ItemGroup>
+
+    <!-- Ensure Facet.Attributes.dll is available to the analyzer when used via ProjectReference -->
+    <Target Name="GetAnalyzerAssemblies" Returns="@(_FacetAnalyzerAssemblies)" DependsOnTargets="ResolveProjectReferences">
+        <ItemGroup>
+            <!-- Include Facet.dll itself -->
+            <_FacetAnalyzerAssemblies Include="$(OutputPath)$(AssemblyName).dll" />
+            <!-- Include Facet.Attributes.dll so generator can load it -->
+            <_FacetAnalyzerAssemblies Include="$(OutputPath)Facet.Attributes.dll" />
+        </ItemGroup>
+    </Target>
+
+    <ItemGroup>
+        <!-- Expose analyzer assemblies to consuming projects -->
+        <UpToDateCheckOutput Include="$(OutputPath)Facet.Attributes.dll" />
     </ItemGroup>
 </Project>
