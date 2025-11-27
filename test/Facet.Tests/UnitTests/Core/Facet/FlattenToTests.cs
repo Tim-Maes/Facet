@@ -228,4 +228,92 @@ public class FlattenToTests
         Assert.Equal("Second Extended Value", flattened[1].ExtendedValue);
         Assert.Equal(99, flattened[1].NumericValue);
     }
+
+    [Fact]
+    public void FlattenTo_WithMultipleNameCollisions_ShouldUseSmartLeafNaming()
+    {
+        // Arrange - Test case for Issue #196
+        // Multiple nested entities with "Name" properties should be prefixed with parent name
+        var catalog = new TestModels.ProductCatalogEntity
+        {
+            Id = 1,
+            Name = "Main Catalog",
+            ProductLookups = new List<TestModels.ProductLookupEntity>
+            {
+                new()
+                {
+                    Id = 100,
+                    Category = new TestModels.CategoryEntity
+                    {
+                        Id = 10,
+                        Name = "Electronics",
+                        Code = "ELEC"
+                    },
+                    Supplier = new TestModels.SupplierEntity
+                    {
+                        Id = 20,
+                        Name = "TechCorp",
+                        ContactEmail = "contact@techcorp.com"
+                    },
+                    Brand = new TestModels.BrandEntity
+                    {
+                        Id = 30,
+                        Name = "Samsung",
+                        Country = "South Korea"
+                    }
+                },
+                new()
+                {
+                    Id = 200,
+                    Category = new TestModels.CategoryEntity
+                    {
+                        Id = 11,
+                        Name = "Furniture",
+                        Code = "FURN"
+                    },
+                    Supplier = new TestModels.SupplierEntity
+                    {
+                        Id = 21,
+                        Name = "WoodWorks Inc",
+                        ContactEmail = "sales@woodworks.com"
+                    },
+                    Brand = new TestModels.BrandEntity
+                    {
+                        Id = 31,
+                        Name = "IKEA",
+                        Country = "Sweden"
+                    }
+                }
+            }
+        };
+
+        var facet = new TestModels.ProductCatalogFacet(catalog);
+
+        // Act
+        var flattened = facet.FlattenTo();
+
+        // Assert
+        Assert.NotNull(flattened);
+        Assert.Equal(2, flattened.Count);
+
+        // First row - verify SmartLeaf naming resolved all "Name" collisions
+        Assert.Equal(1, flattened[0].Id);
+        Assert.Equal("Main Catalog", flattened[0].Name);           // Parent Name (no prefix needed)
+        Assert.Equal("Electronics", flattened[0].CategoryName);     // Category.Name (prefixed to avoid collision)
+        Assert.Equal("ELEC", flattened[0].Code);                    // Category.Code (no collision, no prefix)
+        Assert.Equal("TechCorp", flattened[0].SupplierName);        // Supplier.Name (prefixed to avoid collision)
+        Assert.Equal("contact@techcorp.com", flattened[0].ContactEmail); // Supplier.ContactEmail (no collision, no prefix)
+        Assert.Equal("Samsung", flattened[0].BrandName);            // Brand.Name (prefixed to avoid collision)
+        Assert.Equal("South Korea", flattened[0].Country);          // Brand.Country (no collision, no prefix)
+
+        // Second row
+        Assert.Equal(1, flattened[1].Id);
+        Assert.Equal("Main Catalog", flattened[1].Name);
+        Assert.Equal("Furniture", flattened[1].CategoryName);
+        Assert.Equal("FURN", flattened[1].Code);
+        Assert.Equal("WoodWorks Inc", flattened[1].SupplierName);
+        Assert.Equal("sales@woodworks.com", flattened[1].ContactEmail);
+        Assert.Equal("IKEA", flattened[1].BrandName);
+        Assert.Equal("Sweden", flattened[1].Country);
+    }
 }
