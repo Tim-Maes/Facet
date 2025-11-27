@@ -95,19 +95,32 @@ internal static class FlattenToGenerator
 
             if (nestedFacet != null)
             {
-                // Map properties from the nested facet using the "item" variable
-                // Use the collection property name as the prefix (e.g., "Extended" from "Extended" property)
-                // rather than the facet type name (e.g., "ExtendedFacet")
+                // Map properties from the nested facet using SmartLeaf-style collision detection
                 var collectionPropertyName = collectionMember.Name;
 
-                // Recursively collect all scalar properties from nested facets
+                // First pass: Identify which leaf property names appear multiple times
+                var leafNameCounts = new Dictionary<string, int>();
+                CollectLeafNames(
+                    nestedFacet,
+                    facetLookup,
+                    nonCollectionMembers,
+                    new List<string> { collectionPropertyName },
+                    leafNameCounts,
+                    maxDepth: 5);
+
+                // Build set of colliding names (names that appear more than once)
+                var collidingLeafNames = new HashSet<string>(
+                    leafNameCounts.Where(kvp => kvp.Value > 1).Select(kvp => kvp.Key));
+
+                // Second pass: Recursively collect all scalar properties with smart naming
                 CollectNestedProperties(
                     sb,
                     nestedFacet,
                     facetLookup,
                     nonCollectionMembers,
                     "item",
-                    collectionPropertyName,
+                    new List<string> { collectionPropertyName },
+                    collidingLeafNames,
                     indent,
                     maxDepth: 5);
             }
@@ -120,8 +133,83 @@ internal static class FlattenToGenerator
     }
 
     /// <summary>
+    /// First pass: Collects all leaf property names and counts their occurrences.
+    /// Used to identify which property names collide and need SmartLeaf-style prefixing.
+    /// </summary>
+    private static void CollectLeafNames(
+        FacetTargetModel facet,
+        Dictionary<string, FacetTargetModel> facetLookup,
+        List<FacetMember> parentMembers,
+        List<string> pathSegments,
+        Dictionary<string, int> leafNameCounts,
+        int maxDepth,
+        int currentDepth = 0)
+    {
+        if (currentDepth >= maxDepth)
+        {
+            return;
+        }
+
+        foreach (var member in facet.Members)
+        {
+            if (member.IsCollection)
+            {
+                continue;
+            }
+
+            if (member.IsNestedFacet)
+            {
+                // Recurse into nested facet
+                var nestedFacetTypeName = member.TypeName?.Replace("?", "").Trim();
+                if (!string.IsNullOrEmpty(nestedFacetTypeName))
+                {
+                    FacetTargetModel? nestedFacet = null;
+                    if (!facetLookup.TryGetValue(nestedFacetTypeName, out nestedFacet))
+                    {
+                        var simpleName = ExtractSimpleName(nestedFacetTypeName);
+                        facetLookup.TryGetValue(simpleName, out nestedFacet);
+                    }
+
+                    if (nestedFacet != null)
+                    {
+                        var newPathSegments = new List<string>(pathSegments) { member.Name };
+                        CollectLeafNames(
+                            nestedFacet,
+                            facetLookup,
+                            parentMembers,
+                            newPathSegments,
+                            leafNameCounts,
+                            maxDepth,
+                            currentDepth + 1);
+                    }
+                }
+            }
+            else if (IsScalarType(member.TypeName))
+            {
+                // This is a scalar leaf property
+                var leafName = member.Name;
+
+                // Always count the occurrence, even if it collides with parent
+                // Parent collisions need to be tracked so we can prefix them
+                if (leafNameCounts.ContainsKey(leafName))
+                {
+                    leafNameCounts[leafName]++;
+                }
+                else
+                {
+                    // Initialize count
+                    // If it also exists in parent, immediately mark as collision
+                    int initialCount = parentMembers.Any(pm => pm.Name == leafName) ? 2 : 1;
+                    leafNameCounts[leafName] = initialCount;
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Recursively collects scalar properties from a nested facet and its child nested facets.
     /// Generates property assignments with proper navigation paths (e.g., item.Extended.ExtendedValue).
+    /// Uses SmartLeaf-style naming: only adds parent prefix when property names collide.
     /// </summary>
     private static void CollectNestedProperties(
         StringBuilder sb,
@@ -129,7 +217,8 @@ internal static class FlattenToGenerator
         Dictionary<string, FacetTargetModel> facetLookup,
         List<FacetMember> parentMembers,
         string navigationPath,
-        string prefix,
+        List<string> pathSegments,
+        HashSet<string> collidingLeafNames,
         string indent,
         int maxDepth,
         int currentDepth = 0)
@@ -170,9 +259,8 @@ internal static class FlattenToGenerator
                         // Build navigation path: item.Extended.SubProperty
                         var newNavigationPath = $"{navigationPath}.{member.Name}";
 
-                        // Build prefix for collision handling
-                        // Keep the prefix simple - don't add every level
-                        var newPrefix = prefix;
+                        // Add this member to the path segments for SmartLeaf naming
+                        var newPathSegments = new List<string>(pathSegments) { member.Name };
 
                         CollectNestedProperties(
                             sb,
@@ -180,7 +268,8 @@ internal static class FlattenToGenerator
                             facetLookup,
                             parentMembers,
                             newNavigationPath,
-                            newPrefix,
+                            newPathSegments,
+                            collidingLeafNames,
                             indent,
                             maxDepth,
                             currentDepth + 1);
@@ -199,31 +288,42 @@ internal static class FlattenToGenerator
                 }
 
                 // This is a scalar property - add it to the flattened output
-                var propertyName = member.Name;
-                var navigationExpression = $"{navigationPath}.{propertyName}";
+                var leafName = member.Name;
+                var navigationExpression = $"{navigationPath}.{leafName}";
 
-                // Check if this property name exists in the parent to avoid duplication
-                if (!parentMembers.Any(pm => pm.Name == propertyName))
+                // Skip Id properties to avoid collision with parent Id
+                if (leafName.Equals("Id", System.StringComparison.Ordinal) &&
+                    parentMembers.Any(pm => pm.Name == leafName))
                 {
-                    sb.AppendLine($"{indent}        {propertyName} = {navigationExpression},");
+                    // Skip nested Id - it would conflict with parent Id
+                    // User can manually add a prefixed Id property if they need it
+                    continue;
                 }
-                else
-                {
-                    // Property name collision - use a prefixed name based on the collection property name
-                    // E.g., if collection is "Extended" and member is "Name", try "ExtendedName"
-                    // Skip Id properties since they're often ignored in flattened outputs
-                    if (propertyName.Equals("Id", System.StringComparison.Ordinal))
-                    {
-                        // Skip nested Id - it would conflict with parent Id
-                        // User can manually add a prefixed Id property if they need it
-                        continue;
-                    }
 
-                    var prefixedName = $"{prefix}{propertyName}";
-                    sb.AppendLine($"{indent}        {prefixedName} = {navigationExpression},");
-                }
+                // Use SmartLeaf naming strategy for all properties
+                var propertyName = GenerateSmartLeafName(pathSegments, leafName, collidingLeafNames);
+                sb.AppendLine($"{indent}        {propertyName} = {navigationExpression},");
             }
         }
+    }
+
+    /// <summary>
+    /// Generates a property name using SmartLeaf strategy:
+    /// - If the leaf name doesn't collide with others, use just the leaf name
+    /// - If it collides, use parent + leaf name (e.g., "PositionName" instead of "Name")
+    /// </summary>
+    private static string GenerateSmartLeafName(List<string> pathSegments, string leafName, HashSet<string> collidingLeafNames)
+    {
+        // If this leaf name collides with another, use parent + leaf
+        if (collidingLeafNames.Contains(leafName) && pathSegments.Count >= 1)
+        {
+            // Use immediate parent + leaf name
+            var parentName = pathSegments[pathSegments.Count - 1];
+            return parentName + leafName;
+        }
+
+        // No collision, use leaf only
+        return leafName;
     }
 
     private static string ExtractSimpleName(string fullyQualifiedName)
