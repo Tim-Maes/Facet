@@ -36,6 +36,14 @@ jobs:
       run: |
         # Remove 'v' prefix from tag name if present (e.g., v2.5.0 -> 2.5.0)
         VERSION=${GITHUB_REF_NAME#v}
+
+        # Validate that VERSION is not empty
+        if [ -z "$VERSION" ]; then
+          echo "Error: VERSION is empty! GITHUB_REF_NAME was: $GITHUB_REF_NAME"
+          echo "Please create the release with a proper tag like 'v5.1.0'"
+          exit 1
+        fi
+
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Extracted version: $VERSION"
     
