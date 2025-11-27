@@ -352,3 +352,78 @@ public partial class DataTableFlattenedDto
     public string ExtendedValue { get; set; } = string.Empty;
     public int NumericValue { get; set; }
 }
+
+// Test models for FlattenTo with multiple Name property collisions (Issue #196)
+// This scenario tests SmartLeaf naming when multiple nested paths have properties with the same name
+public class ProductCatalogEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public ICollection<ProductLookupEntity> ProductLookups { get; set; } = new List<ProductLookupEntity>();
+}
+
+public class ProductLookupEntity
+{
+    public int Id { get; set; }
+    public CategoryEntity Category { get; set; } = null!;
+    public SupplierEntity Supplier { get; set; } = null!;
+    public BrandEntity Brand { get; set; } = null!;
+}
+
+public class CategoryEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;  // Will collide
+    public string Code { get; set; } = string.Empty;
+}
+
+public class SupplierEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;  // Will collide
+    public string ContactEmail { get; set; } = string.Empty;
+}
+
+public class BrandEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;  // Will collide
+    public string Country { get; set; } = string.Empty;
+}
+
+// Facets for SmartLeaf collision test
+[Facet(typeof(CategoryEntity))]
+public partial class CategoryFacet;
+
+[Facet(typeof(SupplierEntity))]
+public partial class SupplierFacet;
+
+[Facet(typeof(BrandEntity))]
+public partial class BrandFacet;
+
+[Facet(typeof(ProductLookupEntity),
+    NestedFacets = [typeof(CategoryFacet), typeof(SupplierFacet), typeof(BrandFacet)])]
+public partial class ProductLookupFacet;
+
+[Facet(typeof(ProductCatalogEntity),
+    NestedFacets = [typeof(ProductLookupFacet)],
+    FlattenTo = [typeof(ProductCatalogFlattenedDto)])]
+public partial class ProductCatalogFacet;
+
+// Flattened DTO with SmartLeaf naming for collision resolution
+public partial class ProductCatalogFlattenedDto
+{
+    // From ProductCatalogEntity (parent)
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+
+    // From nested entities - SmartLeaf naming prefixes only when collisions occur
+    public string CategoryName { get; set; } = string.Empty;      // From Category.Name (prefixed due to collision)
+    public string Code { get; set; } = string.Empty;              // From Category.Code (no collision, no prefix)
+
+    public string SupplierName { get; set; } = string.Empty;      // From Supplier.Name (prefixed due to collision)
+    public string ContactEmail { get; set; } = string.Empty;      // From Supplier.ContactEmail (no collision, no prefix)
+
+    public string BrandName { get; set; } = string.Empty;         // From Brand.Name (prefixed due to collision)
+    public string Country { get; set; } = string.Empty;           // From Brand.Country (no collision, no prefix)
+}
