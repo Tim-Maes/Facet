@@ -18,9 +18,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Facet\Facet.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\src\Facet.Attributes\Facet.Attributes.csproj" />
     <ProjectReference Include="..\..\src\Facet.Extensions\Facet.Extensions.csproj" />
     <ProjectReference Include="..\..\src\Facet.Mapping\Facet.Mapping.csproj" />
     <ProjectReference Include="..\..\src\Facet.Extensions.EFCore\Facet.Extensions.EFCore.csproj" />
+  </ItemGroup>
+
+  <!-- Manually include Facet.Attributes.dll as an analyzer dependency so generators can load it -->
+  <ItemGroup>
+    <Analyzer Include="..\..\src\Facet.Attributes\bin\$(Configuration)\netstandard2.0\Facet.Attributes.dll" />
   </ItemGroup>
 
   <ItemGroup>
