@@ -1,6 +1,6 @@
 # GenerateDtos Attribute Reference
 
-The `[GenerateDtos]` and `[GenerateAuditableDtos]` attributes automatically generate standard CRUD DTOs (Create, Update, Response, Query, Upsert) for domain models, eliminating the need to manually write repetitive DTO classes.
+The `[GenerateDtos]` and `[GenerateAuditableDtos]` attributes automatically generate standard CRUD DTOs (Create, Update, Response, Query, Upsert, Patch) for domain models, eliminating the need to manually write repetitive DTO classes.
 
 ## GenerateDtos Attribute
 
@@ -44,6 +44,7 @@ public class User
 | `Response` | DTO for API responses               |
 | `Query`  | DTO for search/filtering operations   |
 | `Upsert` | DTO for create-or-update operations   |
+| `Patch`  | DTO for partial updates with Optional&lt;T&gt; |
 | `All`    | Generate all DTO types                |
 
 ### OutputType Enum
@@ -103,8 +104,96 @@ The attributes generate separate files for each DTO type:
 - `UserResponse.g.cs` - For API responses
 - `UserQuery.g.cs` - For search operations
 - `UserUpsert.g.cs` - For create-or-update operations
+- `UserPatch.g.cs` - For partial updates (HTTP PATCH)
 
 When `UseFullName = true`, file names include the full namespace to prevent collisions.
+
+## Patch DTOs for Partial Updates
+
+Patch DTOs are designed for HTTP PATCH scenarios where you need to update only specific fields. They use the `Optional<T>` type to distinguish between three states:
+
+1. **Unspecified** - Property not included in the update
+2. **Explicitly Null** - Property should be set to null
+3. **Has Value** - Property should be updated to the specified value
+
+### Usage Example
+
+```csharp
+[GenerateDtos(Types = DtoTypes.Patch)]
+public class User
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string? Email { get; set; }
+    public bool IsActive { get; set; }
+    public DateTime? LastLoginAt { get; set; }
+}
+```
+
+This generates a `UserPatch` DTO with all properties wrapped in `Optional<T>`:
+
+```csharp
+public class UserPatch
+{
+    public Optional<int> Id { get; set; }
+    public Optional<string> Name { get; set; }
+    public Optional<string?> Email { get; set; }
+    public Optional<bool> IsActive { get; set; }
+    public Optional<DateTime?> LastLoginAt { get; set; }
+    
+    public void ApplyTo(User target)
+    {
+        if (Id.HasValue) target.Id = Id.Value;
+        if (Name.HasValue) target.Name = Name.Value;
+        if (Email.HasValue) target.Email = Email.Value;
+        if (IsActive.HasValue) target.IsActive = IsActive.Value;
+        if (LastLoginAt.HasValue) target.LastLoginAt = LastLoginAt.Value;
+    }
+}
+```
+
+### Using Patch DTOs
+
+```csharp
+// Load existing entity
+var user = await dbContext.Users.FindAsync(userId);
+
+// Create patch with only the fields to update
+var patch = new UserPatch
+{
+    Name = "Jane Doe",           // Update name
+    IsActive = false,             // Deactivate user
+    Email = new Optional<string?>(null)  // Explicitly set email to null
+    // LastLoginAt is not set, so it won't be modified
+};
+
+// Apply the patch
+patch.ApplyTo(user);
+await dbContext.SaveChangesAsync();
+```
+
+### Implicit Conversion
+
+`Optional<T>` supports implicit conversion for convenience:
+
+```csharp
+var patch = new UserPatch
+{
+    Name = "Jane Doe",  // Implicitly converted to Optional<string>
+    IsActive = false    // Implicitly converted to Optional<bool>
+};
+```
+
+### Distinguishing Null from Unspecified
+
+```csharp
+// Set email to null explicitly
+patch.Email = new Optional<string?>(null);  // HasValue = true, Value = null
+
+// Leave email unspecified
+var patch2 = new UserPatch();
+// patch2.Email.HasValue = false, email won't be modified
+```
 
 ## Examples
 
@@ -130,6 +219,17 @@ public class Order
 }
 ```
 
+### Patch-Only DTO
+```csharp
+[GenerateDtos(Types = DtoTypes.Patch, OutputType = OutputType.Class)]
+public class UserProfile
+{
+    public string DisplayName { get; set; }
+    public string? Bio { get; set; }
+    public string? AvatarUrl { get; set; }
+}
+```
+
 ### Custom Namespace and Naming
 ```csharp
 [GenerateDtos(
@@ -144,6 +244,30 @@ public class Customer
     public string Email { get; set; }
     public string InternalId { get; set; }
 }
+```
+
+## Optional&lt;T&gt; Type
+
+The `Optional<T>` type is a struct that wraps values and tracks whether they've been explicitly set. It's part of the `Facet` namespace and available for use in your own code.
+
+### Properties and Methods
+
+- `bool HasValue` - Indicates if a value has been set
+- `T Value` - Gets the value (throws if `HasValue` is false)
+- `T GetValueOrDefault(T defaultValue = default)` - Safely gets the value or a default
+- Implicit conversion from `T` to `Optional<T>`
+- Equality and comparison operators
+
+### Example
+
+```csharp
+var optional1 = new Optional<string>("Hello");  // HasValue = true, Value = "Hello"
+var optional2 = new Optional<string?>(null);    // HasValue = true, Value = null
+var optional3 = new Optional<string>();         // HasValue = false
+
+optional1.HasValue  // true
+optional2.HasValue  // true - explicitly set to null
+optional3.HasValue  // false - unspecified
 ```
 
 ---

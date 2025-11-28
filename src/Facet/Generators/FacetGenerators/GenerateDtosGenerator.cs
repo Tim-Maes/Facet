@@ -288,6 +288,15 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             var queryCode = GenerateDtoCode(model, queryDtoName, queryMembers, "Query");
             context.AddSource($"{GenerateFileDtoFullName(model, queryDtoName)}", SourceText.From(queryCode, Encoding.UTF8));
         }
+
+        // Generate Patch DTO (uses Optional<T> to distinguish between unspecified and null)
+        if ((model.Types & DtoTypes.Patch) != 0)
+        {
+            var patchMembers = FilterMembers(model.Members, model.ExcludeProperties);
+            var patchDtoName = BuildDtoName(sourceTypeName, "", "Patch", model.Prefix, model.Suffix);
+            var patchCode = GeneratePatchDtoCode(model, patchDtoName, patchMembers);
+            context.AddSource($"{GenerateFileDtoFullName(model, patchDtoName)}", SourceText.From(patchCode, Encoding.UTF8));
+        }
     }
 
     private static string BuildDtoName(string sourceTypeName, string prefix, string suffix, string? customPrefix, string? customSuffix)
@@ -678,6 +687,82 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine($"    /// <returns>An instance of <see cref=\"{sourceTypeName}\"/> with properties mapped from this DTO.</returns>");
         sb.AppendLine("    [global::System.Obsolete(\"Use ToSource() instead. This method will be removed in a future version.\")]");
         sb.AppendLine($"    public {model.SourceTypeName} BackTo() => ToSource();");
+    }
+
+    private static string GeneratePatchDtoCode(GenerateDtosTargetModel model, string dtoName, ImmutableArray<FacetMember> members)
+    {
+        var sb = new StringBuilder();
+        var sourceTypeName = GetSimpleTypeName(model.SourceTypeName);
+
+        // Generate file header
+        GenerateFileHeader(sb);
+        sb.AppendLine("using System;");
+        sb.AppendLine();
+
+        if (!string.IsNullOrWhiteSpace(model.TargetNamespace))
+        {
+            sb.AppendLine($"namespace {model.TargetNamespace};");
+            sb.AppendLine();
+        }
+
+        // Generate type declaration
+        var keyword = model.OutputType switch
+        {
+            OutputType.Class => "class",
+            OutputType.Record => "record",
+            OutputType.RecordStruct => "record struct",
+            OutputType.Struct => "struct",
+            _ => "record"
+        };
+
+        sb.AppendLine($"/// <summary>");
+        sb.AppendLine($"/// Generated Patch DTO for {sourceTypeName} that supports partial updates.");
+        sb.AppendLine($"/// Uses Optional&lt;T&gt; to distinguish between unspecified values and explicit null values.");
+        sb.AppendLine($"/// </summary>");
+        sb.AppendLine($"public {keyword} {dtoName}");
+        sb.AppendLine("{");
+
+        // Generate properties wrapped in Optional<T>
+        foreach (var member in members)
+        {
+            if (member.Kind == FacetMemberKind.Property)
+            {
+                sb.AppendLine($"    /// <summary>Optional value for {member.Name}.</summary>");
+                sb.AppendLine($"    public global::Facet.Optional<{member.TypeName}> {member.Name} {{ get; set; }}");
+            }
+        }
+
+        // Generate ApplyTo method
+        GeneratePatchApplyToMethod(sb, model, dtoName, sourceTypeName, members);
+
+        sb.AppendLine("}");
+
+        return sb.ToString();
+    }
+
+    private static void GeneratePatchApplyToMethod(StringBuilder sb, GenerateDtosTargetModel model, string dtoName, string sourceTypeName, ImmutableArray<FacetMember> members)
+    {
+        sb.AppendLine();
+        sb.AppendLine($"    /// <summary>");
+        sb.AppendLine($"    /// Applies the specified optional values from this patch DTO to the target <see cref=\"{sourceTypeName}\"/> instance.");
+        sb.AppendLine($"    /// Only properties with HasValue = true will be updated.");
+        sb.AppendLine($"    /// </summary>");
+        sb.AppendLine($"    /// <param name=\"target\">The target <see cref=\"{sourceTypeName}\"/> object to update.</param>");
+        sb.AppendLine($"    public void ApplyTo({model.SourceTypeName} target)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        if (target == null) throw new System.ArgumentNullException(nameof(target));");
+        sb.AppendLine();
+
+        // Generate property updates for non-readonly members
+        var updatableMembers = members.Where(m => !m.IsReadOnly && m.Kind == FacetMemberKind.Property).ToArray();
+        foreach (var member in updatableMembers)
+        {
+            sb.AppendLine($"        if ({member.Name}.HasValue)");
+            sb.AppendLine($"            target.{member.Name} = {member.Name}.Value;");
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("    }");
     }
 
     private static void GenerateFileHeader(StringBuilder sb)
