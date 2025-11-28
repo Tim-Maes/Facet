@@ -91,6 +91,9 @@ jobs:
           } elseif ($file.Name -like "Facet.Extensions.*") {
             Write-Host "Publishing Facet.Extensions package..."
             $apiKey = "${{ secrets.NUGET_API_KEY_EXTENSIONS }}"
+          } elseif ($file.Name -like "Facet.Attributes.*") {
+            Write-Host "Publishing Facet.Attributes package..."
+            $apiKey = "${{ secrets.NUGET_ATTRIBUTES_API_KEY }}"
           } elseif ($file.Name -like "Facet.*") {
             Write-Host "Publishing Facet package..."
             $apiKey = "${{ secrets.NUGET_API_KEY }}"
