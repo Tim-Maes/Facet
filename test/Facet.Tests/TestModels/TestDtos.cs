@@ -179,6 +179,14 @@ public partial class NullableTestDto
 {
 }
 
+// Test for GitHub issue: Source type with NO nullable properties but facet has nullable user-defined property
+[Facet(typeof(Dummy), exclude: [nameof(Dummy.Age)])]
+public partial record DummyDto
+{
+    /// <summary>User-defined nullable property</summary>
+    public string? NameInUpperCase { get; init; }
+}
+
 // NullableProperties functionality test DTOs
 [Facet(typeof(Product), "InternalNotes", "CreatedAt", NullableProperties = true, GenerateToSource = false)]
 public partial class ProductQueryDto;
