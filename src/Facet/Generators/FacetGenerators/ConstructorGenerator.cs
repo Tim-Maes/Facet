@@ -204,7 +204,8 @@ internal static class ConstructorGenerator
     }
 
     /// <summary>
-    /// Generates an internal constructor with depth tracking for circular reference prevention.
+    /// Generates a public constructor with depth tracking for circular reference prevention.
+    /// This is public to support nested facets across assemblies.
     /// </summary>
     private static void GenerateDepthAwareConstructor(
         StringBuilder sb,
@@ -216,13 +217,17 @@ internal static class ConstructorGenerator
     {
         sb.AppendLine();
         sb.AppendLine("    /// <summary>");
-        sb.AppendLine($"    /// Internal constructor with depth tracking to prevent stack overflow from circular references.");
+        sb.AppendLine($"    /// Constructor with depth tracking to prevent stack overflow from circular references.");
         sb.AppendLine("    /// </summary>");
         sb.AppendLine($"    /// <param name=\"source\">The source object to copy data from.</param>");
         sb.AppendLine($"    /// <param name=\"__depth\">Current nesting depth for circular reference detection.</param>");
         sb.AppendLine($"    /// <param name=\"__processed\">Set of already processed objects to detect circular references.</param>");
+        sb.AppendLine("    /// <remarks>");
+        sb.AppendLine("    /// This constructor is public to support nested facets across different assemblies.");
+        sb.AppendLine("    /// For typical usage, prefer the single-parameter constructor or FromSource factory method.");
+        sb.AppendLine("    /// </remarks>");
 
-        var ctorSig = $"internal {model.Name}({model.SourceTypeName} source, int __depth, System.Collections.Generic.HashSet<object>? __processed)";
+        var ctorSig = $"public {model.Name}({model.SourceTypeName} source, int __depth, System.Collections.Generic.HashSet<object>? __processed)";
 
         if (isPositional && !model.HasExistingPrimaryConstructor)
         {
