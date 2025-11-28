@@ -21,6 +21,18 @@ public class TestUser
     public DateTime CreatedAt { get; set; }
 }
 
+// Dedicated entity for Patch DTO testing
+[GenerateDtos(Types = DtoTypes.Patch, OutputType = OutputType.Class)]
+public class PatchTestEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Email { get; set; }
+    public bool IsActive { get; set; }
+    public DateTime? LastLoginAt { get; set; }
+    public decimal Price { get; set; }
+}
+
 [GenerateAuditableDtos(Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response, OutputType = OutputType.Class)]
 public class TestProduct
 {

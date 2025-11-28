@@ -14,7 +14,8 @@ public enum DtoTypes
     Response = 4,
     Query = 8,
     Upsert = 16,
-    All = Create | Update | Response | Query | Upsert
+    Patch = 32,
+    All = Create | Update | Response | Query | Upsert | Patch
 }
 
 /// <summary>

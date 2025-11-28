@@ -74,7 +74,7 @@ Click on a section to expand/collapse
 
 - **Flatten** nested objects into top-level properties
 - **Wrapper** pattern for reference-based delegation (facades, decorators, ViewModels)
-- **Auto-generate CRUD DTOs** (Create, Update, Response, Query, Upsert)
+- **Auto-generate CRUD DTOs** (Create, Update, Response, Query, Upsert, Patch)
 - **Source signature tracking** for detecting breaking changes when source entities change
 
 </details> 
@@ -634,7 +634,7 @@ var users = await dbContext.Users
 <details>
   <summary>Automatic CRUD DTO Generation with [GenerateDtos]</summary>
   
-Generate standard Create, Update, Response, Query, and Upsert DTOs automatically:
+Generate standard Create, Update, Response, Query, Upsert, and Patch DTOs automatically:
 
 ```csharp
 // Generate all standard CRUD DTOs
