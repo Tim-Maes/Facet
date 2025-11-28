@@ -97,9 +97,21 @@ public class EntityWithFields
     public string Email { get; set; } = string.Empty;
 }
 
-// Test for GitHub issue: Source type with NO nullable properties
-// but facet has nullable user-defined property
 public record Dummy(string Name, int Age);
+
+public class UserForNestedFacet
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public UserAddressForNestedFacet Address { get; set; } = new();
+}
+
+public class UserAddressForNestedFacet
+{
+    public string Street { get; set; } = string.Empty;
+    public string City { get; set; } = string.Empty;
+    public string FormattedAddress => $"{Street}, {City}";
+}
 
 // Test entities for inherited property exclusion
 public abstract class BaseEntity<TPkKey>

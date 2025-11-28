@@ -44,6 +44,12 @@ internal static class CodeGenerationHelpers
                 needAttributeNamespace = false;
             }
 
+            // Skip nested facets - they will be handled by CollectStaticUsingTypes
+            if (member.IsNestedFacet)
+            {
+                continue;
+            }
+
             var memberTypeNamespace = ExtractNamespaceFromFullyQualifiedType(member.TypeName);
             if (!string.IsNullOrWhiteSpace(memberTypeNamespace))
             {
@@ -109,6 +115,62 @@ internal static class CodeGenerationHelpers
             {
                 var containingType = sourceTypeName.Substring(0, lastDotIndex);
                 staticUsingTypes.Add(containingType);
+            }
+        }
+
+        // Check for nested facets that are actually nested classes (not just types in the same namespace)
+        // Example: UserDetailResponse.UserAddressItem is a nested class
+        // vs OrderItemFacet which is a separate top-level type
+        foreach (var member in model.Members)
+        {
+            if (member.IsNestedFacet)
+            {
+                var memberTypeName = member.TypeName;
+
+                // Remove global:: prefix if present
+                memberTypeName = GeneratorUtilities.StripGlobalPrefix(memberTypeName);
+
+                // Remove generic parameters if present
+                var genericIndex = memberTypeName.IndexOf('<');
+                if (genericIndex > 0)
+                {
+                    memberTypeName = memberTypeName.Substring(0, genericIndex);
+                }
+
+                // Remove nullable marker if present
+                if (memberTypeName.EndsWith("?"))
+                {
+                    memberTypeName = memberTypeName.Substring(0, memberTypeName.Length - 1);
+                }
+
+                // Extract the namespace portion to determine if this is truly a nested type
+                var memberNamespace = ExtractNamespaceFromFullyQualifiedType(memberTypeName);
+
+                // If there's no namespace, or the member type has more segments than just namespace + typename,
+                // then it's a nested type and needs 'using static'
+                string typeNameWithoutNamespace;
+                if (!string.IsNullOrWhiteSpace(memberNamespace))
+                {
+                    // Remove the namespace prefix
+                    typeNameWithoutNamespace = memberTypeName.Substring(memberNamespace.Length + 1);
+                }
+                else
+                {
+                    typeNameWithoutNamespace = memberTypeName;
+                }
+
+                // If the type name (without namespace) contains a dot, it's a nested type
+                // Example: "UserDetailResponse.UserAddressItem" -> needs using static for UserDetailResponse
+                if (typeNameWithoutNamespace.Contains('.'))
+                {
+                    // This is a nested type - extract the containing type
+                    var lastDotIndex = memberTypeName.LastIndexOf('.');
+                    if (lastDotIndex > 0)
+                    {
+                        var containingType = memberTypeName.Substring(0, lastDotIndex);
+                        staticUsingTypes.Add(containingType);
+                    }
+                }
             }
         }
 

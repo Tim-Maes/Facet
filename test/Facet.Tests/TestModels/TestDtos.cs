@@ -187,6 +187,20 @@ public partial record DummyDto
     public string? NameInUpperCase { get; init; }
 }
 
+// Test for GitHub issue #194: Nested facet inside another facet
+[Facet(typeof(UserForNestedFacet), Include = [
+    nameof(UserForNestedFacet.Id),
+    nameof(UserForNestedFacet.Name),
+    nameof(UserForNestedFacet.Address)
+], NestedFacets = [typeof(UserDetailResponse.UserAddressItem)])]
+public partial class UserDetailResponse
+{
+    [Facet(typeof(UserAddressForNestedFacet), Include = [
+        nameof(UserAddressForNestedFacet.FormattedAddress)
+    ])]
+    public partial class UserAddressItem;
+}
+
 // NullableProperties functionality test DTOs
 [Facet(typeof(Product), "InternalNotes", "CreatedAt", NullableProperties = true, GenerateToSource = false)]
 public partial class ProductQueryDto;
