@@ -41,7 +41,10 @@ internal static class CodeBuilder
 
         // Nullable must be enabled in generated code with a directive
         var hasNullableRefTypeMembers = model.Members.Any(m => !m.IsValueType && m.TypeName.EndsWith("?"));
-        if (hasNullableRefTypeMembers)
+        // Also enable nullable context when depth tracking is needed, as the internal constructor
+        // uses System.Collections.Generic.HashSet<object>? __processed (nullable parameter)
+        var needsDepthTracking = model.MaxDepth > 0 || model.PreserveReferences;
+        if (hasNullableRefTypeMembers || needsDepthTracking)
         {
             sb.AppendLine("#nullable enable");
             sb.AppendLine();
