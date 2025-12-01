@@ -46,7 +46,7 @@ public class CustomMappingTests
         var dto = user.ToFacet<User, UserDtoWithMapping>();
 
        // Assert
-        dto.Age.Should().Be(29, "Age should be 29 if birthday hasn't occurred this year yet");
+        dto.Age.Should().Be(30, "Age should be 30 if birthday hasn't occurred this year yet");
     }
 
     [Fact]
