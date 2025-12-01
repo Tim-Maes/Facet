@@ -123,7 +123,7 @@ dotnet add package Facet.Mapping.Expressions
   
 </details>
  <details>
-    <summary>Facets usage</summary>
+    <summary>Define Facets</summary>
    
 
   ```csharp
@@ -254,9 +254,18 @@ public partial class UserFacet { }
 var userFacet = user.ToFacet<UserFacet>();
 var userFacet = user.ToFacet<User, UserFacet>(); //Much faster
 
+// Map back to source
 var user = userFacet.ToSource<User>();
 var user = userFacet.ToSource<UserFacet, User>(); //Much faster
 
+// Patch only changed properties to source
+user.ApplyFacet<userDto>();
+user.ApplyFacet<User, userDto>(); // Much faster
+
+// Patch with change tracking
+bool hasChanges = userFacet.ApplyFacetWithChanges<user, userDto>();
+
+// LINQ
 var users = users.SelectFacets<UserFacet>();
 var users = users.SelectFacets<User, UserFacet>(); //Much faster
 ```
@@ -945,7 +954,7 @@ In Visual Studio or Rider, click the lightbulb to automatically update the signa
 Facet is modular and consists of several NuGet packages:
 
 - **[Facet](https://github.com/Tim-Maes/Facet/blob/master/README.md)**: The core source generator. Generates DTOs, projections, and mapping code.
-- **[Facet.Extensions](https://github.com/Tim-Maes/Facet/blob/master/src/Facet.Extensions/README.md)**: Provider-agnostic extension methods for mapping and projecting (works with any LINQ provider, no EF Core dependency).
+- **[Facet.Extensions](https://github.com/Tim-Maes/Facet/blob/master/src/Facet.Extensions/README.md)**: Provider-agnostic extension methods for mapping, projecting and patch updates (works with any LINQ provider, no EF Core dependency).
 - **[Facet.Mapping](https://github.com/Tim-Maes/Facet/tree/master/src/Facet.Mapping)**: Advanced static mapping configuration support with async capabilities and dependency injection for complex mapping scenarios.
 - **[Facet.Mapping.Expressions](https://github.com/Tim-Maes/Facet/blob/master/src/Facet.Mapping.Expressions/README.md)**: Expression tree transformation utilities for transforming predicates, selectors, and business logic between source entities and their Facet projections.
 - **[Facet.Extensions.EFCore](https://github.com/Tim-Maes/Facet/tree/master/src/Facet.Extensions.EFCore)**: Async extension methods for Entity Framework Core (requires EF Core 6+).
