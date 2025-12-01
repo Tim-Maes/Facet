@@ -251,7 +251,7 @@ Create focused facets for different scenarios:
 [Facet(typeof(User))]
 public partial class UserFacet { }
 
-// Auto-generates constructor, properties, and LINQ projection
+// Map your source to facet
 var userFacet = user.ToFacet<UserFacet>();
 var userFacet = user.ToFacet<User, UserFacet>(); //Much faster
 
@@ -259,14 +259,14 @@ var userFacet = user.ToFacet<User, UserFacet>(); //Much faster
 var user = userFacet.ToSource<User>();
 var user = userFacet.ToSource<UserFacet, User>(); //Much faster
 
-// Patch only changed properties to source
+// Patch only changed properties back to source
 user.ApplyFacet(userFacet);
 user.ApplyFacet<User, UserFacet>(userFacet); // Much faster
 
 // Patch with change tracking
 bool hasChanges = userFacet.ApplyFacetWithChanges<user, userDto>(userFacet);
 
-// LINQ
+// LINQ queries
 var users = users.SelectFacets<UserFacet>();
 var users = users.SelectFacets<User, UserFacet>(); //Much faster
 ```
