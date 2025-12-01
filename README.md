@@ -60,9 +60,10 @@ Click on a section to expand/collapse
 <details>
   <summary>Configuration & customization</summary>
 
-- Include/exclude properties with simple attributes
+- Include/exclude pattern with simple attributes
 - Copy data validation attributes
-- Custom mapping configurations (sync & async)
+- Reverse & custom mapping configurations (sync & async)
+- Patch/update source with change tracking
 - Expression transformation utilities for business logic reuse
 - **Property mapping with `[MapFrom]`** for declarative property renaming
 - **Conditional mapping with `[MapWhen]`** for status-dependent fields
