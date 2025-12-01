@@ -5,14 +5,28 @@ For async EF Core support, see the separate Facet.Extensions.EFCore package.
 
 ## Methods (Facet.Extensions)
 
+### Mappings
+
 | Method                              | Description                                                      |
 |------------------------------------- |------------------------------------------------------------------|
 | `ToFacet<TSource, TTarget>()`        | Map a single object with explicit source type (compile-time).   |
 | `ToFacet<TTarget>()`                 | Map a single object with inferred source type (runtime).        |
+| `ToSource<TFacet, TFacetSource>()`   | Map facet back to source via generated ToSource method.         |
+| `ToSource<TFacetSource>()`           | Map facet back to source with inferred facet type.              |
 | `SelectFacets<TSource, TTarget>()`   | Map an `IEnumerable<TSource>` with explicit types.              |
 | `SelectFacets<TTarget>()`            | Map an `IEnumerable` with inferred source type.                 |
+| `SelectFacetSources<TFacet, TFacetSource>()` | Map facets back to sources.                             |
+| `SelectFacetSources<TFacetSource>()` | Map facets back to sources with inferred facet type.            |
 | `SelectFacet<TSource, TTarget>()`    | Project an `IQueryable<TSource>` with explicit types.           |
 | `SelectFacet<TTarget>()`             | Project an `IQueryable` with inferred source type.              |
+
+### Patch/Update methods (Facet -> Source)
+
+| Method                                      | Description                                                      |
+|---------------------------------------------|------------------------------------------------------------------|
+| `ApplyFacet<TSource, TFacet>()`             | Apply changed properties from facet to source  |
+| `ApplyFacet<TFacet>()`                      | Apply changed properties with inferred source type.              |
+| `ApplyFacetWithChanges<TSource, TFacet>()`  | Apply changes and return `FacetApplyResult` with changed property names. |
 
 ## Methods (Facet.Extensions.EFCore)
 
@@ -56,12 +70,23 @@ dotnet add package Facet.Extensions
 ```csharp
 using Facet.Extensions;
 
-// provider-agnostic
-// Single object
+// Forward mapping: Source > Facet
 var dto = person.ToFacet<PersonDto>();
 
-// Enumerable
+// Enumerable mapping
 var dtos = people.SelectFacets<PersonDto>();
+
+// Reverse mapping: Facet > Source (apply changes)
+var updateDto = new PersonDto { Name = "Jane", Email = "jane@example.com" };
+person.ApplyFacet(updateDto);  // Only updates changed properties
+
+// Track changes for auditing
+var result = person.ApplyFacetWithChanges<Person, PersonDto>(updateDto);
+
+if (result.HasChanges)
+{
+    Console.WriteLine($"Changed: {string.Join(", ", result.ChangedProperties)}");
+}
 ```
 
 ### EF Core Extensions
@@ -124,7 +149,36 @@ var orders = await dbContext.Orders.ToFacetsAsync<OrderDto>();
 // Automatically includes Items collection and ShippingAddress!
 ```
 
-### EF Core Reverse Mapping (UpdateFromFacet)
+### Reverse Mapping: ApplyFacet
+
+For general-purpose patch/update scenarios
+
+```csharp
+using Facet.Extensions;
+
+[HttpPut("{id}")]
+public IActionResult UpdatePerson(int id, [FromBody] PersonDto dto)
+{
+    var person = repository.GetById(id);
+    if (person == null) return NotFound();
+
+    // Apply changes from facet to source (no DbContext required)
+    var result = person.ApplyFacetWithChanges<Person, PersonDto>(dto);
+
+    if (result.HasChanges)
+    {
+        repository.Save(person);
+        logger.LogInformation("Person {Id} updated: {Changes}",
+            id, string.Join(", ", result.ChangedProperties));
+    }
+
+    return NoContent();
+}
+```
+
+### Reverse Mapping: UpdateFromFacet (EF Core)
+
+For EF Core-specific scenarios with change tracking integration:
 
 ```csharp
 using Facet.Extensions.EFCore;
@@ -134,10 +188,11 @@ public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateUserDto dto
 {
     var user = await context.Users.FindAsync(id);
     if (user == null) return NotFound();
-    
+
     // Only updates properties that actually changed - selective update
+    // Integrates with EF Core's change tracking
     user.UpdateFromFacet(dto, context);
-    
+
     await context.SaveChangesAsync();
     return Ok();
 }
@@ -146,13 +201,17 @@ public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateUserDto dto
 var result = user.UpdateFromFacetWithChanges(dto, context);
 if (result.HasChanges)
 {
-    logger.LogInformation("User {UserId} updated. Changed: {Properties}", 
+    logger.LogInformation("User {UserId} updated. Changed: {Properties}",
         user.Id, string.Join(", ", result.ChangedProperties));
 }
 
 // Async version
 await user.UpdateFromFacetAsync(dto, context);
 ```
+
+**Key Differences:**
+- **`ApplyFacet`** (Facet.Extensions): No EF Core dependency, uses reflection, works with any objects
+- **`UpdateFromFacet`** (Facet.Extensions.EFCore): Requires `DbContext`, integrates with EF Core change tracking
 
 ### Complete API Example
 
@@ -182,20 +241,40 @@ public class UsersController : ControllerBase
     {
         var user = await context.Users.FindAsync(id);
         if (user == null) return NotFound();
-        
+
         return user.ToFacet<UserDto>();  // Forward mapping
     }
-    
-    // PUT: Facet -> Entity (selective update)
+
+    // PUT: Facet -> Entity
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateUser(int id, UpdateUserDto dto)
     {
         var user = await context.Users.FindAsync(id);
         if (user == null) return NotFound();
-        
+
         user.UpdateFromFacet(dto, context);  // Reverse mapping
         await context.SaveChangesAsync();
-        
+
+        return NoContent();
+    }
+}
+
+// Non-EF Core version with ApplyFacet
+[ApiController]
+public class UsersController : ControllerBase
+{
+    private readonly IUserRepository _repository;
+
+    // PUT: Facet -> Entity (selective update without EF Core)
+    [HttpPut("{id}")]
+    public IActionResult UpdateUser(int id, UpdateUserDto dto)
+    {
+        var user = _repository.GetById(id);
+        if (user == null) return NotFound();
+
+        user.ApplyFacet(dto);  // Reverse mapping (no DbContext)
+        _repository.Save(user);
+
         return NoContent();
     }
 }
