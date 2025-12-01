@@ -186,7 +186,11 @@ internal static class CodeBuilder
                 }
                 return param;
             }));
+        // Suppress CS1591 (missing XML comment) warnings for generated positional declarations
+        // This prevents warnings when GenerateDocumentationFile is enabled
+        sb.AppendLine($"{indent}#pragma warning disable CS1591");
         sb.AppendLine($"{indent}{model.Accessibility} partial {keyword} {model.Name}({parameters});");
+        sb.AppendLine($"{indent}#pragma warning restore CS1591");
     }
 
     #endregion
