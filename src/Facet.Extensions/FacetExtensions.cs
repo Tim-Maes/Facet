@@ -464,6 +464,167 @@ public static class FacetExtensions
         return adapted;
     }
 
+    /// <summary>
+    /// Applies changed properties from a facet DTO back to the source object.
+    /// Only updates properties that exist in both the facet and the source and have different values.
+    /// </summary>
+    /// <typeparam name="TSource">The source entity type being updated</typeparam>
+    /// <typeparam name="TFacet">The facet DTO type containing the new values</typeparam>
+    /// <param name="source">The source instance to update</param>
+    /// <param name="facet">The facet DTO containing the new property values</param>
+    /// <returns>The updated source instance (for fluent chaining)</returns>
+    /// <exception cref="ArgumentNullException">Thrown when source or facet is null</exception>
+    /// <example>
+    /// <code>
+    /// var user = new User { Id = 1, Name = "John", Email = "john@example.com" };
+    /// var facet = new UserFacet { Name = "Jane", Email = "john@example.com" };
+    ///
+    /// user.ApplyFacet&lt;User, UserFacet&gt;(facet);
+    /// // user.Name is now "Jane", Email unchanged
+    /// </code>
+    /// </example>
+    public static TSource ApplyFacet<TSource, TFacet>(this TSource source, TFacet facet)
+        where TSource : class
+    {
+        if (source is null) throw new ArgumentNullException(nameof(source));
+        if (facet is null) throw new ArgumentNullException(nameof(facet));
+
+        // Get properties that exist in both Facet and Source
+        var facetProperties = typeof(TFacet).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanRead)
+            .ToDictionary(p => p.Name, p => p);
+
+        var sourceProperties = typeof(TSource).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanWrite);
+
+        // Update source properties from facet where values differ
+        foreach (var sourceProperty in sourceProperties)
+        {
+            if (facetProperties.TryGetValue(sourceProperty.Name, out var facetProperty))
+            {
+                var facetValue = facetProperty.GetValue(facet);
+                var sourceValue = sourceProperty.GetValue(source);
+
+                // Only update if values are different
+                if (!Equals(facetValue, sourceValue))
+                {
+                    sourceProperty.SetValue(source, facetValue);
+                }
+            }
+        }
+
+        return source;
+    }
+
+    /// <summary>
+    /// Applies changed properties from a facet DTO back to the source object.
+    /// The facet type is inferred from the TFacet parameter.
+    /// Only updates properties that exist in both the facet and the source and have different values.
+    /// </summary>
+    /// <typeparam name="TFacet">The facet DTO type containing the new values</typeparam>
+    /// <param name="source">The source instance to update</param>
+    /// <param name="facet">The facet DTO containing the new property values</param>
+    /// <returns>The updated source instance (for fluent chaining)</returns>
+    /// <exception cref="ArgumentNullException">Thrown when source or facet is null</exception>
+    /// <example>
+    /// <code>
+    /// var user = new User { Id = 1, Name = "John", Email = "john@example.com" };
+    /// var facet = new UserFacet { Name = "Jane", Email = "john@example.com" };
+    ///
+    /// user.ApplyFacet(facet);
+    /// // user.Name is now "Jane", Email unchanged
+    /// </code>
+    /// </example>
+    public static object ApplyFacet<TFacet>(this object source, TFacet facet)
+        where TFacet : class
+    {
+        if (source is null) throw new ArgumentNullException(nameof(source));
+        if (facet is null) throw new ArgumentNullException(nameof(facet));
+
+        var sourceType = source.GetType();
+
+        // Get properties that exist in both Facet and Source
+        var facetProperties = typeof(TFacet).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanRead)
+            .ToDictionary(p => p.Name, p => p);
+
+        var sourceProperties = sourceType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanWrite);
+
+        // Update source properties from facet where values differ
+        foreach (var sourceProperty in sourceProperties)
+        {
+            if (facetProperties.TryGetValue(sourceProperty.Name, out var facetProperty))
+            {
+                var facetValue = facetProperty.GetValue(facet);
+                var sourceValue = sourceProperty.GetValue(source);
+
+                // Only update if values are different
+                if (!Equals(facetValue, sourceValue))
+                {
+                    sourceProperty.SetValue(source, facetValue);
+                }
+            }
+        }
+
+        return source;
+    }
+
+    /// <summary>
+    /// Applies changed properties from a facet DTO back to the source object and returns information about which properties were changed.
+    /// This is useful for auditing, logging, or conditional logic based on what actually changed.
+    /// </summary>
+    /// <typeparam name="TSource">The source entity type being updated</typeparam>
+    /// <typeparam name="TFacet">The facet DTO type containing the new values</typeparam>
+    /// <param name="source">The source instance to update</param>
+    /// <param name="facet">The facet DTO containing the new property values</param>
+    /// <returns>A result containing the updated source and a list of property names that were changed</returns>
+    /// <exception cref="ArgumentNullException">Thrown when source or facet is null</exception>
+    /// <example>
+    /// <code>
+    /// var result = user.ApplyFacetWithChanges&lt;User, UserFacet&gt;(facet);
+    /// if (result.HasChanges)
+    /// {
+    ///     Console.WriteLine($"Changed properties: {string.Join(", ", result.ChangedProperties)}");
+    /// }
+    /// </code>
+    /// </example>
+    public static FacetApplyResult<TSource> ApplyFacetWithChanges<TSource, TFacet>(this TSource source, TFacet facet)
+        where TSource : class
+    {
+        if (source is null) throw new ArgumentNullException(nameof(source));
+        if (facet is null) throw new ArgumentNullException(nameof(facet));
+
+        var changedProperties = new List<string>();
+
+        // Get properties that exist in both Facet and Source
+        var facetProperties = typeof(TFacet).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanRead)
+            .ToDictionary(p => p.Name, p => p);
+
+        var sourceProperties = typeof(TSource).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanWrite);
+
+        // Update source properties from facet where values differ
+        foreach (var sourceProperty in sourceProperties)
+        {
+            if (facetProperties.TryGetValue(sourceProperty.Name, out var facetProperty))
+            {
+                var facetValue = facetProperty.GetValue(facet);
+                var sourceValue = sourceProperty.GetValue(source);
+
+                // Only update if values are different
+                if (!Equals(facetValue, sourceValue))
+                {
+                    sourceProperty.SetValue(source, facetValue);
+                    changedProperties.Add(sourceProperty.Name);
+                }
+            }
+        }
+
+        return new FacetApplyResult<TSource>(source, changedProperties);
+    }
+
     private sealed class ReplaceParameterVisitor : ExpressionVisitor
     {
         private readonly ParameterExpression _oldParam;
@@ -476,4 +637,19 @@ public static class FacetExtensions
         protected override Expression VisitParameter(ParameterExpression node)
             => node == _oldParam ? _newExpr : base.VisitParameter(node);
     }
+}
+
+/// <summary>
+/// Represents the result of a facet apply operation, containing the updated source and information about what changed.
+/// </summary>
+/// <typeparam name="TSource">The type of source that was updated</typeparam>
+public readonly record struct FacetApplyResult<TSource>(
+    TSource Source,
+    IReadOnlyList<string> ChangedProperties)
+    where TSource : class
+{
+    /// <summary>
+    /// Gets a value indicating whether any properties were changed during the apply operation.
+    /// </summary>
+    public bool HasChanges => ChangedProperties.Count > 0;
 }
