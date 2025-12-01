@@ -260,11 +260,11 @@ var user = userFacet.ToSource<User>();
 var user = userFacet.ToSource<UserFacet, User>(); //Much faster
 
 // Patch only changed properties to source
-user.ApplyFacet<userDto>();
-user.ApplyFacet<User, userDto>(); // Much faster
+user.ApplyFacet(userFacet);
+user.ApplyFacet<User, UserFacet>(userFacet); // Much faster
 
 // Patch with change tracking
-bool hasChanges = userFacet.ApplyFacetWithChanges<user, userDto>();
+bool hasChanges = userFacet.ApplyFacetWithChanges<user, userDto>(userFacet);
 
 // LINQ
 var users = users.SelectFacets<UserFacet>();
