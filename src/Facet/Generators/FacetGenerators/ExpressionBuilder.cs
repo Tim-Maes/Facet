@@ -41,9 +41,14 @@ internal static class ExpressionBuilder
         {
             valueExpression = TransformExpression(member.MapFromSource, sourceVariableName);
         }
+        else if (member.MapFromSource != null)
+        {
+            // Use the full MapFromSource path for nested property paths (e.g., "Company.Address")
+            valueExpression = $"{sourceVariableName}.{member.MapFromSource}";
+        }
         else
         {
-            // Use SourcePropertyName for accessing the source property (supports MapFrom)
+            // Use SourcePropertyName for regular properties
             valueExpression = $"{sourceVariableName}.{member.SourcePropertyName}";
         }
 

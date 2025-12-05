@@ -510,10 +510,12 @@ internal static class ModelBuilder
                             typeName = GeneratorUtilities.MakeNullable(typeName);
                         }
 
-                        // Check if this is an expression (contains operators or spaces)
-                        if (IsExpression(source))
+                        // Check if this is an expression (contains operators or spaces) or a nested property path
+                        if (IsExpression(source) || source.Contains("."))
                         {
-                            // Expression-based member - add directly to members list
+                            // Expression-based member or nested property path - add directly to members list
+                            // Nested paths bypass source property processing since multiple target properties
+                            // can map from different nested paths under the same source property
                             expressionMembers.Add(new FacetMember(
                                 property.Name,
                                 typeName,
@@ -538,8 +540,7 @@ internal static class ModelBuilder
                         else
                         {
                             // Simple property rename - map to source property
-                            var sourcePropertyName = source.Contains(".") ? source.Split('.')[0] : source;
-                            mappings[sourcePropertyName] = (property.Name, source, reversible, includeInProjection, typeName);
+                            mappings[source] = (property.Name, source, reversible, includeInProjection, typeName);
                         }
                     }
                     break;

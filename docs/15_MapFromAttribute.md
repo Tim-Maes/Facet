@@ -238,10 +238,51 @@ public partial class UserDto
 3. **Consider projection compatibility** - Set `IncludeInProjection = false` for expressions that can't translate to SQL
 4. **Combine with custom mappers when needed** - MapFrom handles the basics, custom mapper handles the rest
 
+## Nested Property Paths
+
+You can use `MapFrom` to flatten nested object structures by specifying property paths:
+
+```csharp
+public class Order
+{
+    public int Id { get; set; }
+    public Customer Customer { get; set; }
+}
+
+public class Customer
+{
+    public string Name { get; set; }
+    public Address Address { get; set; }
+}
+
+public class Address
+{
+    public string City { get; set; }
+    public string Country { get; set; }
+}
+
+[Facet(typeof(Order), exclude: [nameof(Order.Customer)])]
+public partial class OrderDto
+{
+    // Single-level nested path
+    [MapFrom("Customer.Name")]
+    public string CustomerName { get; set; }
+
+    // Multi-level nested path
+    [MapFrom("Customer.Address.City")]
+    public string City { get; set; }
+
+    [MapFrom("Customer.Address.Country")]
+    public string Country { get; set; }
+}
+```
+
+**Important**: Nested property paths do not include null-checking. If any intermediate property is null, a `NullReferenceException` will be thrown. Ensure intermediate properties are non-nullable or handle null cases in your application logic.
+
 ## Limitations
 
 - **Same type required** - Source and target property types must match
-- **No nested path support** - Cannot use `"Company.Name"` (use nested facets instead)
 - **Expressions are not reversible** - Computed expressions are one-way (source → DTO only)
+- **No null-checking in nested paths** - `"Company.Address.City"` will throw if Company or Address is null
 
 For complex scenarios like async operations or conditional logic, use [Custom Mapping](04_CustomMapping.md) instead.
