@@ -94,6 +94,57 @@ public partial class MapFromCompanyFacet
     GenerateToSource = true)]
 public partial class MapFromNestedFacet;
 
+// ========================================
+// Nested Property Path Tests (not nested facets!)
+// These test [MapFrom("Property.Nested.Path")] using string literals
+// ========================================
+
+public class MapFromNestedPropertyEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public MapFromCompanyEntity? Company { get; set; }
+}
+
+public class MapFromMultiLevelEntity
+{
+    public int Id { get; set; }
+    public MapFromNestedPropertyEntity? Employee { get; set; }
+}
+
+// Test single-level nested property path: Company.CompanyName
+[Facet(typeof(MapFromNestedPropertyEntity),
+    exclude: [nameof(MapFromNestedPropertyEntity.Company)], // Exclude navigation property
+    GenerateToSource = false)]
+public partial class MapFromSingleLevelPathFacet
+{
+    // Use string literal to access nested property
+    [MapFrom("Company.CompanyName")]
+    public string CompanyName { get; set; } = string.Empty;
+
+    [MapFrom("Company.Address")]
+    public string CompanyAddress { get; set; } = string.Empty;
+}
+
+// Test multi-level nested property path: Employee.Company.CompanyName
+[Facet(typeof(MapFromMultiLevelEntity),
+    exclude: [nameof(MapFromMultiLevelEntity.Employee)], // Exclude navigation property
+    GenerateToSource = false)]
+public partial class MapFromMultiLevelPathFacet
+{
+    // Two levels deep
+    [MapFrom("Employee.Company.CompanyName")]
+    public string EmployeeCompanyName { get; set; } = string.Empty;
+
+    // Two levels deep
+    [MapFrom("Employee.Company.Address")]
+    public string EmployeeCompanyAddress { get; set; } = string.Empty;
+
+    // Single level
+    [MapFrom("Employee.Name")]
+    public string EmployeeName { get; set; } = string.Empty;
+}
+
 public class MapFromTests
 {
     [Fact]
@@ -466,5 +517,218 @@ public class MapFromTests
         facets.Should().HaveCount(2);
         facets[0].FullName.Should().Be("Alice Smith");
         facets[1].FullName.Should().Be("Bob Jones");
+    }
+
+    // ========================================
+    // Nested Property Path Tests
+    // Testing [MapFrom("Property.Nested.Path")] with string literals
+    // ========================================
+
+    [Fact]
+    public void Constructor_ShouldMapSingleLevelNestedPropertyPath()
+    {
+        // Arrange
+        var entity = new MapFromNestedPropertyEntity
+        {
+            Id = 1,
+            Name = "John Doe",
+            Company = new MapFromCompanyEntity
+            {
+                Id = 100,
+                CompanyName = "Acme Corporation",
+                Address = "123 Main Street"
+            }
+        };
+
+        // Act
+        var facet = new MapFromSingleLevelPathFacet(entity);
+
+        // Assert
+        facet.Should().NotBeNull();
+        facet.Id.Should().Be(1);
+        facet.Name.Should().Be("John Doe");
+        facet.CompanyName.Should().Be("Acme Corporation"); // From Company.CompanyName
+        facet.CompanyAddress.Should().Be("123 Main Street"); // From Company.Address
+    }
+
+    [Fact]
+    public void Projection_ShouldMapSingleLevelNestedPropertyPath()
+    {
+        // Arrange
+        var entities = new[]
+        {
+            new MapFromNestedPropertyEntity
+            {
+                Id = 1,
+                Name = "Alice",
+                Company = new MapFromCompanyEntity
+                {
+                    Id = 100,
+                    CompanyName = "TechCorp",
+                    Address = "456 Tech Ave"
+                }
+            },
+            new MapFromNestedPropertyEntity
+            {
+                Id = 2,
+                Name = "Bob",
+                Company = new MapFromCompanyEntity
+                {
+                    Id = 200,
+                    CompanyName = "StartupInc",
+                    Address = "789 Innovation Blvd"
+                }
+            }
+        }.AsQueryable();
+
+        // Act
+        var facets = entities.Select(MapFromSingleLevelPathFacet.Projection).ToList();
+
+        // Assert
+        facets.Should().HaveCount(2);
+        facets[0].CompanyName.Should().Be("TechCorp");
+        facets[0].CompanyAddress.Should().Be("456 Tech Ave");
+        facets[1].CompanyName.Should().Be("StartupInc");
+        facets[1].CompanyAddress.Should().Be("789 Innovation Blvd");
+    }
+
+    [Fact]
+    public void Constructor_ShouldMapMultiLevelNestedPropertyPath()
+    {
+        // Arrange
+        var entity = new MapFromMultiLevelEntity
+        {
+            Id = 1,
+            Employee = new MapFromNestedPropertyEntity
+            {
+                Id = 50,
+                Name = "Jane Smith",
+                Company = new MapFromCompanyEntity
+                {
+                    Id = 100,
+                    CompanyName = "Global Enterprises",
+                    Address = "999 Corporate Plaza"
+                }
+            }
+        };
+
+        // Act
+        var facet = new MapFromMultiLevelPathFacet(entity);
+
+        // Assert
+        facet.Should().NotBeNull();
+        facet.Id.Should().Be(1);
+        facet.EmployeeName.Should().Be("Jane Smith"); // From Employee.Name
+        facet.EmployeeCompanyName.Should().Be("Global Enterprises"); // From Employee.Company.CompanyName
+        facet.EmployeeCompanyAddress.Should().Be("999 Corporate Plaza"); // From Employee.Company.Address
+    }
+
+    [Fact]
+    public void Projection_ShouldMapMultiLevelNestedPropertyPath()
+    {
+        // Arrange
+        var entities = new[]
+        {
+            new MapFromMultiLevelEntity
+            {
+                Id = 1,
+                Employee = new MapFromNestedPropertyEntity
+                {
+                    Id = 10,
+                    Name = "Alice Johnson",
+                    Company = new MapFromCompanyEntity
+                    {
+                        Id = 100,
+                        CompanyName = "MegaCorp",
+                        Address = "100 Business Park"
+                    }
+                }
+            },
+            new MapFromMultiLevelEntity
+            {
+                Id = 2,
+                Employee = new MapFromNestedPropertyEntity
+                {
+                    Id = 20,
+                    Name = "Bob Williams",
+                    Company = new MapFromCompanyEntity
+                    {
+                        Id = 200,
+                        CompanyName = "SmallBiz LLC",
+                        Address = "200 Small St"
+                    }
+                }
+            }
+        }.AsQueryable();
+
+        // Act
+        var facets = entities.Select(MapFromMultiLevelPathFacet.Projection).ToList();
+
+        // Assert
+        facets.Should().HaveCount(2);
+        facets[0].EmployeeName.Should().Be("Alice Johnson");
+        facets[0].EmployeeCompanyName.Should().Be("MegaCorp");
+        facets[0].EmployeeCompanyAddress.Should().Be("100 Business Park");
+        facets[1].EmployeeName.Should().Be("Bob Williams");
+        facets[1].EmployeeCompanyName.Should().Be("SmallBiz LLC");
+        facets[1].EmployeeCompanyAddress.Should().Be("200 Small St");
+    }
+
+    [Fact]
+    public void Constructor_ShouldHandleNullIntermediatePropertyInNestedPath()
+    {
+        // Arrange
+        var entity = new MapFromNestedPropertyEntity
+        {
+            Id = 1,
+            Name = "John Doe",
+            Company = null // Null company
+        };
+
+        // Act & Assert
+        // This should throw NullReferenceException because Company is null
+        // and the generated code doesn't include null checks for nested paths
+        var action = () => new MapFromSingleLevelPathFacet(entity);
+        action.Should().Throw<NullReferenceException>();
+    }
+
+    [Fact]
+    public void Projection_ShouldHandleNullIntermediatePropertyInNestedPath()
+    {
+        // Arrange
+        var entities = new[]
+        {
+            new MapFromNestedPropertyEntity
+            {
+                Id = 1,
+                Name = "Alice",
+                Company = null // Null company
+            }
+        }.AsQueryable();
+
+        // Act & Assert
+        // EF Core projection with null nested path should also fail
+        var action = () => entities.Select(MapFromSingleLevelPathFacet.Projection).ToList();
+        action.Should().Throw<NullReferenceException>();
+    }
+
+    [Fact]
+    public void Constructor_NestedPropertyPath_ShouldNotGenerateDuplicateProperties()
+    {
+        // Verify that MapFrom with nested paths doesn't create duplicate properties
+        var facetType = typeof(MapFromSingleLevelPathFacet);
+        var properties = facetType.GetProperties();
+        var propertyNames = properties.Select(p => p.Name).ToList();
+
+        // Should have our custom properties
+        propertyNames.Should().Contain("CompanyName");
+        propertyNames.Should().Contain("CompanyAddress");
+
+        // Should have auto-generated properties from MapFromNestedPropertyEntity
+        propertyNames.Should().Contain("Id");
+        propertyNames.Should().Contain("Name");
+
+        // Should NOT have the "Company" navigation property (it's mapped to nested paths)
+        propertyNames.Should().NotContain("Company");
     }
 }

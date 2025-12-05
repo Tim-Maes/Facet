@@ -134,9 +134,14 @@ internal static class ProjectionGenerator
         {
             valueExpression = TransformExpression(member.MapFromSource, sourceVariableName);
         }
+        else if (member.MapFromSource != null)
+        {
+            // Use the full MapFromSource path for nested property paths (e.g., "Company.Address")
+            valueExpression = $"{sourceVariableName}.{member.MapFromSource}";
+        }
         else
         {
-            // Regular property - direct assignment using SourcePropertyName (supports MapFrom)
+            // Regular property - direct assignment using SourcePropertyName
             valueExpression = $"{sourceVariableName}.{member.SourcePropertyName}";
         }
 
