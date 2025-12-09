@@ -316,6 +316,8 @@ internal static class ExpressionBuilder
             FacetConstants.CollectionWrappers.List => $"{projection}.ToList()",
             FacetConstants.CollectionWrappers.IList => $"{projection}.ToList()",
             FacetConstants.CollectionWrappers.ICollection => $"{projection}.ToList()",
+            FacetConstants.CollectionWrappers.IReadOnlyList => $"{projection}.ToList()",
+            FacetConstants.CollectionWrappers.IReadOnlyCollection => $"{projection}.ToList()",
             FacetConstants.CollectionWrappers.IEnumerable => projection,
             FacetConstants.CollectionWrappers.Array => $"{projection}.ToArray()",
             _ => projection

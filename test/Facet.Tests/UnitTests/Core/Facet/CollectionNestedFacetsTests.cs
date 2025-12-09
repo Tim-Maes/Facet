@@ -351,4 +351,157 @@ public class CollectionNestedFacetsTests
         // Assert - Items should be List<OrderItemFacet>
         dto.Items.Should().BeAssignableTo<List<OrderItemFacet>>();
     }
+
+    [Fact]
+    public void ToFacet_ShouldMapIReadOnlyListCollection_WhenUsingNestedFacets()
+    {
+        // Arrange
+        var library = new LibraryEntity
+        {
+            Id = 1,
+            Name = "City Library",
+            Books = new List<LibraryBookEntity>
+            {
+                new() { Id = 1, Title = "1984", Author = "George Orwell", ISBN = "978-0451524935" },
+                new() { Id = 2, Title = "Brave New World", Author = "Aldous Huxley", ISBN = "978-0060850524" },
+                new() { Id = 3, Title = "Fahrenheit 451", Author = "Ray Bradbury", ISBN = "978-1451673319" }
+            },
+            Staff = new List<StaffMember>
+            {
+                new()
+                {
+                    Id = 100,
+                    FirstName = "Jane",
+                    LastName = "Doe",
+                    Email = "jane@library.com",
+                    PasswordHash = "hash123",
+                    Salary = 50000m,
+                    HireDate = new DateTime(2020, 6, 1),
+                    Company = new CompanyEntity { Id = 1, Name = "Library Corp", Industry = "Education", HeadquartersAddress = new AddressEntity() },
+                    HomeAddress = new AddressEntity { City = "New York" }
+                }
+            }
+        };
+
+        // Act
+        var dto = new LibraryFacet(library);
+
+        // Assert
+        dto.Should().NotBeNull();
+        dto.Id.Should().Be(1);
+        dto.Name.Should().Be("City Library");
+
+        // Verify IReadOnlyList<T> mapping
+        dto.Books.Should().NotBeNull();
+        dto.Books.Should().HaveCount(3);
+        dto.Books.Should().AllBeOfType<LibraryBookFacet>();
+        dto.Books.Should().BeAssignableTo<IReadOnlyList<LibraryBookFacet>>();
+
+        // Verify first book
+        dto.Books[0].Id.Should().Be(1);
+        dto.Books[0].Title.Should().Be("1984");
+        dto.Books[0].Author.Should().Be("George Orwell");
+        dto.Books[0].ISBN.Should().Be("978-0451524935");
+
+        // Verify IReadOnlyCollection<T> mapping
+        dto.Staff.Should().NotBeNull();
+        dto.Staff.Should().HaveCount(1);
+        dto.Staff.Should().AllBeOfType<StaffMemberFacet>();
+        dto.Staff.Should().BeAssignableTo<IReadOnlyCollection<StaffMemberFacet>>();
+
+        var staffMember = dto.Staff.First();
+        staffMember.Id.Should().Be(100);
+        staffMember.FirstName.Should().Be("Jane");
+        staffMember.LastName.Should().Be("Doe");
+        staffMember.Email.Should().Be("jane@library.com");
+
+        // Verify excluded properties
+        var staffType = staffMember.GetType();
+        staffType.GetProperty("PasswordHash").Should().BeNull("PasswordHash should be excluded");
+        staffType.GetProperty("Salary").Should().BeNull("Salary should be excluded");
+    }
+
+    [Fact]
+    public void ToSource_ShouldMapIReadOnlyListCollectionBackToSource()
+    {
+        // Arrange
+        var library = new LibraryEntity
+        {
+            Id = 1,
+            Name = "City Library",
+            Books = new List<LibraryBookEntity>
+            {
+                new() { Id = 1, Title = "1984", Author = "George Orwell", ISBN = "978-0451524935" },
+                new() { Id = 2, Title = "Brave New World", Author = "Aldous Huxley", ISBN = "978-0060850524" }
+            },
+            Staff = new List<StaffMember>()
+        };
+
+        var dto = new LibraryFacet(library);
+
+        // Act
+        var mappedLibrary = dto.ToSource();
+
+        // Assert
+        mappedLibrary.Should().NotBeNull();
+        mappedLibrary.Id.Should().Be(1);
+        mappedLibrary.Name.Should().Be("City Library");
+
+        // Verify IReadOnlyList mapping back
+        mappedLibrary.Books.Should().NotBeNull();
+        mappedLibrary.Books.Should().HaveCount(2);
+        mappedLibrary.Books.Should().AllBeOfType<LibraryBookEntity>();
+        mappedLibrary.Books.Should().BeAssignableTo<IReadOnlyList<LibraryBookEntity>>();
+
+        mappedLibrary.Books[0].Id.Should().Be(1);
+        mappedLibrary.Books[0].Title.Should().Be("1984");
+        mappedLibrary.Books[0].Author.Should().Be("George Orwell");
+
+        // Verify IReadOnlyCollection mapping back
+        mappedLibrary.Staff.Should().NotBeNull();
+        mappedLibrary.Staff.Should().BeEmpty();
+        mappedLibrary.Staff.Should().BeAssignableTo<IReadOnlyCollection<StaffMember>>();
+    }
+
+    [Fact]
+    public void IReadOnlyList_ShouldWorkWithNestedFacets_ReproducesIssue218()
+    {
+        // This test reproduces the exact scenario from GitHub issue #218
+        // Arrange
+        var bob = new Bob
+        {
+            ReadOnlyRelationships = new List<BobChild>
+            {
+                new() { Name = "Alice" },
+                new() { Name = "Charlie" }
+            },
+            Relationships = new List<BobChild>
+            {
+                new() { Name = "Dave" },
+                new() { Name = "Eve" }
+            }
+        };
+
+        // Act
+        var bobModel = new BobModel(bob);
+
+        // Assert
+        bobModel.Should().NotBeNull();
+
+        // Verify IReadOnlyList<BobChild> was correctly mapped to IReadOnlyList<BobChildModel>
+        bobModel.ReadOnlyRelationships.Should().NotBeNull();
+        bobModel.ReadOnlyRelationships.Should().HaveCount(2);
+        bobModel.ReadOnlyRelationships.Should().AllBeOfType<BobChildModel>();
+        bobModel.ReadOnlyRelationships.Should().BeAssignableTo<IReadOnlyList<BobChildModel>>();
+        bobModel.ReadOnlyRelationships[0].Name.Should().Be("Alice");
+        bobModel.ReadOnlyRelationships[1].Name.Should().Be("Charlie");
+
+        // Verify List<BobChild> was correctly mapped to List<BobChildModel>
+        bobModel.Relationships.Should().NotBeNull();
+        bobModel.Relationships.Should().HaveCount(2);
+        bobModel.Relationships.Should().AllBeOfType<BobChildModel>();
+        bobModel.Relationships.Should().BeAssignableTo<List<BobChildModel>>();
+        bobModel.Relationships[0].Name.Should().Be("Dave");
+        bobModel.Relationships[1].Name.Should().Be("Eve");
+    }
 }

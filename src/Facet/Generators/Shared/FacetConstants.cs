@@ -75,6 +75,8 @@ internal static class FacetConstants
         public const string IList = "IList";
         public const string ICollection = "ICollection";
         public const string IEnumerable = "IEnumerable";
+        public const string IReadOnlyList = "IReadOnlyList";
+        public const string IReadOnlyCollection = "IReadOnlyCollection";
         public const string Array = "array";
     }
 
