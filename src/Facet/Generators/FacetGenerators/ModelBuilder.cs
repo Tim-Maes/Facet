@@ -136,6 +136,23 @@ internal static class ModelBuilder
         // Check if the source type has a positional constructor
         var hasPositionalConstructor = TypeAnalyzer.HasPositionalConstructor(sourceType);
 
+        // Check if ToSource can actually be generated (GitHub issue #220)
+        // If the source type doesn't have an accessible parameterless constructor or has inaccessible setters,
+        // skip ToSource generation to avoid compilation errors
+        if (generateToSource && !hasPositionalConstructor)
+        {
+            // For non-positional types, we need a parameterless constructor and accessible setters
+            var hasAccessibleConstructor = TypeAnalyzer.HasAccessibleParameterlessConstructor(sourceType);
+            var hasAccessibleSetters = TypeAnalyzer.AllPropertiesHaveAccessibleSetters(sourceType, members);
+
+            if (!hasAccessibleConstructor || !hasAccessibleSetters)
+            {
+                // Cannot generate ToSource - disable it silently
+                // Note: Users can still manually write their own ToSource method if needed
+                generateToSource = false;
+            }
+        }
+
         // Collect base class member names to avoid generating duplicate properties
         var baseClassMemberNames = GetBaseClassMemberNames(targetSymbol);
 

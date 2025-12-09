@@ -126,4 +126,73 @@ internal static class TypeAnalyzer
 
         return (typeKind, isRecord);
     }
+
+    /// <summary>
+    /// Checks if the source type has an accessible parameterless constructor.
+    /// For ToSource generation, we need a public or internal parameterless constructor.
+    /// </summary>
+    public static bool HasAccessibleParameterlessConstructor(INamedTypeSymbol sourceType)
+    {
+        // Check for implicit parameterless constructor (when no constructors are defined)
+        var constructors = sourceType.InstanceConstructors;
+
+        // If no constructors are explicitly defined, there's an implicit public parameterless constructor
+        if (!constructors.Any())
+            return true;
+
+        // Check if there's an explicitly defined parameterless constructor that's accessible
+        foreach (var constructor in constructors)
+        {
+            if (constructor.Parameters.Length == 0)
+            {
+                // Public constructors are always accessible
+                if (constructor.DeclaredAccessibility == Accessibility.Public)
+                    return true;
+
+                // Internal constructors might be accessible if in same assembly
+                // For now, we'll be conservative and only allow public
+                // TODO: In future, detect if in same assembly and allow internal
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Checks if all the specified properties have accessible setters.
+    /// For ToSource generation using object initializer syntax, we need public or internal setters.
+    /// </summary>
+    public static bool AllPropertiesHaveAccessibleSetters(
+        INamedTypeSymbol sourceType,
+        IEnumerable<FacetMember> members)
+    {
+        foreach (var member in members)
+        {
+            // Skip members that aren't reversible
+            if (!member.MapFromReversible)
+                continue;
+
+            // Find the corresponding property in the source type
+            var sourceProperty = sourceType.GetMembers(member.SourcePropertyName)
+                .OfType<IPropertySymbol>()
+                .FirstOrDefault();
+
+            if (sourceProperty == null)
+                continue; // Skip if property doesn't exist
+
+            // Check if the property has a setter and if it's accessible
+            if (sourceProperty.SetMethod == null)
+                return false; // No setter at all
+
+            // Check setter accessibility
+            var setterAccessibility = sourceProperty.SetMethod.DeclaredAccessibility;
+            if (setterAccessibility != Accessibility.Public &&
+                setterAccessibility != Accessibility.Internal)
+            {
+                return false; // Setter is private, protected, or otherwise inaccessible
+            }
+        }
+
+        return true;
+    }
 }
