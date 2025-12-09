@@ -146,3 +146,16 @@ public partial record BobChildModel;
 
 [Facet(typeof(Bob), NestedFacets = [typeof(BobChildModel)])]
 public partial record BobModel;
+
+// Test models for GitHub issue #220 - Smarter GenerateToSource
+public class MyClass
+{
+    public string Name { get; private set; }
+
+    internal MyClass(string name) => Name = name;
+
+    public static MyClass Create(string name) => new(name);
+}
+
+[Facet(typeof(MyClass), GenerateToSource = true)]
+public partial record MyClassModel;
