@@ -104,3 +104,45 @@ public partial record TeamFacet;
 
 [Facet(typeof(ProjectEntity), NestedFacets = [typeof(TeamFacet)], GenerateToSource = true)]
 public partial record ProjectFacet;
+
+// IReadOnlyList and IReadOnlyCollection test models
+public class LibraryBookEntity
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Author { get; set; } = string.Empty;
+    public string ISBN { get; set; } = string.Empty;
+}
+
+public class LibraryEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public IReadOnlyList<LibraryBookEntity> Books { get; set; } = new List<LibraryBookEntity>();
+    public IReadOnlyCollection<StaffMember> Staff { get; set; } = new List<StaffMember>();
+}
+
+// IReadOnlyList and IReadOnlyCollection facet DTOs
+[Facet(typeof(LibraryBookEntity), GenerateToSource = true)]
+public partial record LibraryBookFacet;
+
+[Facet(typeof(LibraryEntity), NestedFacets = [typeof(LibraryBookFacet), typeof(StaffMemberFacet)], GenerateToSource = true)]
+public partial record LibraryFacet;
+
+// Test models from GitHub issue #218
+public class BobChild
+{
+    public required string Name { get; set; }
+}
+
+public class Bob
+{
+    public IReadOnlyList<BobChild> ReadOnlyRelationships { get; set; } = [];
+    public List<BobChild> Relationships { get; set; } = [];
+}
+
+[Facet(typeof(BobChild))]
+public partial record BobChildModel;
+
+[Facet(typeof(Bob), NestedFacets = [typeof(BobChildModel)])]
+public partial record BobModel;
