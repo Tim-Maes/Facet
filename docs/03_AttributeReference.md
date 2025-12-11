@@ -12,7 +12,7 @@ public partial class MyFacet { }
 
 ### Include Mode (New)
 ```csharp
-[Facet(typeof(SourceType), Include = new[] { "Property1", "Property2" })]
+[Facet(typeof(SourceType), Include = [nameof(SourceType.Property1), nameof(SourceType.Property2)])]
 public partial class MyFacet { }
 ```
 
@@ -59,21 +59,21 @@ When using `Include` mode:
 ### Basic Include Usage
 ```csharp
 // Only include FirstName, LastName, and Email
-[Facet(typeof(User), Include = new[] { "FirstName", "LastName", "Email" })]
+[Facet(typeof(User), Include = [nameof(User.FirstName), nameof(User.LastName), nameof(User.Email)])]
 public partial class UserContactDto;
 ```
 
 ### Single Property Include
 ```csharp
 // Only include the Name property
-[Facet(typeof(Product), Include = new[] { "Name" })]
+[Facet(typeof(Product), Include = [nameof(Product.Name)])]
 public partial class ProductNameDto;
 ```
 
 ### Include with Custom Properties
 ```csharp
 // Include specific properties and add custom ones
-[Facet(typeof(User), Include = new[] { "FirstName", "LastName" })]
+[Facet(typeof(User), Include = [nameof(User.FirstName), nameof(User.LastName)])]
 public partial class UserSummaryDto
 {
     public string FullName { get; set; } = string.Empty; // Custom property
@@ -83,14 +83,14 @@ public partial class UserSummaryDto
 ### Include with Fields
 ```csharp
 // Include fields as well as properties
-[Facet(typeof(EntityWithFields), Include = new[] { "Name", "Age" }, IncludeFields = true)]
+[Facet(typeof(EntityWithFields), Include = [nameof(EntityWithFields.Name), nameof(EntityWithFields.Age)], IncludeFields = true)]
 public partial class EntityDto;
 ```
 
 ### Include with Records
 ```csharp
 // Generate a record type with only specific properties
-[Facet(typeof(User), Include = new[] { "FirstName", "LastName" })]
+[Facet(typeof(User), Include = [nameof(User.FirstName), nameof(User.LastName)])]
 public partial record UserNameRecord;
 ```
 
@@ -104,7 +104,7 @@ public partial record UserDto;
 ### Nullable Properties for Query Models
 ```csharp
 // Make all properties nullable for query/filter scenarios
-[Facet(typeof(Product), "InternalNotes", NullableProperties = true, GenerateToSource = false)]
+[Facet(typeof(Product), nameof(Product.InternalNotes), NullableProperties = true, GenerateToSource = false)]
 public partial class ProductQueryDto;
 
 // Usage: All fields are optional for filtering
@@ -128,7 +128,7 @@ public partial record AddressDto;
 public partial record CompanyDto;
 
 [Facet(typeof(Employee),
-    exclude: ["PasswordHash", "Salary"],
+    exclude: [nameof(Employee.PasswordHash), nameof(Employee.Salary)],
     NestedFacets = [typeof(CompanyDto), typeof(AddressDto)])]
 public partial record EmployeeDto;
 
@@ -216,7 +216,7 @@ public class User
     public string Password { get; set; } = string.Empty;
 }
 
-[Facet(typeof(User), "Password", CopyAttributes = true)]
+[Facet(typeof(User), nameof(User.Password), CopyAttributes = true)]
 public partial class UserDto;
 ```
 
@@ -287,7 +287,7 @@ All parameters including named parameters, string literals with escape sequences
 [Facet(typeof(Address), CopyAttributes = true)]
 public partial class AddressDto;
 
-[Facet(typeof(Order), "InternalNotes", CopyAttributes = true, NestedFacets = [typeof(AddressDto)])]
+[Facet(typeof(Order), nameof(Order.InternalNotes), CopyAttributes = true, NestedFacets = [typeof(AddressDto)])]
 public partial class OrderDto;
 ```
 

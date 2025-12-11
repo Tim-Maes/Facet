@@ -24,11 +24,11 @@ public class User
 public partial class UserPublicDto { }
 
 // Contact information only (include specific fields)
-[Facet(typeof(User), Include = new[] { "FirstName", "LastName", "Email" })]
+[Facet(typeof(User), Include = [nameof(User.FirstName), nameof(User.LastName), nameof(User.Email)])]
 public partial class UserContactDto { }
 
 // Summary for lists (include minimal data)
-[Facet(typeof(User), Include = new[] { "Id", "FirstName", "LastName" })]
+[Facet(typeof(User), Include = [nameof(User.Id), nameof(User.FirstName), nameof(User.LastName)])]
 public partial class UserSummaryDto { }
 
 // HR view (exclude password but include salary)
@@ -58,15 +58,15 @@ public class Product
 }
 
 // API response with only customer-facing data
-[Facet(typeof(Product), Include = new[] { "Id", "Name", "Description", "Price", "IsAvailable" })]
+[Facet(typeof(Product), Include = [nameof(Product.Id), nameof(Product.Name), nameof(Product.Description), nameof(Product.Price), nameof(Product.IsAvailable)])]
 public partial record ProductApiDto;
 
 // Search results with minimal data
-[Facet(typeof(Product), Include = new[] { "Id", "Name", "Price" })]
+[Facet(typeof(Product), Include = [nameof(Product.Id), nameof(Product.Name), nameof(Product.Price)])]
 public partial record ProductSearchDto;
 
 // Internal admin view with cost data
-[Facet(typeof(Product), Include = new[] { "Id", "Name", "Price", "Cost", "SKU", "InternalNotes" })]
+[Facet(typeof(Product), Include = [nameof(Product.Id), nameof(Product.Name), nameof(Product.Price), nameof(Product.Cost), nameof(Product.SKU), nameof(Product.InternalNotes)])]
 public partial class ProductAdminDto;
 ```
 
@@ -99,11 +99,11 @@ public class LegacyEntity
 }
 
 // Include specific fields and properties
-[Facet(typeof(LegacyEntity), Include = new[] { "Name", "Status" }, IncludeFields = true)]
+[Facet(typeof(LegacyEntity), Include = [nameof(LegacyEntity.Name), nameof(LegacyEntity.Status)], IncludeFields = true)]
 public partial class LegacyEntityDto;
 
 // Only include properties (fields ignored even if listed)
-[Facet(typeof(LegacyEntity), Include = new[] { "Status", "Notes", "Name" }, IncludeFields = false)]
+[Facet(typeof(LegacyEntity), Include = [nameof(LegacyEntity.Status), nameof(LegacyEntity.Notes), nameof(LegacyEntity.Name)], IncludeFields = false)]
 public partial class LegacyEntityPropsOnlyDto;
 ```
 
@@ -631,11 +631,11 @@ public class Product : BaseEntity
 }
 
 // Include properties from both base and derived class
-[Facet(typeof(Product), Include = new[] { "Id", "Name", "Price" })]
+[Facet(typeof(Product), Include = [nameof(Product.Id), nameof(Product.Name), nameof(Product.Price)])]
 public partial class ProductSummaryDto;
 
 // Include only derived class properties
-[Facet(typeof(Product), Include = new[] { "Name", "Category" })]
+[Facet(typeof(Product), Include = [nameof(Product.Name), nameof(Product.Category)])]
 public partial class ProductInfoDto;
 ```
 
@@ -646,7 +646,7 @@ Both include and exclude work with nested classes:
 ```csharp
 public class OuterClass
 {
-    [Facet(typeof(User), Include = new[] { "FirstName", "LastName" })]
+    [Facet(typeof(User), Include = [nameof(User.FirstName), nameof(User.LastName)])]
     public partial class NestedUserDto { }
 }
 ```
@@ -664,7 +664,7 @@ public class UserIncludeMapper : IFacetMapConfiguration<User, UserFormattedDto>
     }
 }
 
-[Facet(typeof(User), Include = new[] { "FirstName", "LastName" }, Configuration = typeof(UserIncludeMapper))]
+[Facet(typeof(User), Include = [nameof(User.FirstName), nameof(User.LastName)], Configuration = typeof(UserIncludeMapper))]
 public partial class UserFormattedDto
 {
     public string DisplayName { get; set; } = string.Empty;
@@ -785,13 +785,13 @@ public class UsersController : ControllerBase
 }
 
 // Different DTOs for different use cases
-[Facet(typeof(User), Include = new[] { "Id", "FirstName", "LastName" })]
+[Facet(typeof(User), Include = [nameof(User.Id), nameof(User.FirstName), nameof(User.LastName)])]
 public partial record UserSummaryDto;
 
 [Facet(typeof(User), nameof(User.Password))] // Exclude password but include everything else
 public partial class UserDetailDto;
 
-[Facet(typeof(User), Include = new[] { "FirstName", "LastName", "Email", "Department" })]
+[Facet(typeof(User), Include = [nameof(User.FirstName), nameof(User.LastName), nameof(User.Email), nameof(User.Department)])]
 public partial class UserCreateDto;
 ```
 
@@ -811,12 +811,12 @@ public record ModernUser
 }
 
 // Generate record with only specific properties
-[Facet(typeof(ModernUser), Include = new[] { "FirstName", "LastName", "Email" })]
+[Facet(typeof(ModernUser), Include = [nameof(ModernUser.FirstName), nameof(ModernUser.LastName), nameof(ModernUser.Email)])]
 public partial record ModernUserContactRecord;
 
 // Include with init-only preservation
 [Facet(typeof(ModernUser),
-       Include = new[] { "Id", "FirstName", "LastName" },
+       Include = [nameof(ModernUser.Id), nameof(ModernUser.FirstName), nameof(ModernUser.LastName)],
        PreserveInitOnlyProperties = true)]
 public partial record ModernUserImmutableRecord;
 ```
@@ -832,7 +832,7 @@ public partial record ModernUserImmutableRecord;
 
 ```csharp
 // Include mode - generates minimal code
-[Facet(typeof(User), Include = new[] { "FirstName", "Email" })]
+[Facet(typeof(User), Include = [nameof(User.FirstName), nameof(User.Email)])]
 public partial class UserMinimalDto;
 // Generated: only FirstName and Email properties
 
@@ -847,7 +847,7 @@ public partial class UserFullDto;
 When using Include mode, the `ToSource()` method generates source objects with default values for non-included properties:
 
 ```csharp
-[Facet(typeof(User), Include = new[] { "FirstName", "LastName", "Email" })]
+[Facet(typeof(User), Include = [nameof(User.FirstName), nameof(User.LastName), nameof(User.Email)])]
 public partial class UserContactDto;
 
 var dto = new UserContactDto();
@@ -950,7 +950,7 @@ public partial class UserDto;
 // No attributes from Password property
 
 // Include only specific properties - only those get attributes
-[Facet(typeof(User), Include = new[] { "FirstName", "Email" }, CopyAttributes = true)]
+[Facet(typeof(User), Include = [nameof(User.FirstName), nameof(User.Email)], CopyAttributes = true)]
 public partial class UserContactDto;
 // UserContactDto only has attributes for FirstName and Email
 ```
@@ -1175,10 +1175,10 @@ public partial class UserDto
 
 ```csharp
 // Descriptive names for include-based DTOs
-[Facet(typeof(User), Include = new[] { "FirstName", "LastName" })]
+[Facet(typeof(User), Include = [nameof(User.FirstName), nameof(User.LastName)])]
 public partial class UserNameOnlyDto; // Clear about what's included
 
-[Facet(typeof(Product), Include = new[] { "Id", "Name", "Price" })]
+[Facet(typeof(Product), Include = [nameof(Product.Id), nameof(Product.Name), nameof(Product.Price)])]
 public partial class ProductListItemDto; // Indicates usage context
 
 // Traditional names for exclude-based DTOs  

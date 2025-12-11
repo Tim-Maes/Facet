@@ -127,7 +127,7 @@ public class User
     public string Password { get; set; }
 }
 
-[Facet(typeof(User), Include = new[] { "FirstName", "LastName", "Email" }, GenerateToSource = true)]
+[Facet(typeof(User), Include = [nameof(User.FirstName), nameof(User.LastName), nameof(User.Email)], GenerateToSource = true)]
 public partial class UserIncludeDto;
 ```
 

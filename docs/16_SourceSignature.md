@@ -87,11 +87,11 @@ The signature only considers the properties that will actually be in your facet:
 
 ```csharp
 // Only tracks Id, Name, Email (excludes Password)
-[Facet(typeof(User), "Password", SourceSignature = "1a2b3c4d")]
+[Facet(typeof(User), nameof(User.Password), SourceSignature = "1a2b3c4d")]
 public partial class UserDto;
 
 // Only tracks FirstName and LastName
-[Facet(typeof(User), Include = new[] { "FirstName", "LastName" }, SourceSignature = "5e6f7a8b")]
+[Facet(typeof(User), Include = [nameof(User.FirstName), nameof(User.LastName)], SourceSignature = "5e6f7a8b")]
 public partial class UserNameDto;
 ```
 

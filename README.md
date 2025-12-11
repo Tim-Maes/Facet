@@ -176,24 +176,24 @@ Create focused facets for different scenarios:
 ```csharp
   // 1. Public API - Exclude all sensitive data
   [Facet(typeof(User),
-      exclude: ["PasswordHash", "Salary", "InternalNotes"])]
+      exclude: [nameof(User.PasswordHash), nameof(User.Salary), nameof(User.InternalNotes)])]
   public partial record UserPublicDto;
 
   // 2. Contact Information - Include only specific properties
   [Facet(typeof(User),
-      Include = ["FirstName", "LastName", "Email", "Department"])]
+      Include = [nameof(User.FirstName), nameof(User.LastName), nameof(User.Email), nameof(User.Department)])]
   public partial record UserContactDto;
 
   // 3. Query/Filter DTO - Make all properties nullable
   [Facet(typeof(User),
-      Include = ["FirstName", "LastName", "Email", "Department", "IsActive"],
+      Include = [nameof(User.FirstName), nameof(User.LastName), nameof(User.Email), nameof(User.Department), nameof(User.IsActive)],
       NullableProperties = true,
       GenerateToSource = false)]
   public partial record UserFilterDto;
 
   // 4. Validation-Aware DTO - Copy data annotations
   [Facet(typeof(User),
-      Include = ["FirstName", "LastName", "Email"],
+      Include = [nameof(User.FirstName), nameof(User.LastName), nameof(User.Email)],
       CopyAttributes = true)]
   public partial record UserRegistrationDto;
 
@@ -202,7 +202,7 @@ Create focused facets for different scenarios:
   public partial record AddressDto;
 
   [Facet(typeof(User),
-      Include = ["Id", "FirstName", "LastName", "HomeAddress"],
+      Include = [nameof(User.Id), nameof(User.FirstName), nameof(User.LastName), nameof(User.HomeAddress)],
       NestedFacets = [typeof(AddressDto)])]
   public partial record UserWithAddressDto;
   // Address -> AddressDto automatically
@@ -213,7 +213,7 @@ Create focused facets for different scenarios:
   public partial record CompanyDto;
 
   [Facet(typeof(User),
-      exclude: ["PasswordHash", "Salary", "InternalNotes"],
+      exclude: [nameof(User.PasswordHash), nameof(User.Salary), nameof(User.InternalNotes)],
       NestedFacets = [typeof(AddressDto), typeof(CompanyDto)])]
   public partial record UserDetailDto;
   // Multi-level nesting supported
@@ -223,7 +223,7 @@ Create focused facets for different scenarios:
   public partial record ProjectDto;
 
   [Facet(typeof(User),
-      Include = ["Id", "FirstName", "LastName", "Projects"],
+      Include = [nameof(User.Id), nameof(User.FirstName), nameof(User.LastName), nameof(User.Projects)],
       NestedFacets = [typeof(ProjectDto)])]
   public partial record UserWithProjectsDto;
   // List<Project> -> List<ProjectDto> automatically!
@@ -231,7 +231,7 @@ Create focused facets for different scenarios:
 
   // 8. Everything Combined
   [Facet(typeof(User),
-      exclude: ["PasswordHash", "Salary", "InternalNotes"],
+      exclude: [nameof(User.PasswordHash), nameof(User.Salary), nameof(User.InternalNotes)],
       NestedFacets = [typeof(AddressDto), typeof(CompanyDto), typeof(ProjectDto)],
       CopyAttributes = true)]
   public partial record UserCompleteDto;
@@ -594,7 +594,7 @@ For complex mappings that cannot be expressed as SQL projections (e.g., external
 using Facet.Extensions.EFCore.Mapping;
 
 // Example: Converting separate X, Y properties into a Vector2 type
-[Facet(typeof(User), exclude: ["X", "Y"])]
+[Facet(typeof(User), exclude: [nameof(User.X), nameof(User.Y)])]
 public partial class UserDto
 {
     public Vector2 Position { get; set; }
@@ -672,7 +672,7 @@ public class User
 [GenerateAuditableDtos(
     Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response,
     OutputType = OutputType.Record,
-    ExcludeProperties = new[] { "Password" })]
+    ExcludeProperties = [nameof(Product.Password)])]
 public class Product
 {
     public int Id { get; set; }
@@ -688,8 +688,8 @@ public class Product
 #### Multiple Configurations for Fine-Grained Control
 ```csharp
 // Different exclusions for different DTO types
-[GenerateDtos(Types = DtoTypes.Response, ExcludeProperties = new[] { "Password", "InternalNotes" })]
-[GenerateDtos(Types = DtoTypes.Upsert, ExcludeProperties = new[] { "Password" })]
+[GenerateDtos(Types = DtoTypes.Response, ExcludeProperties = [nameof(Schedule.Password), nameof(Schedule.InternalNotes)])]
+[GenerateDtos(Types = DtoTypes.Upsert, ExcludeProperties = [nameof(Schedule.Password)])]
 public class Schedule
 {
     public int Id { get; set; }
@@ -793,13 +793,13 @@ public partial class PersonFlatDepth2Dto
 }
 
 // Exclude specific paths
-[Flatten(typeof(Person), "ContactInfo")]
+[Flatten(typeof(Person), nameof(Person.ContactInfo))]
 public partial class PersonFlatWithoutContactDto
 {
     // All properties except ContactInfo.*
 }
 
-[Flatten(typeof(Person), "Address.Country")]
+[Flatten(typeof(Person), $"{nameof(Person.Address)}.{nameof(Address.Country)}")]
 public partial class PersonFlatWithoutCountryDto
 {
     // Includes Address.Street, Address.City
@@ -839,7 +839,7 @@ public class User
 }
 
 // Hide sensitive properties with a facade
-[Wrapper(typeof(User), "Password", "Salary")]
+[Wrapper(typeof(User), nameof(User.Password), nameof(User.Salary))]
 public partial class PublicUserWrapper { }
 
 // Usage - changes propagate to source!

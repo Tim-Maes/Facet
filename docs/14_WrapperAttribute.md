@@ -93,7 +93,7 @@ public partial class PublicUserWrapper { }
 
 ```csharp
 // Only include specific properties
-[Wrapper(typeof(User), Include = ["Id", "FirstName", "LastName", "Email"])]
+[Wrapper(typeof(User), Include = [nameof(User.Id), nameof(User.FirstName), nameof(User.LastName), nameof(User.Email)])]
 public partial class UserContactWrapper { }
 ```
 

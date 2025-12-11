@@ -328,8 +328,8 @@ The `Include` and `Exclude` parameters are mutually exclusive. Use either `Inclu
 
 ```csharp
 [Facet(typeof(User),
-    "PasswordHash",  // Exclude parameter
-    Include = ["Id", "Name"])] // ❌ FAC009: Can't use both
+    nameof(User.PasswordHash),  // Exclude parameter
+    Include = [nameof(User.Id), nameof(User.Name)])] // ❌ FAC009: Can't use both
 public partial class UserDto { }
 ```
 
@@ -337,11 +337,11 @@ public partial class UserDto { }
 
 ```csharp
 // Option 1: Exclude approach
-[Facet(typeof(User), "PasswordHash", "SecretKey")] // ✅ OK
+[Facet(typeof(User), nameof(User.PasswordHash), nameof(User.SecretKey))] // ✅ OK
 public partial class UserDto { }
 
 // Option 2: Include approach
-[Facet(typeof(User), Include = ["Id", "Name", "Email"])] // ✅ OK
+[Facet(typeof(User), Include = [nameof(User.Id), nameof(User.Name), nameof(User.Email)])] // ✅ OK
 public partial class UserDto { }
 ```
 
