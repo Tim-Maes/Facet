@@ -88,16 +88,17 @@ internal static class CodeBuilder
             MemberGenerator.GenerateMembers(sb, model, memberIndent);
         }
 
-        // Generate constructor
-        if (model.GenerateConstructor)
-        {
-            ConstructorGenerator.GenerateConstructor(sb, model, isPositional, hasInitOnlyProperties, hasCustomMapping, hasRequiredProperties);
-        }
-
-        // Generate parameterless constructor if requested
+        // Generate parameterless constructor first if requested
+        // This ensures third-party code that picks the first constructor will use the parameterless one
         if (model.GenerateParameterlessConstructor)
         {
             ConstructorGenerator.GenerateParameterlessConstructor(sb, model, isPositional);
+        }
+
+        // Generate constructor from source
+        if (model.GenerateConstructor)
+        {
+            ConstructorGenerator.GenerateConstructor(sb, model, isPositional, hasInitOnlyProperties, hasCustomMapping, hasRequiredProperties);
         }
 
         // Generate projection

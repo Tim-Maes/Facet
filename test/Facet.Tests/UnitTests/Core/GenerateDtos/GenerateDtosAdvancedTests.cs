@@ -261,4 +261,31 @@ public class GenerateDtosAdvancedTests
             constructor.IsPublic.Should().BeTrue("All constructors should be public");
         }
     }
+
+    [Fact]
+    public void Facet_ParameterlessConstructor_ShouldExist()
+    {
+        // This test verifies that the parameterless constructor is generated.
+        // Note: The parameterless constructor is generated first in the source code
+        // so that third-party code that picks the first constructor will use it.
+        // However, reflection's GetConstructors() does not guarantee source order.
+        var assembly = System.Reflection.Assembly.GetAssembly(typeof(TestModels.TestUser));
+        var responseType = assembly?.GetType("Facet.Tests.TestModels.TestUserResponse");
+        
+        responseType.Should().NotBeNull();
+        
+        // Get all public constructors
+        var constructors = responseType!.GetConstructors(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        
+        constructors.Should().NotBeEmpty("Should have at least one constructor");
+        
+        // Verify that a parameterless constructor exists
+        var parameterlessConstructor = constructors.FirstOrDefault(c => c.GetParameters().Length == 0);
+        parameterlessConstructor.Should().NotBeNull(
+            "A parameterless constructor should exist for deserialization and third-party tool compatibility");
+        
+        // Verify we can create an instance using the parameterless constructor
+        var instance = parameterlessConstructor!.Invoke(Array.Empty<object>());
+        instance.Should().NotBeNull("Should be able to create an instance using parameterless constructor");
+    }
 }
