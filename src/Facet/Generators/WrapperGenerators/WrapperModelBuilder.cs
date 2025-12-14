@@ -2,6 +2,7 @@ using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using System.Threading;
 
 namespace Facet.Generators;
@@ -153,10 +154,20 @@ internal static class WrapperModelBuilder
             nestedWrapperSourceTypeName = nestedMapping.sourceTypeName;
         }
 
-        // Extract copiable attributes if requested
-        var attributes = copyAttributes
-            ? AttributeProcessor.ExtractCopiableAttributes(property, FacetMemberKind.Property)
-            : new List<string>();
+        // Extract copiable attributes and their namespaces if requested
+        List<string> attributes;
+        List<string> attributeNamespaces;
+        if (copyAttributes)
+        {
+            var (attrs, namespaces) = AttributeProcessor.ExtractCopiableAttributesWithNamespaces(property, FacetMemberKind.Property);
+            attributes = attrs;
+            attributeNamespaces = namespaces.ToList();
+        }
+        else
+        {
+            attributes = new List<string>();
+            attributeNamespaces = new List<string>();
+        }
 
         members.Add(new FacetMember(
             property.Name,
@@ -172,7 +183,16 @@ internal static class WrapperModelBuilder
             attributes,
             false, // isCollection
             null,  // collectionWrapper
-            GeneratorUtilities.GetTypeNameWithNullability(property.Type))); // sourceMemberTypeName
+            GeneratorUtilities.GetTypeNameWithNullability(property.Type), // sourceMemberTypeName
+            null,  // mapFromSource
+            false, // mapFromReversible
+            true,  // mapFromIncludeInProjection
+            null,  // sourcePropertyName
+            false, // isUserDeclared
+            null,  // mapWhenConditions
+            null,  // mapWhenDefault
+            true,  // mapWhenIncludeInProjection
+            attributeNamespaces));
         addedMembers.Add(property.Name);
     }
 
@@ -200,10 +220,20 @@ internal static class WrapperModelBuilder
             nestedWrapperSourceTypeName = nestedMapping.sourceTypeName;
         }
 
-        // Extract copiable attributes if requested
-        var attributes = copyAttributes
-            ? AttributeProcessor.ExtractCopiableAttributes(field, FacetMemberKind.Field)
-            : new List<string>();
+        // Extract copiable attributes and their namespaces if requested
+        List<string> attributes;
+        List<string> attributeNamespaces;
+        if (copyAttributes)
+        {
+            var (attrs, namespaces) = AttributeProcessor.ExtractCopiableAttributesWithNamespaces(field, FacetMemberKind.Field);
+            attributes = attrs;
+            attributeNamespaces = namespaces.ToList();
+        }
+        else
+        {
+            attributes = new List<string>();
+            attributeNamespaces = new List<string>();
+        }
 
         members.Add(new FacetMember(
             field.Name,
@@ -219,7 +249,16 @@ internal static class WrapperModelBuilder
             attributes,
             false, // isCollection
             null,
-            GeneratorUtilities.GetTypeNameWithNullability(field.Type)));
+            GeneratorUtilities.GetTypeNameWithNullability(field.Type),
+            null,  // mapFromSource
+            false, // mapFromReversible
+            true,  // mapFromIncludeInProjection
+            null,  // sourcePropertyName
+            false, // isUserDeclared
+            null,  // mapWhenConditions
+            null,  // mapWhenDefault
+            true,  // mapWhenIncludeInProjection
+            attributeNamespaces));
         addedMembers.Add(field.Name);
     }
 

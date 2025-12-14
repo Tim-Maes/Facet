@@ -17,6 +17,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
     public bool IsNestedFacet { get; }
     public string? NestedFacetSourceTypeName { get; }
     public IReadOnlyList<string> Attributes { get; }
+    public IReadOnlyList<string> AttributeNamespaces { get; }
     public bool IsCollection { get; }
     public string? CollectionWrapper { get; }
     public string? SourceMemberTypeName { get; }
@@ -55,7 +56,8 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         bool isUserDeclared = false,
         IReadOnlyList<string>? mapWhenConditions = null,
         string? mapWhenDefault = null,
-        bool mapWhenIncludeInProjection = true)
+        bool mapWhenIncludeInProjection = true,
+        IReadOnlyList<string>? attributeNamespaces = null)
     {
         Name = name;
         TypeName = typeName;
@@ -68,6 +70,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         IsNestedFacet = isNestedFacet;
         NestedFacetSourceTypeName = nestedFacetSourceTypeName;
         Attributes = attributes ?? Array.Empty<string>();
+        AttributeNamespaces = attributeNamespaces ?? Array.Empty<string>();
         IsCollection = isCollection;
         CollectionWrapper = collectionWrapper;
         SourceMemberTypeName = sourceMemberTypeName;
@@ -103,6 +106,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         MapWhenDefault == other.MapWhenDefault &&
         MapWhenIncludeInProjection == other.MapWhenIncludeInProjection &&
         Attributes.SequenceEqual(other.Attributes) &&
+        AttributeNamespaces.SequenceEqual(other.AttributeNamespaces) &&
         MapWhenConditions.SequenceEqual(other.MapWhenConditions);
 
     public override bool Equals(object? obj) => obj is FacetMember other && Equals(other);
@@ -134,6 +138,9 @@ internal sealed class FacetMember : IEquatable<FacetMember>
             hash = hash * 31 + Attributes.Count.GetHashCode();
             foreach (var attr in Attributes)
                 hash = hash * 31 + (attr?.GetHashCode() ?? 0);
+            hash = hash * 31 + AttributeNamespaces.Count.GetHashCode();
+            foreach (var ns in AttributeNamespaces)
+                hash = hash * 31 + (ns?.GetHashCode() ?? 0);
             hash = hash * 31 + MapWhenConditions.Count.GetHashCode();
             foreach (var cond in MapWhenConditions)
                 hash = hash * 31 + (cond?.GetHashCode() ?? 0);

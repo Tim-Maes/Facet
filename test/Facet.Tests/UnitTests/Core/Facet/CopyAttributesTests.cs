@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Reflection;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
@@ -168,6 +170,56 @@ public class CopyAttributesTests
         var regexAttr = skuProperty!.GetCustomAttribute<RegularExpressionAttribute>();
         regexAttr.Should().NotBeNull();
     }
+
+    [Fact]
+    public void Facet_ShouldCopyAttributesFromDifferentNamespaces()
+    {
+        // This test verifies the fix for GitHub issue: Source generation adds attributes
+        // like "DefaultValue" and "Column" but not their using statements.
+        // Arrange & Act
+        var dtoType = typeof(DatabaseTableModelDto);
+
+        // Assert - Verify attributes from different namespaces are copied correctly
+        var databaseTableIdProperty = dtoType.GetProperty("DatabaseTableID");
+        var firstNameProperty = dtoType.GetProperty("FirstName");
+        var systemChangeDateProperty = dtoType.GetProperty("SystemChangeDate");
+        var systemChangeTypeProperty = dtoType.GetProperty("SystemChangeType");
+
+        // Check [Key] attribute (System.ComponentModel.DataAnnotations)
+        databaseTableIdProperty.Should().NotBeNull();
+        databaseTableIdProperty!.GetCustomAttribute<KeyAttribute>().Should().NotBeNull();
+
+        // Check [Column] attribute (System.ComponentModel.DataAnnotations.Schema)
+        systemChangeDateProperty.Should().NotBeNull();
+        var columnAttr = systemChangeDateProperty!.GetCustomAttribute<ColumnAttribute>();
+        columnAttr.Should().NotBeNull();
+        columnAttr!.Order.Should().Be(500);
+
+        // Check [DefaultValue] attribute (System.ComponentModel)
+        systemChangeTypeProperty.Should().NotBeNull();
+        var defaultValueAttr = systemChangeTypeProperty!.GetCustomAttribute<DefaultValueAttribute>();
+        defaultValueAttr.Should().NotBeNull();
+        defaultValueAttr!.Value.Should().Be("I");
+
+        // Verify all Column attributes with Order
+        var systemChangeLoginProperty = dtoType.GetProperty("SystemChangeLogin");
+        systemChangeLoginProperty.Should().NotBeNull();
+        var loginColumnAttr = systemChangeLoginProperty!.GetCustomAttribute<ColumnAttribute>();
+        loginColumnAttr.Should().NotBeNull();
+        loginColumnAttr!.Order.Should().Be(502);
+    }
+
+    [Fact]
+    public void Facet_ShouldCopyConcurrencyCheckAttribute()
+    {
+        // Arrange & Act
+        var dtoType = typeof(DatabaseTableModelDto);
+        var systemChangeDateProperty = dtoType.GetProperty("SystemChangeDate");
+
+        // Assert - Check [ConcurrencyCheck] attribute (System.ComponentModel.DataAnnotations)
+        systemChangeDateProperty.Should().NotBeNull();
+        systemChangeDateProperty!.GetCustomAttribute<ConcurrencyCheckAttribute>().Should().NotBeNull();
+    }
 }
 
 // Source model with data annotations
@@ -276,5 +328,33 @@ public class ComplexProduct
 
 [Facet(typeof(ComplexProduct), "IsActive", "ImageUrl", CopyAttributes = true)]
 public partial class ComplexProductDto
+{
+}
+
+// Source model with attributes from different namespaces (matching the reported issue)
+public class DatabaseTableModel
+{
+    [Key]
+    public long DatabaseTableID { get; set; }
+
+    public string FirstName { get; set; } = string.Empty;
+
+    public string LastName { get; set; } = string.Empty;
+
+    [ConcurrencyCheck]
+    [Column(Order = 500)]
+    public DateTime? SystemChangeDate { get; set; }
+
+    [DefaultValue("I")]
+    [Column(Order = 501)]
+    public string SystemChangeType { get; set; } = string.Empty;
+
+    [Column(Order = 502)]
+    public string SystemChangeLogin { get; set; } = string.Empty;
+}
+
+// DTO with CopyAttributes = true - should compile with proper using statements
+[Facet(typeof(DatabaseTableModel), CopyAttributes = true)]
+public partial class DatabaseTableModelDto
 {
 }
