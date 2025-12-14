@@ -34,14 +34,16 @@ internal static class CodeGenerationHelpers
             }
         }
 
-        // Single pass through members to collect namespaces and check for attributes
-        bool needAttributeNamespace = model.CopyAttributes;
+        // Single pass through members to collect namespaces
         foreach (var member in model.Members)
         {
-            if (needAttributeNamespace && member.Attributes.Count > 0)
+            // Collect attribute namespaces from each member
+            foreach (var attrNamespace in member.AttributeNamespaces)
             {
-                namespaces.Add("System.ComponentModel.DataAnnotations");
-                needAttributeNamespace = false;
+                if (!string.IsNullOrWhiteSpace(attrNamespace))
+                {
+                    namespaces.Add(attrNamespace);
+                }
             }
 
             // Skip nested facets - they will be handled by CollectStaticUsingTypes
@@ -197,14 +199,16 @@ internal static class CodeGenerationHelpers
             }
         }
 
-        // Single pass through members to collect namespaces and check for attributes
-        bool needAttributeNamespace = model.CopyAttributes;
+        // Single pass through members to collect namespaces
         foreach (var member in model.Members)
         {
-            if (needAttributeNamespace && member.Attributes.Count > 0)
+            // Collect attribute namespaces from each member
+            foreach (var attrNamespace in member.AttributeNamespaces)
             {
-                namespaces.Add("System.ComponentModel.DataAnnotations");
-                needAttributeNamespace = false;
+                if (!string.IsNullOrWhiteSpace(attrNamespace))
+                {
+                    namespaces.Add(attrNamespace);
+                }
             }
 
             var memberTypeNamespace = ExtractNamespaceFromFullyQualifiedType(member.TypeName);

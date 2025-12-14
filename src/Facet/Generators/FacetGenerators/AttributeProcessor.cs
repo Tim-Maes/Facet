@@ -18,7 +18,18 @@ internal static class AttributeProcessor
     /// </summary>
     public static List<string> ExtractCopiableAttributes(ISymbol member, FacetMemberKind targetKind)
     {
+        var (attributes, _) = ExtractCopiableAttributesWithNamespaces(member, targetKind);
+        return attributes;
+    }
+
+    /// <summary>
+    /// Extracts copiable attributes from a member symbol along with their namespaces.
+    /// Filters out internal compiler attributes and non-copiable attributes.
+    /// </summary>
+    public static (List<string> attributes, HashSet<string> namespaces) ExtractCopiableAttributesWithNamespaces(ISymbol member, FacetMemberKind targetKind)
+    {
         var copiableAttributes = new List<string>();
+        var attributeNamespaces = new HashSet<string>();
 
         foreach (var attr in member.GetAttributes())
         {
@@ -42,10 +53,36 @@ internal static class AttributeProcessor
             if (!string.IsNullOrWhiteSpace(attributeSyntax))
             {
                 copiableAttributes.Add(attributeSyntax);
+
+                // Extract namespace from the attribute's full name
+                var ns = ExtractNamespaceFromAttributeFullName(attributeFullName);
+                if (!string.IsNullOrWhiteSpace(ns))
+                {
+                    attributeNamespaces.Add(ns!);
+                }
             }
         }
 
-        return copiableAttributes;
+        return (copiableAttributes, attributeNamespaces);
+    }
+
+    /// <summary>
+    /// Extracts the namespace from a fully qualified attribute name.
+    /// E.g., "global::System.ComponentModel.DataAnnotations.Schema.ColumnAttribute" -> "System.ComponentModel.DataAnnotations.Schema"
+    /// </summary>
+    private static string? ExtractNamespaceFromAttributeFullName(string attributeFullName)
+    {
+        // Remove global:: prefix
+        var name = GeneratorUtilities.StripGlobalPrefix(attributeFullName);
+
+        // Find the last dot to separate namespace from type name
+        var lastDotIndex = name.LastIndexOf('.');
+        if (lastDotIndex > 0)
+        {
+            return name.Substring(0, lastDotIndex);
+        }
+
+        return null;
     }
 
     /// <summary>
