@@ -57,7 +57,7 @@ jobs:
         run: dotnet test --configuration Release --no-build --verbosity normal --logger trx --results-directory TestResults
 
       - name: Upload Test Results
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: success() || failure()
         with:
           name: test-results-${{ github.run_id }}
