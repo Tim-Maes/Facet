@@ -52,9 +52,11 @@ https://localhost:5001/facets
 ```csharp
 builder.Services.AddFacetDashboard(options =>
 {
-    options.RoutePrefix = "/facets";  // Default: "/facets"
-    options.Title = "My API Facets";  // Default: "Facet Dashboard"
-    options.AccentColor = "#3b82f6";  // Default: "#6366f1" (Indigo)
+    options.RoutePrefix = "/facets";         // Default: "/facets"
+    options.Title = "My API Facets";         // Default: "Facet Dashboard"
+    options.AccentColor = "#3b82f6";         // Default: "#6366f1" (Indigo)
+    options.DefaultDarkMode = true;          // Default: false (uses system preference)
+    options.IncludeSystemAssemblies = false; // Default: false
 });
 ```
 
@@ -88,6 +90,29 @@ builder.Services.AddFacetDashboard(options =>
 });
 ```
 
+### Theme Customization
+
+```csharp
+builder.Services.AddFacetDashboard(options =>
+{
+    options.AccentColor = "#3b82f6";      // Custom accent color (blue)
+    options.DefaultDarkMode = true;       // Enable dark mode by default
+});
+```
+
+**Note:** If `DefaultDarkMode` is false (default), the dashboard will respect the user's system preference for dark/light mode.
+
+### System Assemblies
+
+```csharp
+builder.Services.AddFacetDashboard(options =>
+{
+    options.IncludeSystemAssemblies = true;  // Scan Microsoft.* and System.* assemblies
+});
+```
+
+**Note:** By default, system assemblies are excluded from scanning to improve performance and reduce noise. Only enable this if you have custom facets in system assemblies.
+
 ## Available Endpoints
 
 | Endpoint | Description |
@@ -111,19 +136,43 @@ The JSON API returns all facet mappings in a structured format:
         "typeName": "int",
         "isProperty": true,
         "isNullable": false,
-        "isRequired": false
+        "isRequired": false,
+        "isInitOnly": false,
+        "isReadOnly": false,
+        "isCollection": false,
+        "attributes": ["JsonProperty"]
       }
     ],
     "facets": [
       {
         "facetTypeName": "MyApp.DTOs.UserDto",
         "facetTypeSimpleName": "UserDto",
+        "facetTypeNamespace": "MyApp.DTOs",
         "typeKind": "record",
         "hasConstructor": true,
         "hasProjection": true,
         "hasToSource": false,
+        "nullableProperties": "Infer",
+        "copyAttributes": true,
+        "configurationTypeName": null,
         "excludedProperties": ["Password"],
-        "members": [...]
+        "includedProperties": null,
+        "nestedFacets": [],
+        "members": [
+          {
+            "name": "Id",
+            "typeName": "int",
+            "isProperty": true,
+            "isNullable": false,
+            "isRequired": false,
+            "isInitOnly": true,
+            "isReadOnly": false,
+            "isNestedFacet": false,
+            "isCollection": false,
+            "mappedFromProperty": null,
+            "attributes": []
+          }
+        ]
       }
     ]
   }
