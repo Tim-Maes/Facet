@@ -2,6 +2,9 @@
 
 A Swagger-like dashboard for visualizing all Facet source types and their generated facets in your application.
 
+<img width="1595" height="1311" alt="image" src="https://github.com/user-attachments/assets/fce03c50-2984-41dd-8022-262d99b8f600" />
+
+
 ## Features
 
 - **Visual Overview**: See all source types and their generated facets at a glance
