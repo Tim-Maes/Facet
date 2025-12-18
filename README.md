@@ -962,6 +962,13 @@ Facet is modular and consists of several NuGet packages:
 - **[Facet.Extensions.EFCore](https://github.com/Tim-Maes/Facet/tree/master/src/Facet.Extensions.EFCore)**: Async extension methods for Entity Framework Core (requires EF Core 6+).
 - **[Facet.Extensions.EFCore.Mapping](https://github.com/Tim-Maes/Facet/tree/master/src/Facet.Extensions.EFCore.Mapping)**: Advanced custom async mapper support for EF Core queries. Enables complex mappings that cannot be expressed as SQL projections 
 
+## Facet Dashboard
+
+Use `Facet.Dashboard` to visualize your Facets!
+
+<img width="1595" height="1311" alt="image" src="https://github.com/user-attachments/assets/af99d28d-d83b-4807-b7c4-8dad192dc9c4" />
+
+
 ## Comparison
 
 | Feature | Facet | AutoMapper | Mapperly | Mapster |
