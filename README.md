@@ -39,6 +39,7 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 ## :clipboard: Documentation
 
 - **[Documentation & Guides](docs/README.md)**
+- **[Facet Dashboard](https://github.com/Tim-Maes/Facet/tree/master/src/Facet.Dashboard)**
 - [What is being generated?](docs/07_WhatIsBeingGenerated.md)
 - [Configure generated files output location](docs/12_GeneratedFilesOutput.md)
 - [Comprehensive article about Facetting](https://tim-maes.com/blog/2025/09/28/facets-in-dotnet-(2)/)
