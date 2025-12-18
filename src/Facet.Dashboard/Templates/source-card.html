@@ -1,0 +1,29 @@
+<div class="source-card">
+    <div class="source-header">
+        <div class="source-title">
+            <div class="source-icon">{{initial}}</div>
+            <div>
+                <div class="source-name">{{sourceName}}</div>
+                <div class="source-namespace">{{sourceNamespace}}</div>
+            </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <div class="source-badges">
+                <span class="badge badge-primary">{{facetCount}} facet{{facetPlural}}</span>
+                <span class="badge badge-success">{{propertyCount}} properties</span>
+            </div>
+            <svg class="chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6,9 12,15 18,9"/>
+            </svg>
+        </div>
+    </div>
+    <div class="source-content">
+        <h4 class="section-title">Source Properties</h4>
+        {{membersTable}}
+
+        <h4 class="section-title">Generated Facets</h4>
+        <div class="facet-grid">
+            {{facetCards}}
+        </div>
+    </div>
+</div>

@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}}</title>
+    <style>
+        :root {
+            --accent: {{accentColor}};
+            --accent-light: {{accentColor}}22;
+            --bg: #ffffff;
+            --bg-secondary: #f8fafc;
+            --text: #1e293b;
+            --text-secondary: #64748b;
+            --border: #e2e8f0;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --info: #3b82f6;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0f172a;
+                --bg-secondary: #1e293b;
+                --text: #f1f5f9;
+                --text-secondary: #94a3b8;
+                --border: #334155;
+            }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+        }
+
+        .header h1 svg {
+            width: 40px;
+            height: 40px;
+        }
+
+        .header .stats {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+            opacity: 0.9;
+        }
+
+        .header .stat {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .header .stat-value {
+            font-weight: 700;
+            font-size: 1.25rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .search-bar {
+            margin-bottom: 2rem;
+        }
+
+        .search-bar input {
+            width: 100%;
+            padding: 1rem 1.5rem;
+            font-size: 1rem;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            background: var(--bg);
+            color: var(--text);
+            transition: border-color 0.2s;
+        }
+
+        .search-bar input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .source-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+
+        .source-header {
+            padding: 1.25rem 1.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: background 0.2s;
+        }
+
+        .source-header:hover {
+            background: var(--accent-light);
+        }
+
+        .source-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .source-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--accent);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .source-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .source-namespace {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .source-badges {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-primary {
+            background: var(--accent-light);
+            color: var(--accent);
+        }
+
+        .badge-success {
+            background: #dcfce7;
+            color: #15803d;
+        }
+
+        .chevron {
+            transition: transform 0.3s;
+        }
+
+        .source-card.expanded .chevron {
+            transform: rotate(180deg);
+        }
+
+        .source-content {
+            display: none;
+            padding: 0 1.5rem 1.5rem;
+        }
+
+        .source-card.expanded .source-content {
+            display: block;
+        }
+
+        .section-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin: 1.5rem 0 0.75rem;
+        }
+
+        .members-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+
+        .members-table th,
+        .members-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .members-table th {
+            background: var(--bg);
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .members-table tr:hover {
+            background: var(--accent-light);
+        }
+
+        .type-name {
+            color: var(--accent);
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.8rem;
+        }
+
+        .member-badges {
+            display: flex;
+            gap: 0.25rem;
+            flex-wrap: wrap;
+        }
+
+        .member-badge {
+            padding: 0.125rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .member-badge-nullable {
+            background: #fef9c3;
+            color: #854d0e;
+        }
+
+        .member-badge-required {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .member-badge-init {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+
+        .member-badge-collection {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .member-badge-nested {
+            background: #f3e8ff;
+            color: #7c3aed;
+        }
+
+        .facet-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-top: 0.75rem;
+        }
+
+        .facet-card {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+
+        .facet-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .facet-name {
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .facet-type-kind {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            background: var(--bg-secondary);
+            padding: 0.125rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        .facet-features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .feature {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .feature svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .feature-enabled svg {
+            color: var(--success);
+        }
+
+        .feature-disabled svg {
+            color: var(--text-secondary);
+            opacity: 0.5;
+        }
+
+        .facet-config {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .header .stats {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .facet-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .members-table {
+                display: block;
+                overflow-x: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/>
+                <line x1="12" y1="22" x2="12" y2="15.5"/>
+                <polyline points="22,8.5 12,15.5 2,8.5"/>
+                <polyline points="2,15.5 12,8.5 22,15.5"/>
+                <line x1="12" y1="2" x2="12" y2="8.5"/>
+            </svg>
+            {{title}}
+        </h1>
+        <div class="stats">
+            <div class="stat">
+                <span>Source Types</span>
+                <span class="stat-value">{{sourceCount}}</span>
+            </div>
+            <div class="stat">
+                <span>Total Facets</span>
+                <span class="stat-value">{{facetCount}}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Search source types or facets..." />
+        </div>
+
+        <div id="sourceList">
+            {{sourceCards}}
+        </div>
+
+        {{emptyState}}
+    </div>
+
+    <div class="footer">
+        <p>Powered by <a href="https://github.com/Tim-Maes/Facet" target="_blank">Facet</a> • Compile-time DTO generation for .NET</p>
+    </div>
+
+    <script>
+        // Toggle source card expansion
+        document.querySelectorAll('.source-header').forEach(header => {
+            header.addEventListener('click', () => {
+                header.closest('.source-card').classList.toggle('expanded');
+            });
+        });
+
+        // Search functionality
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const query = e.target.value.toLowerCase();
+            document.querySelectorAll('.source-card').forEach(card => {
+                const text = card.textContent.toLowerCase();
+                card.style.display = text.includes(query) ? '' : 'none';
+            });
+        });
+    </script>
+</body>
+</html>

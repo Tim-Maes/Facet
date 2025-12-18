@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+        <IsPackable>true</IsPackable>
+        <PackageId>Facet.Dashboard</PackageId>
+        <Title>Facet Dashboard</Title>
+        <Description>Swagger-like dashboard for visualizing Facet source types and their generated facets in ASP.NET Core applications.</Description>
+        <PackageTags>facet dashboard visualization swagger aspnetcore dto projection source-generator</PackageTags>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <GenerateAssemblyVersionAttribute>true</GenerateAssemblyVersionAttribute>
+        <GenerateAssemblyFileVersionAttribute>true</GenerateAssemblyFileVersionAttribute>
+        <GenerateAssemblyInformationalVersionAttribute>true</GenerateAssemblyInformationalVersionAttribute>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="README.md" Pack="true" PackagePath="" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Facet.Attributes\Facet.Attributes.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Include="Assets\**\*" />
+        <EmbeddedResource Include="Templates\**\*.html" />
+    </ItemGroup>
+
+</Project>
