@@ -38,7 +38,7 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 
 ## :clipboard: Documentation
 
-- **[Documentation & Guides](docs/README.md)**
+- **[Documentation & Guides](https://github.com/Tim-Maes/Facet/wiki)**
 - **[Facet Dashboard](https://github.com/Tim-Maes/Facet/tree/master/src/Facet.Dashboard)**
 - [What is being generated?](docs/07_WhatIsBeingGenerated.md)
 - [Configure generated files output location](docs/12_GeneratedFilesOutput.md)
