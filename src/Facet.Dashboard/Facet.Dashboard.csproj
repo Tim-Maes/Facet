@@ -24,6 +24,7 @@
 
     <ItemGroup>
         <EmbeddedResource Include="Assets\**\*" />
+        <EmbeddedResource Include="Templates\**\*.html" />
     </ItemGroup>
 
 </Project>
