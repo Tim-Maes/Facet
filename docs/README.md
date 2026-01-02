@@ -10,6 +10,8 @@ Welcome to the Facet documentation! This index will help you navigate all availa
 - [Custom Mapping](04_CustomMapping.md): Custom Mapping with IFacetMapConfiguration & Async Support
 - [Property Mapping](15_MapFromAttribute.md): Declarative property renaming with MapFrom attribute
 - [MapWhen Conditional Mapping](17_MapWhen.md): Conditionally map properties based on source values
+- [Inheritance Mapping](18_InheritanceMapping.md): Working with inheritance hierarchies in source types and facet base classes
+- [Mapping Hooks](19_MappingHooks.md): Before/After mapping hooks for validation, defaults, and computed values
 - [Extension Methods](05_Extensions.md): Extension Methods (LINQ, EF Core, etc.)
 - [Advanced Scenarios](06_AdvancedScenarios.md): Advanced Usage Scenarios
   - Multiple facets from one source

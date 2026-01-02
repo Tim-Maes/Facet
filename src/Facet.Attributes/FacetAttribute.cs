@@ -188,6 +188,82 @@ public sealed class FacetAttribute : Attribute
     public Type[]? FlattenTo { get; set; }
 
     /// <summary>
+    /// Optional type that provides custom logic to run BEFORE automatic property mapping.
+    /// Must implement IFacetBeforeMapConfiguration&lt;TSource, TTarget&gt; with a static BeforeMap method.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The type must define a static method with the signature:
+    /// <c>public static void BeforeMap(TSource source, TTarget target)</c>
+    /// </para>
+    /// <para>
+    /// BeforeMap is called before any properties are copied, allowing you to:
+    /// - Validate the source object
+    /// - Set up default values on the target
+    /// - Prepare state for the mapping operation
+    /// </para>
+    /// <para>
+    /// Example usage:
+    /// <code>
+    /// public class UserBeforeMapConfig : IFacetBeforeMapConfiguration&lt;User, UserDto&gt;
+    /// {
+    ///     public static void BeforeMap(User source, UserDto target)
+    ///     {
+    ///         if (source == null) throw new ArgumentNullException(nameof(source));
+    ///         target.MappedAt = DateTime.UtcNow;
+    ///     }
+    /// }
+    ///
+    /// [Facet(typeof(User), BeforeMapConfiguration = typeof(UserBeforeMapConfig))]
+    /// public partial class UserDto
+    /// {
+    ///     public DateTime MappedAt { get; set; }
+    /// }
+    /// </code>
+    /// </para>
+    /// </remarks>
+    public Type? BeforeMapConfiguration { get; set; }
+
+    /// <summary>
+    /// Optional type that provides custom logic to run AFTER automatic property mapping.
+    /// Must implement IFacetAfterMapConfiguration&lt;TSource, TTarget&gt; with a static AfterMap method.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The type must define a static method with the signature:
+    /// <c>public static void AfterMap(TSource source, TTarget target)</c>
+    /// </para>
+    /// <para>
+    /// AfterMap is called after all properties are copied, allowing you to:
+    /// - Compute derived/calculated properties
+    /// - Apply business rules
+    /// - Transform mapped values
+    /// - Validate the final result
+    /// </para>
+    /// <para>
+    /// Example usage:
+    /// <code>
+    /// public class UserAfterMapConfig : IFacetAfterMapConfiguration&lt;User, UserDto&gt;
+    /// {
+    ///     public static void AfterMap(User source, UserDto target)
+    ///     {
+    ///         target.FullName = $"{target.FirstName} {target.LastName}";
+    ///         target.Age = CalculateAge(source.DateOfBirth);
+    ///     }
+    /// }
+    ///
+    /// [Facet(typeof(User), AfterMapConfiguration = typeof(UserAfterMapConfig))]
+    /// public partial class UserDto
+    /// {
+    ///     public string FullName { get; set; }
+    ///     public int Age { get; set; }
+    /// }
+    /// </code>
+    /// </para>
+    /// </remarks>
+    public Type? AfterMapConfiguration { get; set; }
+
+    /// <summary>
     /// Creates a new FacetAttribute that targets a given source type and excludes specified members.
     /// </summary>
     /// <param name="sourceType">The type to generate from.</param>

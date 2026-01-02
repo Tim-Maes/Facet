@@ -68,6 +68,7 @@ Click on a section to expand/collapse
 - Expression transformation utilities for business logic reuse
 - **Property mapping with `[MapFrom]`** for declarative property renaming
 - **Conditional mapping with `[MapWhen]`** for status-dependent fields
+- **Before/After mapping hooks** for validation, defaults, and computed values
 
 </details>
 
@@ -78,6 +79,7 @@ Click on a section to expand/collapse
 - **Wrapper** pattern for reference-based delegation (facades, decorators, ViewModels)
 - **Auto-generate CRUD DTOs** (Create, Update, Response, Query, Upsert, Patch)
 - **Source signature tracking** for detecting breaking changes when source entities change
+- **Inheritance support** for source types and facet base classes
 
 </details> 
 
@@ -455,6 +457,180 @@ var orders = await dbContext.Orders
     .Where(o => o.IsActive)
     .SelectFacet<OrderDto>()  // Conditions included in SQL
     .ToListAsync();
+```
+
+</details>
+
+<details>
+  <summary>Before/After Mapping Hooks</summary>
+
+Run custom logic before and/or after the automatic property mapping. Perfect for validation, setting defaults, and computing derived values:
+
+```csharp
+using Facet.Mapping;
+
+// BeforeMap - runs BEFORE properties are copied
+public class UserBeforeMapConfig : IFacetBeforeMapConfiguration<User, UserDto>
+{
+    public static void BeforeMap(User source, UserDto target)
+    {
+        // Validate input
+        if (string.IsNullOrEmpty(source.Email))
+            throw new ValidationException("Email is required");
+        
+        // Set defaults on target
+        target.MappedAt = DateTime.UtcNow;
+    }
+}
+
+// AfterMap - runs AFTER properties are copied
+public class UserAfterMapConfig : IFacetAfterMapConfiguration<User, UserDto>
+{
+    public static void AfterMap(User source, UserDto target)
+    {
+        // Compute derived values
+        target.FullName = $"{target.FirstName} {target.LastName}";
+        target.Age = CalculateAge(source.DateOfBirth);
+    }
+}
+
+// Apply hooks via attribute
+[Facet(typeof(User), 
+    BeforeMapConfiguration = typeof(UserBeforeMapConfig),
+    AfterMapConfiguration = typeof(UserAfterMapConfig))]
+public partial class UserDto
+{
+    public DateTime MappedAt { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public int Age { get; set; }
+}
+```
+
+#### Combined Hooks
+
+Use `IFacetMapHooksConfiguration` for both before and after logic in one class:
+
+```csharp
+public class UserMappingHooks : IFacetMapHooksConfiguration<User, UserDto>
+{
+    public static void BeforeMap(User source, UserDto target)
+    {
+        target.MappedAt = DateTime.UtcNow;
+    }
+    
+    public static void AfterMap(User source, UserDto target)
+    {
+        target.FullName = $"{target.FirstName} {target.LastName}";
+    }
+}
+
+[Facet(typeof(User), 
+    BeforeMapConfiguration = typeof(UserMappingHooks),
+    AfterMapConfiguration = typeof(UserMappingHooks))]
+public partial class UserDto { }
+```
+
+#### Async Hooks with Dependency Injection
+
+```csharp
+public class UserEnrichmentHook : IFacetAfterMapConfigurationAsyncInstance<User, UserDto>
+{
+    private readonly IProfileService _profileService;
+    
+    public UserEnrichmentHook(IProfileService profileService)
+    {
+        _profileService = profileService;
+    }
+    
+    public async Task AfterMapAsync(User source, UserDto target, CancellationToken ct = default)
+    {
+        target.ProfileUrl = await _profileService.GetProfileUrlAsync(source.Id, ct);
+    }
+}
+```
+
+#### When to Use Each Hook
+
+| Hook | When Called | Use Case |
+|------|-------------|----------|
+| BeforeMap | Before properties copied | Validation, defaults, timestamps |
+| AfterMap | After properties copied | Computed values, transformations |
+| Configuration (Map) | After mapping | Simple computed properties |
+
+**Execution order**: BeforeMap → Property Mapping → Configuration.Map → AfterMap
+
+</details>
+
+<details>
+  <summary>Inheritance Mapping</summary>
+
+Facet fully supports inheritance hierarchies. Properties from base classes are automatically included:
+
+```csharp
+// Base domain model
+public class User
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; }
+    public string Email { get; set; }
+    public string Password { get; set; }  // Sensitive
+}
+
+// Derived domain model
+public class Employee : User
+{
+    public string Department { get; set; }
+    public decimal Salary { get; set; }  // Sensitive
+}
+
+// Facet for Employee - includes User properties automatically
+[Facet(typeof(Employee), "Password", "Salary")]
+public partial class EmployeeDto;
+
+// Generated properties:
+// From User: Id, FirstName, Email
+// From Employee: Department
+// Excluded: Password, Salary
+```
+
+#### Facets with Base Classes
+
+Your facet types can also inherit from base classes. Facet won't duplicate inherited properties:
+
+```csharp
+// Shared base facet
+public abstract class BaseFacet
+{
+    public int Id { get; set; }
+    public bool IsActive { get; set; }
+}
+
+// Facet inherits from base - Id and IsActive come from base
+[Facet(typeof(Product), "InternalCode")]
+public partial class ProductDto : BaseFacet
+{
+    // Generated: Name, Description, Price
+    // Inherited from BaseFacet: Id, IsActive (NOT duplicated)
+}
+```
+
+#### Generic Base Classes
+
+```csharp
+public class BaseEntity<TKey>
+{
+    public TKey Id { get; set; }
+}
+
+public class Category : BaseEntity<uint>
+{
+    public string Name { get; set; }
+}
+
+// Exclude Id from generic base
+[Facet(typeof(Category), "Id")]
+public partial class UpdateCategoryDto;
+// Result: Name only (Id excluded)
 ```
 
 </details>
@@ -980,6 +1156,7 @@ Use `Facet.Dashboard` to visualize your Facets!
 | **Expression Transform** | :white_check_mark: | :x: | :x: | :x: |
 | **Breaking Detection** | :white_check_mark: | :x: | :x: | :x: |
 | **Conditional Mapping** | :white_check_mark: MapWhen | :warning: Custom | :warning: Custom | :warning: Custom |
+| **Before/After Hooks** | :white_check_mark: Built-in | :white_check_mark: | :warning: Manual | :warning: Custom |
 
 **Facet is the only tool that combines compile-time generation with deep EF Core integration.**
 

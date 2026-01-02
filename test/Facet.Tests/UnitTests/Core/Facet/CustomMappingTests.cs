@@ -37,30 +37,30 @@ public class CustomMappingTests
     [Fact]
     public void ToFacet_ShouldHandleBirthdayNotYetPassed_InCurrentYear()
     {
-        // Arrange
-        var nextMonth = DateTime.Today.AddMonths(1);
-        var birthDateNextMonth = new DateTime(DateTime.Today.Year - 30, nextMonth.Month, nextMonth.Day);
-        var user = TestDataFactory.CreateUser("Future", "Birthday", dateOfBirth: birthDateNextMonth);
+        // Arrange - birthday is 6 months from now, so it hasn't passed this year
+        var today = DateTime.Today;
+        var birthDate = today.AddMonths(6).AddYears(-30);
+        var user = TestDataFactory.CreateUser("Future", "Birthday", dateOfBirth: birthDate);
 
         // Act
         var dto = user.ToFacet<User, UserDtoWithMapping>();
 
-       // Assert
-        dto.Age.Should().Be(30, "Age should be 30 if birthday hasn't occurred this year yet");
+        // Assert - person turns 30 in 6 months, so currently 29
+        dto.Age.Should().Be(29, "Age should be 29 if 30th birthday hasn't occurred this year yet");
     }
 
     [Fact]
     public void ToFacet_ShouldHandleBirthdayAlreadyPassed_InCurrentYear()
     {
-        // Arrange
-        var lastMonth = DateTime.Today.AddMonths(-1);
-        var birthDateLastMonth = new DateTime(DateTime.Today.Year - 30, lastMonth.Month, lastMonth.Day);
-        var user = TestDataFactory.CreateUser("Past", "Birthday", dateOfBirth: birthDateLastMonth);
+        // Arrange - birthday was 6 months ago, so it has already passed this year
+        var today = DateTime.Today;
+        var birthDate = today.AddMonths(-6).AddYears(-30);
+        var user = TestDataFactory.CreateUser("Past", "Birthday", dateOfBirth: birthDate);
 
         // Act
         var dto = user.ToFacet<User, UserDtoWithMapping>();
 
-        // Assert
+        // Assert - person turned 30 six months ago
         dto.Age.Should().Be(30, "Age should be 30 if birthday has already occurred this year");
     }
 
