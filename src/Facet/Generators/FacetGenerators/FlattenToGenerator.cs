@@ -132,10 +132,33 @@ internal static class FlattenToGenerator
         sb.AppendLine($"{indent}}}");
     }
 
-    /// <summary>
-    /// First pass: Collects all leaf property names and counts their occurrences.
-    /// Used to identify which property names collide and need SmartLeaf-style prefixing.
-    /// </summary>
+    private static FacetTargetModel? FindFacetModel(string typeName, Dictionary<string, FacetTargetModel> facetLookup)
+    {
+        if (string.IsNullOrEmpty(typeName)) return null;
+
+        // Try the exact name first
+        if (facetLookup.TryGetValue(typeName, out var facet))
+        {
+            return facet;
+        }
+
+        // Try just the simple name
+        var simpleName = ExtractSimpleName(typeName);
+        if (facetLookup.TryGetValue(simpleName, out facet))
+        {
+            return facet;
+        }
+
+        // Try without global:: prefix
+        var withoutGlobal = typeName.Replace("global::", "");
+        if (facetLookup.TryGetValue(withoutGlobal, out facet))
+        {
+            return facet;
+        }
+
+        return null;
+    }
+
     private static void CollectLeafNames(
         FacetTargetModel facet,
         Dictionary<string, FacetTargetModel> facetLookup,
@@ -163,13 +186,7 @@ internal static class FlattenToGenerator
                 var nestedFacetTypeName = member.TypeName?.Replace("?", "").Trim();
                 if (!string.IsNullOrEmpty(nestedFacetTypeName))
                 {
-                    FacetTargetModel? nestedFacet = null;
-                    if (!facetLookup.TryGetValue(nestedFacetTypeName, out nestedFacet))
-                    {
-                        var simpleName = ExtractSimpleName(nestedFacetTypeName);
-                        facetLookup.TryGetValue(simpleName, out nestedFacet);
-                    }
-
+                    var nestedFacet = FindFacetModel(nestedFacetTypeName, facetLookup);
                     if (nestedFacet != null)
                     {
                         var newPathSegments = new List<string>(pathSegments) { member.Name };
@@ -206,11 +223,6 @@ internal static class FlattenToGenerator
         }
     }
 
-    /// <summary>
-    /// Recursively collects scalar properties from a nested facet and its child nested facets.
-    /// Generates property assignments with proper navigation paths (e.g., item.Extended.ExtendedValue).
-    /// Uses SmartLeaf-style naming: only adds parent prefix when property names collide.
-    /// </summary>
     private static void CollectNestedProperties(
         StringBuilder sb,
         FacetTargetModel facet,
@@ -239,29 +251,23 @@ internal static class FlattenToGenerator
 
             if (member.IsNestedFacet)
             {
-                // This is a nested facet - recurse into it
+                // This is a nested facet - recurse into it to access its properties
                 var nestedFacetTypeName = member.TypeName?.Replace("?", "").Trim();
 
                 if (!string.IsNullOrEmpty(nestedFacetTypeName))
                 {
-                    // Try to find the nested facet in the lookup
-                    FacetTargetModel? nestedFacet = null;
-                    if (!facetLookup.TryGetValue(nestedFacetTypeName, out nestedFacet))
-                    {
-                        // Try just the simple name
-                        var simpleName = ExtractSimpleName(nestedFacetTypeName);
-                        facetLookup.TryGetValue(simpleName, out nestedFacet);
-                    }
-
+                    var nestedFacet = FindFacetModel(nestedFacetTypeName, facetLookup);
                     if (nestedFacet != null)
                     {
-                        // Recursively collect properties from this nested facet
-                        // Build navigation path: item.Extended.SubProperty
+                        // Build the navigation path to access nested properties
+                        // This is the key fix: we build the path through the navigation property
+                        // e.g., item.Extended -> item.Extended.Property
                         var newNavigationPath = $"{navigationPath}.{member.Name}";
 
                         // Add this member to the path segments for SmartLeaf naming
                         var newPathSegments = new List<string>(pathSegments) { member.Name };
 
+                        // Recursively collect properties from this nested facet
                         CollectNestedProperties(
                             sb,
                             nestedFacet,
@@ -307,11 +313,6 @@ internal static class FlattenToGenerator
         }
     }
 
-    /// <summary>
-    /// Generates a property name using SmartLeaf strategy:
-    /// - If the leaf name doesn't collide with others, use just the leaf name
-    /// - If it collides, use parent + leaf name (e.g., "PositionName" instead of "Name")
-    /// </summary>
     private static string GenerateSmartLeafName(List<string> pathSegments, string leafName, HashSet<string> collidingLeafNames)
     {
         // If this leaf name collides with another, use parent + leaf
