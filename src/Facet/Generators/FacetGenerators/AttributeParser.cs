@@ -166,6 +166,38 @@ internal static class AttributeParser
     }
 
     /// <summary>
+    /// Extracts the BeforeMapConfiguration type name from the attribute.
+    /// </summary>
+    public static string? ExtractBeforeMapConfigurationTypeName(AttributeData attribute)
+    {
+        var arg = attribute.NamedArguments
+            .FirstOrDefault(kvp => kvp.Key == FacetConstants.AttributeNames.BeforeMapConfiguration);
+        
+        if (arg.Value.Value is INamedTypeSymbol typeSymbol)
+        {
+            return typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        }
+        
+        return null;
+    }
+
+    /// <summary>
+    /// Extracts the AfterMapConfiguration type name from the attribute.
+    /// </summary>
+    public static string? ExtractAfterMapConfigurationTypeName(AttributeData attribute)
+    {
+        var arg = attribute.NamedArguments
+            .FirstOrDefault(kvp => kvp.Key == FacetConstants.AttributeNames.AfterMapConfiguration);
+        
+        if (arg.Value.Value is INamedTypeSymbol typeSymbol)
+        {
+            return typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        }
+        
+        return null;
+    }
+
+    /// <summary>
     /// Extracts the FlattenTo types from the FlattenTo parameter.
     /// Returns a list of fully qualified type names of flatten target types.
     /// </summary>
