@@ -38,6 +38,8 @@ internal static class ModelBuilder
         var generateProjection = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateProjection, true);
         var generateToSource = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateToSource, false);
         var configurationTypeName = AttributeParser.ExtractConfigurationTypeName(attribute);
+        var beforeMapConfigurationTypeName = AttributeParser.ExtractBeforeMapConfigurationTypeName(attribute);
+        var afterMapConfigurationTypeName = AttributeParser.ExtractAfterMapConfigurationTypeName(attribute);
 
         // Infer the type kind and whether it's a record from the target type declaration
         var (typeKind, isRecord) = TypeAnalyzer.InferTypeKind(targetSymbol);
@@ -186,7 +188,9 @@ internal static class ModelBuilder
             maxDepth,
             preserveReferences,
             baseClassMemberNames,
-            flattenToTypes);
+            flattenToTypes,
+            beforeMapConfigurationTypeName,
+            afterMapConfigurationTypeName);
     }
 
     #region Private Helper Methods

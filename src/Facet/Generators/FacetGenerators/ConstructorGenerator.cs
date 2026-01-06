@@ -163,8 +163,17 @@ internal static class ConstructorGenerator
         bool hasInitOnlyProperties,
         bool hasCustomMapping)
     {
+        var hasBeforeMap = !string.IsNullOrWhiteSpace(model.BeforeMapConfigurationTypeName);
+        var hasAfterMap = !string.IsNullOrWhiteSpace(model.AfterMapConfigurationTypeName);
+
         if (!isPositional && !model.HasExistingPrimaryConstructor)
         {
+            // Call BeforeMap before property assignment
+            if (hasBeforeMap)
+            {
+                sb.AppendLine($"        {model.BeforeMapConfigurationTypeName}.BeforeMap(source, this);");
+            }
+
             if (hasCustomMapping && hasInitOnlyProperties)
             {
                 // For types with init-only properties and custom mapping,
@@ -195,11 +204,37 @@ internal static class ConstructorGenerator
                     sb.AppendLine($"        this.{m.Name} = {sourceValue};");
                 }
             }
+
+            // Call AfterMap after property assignment (and after Configuration.Map if present)
+            if (hasAfterMap)
+            {
+                sb.AppendLine($"        {model.AfterMapConfigurationTypeName}.AfterMap(source, this);");
+            }
         }
         else if (hasCustomMapping && !model.HasExistingPrimaryConstructor)
         {
             // For positional records/record structs with custom mapping
+            if (hasBeforeMap)
+            {
+                sb.AppendLine($"        {model.BeforeMapConfigurationTypeName}.BeforeMap(source, this);");
+            }
             sb.AppendLine($"        global::{model.ConfigurationTypeName}.Map(source, this);");
+            if (hasAfterMap)
+            {
+                sb.AppendLine($"        {model.AfterMapConfigurationTypeName}.AfterMap(source, this);");
+            }
+        }
+        else if (!model.HasExistingPrimaryConstructor)
+        {
+            // No custom mapping but may have hooks
+            if (hasBeforeMap)
+            {
+                sb.AppendLine($"        {model.BeforeMapConfigurationTypeName}.BeforeMap(source, this);");
+            }
+            if (hasAfterMap)
+            {
+                sb.AppendLine($"        {model.AfterMapConfigurationTypeName}.AfterMap(source, this);");
+            }
         }
     }
 
@@ -263,6 +298,15 @@ internal static class ConstructorGenerator
         bool hasInitOnlyProperties,
         bool hasCustomMapping)
     {
+        var hasBeforeMap = !string.IsNullOrWhiteSpace(model.BeforeMapConfigurationTypeName);
+        var hasAfterMap = !string.IsNullOrWhiteSpace(model.AfterMapConfigurationTypeName);
+
+        // Call BeforeMap first
+        if (hasBeforeMap)
+        {
+            sb.AppendLine($"        {model.BeforeMapConfigurationTypeName}.BeforeMap(source, this);");
+        }
+
         if (hasCustomMapping && hasInitOnlyProperties)
         {
             sb.AppendLine($"        // This constructor should not be used for types with init-only properties and custom mapping");
@@ -291,6 +335,12 @@ internal static class ConstructorGenerator
                 var sourceValue = ExpressionBuilder.GetSourceValueExpression(m, "source", model.MaxDepth, true, model.PreserveReferences);
                 sb.AppendLine($"        this.{m.Name} = {sourceValue};");
             }
+        }
+
+        // Call AfterMap after property assignment (and after Configuration.Map if present)
+        if (hasAfterMap)
+        {
+            sb.AppendLine($"        {model.AfterMapConfigurationTypeName}.AfterMap(source, this);");
         }
     }
 

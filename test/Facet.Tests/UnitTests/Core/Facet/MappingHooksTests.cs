@@ -4,8 +4,6 @@ namespace Facet.Tests.UnitTests.Core.Facet;
 
 /// <summary>
 /// Tests for Before/After mapping hooks functionality.
-/// Note: These tests document the expected behavior once the generator supports
-/// BeforeMapConfiguration and AfterMapConfiguration attributes.
 /// </summary>
 public class MappingHooksTests
 {
@@ -74,7 +72,7 @@ public class MappingHooksTests
         }
     }
 
-    // Placeholder facets for compilation until generator support is added
+    // Placeholder facets for unit tests
     public class BeforeMapFacet
     {
         public int Id { get; set; }

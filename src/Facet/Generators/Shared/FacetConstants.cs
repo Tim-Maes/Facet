@@ -90,6 +90,8 @@ internal static class FacetConstants
         public const string FlattenTo = "FlattenTo";
         public const string Include = "Include";
         public const string Configuration = "Configuration";
+        public const string BeforeMapConfiguration = "BeforeMapConfiguration";
+        public const string AfterMapConfiguration = "AfterMapConfiguration";
         public const string IncludeFields = "IncludeFields";
         public const string GenerateConstructor = "GenerateConstructor";
         public const string GenerateParameterlessConstructor = "GenerateParameterlessConstructor";

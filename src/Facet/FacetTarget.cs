@@ -21,6 +21,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public string SourceTypeName { get; }
     public ImmutableArray<string> SourceContainingTypes { get; }
     public string? ConfigurationTypeName { get; }
+    public string? BeforeMapConfigurationTypeName { get; }
+    public string? AfterMapConfigurationTypeName { get; }
     public ImmutableArray<FacetMember> Members { get; }
     public bool HasExistingPrimaryConstructor { get; }
     public bool SourceHasPositionalConstructor { get; }
@@ -61,7 +63,9 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         int maxDepth = 0,
         bool preserveReferences = false,
         ImmutableArray<string> baseClassMemberNames = default,
-        ImmutableArray<string> flattenToTypes = default)
+        ImmutableArray<string> flattenToTypes = default,
+        string? beforeMapConfigurationTypeName = null,
+        string? afterMapConfigurationTypeName = null)
     {
         Name = name;
         Namespace = @namespace;
@@ -76,6 +80,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         SourceTypeName = sourceTypeName;
         SourceContainingTypes = sourceContainingTypes.IsDefault ? ImmutableArray<string>.Empty : sourceContainingTypes;
         ConfigurationTypeName = configurationTypeName;
+        BeforeMapConfigurationTypeName = beforeMapConfigurationTypeName;
+        AfterMapConfigurationTypeName = afterMapConfigurationTypeName;
         Members = members;
         HasExistingPrimaryConstructor = hasExistingPrimaryConstructor;
         SourceHasPositionalConstructor = sourceHasPositionalConstructor;
@@ -108,6 +114,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && SourceTypeName == other.SourceTypeName
             && SourceContainingTypes.SequenceEqual(other.SourceContainingTypes)
             && ConfigurationTypeName == other.ConfigurationTypeName
+            && BeforeMapConfigurationTypeName == other.BeforeMapConfigurationTypeName
+            && AfterMapConfigurationTypeName == other.AfterMapConfigurationTypeName
             && HasExistingPrimaryConstructor == other.HasExistingPrimaryConstructor
             && SourceHasPositionalConstructor == other.SourceHasPositionalConstructor
             && TypeXmlDocumentation == other.TypeXmlDocumentation
@@ -141,6 +149,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + GenerateExpressionProjection.GetHashCode();
             hash = hash * 31 + (SourceTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + (ConfigurationTypeName?.GetHashCode() ?? 0);
+            hash = hash * 31 + (BeforeMapConfigurationTypeName?.GetHashCode() ?? 0);
+            hash = hash * 31 + (AfterMapConfigurationTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + HasExistingPrimaryConstructor.GetHashCode();
             hash = hash * 31 + SourceHasPositionalConstructor.GetHashCode();
             hash = hash * 31 + (TypeXmlDocumentation?.GetHashCode() ?? 0);
