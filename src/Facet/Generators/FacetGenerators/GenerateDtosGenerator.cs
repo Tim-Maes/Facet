@@ -15,6 +15,7 @@ namespace Facet.Generators;
 public sealed class GenerateDtosGenerator : IIncrementalGenerator
 {
     private const string GenerateDtosAttributeName = "Facet.GenerateDtosAttribute";
+    // Keep for backward compatibility with obsolete attribute
     private const string GenerateAuditableDtosAttributeName = "Facet.GenerateAuditableDtosAttribute";
 
     // Diagnostic for generator internal errors
@@ -46,19 +47,21 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             .ForAttributeWithMetadataName(
                 GenerateDtosAttributeName,
                 predicate: static (node, _) => node is TypeDeclarationSyntax,
-                transform: static (ctx, token) => GetGenerateDtosModels(ctx, token))
+                transform: static (ctx, token) => GetGenerateDtosModels(ctx, token, forceExcludeAuditFields: false))
             .Where(static m => m is not null)
             .SelectMany(static (models, _) => models!);
 
+        // Obsolete attribute: GenerateAuditableDtos (kept for backward compatibility)
         var generateAuditableDtosTargets = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 GenerateAuditableDtosAttributeName,
                 predicate: static (node, _) => node is TypeDeclarationSyntax,
-                transform: static (ctx, token) => GetGenerateAuditableDtosModels(ctx, token))
+                transform: static (ctx, token) => GetGenerateDtosModels(ctx, token, forceExcludeAuditFields: true))
             .Where(static m => m is not null)
             .SelectMany(static (models, _) => models!);
 
-        var allTargets = generateDtosTargets.Collect().Combine(generateAuditableDtosTargets.Collect())
+        var allTargets = generateDtosTargets.Collect()
+            .Combine(generateAuditableDtosTargets.Collect())
             .Select(static (combined, _) => combined.Left.Concat(combined.Right));
 
         context.RegisterSourceOutput(allTargets, (spc, models) =>
@@ -86,17 +89,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         });
     }
 
-    private static IEnumerable<GenerateDtosTargetModel>? GetGenerateDtosModels(GeneratorAttributeSyntaxContext context, CancellationToken token)
-    {
-        return GetDtosModels(context, token, isAuditable: false);
-    }
-
-    private static IEnumerable<GenerateDtosTargetModel>? GetGenerateAuditableDtosModels(GeneratorAttributeSyntaxContext context, CancellationToken token)
-    {
-        return GetDtosModels(context, token, isAuditable: true);
-    }
-
-    private static IEnumerable<GenerateDtosTargetModel>? GetDtosModels(GeneratorAttributeSyntaxContext context, CancellationToken token, bool isAuditable)
+    private static IEnumerable<GenerateDtosTargetModel>? GetGenerateDtosModels(GeneratorAttributeSyntaxContext context, CancellationToken token, bool forceExcludeAuditFields)
     {
         token.ThrowIfCancellationRequested();
         if (context.TargetSymbol is not INamedTypeSymbol sourceSymbol) return null;
@@ -109,7 +102,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
             token.ThrowIfCancellationRequested();
 
-            var model = GetDtosModel(context, attribute, sourceSymbol, isAuditable, token);
+            var model = GetDtosModel(context, attribute, sourceSymbol, forceExcludeAuditFields, token);
             if (model != null)
             {
                 models.Add(model);
@@ -119,7 +112,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         return models.Count > 0 ? models : null;
     }
 
-    private static GenerateDtosTargetModel? GetDtosModel(GeneratorAttributeSyntaxContext context, AttributeData attribute, INamedTypeSymbol sourceSymbol, bool isAuditable, CancellationToken token)
+    private static GenerateDtosTargetModel? GetDtosModel(GeneratorAttributeSyntaxContext context, AttributeData attribute, INamedTypeSymbol sourceSymbol, bool forceExcludeAuditFields, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
 
@@ -135,6 +128,9 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             var generateConstructors = GetNamedArg(attribute.NamedArguments, "GenerateConstructors", true);
             var generateProjections = GetNamedArg(attribute.NamedArguments, "GenerateProjections", true);
             var useFullName = GetNamedArg(attribute.NamedArguments, "UseFullName", false);
+            
+            // New property: ExcludeAuditFields (only on GenerateDtosAttribute, not on obsolete attribute)
+            var excludeAuditFields = forceExcludeAuditFields || GetNamedArg(attribute.NamedArguments, "ExcludeAuditFields", false);
 
             // Fix the ExcludeProperties handling
             var userExcludeProperties = new List<string>();
@@ -153,7 +149,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             // Build exclusion list
             var excludeProperties = new HashSet<string>(userExcludeProperties, System.StringComparer.OrdinalIgnoreCase);
 
-            if (isAuditable)
+            if (excludeAuditFields)
             {
                 foreach (var field in DefaultAuditFields)
                 {
@@ -223,8 +219,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         catch (Exception ex)
         {
             // Return null to skip this model, but the error is captured in the exception
-            // Note: In incremental generators, we can't report diagnostics from the transform phase.
-            // Consider adding error information to the model in the future to report in output phase.
             System.Diagnostics.Debug.WriteLine($"GenerateDtos error for {sourceSymbol.Name}: {ex.Message}");
             return null;
         }

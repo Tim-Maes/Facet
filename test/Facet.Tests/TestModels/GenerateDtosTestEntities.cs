@@ -33,7 +33,8 @@ public class PatchTestEntity
     public decimal Price { get; set; }
 }
 
-[GenerateAuditableDtos(Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response, OutputType = OutputType.Class)]
+// Uses ExcludeAuditFields = true to automatically exclude audit fields
+[GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response, OutputType = OutputType.Class, ExcludeAuditFields = true)]
 public class TestProduct
 {
     public int Id { get; set; }
@@ -92,7 +93,8 @@ public class TestCustomNaming
     public DateTime PublishedAt { get; set; }
 }
 
-[GenerateAuditableDtos(Types = DtoTypes.All, OutputType = OutputType.RecordStruct)]
+// Uses ExcludeAuditFields = true with RecordStruct output
+[GenerateDtos(Types = DtoTypes.All, OutputType = OutputType.RecordStruct, ExcludeAuditFields = true)]
 public class TestCompactEntity
 {
     public int Id { get; set; }

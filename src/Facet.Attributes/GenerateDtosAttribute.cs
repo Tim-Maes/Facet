@@ -30,7 +30,7 @@ public enum OutputType
 }
 
 /// <summary>
-/// Generates standard CRUD DTOs (Create, Update, Response, Query, Upsert) for a domain model.
+/// Generates standard CRUD DTOs (Create, Update, Response, Query, Upsert, Patch) for a domain model.
 /// Can be applied multiple times with different configurations for fine-grained control.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
@@ -52,9 +52,18 @@ public class GenerateDtosAttribute : Attribute
     public string? Namespace { get; set; }
 
     /// <summary>
-    /// Additional properties to exclude from all generated DTOs.
+    /// Properties to exclude from all generated DTOs.
     /// </summary>
     public string[] ExcludeProperties { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// When true, automatically excludes common audit fields from generated DTOs.
+    /// <para>
+    /// Excluded fields: CreatedDate, UpdatedDate, CreatedAt, UpdatedAt, CreatedBy, UpdatedBy, CreatedById, UpdatedById.
+    /// </para>
+    /// Default is false.
+    /// </summary>
+    public bool ExcludeAuditFields { get; set; } = false;
 
     /// <summary>
     /// Custom prefix for generated DTO names (default: none).
@@ -89,10 +98,21 @@ public class GenerateDtosAttribute : Attribute
 }
 
 /// <summary>
-/// Predefined attribute for common auditable entity scenarios.
-/// Automatically excludes common audit fields: CreatedDate, UpdatedDate, CreatedAt, UpdatedAt, CreatedBy, UpdatedBy.
-/// Can be applied multiple times with different configurations for fine-grained control.
+/// Obsolete. Use <see cref="GenerateDtosAttribute"/> with <c>ExcludeAuditFields = true</c> instead.
 /// </summary>
+/// <remarks>
+/// This attribute has been replaced by <see cref="GenerateDtosAttribute"/> with the <c>ExcludeAuditFields</c> property.
+/// </remarks>
+/// <example>
+/// <code>
+/// // Old way (deprecated):
+/// [GenerateAuditableDtos(Types = DtoTypes.Create)]
+/// 
+/// // New way:
+/// [GenerateDtos(Types = DtoTypes.Create, ExcludeAuditFields = true)]
+/// </code>
+/// </example>
+[Obsolete("Use GenerateDtosAttribute with ExcludeAuditFields = true instead. This attribute will be removed in a future version.")]
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public class GenerateAuditableDtosAttribute : Attribute
 {
