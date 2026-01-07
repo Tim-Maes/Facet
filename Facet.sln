@@ -1,11 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
-VisualStudioVersion = 18.0.11205.157 d18.0
+VisualStudioVersion = 18.0.11205.157
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet", "src\Facet\Facet.csproj", "{31123CE5-A21E-4A33-B0C9-C56CBCD964C3}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "00 Solution Items", "00 Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
 	ProjectSection(SolutionItems) = preProject
 		Directory.Packages.props = Directory.Packages.props
 		NuGet.Config = NuGet.Config
@@ -18,7 +18,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Extensions", "src\Fac
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Extensions.EFCore", "src\Facet.Extensions.EFCore\Facet.Extensions.EFCore.csproj", "{4BBA34E9-E0B6-7300-A1C6-BFB7924C4C91}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{0C88DD14-F956-CE84-757C-A364CCF449FC}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{0C88DD14-F956-CE84-757C-A364CCF449FC}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Tests", "test\Facet.Tests\Facet.Tests.csproj", "{519E7976-7BE4-4E93-9A45-01A160AA1684}"
 EndProject
@@ -29,6 +29,12 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Attributes", "src\Facet.Attributes\Facet.Attributes.csproj", "{64E5F0A4-766A-440D-A880-5687DE276D6F}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Dashboard", "src\Facet.Dashboard\Facet.Dashboard.csproj", "{44F15EF9-C4FD-47C6-99BB-D1A0BEEF892B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "01 Facet", "01 Facet", "{609A89B5-735D-4845-9C18-84130889515D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "02 Extensions", "02 Extensions", "{1BD51EEF-C209-4E36-8DFC-D7275A687100}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "03 Mapping", "03 Mapping", "{B7FAAA85-8304-42D3-B591-09244109AED7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -153,7 +159,15 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
+		{31123CE5-A21E-4A33-B0C9-C56CBCD964C3} = {609A89B5-735D-4845-9C18-84130889515D}
+		{CEF12992-4DB3-4770-B291-FF5FD67FDB01} = {B7FAAA85-8304-42D3-B591-09244109AED7}
+		{DC7D6F19-83E8-4430-A7E1-11E3BC6D9EB6} = {1BD51EEF-C209-4E36-8DFC-D7275A687100}
+		{4BBA34E9-E0B6-7300-A1C6-BFB7924C4C91} = {1BD51EEF-C209-4E36-8DFC-D7275A687100}
 		{519E7976-7BE4-4E93-9A45-01A160AA1684} = {0C88DD14-F956-CE84-757C-A364CCF449FC}
+		{538881BB-5006-4D97-8D73-7C73979AE7C3} = {B7FAAA85-8304-42D3-B591-09244109AED7}
+		{9D11593F-8A2C-8FD7-AFF5-F49D54DFAF18} = {1BD51EEF-C209-4E36-8DFC-D7275A687100}
+		{64E5F0A4-766A-440D-A880-5687DE276D6F} = {609A89B5-735D-4845-9C18-84130889515D}
+		{44F15EF9-C4FD-47C6-99BB-D1A0BEEF892B} = {609A89B5-735D-4845-9C18-84130889515D}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {CEF45DDD-485B-4A2F-9944-8A36CFCD1994}
