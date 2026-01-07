@@ -1,6 +1,6 @@
 # GenerateDtos Attribute Reference
 
-The `[GenerateDtos]` and `[GenerateAuditableDtos]` attributes automatically generate standard CRUD DTOs (Create, Update, Response, Query, Upsert, Patch) for domain models, eliminating the need to manually write repetitive DTO classes.
+The `[GenerateDtos]` attribute automatically generates standard CRUD DTOs (Create, Update, Response, Query, Upsert, Patch) for domain models, eliminating the need to manually write repetitive DTO classes.
 
 ## GenerateDtos Attribute
 
@@ -27,6 +27,7 @@ public class User
 | `OutputType`         | `OutputType`| The output type for generated DTOs (default: Record).               |
 | `Namespace`          | `string?`   | Custom namespace for generated DTOs (default: same as source type). |
 | `ExcludeProperties`  | `string[]`  | Properties to exclude from all generated DTOs.                      |
+| `ExcludeAuditFields` | `bool`      | Automatically exclude common audit fields (default: false). See [Excluding Audit Fields](#excluding-audit-fields). |
 | `Prefix`             | `string?`   | Custom prefix for generated DTO names.                              |
 | `Suffix`             | `string?`   | Custom suffix for generated DTO names.                              |
 | `IncludeFields`      | `bool`      | Include public fields from the source type (default: false).        |
@@ -56,32 +57,62 @@ public class User
 | `Struct`      | Generate as structs      |
 | `RecordStruct`| Generate as record structs |
 
-## GenerateAuditableDtos Attribute
+## Excluding Audit Fields
 
-A specialized version of `GenerateDtos` that automatically excludes common audit fields: `CreatedDate`, `UpdatedDate`, `CreatedAt`, `UpdatedAt`, `CreatedBy`, `UpdatedBy`.
+Use the `ExcludeAuditFields` property to automatically exclude common audit/tracking fields from the generated DTOs.
+
+When `ExcludeAuditFields = true`, the following fields are automatically excluded:
+- `CreatedDate`, `UpdatedDate`
+- `CreatedAt`, `UpdatedAt`
+- `CreatedBy`, `UpdatedBy`
+- `CreatedById`, `UpdatedById`
 
 ### Usage
 
 ```csharp
-[GenerateAuditableDtos(Types = DtoTypes.Create | DtoTypes.Update)]
+[GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update, ExcludeAuditFields = true)]
 public class AuditableEntity
 {
+    public int Id { get; set; }
     public string Name { get; set; }
     public string Description { get; set; }
-    public DateTime CreatedAt { get; set; }
-    public DateTime UpdatedAt { get; set; }
-    public string CreatedBy { get; set; }
-    public string UpdatedBy { get; set; }
+    public DateTime CreatedAt { get; set; }    // Will be excluded
+    public DateTime UpdatedAt { get; set; }    // Will be excluded
+    public string CreatedBy { get; set; }      // Will be excluded
+    public string UpdatedBy { get; set; }      // Will be excluded
 }
 ```
 
-### Parameters
+You can combine `ExcludeAuditFields` with `ExcludeProperties` to exclude additional properties:
 
-Same as `GenerateDtos` with the addition of automatic exclusion of audit fields.
+```csharp
+[GenerateDtos(ExcludeAuditFields = true, ExcludeProperties = new[] { "InternalNotes", "SecretKey" })]
+public class Product
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string InternalNotes { get; set; }  // Will be excluded
+    public string SecretKey { get; set; }      // Will be excluded
+    public DateTime CreatedAt { get; set; }    // Will be excluded (audit field)
+}
+```
+
+## Obsolete: GenerateAuditableDtos Attribute
+
+> **?? Deprecated:** The `[GenerateAuditableDtos]` attribute has been replaced by `[GenerateDtos]` with `ExcludeAuditFields = true`. The old attribute will be removed in a future version.
+>
+> **Migration:**
+> ```csharp
+> // Old way (deprecated):
+> [GenerateAuditableDtos(Types = DtoTypes.Create)]
+> 
+> // New way:
+> [GenerateDtos(Types = DtoTypes.Create, ExcludeAuditFields = true)]
+> ```
 
 ## Multiple Attribute Usage
 
-Both attributes support multiple applications for fine-grained control:
+The attribute supports multiple applications for fine-grained control:
 
 ```csharp
 [GenerateDtos(Types = DtoTypes.Response, ExcludeProperties = new[] { "Password", "InternalNotes" })]
