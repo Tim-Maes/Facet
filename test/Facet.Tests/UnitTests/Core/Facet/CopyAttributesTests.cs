@@ -220,6 +220,37 @@ public class CopyAttributesTests
         systemChangeDateProperty.Should().NotBeNull();
         systemChangeDateProperty!.GetCustomAttribute<ConcurrencyCheckAttribute>().Should().NotBeNull();
     }
+
+    [Fact]
+    public void Facet_ShouldCopyCustomAttributeWithEnumConstructorArgument()
+    {
+        // Arrange & Act
+        var dtoType = typeof(DatabaseTableWithEnumAttributeDto);
+
+        // Assert - Verify the attribute with enum was copied correctly
+        var amountProperty = dtoType.GetProperty("Amount");
+        amountProperty.Should().NotBeNull();
+
+        var defaultSortAttr = amountProperty!.GetCustomAttribute<DefaultSortAttribute>();
+        defaultSortAttr.Should().NotBeNull();
+        defaultSortAttr!.Direction.Should().Be(SortDirection.Descending);
+        defaultSortAttr.SortPrecedence.Should().Be(0);
+    }
+
+    [Fact]
+    public void Facet_ShouldCopyAttributeWithMultipleEnumValues()
+    {
+        // Additional test for enum attributes with different values
+        var dtoType = typeof(DatabaseTableWithEnumAttributeDto);
+
+        var createdAtProperty = dtoType.GetProperty("CreatedAt");
+        createdAtProperty.Should().NotBeNull();
+
+        var defaultSortAttr = createdAtProperty!.GetCustomAttribute<DefaultSortAttribute>();
+        defaultSortAttr.Should().NotBeNull();
+        defaultSortAttr!.Direction.Should().Be(SortDirection.Ascending);
+        defaultSortAttr.SortPrecedence.Should().Be(1);
+    }
 }
 
 // Source model with data annotations
@@ -356,5 +387,47 @@ public class DatabaseTableModel
 // DTO with CopyAttributes = true - should compile with proper using statements
 [Facet(typeof(DatabaseTableModel), CopyAttributes = true)]
 public partial class DatabaseTableModelDto
+{
+}
+
+// Custom attribute with enum parameter
+public enum SortDirection
+{
+    Ascending,
+    Descending
+}
+
+public class DefaultSortAttribute : Attribute
+{
+    public SortDirection Direction { get; set; }
+    public int SortPrecedence { get; set; } = 0;
+
+    public DefaultSortAttribute(SortDirection direction, int sortPrecedence = 0)
+    {
+        Direction = direction;
+        SortPrecedence = sortPrecedence;
+    }
+}
+
+// Source model with custom attribute that has enum constructor argument
+public class DatabaseTableWithEnumAttribute
+{
+    [Key]
+    public long DatabaseTableID { get; set; }
+
+    [DefaultSort(SortDirection.Descending, 0)]
+    public decimal Amount { get; set; }
+
+    [DefaultSort(SortDirection.Ascending, 1)]
+    public DateTime CreatedAt { get; set; }
+
+    public string FirstName { get; set; } = string.Empty;
+
+    public string LastName { get; set; } = string.Empty;
+}
+
+// DTO with CopyAttributes = true - should compile with custom enum attribute
+[Facet(typeof(DatabaseTableWithEnumAttribute), CopyAttributes = true)]
+public partial class DatabaseTableWithEnumAttributeDto
 {
 }
