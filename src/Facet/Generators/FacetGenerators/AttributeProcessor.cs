@@ -178,8 +178,7 @@ internal static class AttributeProcessor
                 return constant.Value?.ToString() ?? "null";
 
             case TypedConstantKind.Enum:
-                var enumType = constant.Type?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                return $"{enumType}.{constant.Value}";
+                return FormatEnumConstant(constant);
 
             case TypedConstantKind.Type:
                 if (constant.Value is ITypeSymbol typeValue)
@@ -192,6 +191,139 @@ internal static class AttributeProcessor
 
             default:
                 return constant.Value?.ToString() ?? "null";
+        }
+    }
+
+    /// <summary>
+    /// Formats an enum TypedConstant value for attribute syntax generation.
+    /// Resolves the enum member name from the underlying value.
+    /// </summary>
+    private static string FormatEnumConstant(TypedConstant constant)
+    {
+        var enumType = constant.Type as INamedTypeSymbol;
+        if (enumType == null)
+            return constant.Value?.ToString() ?? "0";
+
+        var enumTypeName = enumType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var underlyingValue = constant.Value;
+
+        // For flags enums, we need to handle combined values
+        if (enumType.GetAttributes().Any(a => a.AttributeClass?.Name == "FlagsAttribute"))
+        {
+            return FormatFlagsEnumConstant(enumType, enumTypeName, underlyingValue);
+        }
+
+        // For non-flags enums, find the matching member
+        foreach (var member in enumType.GetMembers())
+        {
+            if (member is IFieldSymbol field && field.HasConstantValue)
+            {
+                // Compare values (handle different underlying types)
+                if (AreEnumValuesEqual(field.ConstantValue, underlyingValue))
+                {
+                    return $"{enumTypeName}.{field.Name}";
+                }
+            }
+        }
+
+        // If no match found, cast the value (shouldn't normally happen)
+        return $"({enumTypeName}){underlyingValue}";
+    }
+
+    /// <summary>
+    /// Formats a flags enum value that may be a combination of multiple members.
+    /// </summary>
+    private static string FormatFlagsEnumConstant(INamedTypeSymbol enumType, string enumTypeName, object? underlyingValue)
+    {
+        if (underlyingValue == null)
+            return $"({enumTypeName})0";
+
+        var longValue = Convert.ToInt64(underlyingValue);
+        
+        // Special case: zero value
+        if (longValue == 0)
+        {
+            // Look for a member with value 0 (like "None")
+            foreach (var member in enumType.GetMembers())
+            {
+                if (member is IFieldSymbol field && field.HasConstantValue)
+                {
+                    if (Convert.ToInt64(field.ConstantValue) == 0)
+                    {
+                        return $"{enumTypeName}.{field.Name}";
+                    }
+                }
+            }
+            return $"({enumTypeName})0";
+        }
+
+        // Collect all enum members and their values
+        var membersWithValues = new List<(string Name, long Value)>();
+        foreach (var member in enumType.GetMembers())
+        {
+            if (member is IFieldSymbol field && field.HasConstantValue)
+            {
+                var fieldValue = Convert.ToInt64(field.ConstantValue);
+                if (fieldValue != 0) // Skip zero values for flags combination
+                {
+                    membersWithValues.Add((field.Name, fieldValue));
+                }
+            }
+        }
+
+        // Sort by value descending to match largest values first
+        membersWithValues.Sort((a, b) => b.Value.CompareTo(a.Value));
+
+        var matchedMembers = new List<string>();
+        var remainingValue = longValue;
+
+        // First, check for an exact match (including composite values like "All")
+        foreach (var (name, value) in membersWithValues)
+        {
+            if (value == longValue)
+            {
+                return $"{enumTypeName}.{name}";
+            }
+        }
+
+        // Decompose the value into individual flags
+        foreach (var (name, value) in membersWithValues)
+        {
+            if (value != 0 && (remainingValue & value) == value)
+            {
+                matchedMembers.Add($"{enumTypeName}.{name}");
+                remainingValue &= ~value;
+            }
+        }
+
+        if (remainingValue == 0 && matchedMembers.Count > 0)
+        {
+            return string.Join(" | ", matchedMembers);
+        }
+
+        // If we couldn't decompose it fully, use a cast
+        return $"({enumTypeName}){underlyingValue}";
+    }
+
+    /// <summary>
+    /// Compares two enum underlying values for equality, handling different numeric types.
+    /// </summary>
+    private static bool AreEnumValuesEqual(object? fieldValue, object? constantValue)
+    {
+        if (fieldValue == null || constantValue == null)
+            return fieldValue == constantValue;
+
+        // Convert both to long for comparison to handle different underlying types
+        try
+        {
+            var fieldLong = Convert.ToInt64(fieldValue);
+            var constantLong = Convert.ToInt64(constantValue);
+            return fieldLong == constantLong;
+        }
+        catch
+        {
+            // If conversion fails, try direct comparison
+            return fieldValue.Equals(constantValue);
         }
     }
 }
