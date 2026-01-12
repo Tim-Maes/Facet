@@ -1,5 +1,6 @@
 using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -379,6 +380,16 @@ internal static class ModelBuilder
             attributeNamespaces = new List<string>();
         }
 
+        // Extract property initializer/default value from source
+        // Skip initializers for:
+        // 1. Nested facets - the type changes and the initializer won't be compatible
+        // 2. NullableProperties = true - query DTOs should default to null, not the source initializer
+        string? defaultValue = null;
+        if (!isNestedFacet && !nullableProperties)
+        {
+            defaultValue = ExtractPropertyInitializer(property);
+        }
+
         // Determine final member name and mapping properties
         var memberName = hasMapFrom ? mapFromInfo.targetName : property.Name;
         var mapFromSource = hasMapFrom ? mapFromInfo.source : null;
@@ -428,8 +439,28 @@ internal static class ModelBuilder
             mapWhenConditions,
             mapWhenDefault,
             mapWhenIncludeInProjection,
-            attributeNamespaces));
+            attributeNamespaces,
+            defaultValue));
         addedMembers.Add(memberName);
+    }
+
+    /// <summary>
+    /// Extracts the property initializer from the source property's syntax declaration.
+    /// For example, for "public UserSettings Settings { get; set; } = new();" this returns "new()".
+    /// </summary>
+    private static string? ExtractPropertyInitializer(IPropertySymbol property)
+    {
+        // Try to get the syntax for the property declaration
+        foreach (var syntaxRef in property.DeclaringSyntaxReferences)
+        {
+            var syntax = syntaxRef.GetSyntax();
+            if (syntax is PropertyDeclarationSyntax propSyntax && propSyntax.Initializer != null)
+            {
+                // Return the initializer value (the part after the '=')
+                return propSyntax.Initializer.Value.ToFullString().Trim();
+            }
+        }
+        return null;
     }
 
     private static void ProcessField(
@@ -487,6 +518,14 @@ internal static class ModelBuilder
             attributeNamespaces = new List<string>();
         }
 
+        // Extract field initializer/default value from source
+        // Skip initializers when NullableProperties = true (query DTOs should default to null)
+        string? defaultValue = null;
+        if (!nullableProperties)
+        {
+            defaultValue = ExtractFieldInitializer(field);
+        }
+
         members.Add(new FacetMember(
             field.Name,
             typeName,
@@ -510,8 +549,28 @@ internal static class ModelBuilder
             null,  // mapWhenConditions
             null,  // mapWhenDefault
             true,  // mapWhenIncludeInProjection
-            attributeNamespaces));
+            attributeNamespaces,
+            defaultValue));
         addedMembers.Add(field.Name);
+    }
+
+    /// <summary>
+    /// Extracts the field initializer from the source field's syntax declaration.
+    /// For example, for "public string Name = string.Empty;" this returns "string.Empty".
+    /// </summary>
+    private static string? ExtractFieldInitializer(IFieldSymbol field)
+    {
+        // Try to get the syntax for the field declaration
+        foreach (var syntaxRef in field.DeclaringSyntaxReferences)
+        {
+            var syntax = syntaxRef.GetSyntax();
+            if (syntax is VariableDeclaratorSyntax varSyntax && varSyntax.Initializer != null)
+            {
+                // Return the initializer value (the part after the '=')
+                return varSyntax.Initializer.Value.ToFullString().Trim();
+            }
+        }
+        return null;
     }
 
     /// <summary>

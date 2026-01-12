@@ -124,3 +124,34 @@ public class Category : BaseEntity<uint>
     public required string Name { get; set; }
     public string? Description { get; set; }
 }
+
+// Test entity with non-nullable reference type properties with initializers (GitHub issue)
+public class UserModel
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public UserSettings Settings { get; set; } = new();
+}
+
+public class UserSettings
+{
+    public bool NotificationsEnabled { get; set; } = true;
+    public string Theme { get; set; } = "light";
+    public string Language { get; set; } = "en";
+}
+
+// Facet for testing property initializer preservation
+[Facet(typeof(UserModel))]
+public partial class UserModelDto;
+
+// Test with init only properties that have initializers
+public class InitOnlyWithInitializers
+{
+    public string Id { get; init; } = Guid.NewGuid().ToString();
+    public string Name { get; init; } = string.Empty;
+    public List<string> Tags { get; init; } = new();
+    public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
+}
+
+[Facet(typeof(InitOnlyWithInitializers))]
+public partial class InitOnlyWithInitializersDto;

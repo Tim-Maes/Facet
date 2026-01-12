@@ -63,6 +63,12 @@ internal static class MemberGenerator
             propDef += " { get; set; }";
         }
 
+        // Add default value/initializer if present
+        if (!string.IsNullOrEmpty(member.DefaultValue))
+        {
+            propDef += $" = {member.DefaultValue};";
+        }
+
         if (member.IsRequired)
         {
             propDef = $"required {propDef}";
@@ -73,7 +79,16 @@ internal static class MemberGenerator
 
     private static void GenerateField(StringBuilder sb, FacetMember member, string indent)
     {
-        var fieldDef = $"public {member.TypeName} {member.Name};";
+        var fieldDef = $"public {member.TypeName} {member.Name}";
+        
+        // Add default value/initializer if present
+        if (!string.IsNullOrEmpty(member.DefaultValue))
+        {
+            fieldDef += $" = {member.DefaultValue}";
+        }
+        
+        fieldDef += ";";
+        
         if (member.IsRequired)
         {
             fieldDef = $"required {fieldDef}";
