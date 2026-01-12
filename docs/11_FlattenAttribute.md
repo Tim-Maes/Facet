@@ -123,6 +123,7 @@ public partial class PersonFlatDto
 | `MaxDepth` | `int` | `3` | Maximum depth to traverse when flattening nested objects. Set to `0` for unlimited (not recommended). |
 | `NamingStrategy` | `FlattenNamingStrategy` | `Prefix` | Naming strategy for flattened properties. |
 | `IncludeFields` | `bool` | `false` | Include public fields in addition to properties. |
+| `IncludeCollections` | `bool` | `false` | Include collection properties as-is without flattening their contents. |
 | `GenerateParameterlessConstructor` | `bool` | `true` | Generate a parameterless constructor for object initialization. |
 | `GenerateProjection` | `bool` | `true` | Generate a LINQ projection expression for database queries. |
 | `UseFullName` | `bool` | `false` | Use fully qualified type name in generated file names to avoid collisions. |
@@ -500,62 +501,111 @@ Facet automatically determines which types should be flattened as "leaf" propert
 - Complex reference types with properties
 - Value types with 3+ properties
 
-### Completely Ignored
+### Completely Ignored (by default)
 - Collections (Lists, Arrays, IEnumerable, etc.) - These are skipped entirely and don't generate any flattened properties
 
-## Null Handling
+## Including Collections
 
-Flattened DTOs use null-conditional operators for safe access:
+By default, collections are excluded from flattened types. However, you can opt-in to include collection properties using the `IncludeCollections` parameter. When enabled, collection properties are "hoisted" as-is into the flattened type without attempting to flatten their contents.
+
+### Without IncludeCollections (Default)
 
 ```csharp
-// Generated constructor
-public PersonFlatDto(Person source)
+public class ApiResponse
 {
-    this.FirstName = source.FirstName;
-    this.AddressStreet = source.Address?.Street;
-    this.AddressCity = source.Address?.City;
-    this.AddressCountryName = source.Address?.Country?.Name;
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public List<Item> Items { get; set; }
+    public string[] Tags { get; set; }
+}
+
+[Flatten(typeof(ApiResponse))]
+public partial class ApiResponseFlatDto
+{
+    // Generated:
+    // public int Id { get; set; }
+    // public string Name { get; set; }
+    // (Items and Tags are excluded)
 }
 ```
 
-This means null nested objects won't throw exceptions:
+### With IncludeCollections
 
 ```csharp
-var person = new Person { FirstName = "John", Address = null };
-var dto = new PersonFlatDto(person);
-// dto.AddressStreet is null (not an exception)
+[Flatten(typeof(ApiResponse), IncludeCollections = true)]
+public partial class ApiResponseFlatDto
+{
+    // Generated:
+    // public int Id { get; set; }
+    // public string Name { get; set; }
+    // public List<Item> Items { get; set; }      // Collection included as-is
+    // public string[] Tags { get; set; }         // Array included as-is
+}
 ```
 
-## Projection Expressions
+### Behavior Rules
 
-Flattened types generate a static `Projection` property for efficient database queries:
+1. **Collections are not flattened**: The collection type and its element type are preserved exactly as declared
+2. **Nested objects are still flattened**: Scalar properties from nested objects continue to be flattened
+3. **Works with all collection types**: `List<T>`, `Array`, `IEnumerable<T>`, `ICollection<T>`, `IList<T>`, `HashSet<T>`, etc.
+4. **Naming strategies apply**: Collection property names follow the same naming strategy as other properties
+
+### Use Cases
+
+**API Responses:**
+```csharp
+public class OrderResponse
+{
+    public int OrderId { get; set; }
+    public Customer Customer { get; set; }
+    public List<OrderLine> Lines { get; set; }
+}
+
+[Flatten(typeof(OrderResponse), IncludeCollections = true)]
+public partial class OrderResponseFlat
+{
+    // Generated:
+    // public int OrderId { get; set; }
+    // public string CustomerName { get; set; }     // Flattened from Customer
+    // public string CustomerEmail { get; set; }    // Flattened from Customer
+    // public List<OrderLine> Lines { get; set; }   // Collection preserved
+}
+```
+
+**Export/Report Data:**
+```csharp
+public class ProductExport
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public Category Category { get; set; }
+    public string[] Tags { get; set; }
+    public List<Image> Images { get; set; }
+}
+
+[Flatten(typeof(ProductExport), IncludeCollections = true)]
+public partial class ProductExportFlat
+{
+    // Scalar properties flattened, collections preserved
+}
+```
+
+### Combining with Other Options
+
+You can combine `IncludeCollections` with other Flatten options:
 
 ```csharp
-// Generated code
-public static Expression<Func<Person, PersonFlatDto>> Projection =>
-    source => new PersonFlatDto
-    {
-        FirstName = source.FirstName,
-        AddressStreet = source.Address.Street,
-        AddressCity = source.Address.City
-    };
-
-// Usage with Entity Framework
-var dtos = await dbContext.People
-    .Where(p => p.IsActive)
-    .Select(PersonFlatDto.Projection)
-    .ToListAsync();
+[Flatten(typeof(Order),
+    IncludeCollections = true,
+    IgnoreNestedIds = true,
+    NamingStrategy = FlattenNamingStrategy.SmartLeaf)]
+public partial class OrderFlatDto
+{
+    // Collections included
+    // Nested IDs excluded
+    // SmartLeaf naming for collisions
+}
 ```
-
-## Why No ToSource Method?
-
-Unlike the `[Facet]` attribute, flattened types **do not** generate `ToSource` methods. This is intentional because:
-
-1. **Ambiguity**: It's unclear which flattened properties map to which nested objects
-2. **Data Loss**: Flattening is lossy - you can't reliably reconstruct the original hierarchy
-3. **Intent**: Flattening is designed for read-only projections (API responses, reports)
-
-If you need bidirectional mapping, use the `[Facet]` attribute with `NestedFacets` instead.
 
 ## Complete Examples
 

@@ -70,7 +70,8 @@ internal sealed class FlattenProperty
         string sourcePath,
         ImmutableArray<string> pathSegments,
         bool isValueType,
-        string? xmlDocumentation)
+        string? xmlDocumentation,
+        bool isCollection = false)
     {
         Name = name;
         TypeName = typeName;
@@ -78,6 +79,7 @@ internal sealed class FlattenProperty
         PathSegments = pathSegments;
         IsValueType = isValueType;
         XmlDocumentation = xmlDocumentation;
+        IsCollection = isCollection;
     }
 
     /// <summary>
@@ -109,4 +111,9 @@ internal sealed class FlattenProperty
     /// XML documentation for this property, if available.
     /// </summary>
     public string? XmlDocumentation { get; }
+
+    /// <summary>
+    /// Whether this property is a collection type (included via IncludeCollections = true).
+    /// </summary>
+    public bool IsCollection { get; }
 }

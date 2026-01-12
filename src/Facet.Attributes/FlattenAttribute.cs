@@ -109,6 +109,21 @@ public sealed class FlattenAttribute : Attribute
     /// </para>
     /// </remarks>
     public bool IgnoreForeignKeyClashes { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets whether to include collection properties in the flattened type.
+    /// When true, collection properties (List, Array, IEnumerable, etc.) are included as-is
+    /// without flattening their contents. The collection type is preserved exactly as declared
+    /// in the source type.
+    /// Default is false (collections are skipped).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is useful for API responses where you want a flattened structure for scalar nested
+    /// properties, but still need to include collection data without modification.
+    /// </para>
+    /// </remarks>
+    public bool IncludeCollections { get; set; } = false;
 }
 
 /// <summary>
