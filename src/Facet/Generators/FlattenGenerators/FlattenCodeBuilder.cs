@@ -27,6 +27,13 @@ internal static class FlattenCodeBuilder
         sb.AppendLine("using System;");
         sb.AppendLine("using System.Linq;");
         sb.AppendLine("using System.Linq.Expressions;");
+        
+        // Add System.Collections.Generic if we have collection properties
+        if (model.Properties.Any(p => p.IsCollection))
+        {
+            sb.AppendLine("using System.Collections.Generic;");
+        }
+        
         sb.AppendLine();
 
         // Namespace
@@ -89,7 +96,14 @@ internal static class FlattenCodeBuilder
             else
             {
                 sb.AppendLine("    /// <summary>");
-                sb.AppendLine($"    /// Flattened from source path: {property.SourcePath}");
+                if (property.IsCollection)
+                {
+                    sb.AppendLine($"    /// Collection property from source path: {property.SourcePath}");
+                }
+                else
+                {
+                    sb.AppendLine($"    /// Flattened from source path: {property.SourcePath}");
+                }
                 sb.AppendLine("    /// </summary>");
             }
 

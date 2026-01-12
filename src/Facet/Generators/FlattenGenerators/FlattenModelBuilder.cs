@@ -39,6 +39,7 @@ internal static class FlattenModelBuilder
         var useFullName = GetNamedArg(attribute.NamedArguments, "UseFullName", false);
         var ignoreNestedIds = GetNamedArg(attribute.NamedArguments, "IgnoreNestedIds", false);
         var ignoreForeignKeyClashes = GetNamedArg(attribute.NamedArguments, "IgnoreForeignKeyClashes", false);
+        var includeCollections = GetNamedArg(attribute.NamedArguments, "IncludeCollections", false);
 
         // Infer the type kind from the target type declaration
         var (typeKind, isRecord) = TypeAnalyzer.InferTypeKind(targetSymbol);
@@ -55,6 +56,7 @@ internal static class FlattenModelBuilder
             includeFields,
             ignoreNestedIds,
             ignoreForeignKeyClashes,
+            includeCollections,
             token);
 
         // Determine full name
@@ -132,6 +134,7 @@ internal static class FlattenModelBuilder
         bool includeFields,
         bool ignoreNestedIds,
         bool ignoreForeignKeyClashes,
+        bool includeCollections,
         CancellationToken token)
     {
         var properties = new List<FlattenProperty>();
@@ -156,6 +159,7 @@ internal static class FlattenModelBuilder
                 ignoreNestedIds,
                 ignoreForeignKeyClashes,
                 foreignKeyPaths,
+                includeCollections,
                 collectionTypeCache,
                 leafTypeCache,
                 token);
@@ -174,6 +178,7 @@ internal static class FlattenModelBuilder
             ignoreNestedIds,
             ignoreForeignKeyClashes,
             foreignKeyPaths,
+            includeCollections,
             properties,
             seenNames,
             collidingLeafNames,
@@ -193,6 +198,7 @@ internal static class FlattenModelBuilder
         bool ignoreNestedIds,
         bool ignoreForeignKeyClashes,
         HashSet<string> foreignKeyPaths,
+        bool includeCollections,
         Dictionary<ITypeSymbol, bool> collectionTypeCache,
         Dictionary<ITypeSymbol, bool> leafTypeCache,
         CancellationToken token)
@@ -210,6 +216,7 @@ internal static class FlattenModelBuilder
             ignoreNestedIds,
             ignoreForeignKeyClashes,
             foreignKeyPaths,
+            includeCollections,
             leafNameCounts,
             new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default),
             collectionTypeCache,
@@ -233,6 +240,7 @@ internal static class FlattenModelBuilder
         bool ignoreNestedIds,
         bool ignoreForeignKeyClashes,
         HashSet<string> foreignKeyPaths,
+        bool includeCollections,
         Dictionary<string, int> leafNameCounts,
         HashSet<ITypeSymbol> visitedTypes,
         Dictionary<ITypeSymbol, bool> collectionTypeCache,
@@ -299,6 +307,18 @@ internal static class FlattenModelBuilder
 
             if (IsCollectionType(memberType, collectionTypeCache))
             {
+                // If includeCollections is true, count it as a leaf for collision detection
+                if (includeCollections)
+                {
+                    if (leafNameCounts.ContainsKey(leafName))
+                    {
+                        leafNameCounts[leafName]++;
+                    }
+                    else
+                    {
+                        leafNameCounts[leafName] = 1;
+                    }
+                }
                 continue;
             }
 
@@ -326,6 +346,7 @@ internal static class FlattenModelBuilder
                     ignoreNestedIds,
                     ignoreForeignKeyClashes,
                     foreignKeyPaths,
+                    includeCollections,
                     leafNameCounts,
                     visitedTypes,
                     collectionTypeCache,
@@ -454,6 +475,7 @@ internal static class FlattenModelBuilder
         bool ignoreNestedIds,
         bool ignoreForeignKeyClashes,
         HashSet<string> foreignKeyPaths,
+        bool includeCollections,
         List<FlattenProperty> properties,
         HashSet<string> seenNames,
         HashSet<string> collidingLeafNames,
@@ -528,8 +550,43 @@ internal static class FlattenModelBuilder
                 continue;
             }
 
-            if (IsCollectionType(memberType, collectionTypeCache))
+            bool isCollection = IsCollectionType(memberType, collectionTypeCache);
+            if (isCollection)
             {
+                // If includeCollections is enabled, add collection properties as-is
+                if (includeCollections)
+                {
+                    if (seenNames.Contains(flattenedName))
+                    {
+                        int counter = 2;
+                        string uniqueName;
+                        do
+                        {
+                            uniqueName = $"{flattenedName}{counter}";
+                            counter++;
+                        } while (seenNames.Contains(uniqueName));
+
+                        flattenedName = uniqueName;
+                    }
+
+                    seenNames.Add(flattenedName);
+
+                    // Get XML documentation
+                    var xmlDoc = CodeGenerationHelpers.ExtractXmlDocumentation(member);
+
+                    // Use the exact type name from the source - collections are included as-is
+                    var typeName = GeneratorUtilities.GetTypeNameWithNullability(memberType);
+
+                    // Create flattened property for the collection
+                    properties.Add(new FlattenProperty(
+                        flattenedName,
+                        typeName,
+                        newPath,
+                        newPathSegments.ToImmutableArray(),
+                        false, // Collections are reference types
+                        xmlDoc,
+                        true)); // Mark as collection
+                }
                 continue;
             }
 
@@ -572,7 +629,8 @@ internal static class FlattenModelBuilder
                     newPath,
                     newPathSegments.ToImmutableArray(),
                     memberType.IsValueType,
-                    xmlDoc));
+                    xmlDoc,
+                    false)); // Not a collection
             }
             else
             {
@@ -589,6 +647,7 @@ internal static class FlattenModelBuilder
                     ignoreNestedIds,
                     ignoreForeignKeyClashes,
                     foreignKeyPaths,
+                    includeCollections,
                     properties,
                     seenNames,
                     collidingLeafNames,

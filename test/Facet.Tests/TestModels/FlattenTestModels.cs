@@ -427,3 +427,68 @@ public partial class ProductCatalogFlattenedDto
     public string BrandName { get; set; } = string.Empty;         // From Brand.Name (prefixed due to collision)
     public string Country { get; set; } = string.Empty;           // From Brand.Country (no collision, no prefix)
 }
+
+// Test models for IncludeCollections feature (GitHub issue #242)
+public class ApiResponse
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public ResponseMetadata Metadata { get; set; } = null!;
+    public List<ResponseItem> Items { get; set; } = new();
+    public string[] Tags { get; set; } = Array.Empty<string>();
+}
+
+public class ResponseMetadata
+{
+    public DateTime CreatedAt { get; set; }
+    public string Version { get; set; } = string.Empty;
+}
+
+public class ResponseItem
+{
+    public int ItemId { get; set; }
+    public string ItemName { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+}
+
+// Flatten WITH collections included
+[Flatten(typeof(ApiResponse), IncludeCollections = true)]
+public partial class ApiResponseFlatWithCollectionsDto
+{
+    // Should include:
+    // - Id
+    // - Name
+    // - MetadataCreatedAt
+    // - MetadataVersion
+    // - Items (List<ResponseItem> - collection included as-is)
+    // - Tags (string[] - collection included as-is)
+}
+
+// Flatten WITHOUT collections (default behavior)
+[Flatten(typeof(ApiResponse))]
+public partial class ApiResponseFlatWithoutCollectionsDto
+{
+    // Should include:
+    // - Id
+    // - Name
+    // - MetadataCreatedAt
+    // - MetadataVersion
+    // (Items and Tags should be excluded)
+}
+
+// Test with IEnumerable and ICollection
+public class EntityWithVariousCollections
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public IEnumerable<string> Emails { get; set; } = Enumerable.Empty<string>();
+    public ICollection<int> Numbers { get; set; } = new List<int>();
+    public IList<DateTime> Dates { get; set; } = new List<DateTime>();
+    public HashSet<string> UniqueValues { get; set; } = new();
+}
+
+[Flatten(typeof(EntityWithVariousCollections), IncludeCollections = true)]
+public partial class EntityWithVariousCollectionsFlatDto
+{
+    // All collection types should be included as-is
+}
