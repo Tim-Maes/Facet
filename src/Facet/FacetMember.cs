@@ -34,6 +34,12 @@ internal sealed class FacetMember : IEquatable<FacetMember>
     public string? MapWhenDefault { get; }
     public bool MapWhenIncludeInProjection { get; }
 
+    /// <summary>
+    /// The default value/initializer expression from the source property (e.g., "= new()" or "= string.Empty").
+    /// When set, this will be included in the generated property declaration.
+    /// </summary>
+    public string? DefaultValue { get; }
+
     public FacetMember(
         string name,
         string typeName,
@@ -57,7 +63,8 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         IReadOnlyList<string>? mapWhenConditions = null,
         string? mapWhenDefault = null,
         bool mapWhenIncludeInProjection = true,
-        IReadOnlyList<string>? attributeNamespaces = null)
+        IReadOnlyList<string>? attributeNamespaces = null,
+        string? defaultValue = null)
     {
         Name = name;
         TypeName = typeName;
@@ -82,6 +89,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         MapWhenConditions = mapWhenConditions ?? Array.Empty<string>();
         MapWhenDefault = mapWhenDefault;
         MapWhenIncludeInProjection = mapWhenIncludeInProjection;
+        DefaultValue = defaultValue;
     }
 
     public bool Equals(FacetMember? other) =>
@@ -105,6 +113,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         IsUserDeclared == other.IsUserDeclared &&
         MapWhenDefault == other.MapWhenDefault &&
         MapWhenIncludeInProjection == other.MapWhenIncludeInProjection &&
+        DefaultValue == other.DefaultValue &&
         Attributes.SequenceEqual(other.Attributes) &&
         AttributeNamespaces.SequenceEqual(other.AttributeNamespaces) &&
         MapWhenConditions.SequenceEqual(other.MapWhenConditions);
@@ -135,6 +144,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
             hash = hash * 31 + IsUserDeclared.GetHashCode();
             hash = hash * 31 + (MapWhenDefault?.GetHashCode() ?? 0);
             hash = hash * 31 + MapWhenIncludeInProjection.GetHashCode();
+            hash = hash * 31 + (DefaultValue?.GetHashCode() ?? 0);
             hash = hash * 31 + Attributes.Count.GetHashCode();
             foreach (var attr in Attributes)
                 hash = hash * 31 + (attr?.GetHashCode() ?? 0);
