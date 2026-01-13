@@ -75,6 +75,13 @@ internal static class AttributeProcessor
         // Remove global:: prefix
         var name = GeneratorUtilities.StripGlobalPrefix(attributeFullName);
 
+        // Remove generic type parameters before extracting namespace
+        var genericIndex = name.IndexOf('<');
+        if (genericIndex > 0)
+        {
+            name = name.Substring(0, genericIndex);
+        }
+
         // Find the last dot to separate namespace from type name
         var lastDotIndex = name.LastIndexOf('.');
         if (lastDotIndex > 0)
@@ -121,6 +128,22 @@ internal static class AttributeProcessor
         }
 
         sb.Append($"[{attributeName}");
+
+        // Handle generic attributes (e.g., Attribute<T>)
+        if (attribute.AttributeClass.IsGenericType)
+        {
+            sb.Append("<");
+            var typeArguments = attribute.AttributeClass.TypeArguments;
+            var typeArgumentStrings = new List<string>();
+
+            foreach (var typeArg in typeArguments)
+            {
+                typeArgumentStrings.Add(typeArg.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+            }
+
+            sb.Append(string.Join(", ", typeArgumentStrings));
+            sb.Append(">");
+        }
 
         var hasArguments = attribute.ConstructorArguments.Length > 0 || attribute.NamedArguments.Length > 0;
 
@@ -239,7 +262,7 @@ internal static class AttributeProcessor
             return $"({enumTypeName})0";
 
         var longValue = Convert.ToInt64(underlyingValue);
-        
+
         // Special case: zero value
         if (longValue == 0)
         {
