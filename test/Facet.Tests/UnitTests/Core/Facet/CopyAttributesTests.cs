@@ -431,3 +431,108 @@ public class DatabaseTableWithEnumAttribute
 public partial class DatabaseTableWithEnumAttributeDto
 {
 }
+
+public interface IDynamicDropdownAttribute
+{
+    Type DynamicDropdownDataProviderType { get; }
+
+    string EmptyOptionText { get; set; }
+
+    bool UseComboBox { get; set; }
+
+    bool UseCheckboxMultiselect { get; set; }
+}
+
+public class DynamicDropdownAttribute<TDataProvider> : Attribute, IDynamicDropdownAttribute
+    where TDataProvider : IDynamicDropdownDataProvider
+{
+    public Type DynamicDropdownDataProviderType
+    {
+        get
+        {
+            return typeof(TDataProvider);
+        }
+    }
+
+    public string EmptyOptionText { get; set; }
+
+    public bool UseComboBox { get; set; }
+
+    public bool UseCheckboxMultiselect { get; set; } = false;
+
+    public DynamicDropdownAttribute(string emptyOptionText = null, bool useComboBox = true)
+    {
+        EmptyOptionText = emptyOptionText;
+        UseComboBox = useComboBox;
+    }
+}
+
+public interface IDynamicDropdownDataProvider
+{
+}
+
+public class DataSourceItem<TProperty, TListObject>
+{
+    public string Text { get; set; }
+
+    public TProperty Value { get; set; }
+
+    public TListObject Object { get; set; }
+
+}
+
+public abstract class DynamicDropdownDataProvider<TDataModel, TProperty, TListObject> : IDynamicDropdownDataProvider
+{
+    public bool AutoOrderByText { get; set; } = true;
+
+    public abstract List<DataSourceItem<TProperty, TListObject>> UnfilteredDataList(TDataModel? model);
+
+    public virtual List<DataSourceItem<TProperty, TListObject>> FilteredDataList(
+        TDataModel? model,
+        List<DataSourceItem<TProperty, TListObject>> unfilteredList)
+    {
+        return unfilteredList;
+    }
+
+    public string RetrieveDisplayText(List<DataSourceItem<TProperty, TListObject>> unfilteredList, PropertyInfo propertyInfo, TDataModel? context)
+    {
+        return string.Empty;
+    }
+}
+
+public class PermissionSchemeProvider : DynamicDropdownDataProvider<DatabaseTableModel, SortDirection, SortDirection>
+{
+    public override List<DataSourceItem<SortDirection, SortDirection>> UnfilteredDataList(DatabaseTableModel? model)
+    {
+        return new List<DataSourceItem<SortDirection, SortDirection>>()
+            {
+                new DataSourceItem<SortDirection, SortDirection>(){ Object = SortDirection.Descending, Text = "Descending", Value =  SortDirection.Descending},
+                new DataSourceItem<SortDirection, SortDirection>(){ Object = SortDirection.Ascending, Text = "Test", Value =  SortDirection.Ascending},
+            };
+    }
+}
+
+public class DatabaseTableWithGenericAttribute
+{
+    [Key]
+    public long DatabaseTableID { get; set; }
+
+    [DefaultSort(SortDirection.Descending, 0)]
+    public decimal Amount { get; set; }
+
+    [DefaultSort(SortDirection.Ascending, 1)]
+    public DateTime CreatedAt { get; set; }
+
+    public string FirstName { get; set; } = string.Empty;
+
+    public string LastName { get; set; } = string.Empty;
+
+    [DynamicDropdown<PermissionSchemeProvider>]
+    public SortDirection SortDirection { get; set; }
+}
+
+// DTO with CopyAttributes = true - should compile with custom generic attribute
+[Facet(typeof(DatabaseTableWithGenericAttribute), CopyAttributes = true)]
+public partial class DatabaseTableWithGenericAttributeDto
+{
+}
