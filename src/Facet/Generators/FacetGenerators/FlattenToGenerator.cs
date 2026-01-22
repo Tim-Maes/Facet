@@ -84,13 +84,7 @@ internal static class FlattenToGenerator
             FacetTargetModel? nestedFacet = null;
             if (!string.IsNullOrEmpty(nestedFacetTypeName))
             {
-                // Try the full qualified name first
-                if (!facetLookup.TryGetValue(nestedFacetTypeName, out nestedFacet))
-                {
-                    // Try just the simple name
-                    var simpleName = ExtractSimpleName(nestedFacetTypeName);
-                    facetLookup.TryGetValue(simpleName, out nestedFacet);
-                }
+                nestedFacet = FindFacetModel(nestedFacetTypeName, facetLookup);
             }
 
             if (nestedFacet != null)
