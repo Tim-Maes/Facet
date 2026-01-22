@@ -51,11 +51,6 @@ internal static class FlattenToGenerator
         else
         {
             // Use the first nested facet collection property
-            // Note: If multiple collections exist, the first one will be used.
-            // In the future, this could be enhanced to:
-            // 1. Analyze the target flatten type to determine which collection it expects
-            // 2. Allow users to specify which collection to flatten via attribute parameter
-            // 3. Generate multiple FlattenTo methods for each collection
             var collectionMember = collectionMembers[0];
 
             sb.AppendLine($"{indent}    if ({collectionMember.Name} == null)");
@@ -84,13 +79,7 @@ internal static class FlattenToGenerator
             FacetTargetModel? nestedFacet = null;
             if (!string.IsNullOrEmpty(nestedFacetTypeName))
             {
-                // Try the full qualified name first
-                if (!facetLookup.TryGetValue(nestedFacetTypeName, out nestedFacet))
-                {
-                    // Try just the simple name
-                    var simpleName = ExtractSimpleName(nestedFacetTypeName);
-                    facetLookup.TryGetValue(simpleName, out nestedFacet);
-                }
+                nestedFacet = FindFacetModel(nestedFacetTypeName, facetLookup);
             }
 
             if (nestedFacet != null)
@@ -259,9 +248,6 @@ internal static class FlattenToGenerator
                     var nestedFacet = FindFacetModel(nestedFacetTypeName, facetLookup);
                     if (nestedFacet != null)
                     {
-                        // Build the navigation path to access nested properties
-                        // This is the key fix: we build the path through the navigation property
-                        // e.g., item.Extended -> item.Extended.Property
                         var newNavigationPath = $"{navigationPath}.{member.Name}";
 
                         // Add this member to the path segments for SmartLeaf naming

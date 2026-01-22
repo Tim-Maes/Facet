@@ -104,6 +104,11 @@ internal static class ModelBuilder
             members = members.AddRange(expressionMembers);
         }
 
+        // Get the namespace early - needed for fullName calculation (GitHub issue #249)
+        var ns = targetSymbol.ContainingNamespace.IsGlobalNamespace
+            ? null
+            : targetSymbol.ContainingNamespace.ToDisplayString();
+
         // Determine full name
         var useFullName = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.UseFullName, false);
 
@@ -122,14 +127,16 @@ internal static class ModelBuilder
             // Build hierarchical name: ParentClass.NestedClass
             fullName = string.Join(".", containingTypes) + "." + targetSymbol.Name;
         }
+        else if (ns != null)
+        {
+            // Include namespace to avoid collisions for types with the same name in different namespaces
+            // (GitHub issue #249)
+            fullName = ns + "." + targetSymbol.Name;
+        }
         else
         {
             fullName = targetSymbol.Name;
         }
-
-        var ns = targetSymbol.ContainingNamespace.IsGlobalNamespace
-            ? null
-            : targetSymbol.ContainingNamespace.ToDisplayString();
 
         // Get containing types for the source type (to detect nesting in static classes)
         var sourceContainingTypes = TypeAnalyzer.GetContainingTypes(sourceType);
