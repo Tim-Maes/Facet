@@ -45,6 +45,12 @@ public partial class UserIncludeDto;
 [Facet(typeof(User), Include = new[] { "FirstName" })]
 public partial class UserSingleIncludeDto;
 
+[Facet(typeof(User), Include = new[] { "DateOfBirth" })]
+public partial record UserSingleObjectIncludeDto;
+
+[Facet(typeof(Tenant))]
+public partial record TenantSingleObjectIncludeDto;
+
 [Facet(typeof(Product), Include = new[] { "Name", "Price" })]
 public partial class ProductIncludeDto;
 
