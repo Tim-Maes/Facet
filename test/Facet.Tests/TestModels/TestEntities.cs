@@ -14,6 +14,11 @@ public class User
     public string AddedProperty { get; set; } = string.Empty;
 }
 
+public record Tenant
+{
+    public Guid Id { get; set; }
+}
+
 public class Product
 {
     public int Id { get; set; }

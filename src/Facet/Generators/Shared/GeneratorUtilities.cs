@@ -237,7 +237,7 @@ internal static class GeneratorUtilities
             var t when t.StartsWith("System.TimeSpan") => "default",
             var t when t.StartsWith("System.Guid") => "default",
             // For other types, use default() expression
-            _ => "default"
+            _ => $"default({typeName})"
         };
     }
 

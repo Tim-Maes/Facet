@@ -1,4 +1,5 @@
 using Facet.Tests.TestModels;
+using System;
 
 namespace Facet.Tests.Utilities;
 
@@ -117,7 +118,7 @@ public static class TestDataFactory
             PasswordHash = "hashed_password_modern"
         };
     }
-    
+
     public static ClassicUser CreateClassicUser(
         string firstName = "Classic",
         string lastName = "User")
@@ -150,4 +151,13 @@ public static class TestDataFactory
             Email = $"{name.Replace(" ", ".").ToLower()}@fields.com"
         };
     }
+
+    public static Tenant CreateTenant(Guid? id = null)
+    {
+        return new Tenant
+        {
+            Id = id ?? Guid.NewGuid(),
+        };
+    }
+
 }
