@@ -264,6 +264,49 @@ public sealed class FacetAttribute : Attribute
     public Type? AfterMapConfiguration { get; set; }
 
     /// <summary>
+    /// When true, the generated constructor that takes the source type will chain to the 
+    /// parameterless constructor using `: this()`. This ensures any custom initialization 
+    /// logic in your parameterless constructor runs before property mapping.
+    /// Default is false. Set to true when you have initialization logic in your parameterless 
+    /// constructor that needs to execute during mapping.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is useful when you need to initialize computed properties or run setup logic
+    /// that isn't simply copying values from the source.
+    /// </para>
+    /// <para>
+    /// Example usage:
+    /// <code>
+    /// public class ModelType
+    /// {
+    ///     public int MaxValue { get; set; }
+    /// }
+    ///
+    /// [Facet(typeof(ModelType), GenerateParameterlessConstructor = false, ChainToParameterlessConstructor = true)]
+    /// public partial class MyType
+    /// {
+    ///     public int Value { get; set; }
+    ///
+    ///     public MyType()
+    ///     {
+    ///         // Custom initialization logic
+    ///         Value = 100; // Default value
+    ///     }
+    /// }
+    /// </code>
+    /// The generated constructor will be:
+    /// <code>
+    /// public MyType(ModelType source) : this()
+    /// {
+    ///     this.MaxValue = source.MaxValue;
+    /// }
+    /// </code>
+    /// </para>
+    /// </remarks>
+    public bool ChainToParameterlessConstructor { get; set; } = false;
+
+    /// <summary>
     /// Creates a new FacetAttribute that targets a given source type and excludes specified members.
     /// </summary>
     /// <param name="sourceType">The type to generate from.</param>

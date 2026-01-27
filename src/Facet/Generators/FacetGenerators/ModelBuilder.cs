@@ -36,6 +36,7 @@ internal static class ModelBuilder
         var includeFields = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.IncludeFields, false);
         var generateConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateConstructor, true);
         var generateParameterlessConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateParameterlessConstructor, true);
+        var chainToParameterlessConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.ChainToParameterlessConstructor, false);
         var generateProjection = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateProjection, true);
         var generateToSource = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateToSource, false);
         var configurationTypeName = AttributeParser.ExtractConfigurationTypeName(attribute);
@@ -198,7 +199,8 @@ internal static class ModelBuilder
             baseClassMemberNames,
             flattenToTypes,
             beforeMapConfigurationTypeName,
-            afterMapConfigurationTypeName);
+            afterMapConfigurationTypeName,
+            chainToParameterlessConstructor);
     }
 
     #region Private Helper Methods

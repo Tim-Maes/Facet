@@ -201,3 +201,53 @@ public class ModelWithNullableList
 
 [Facet(typeof(ModelWithNullableList))]
 public partial record RecordWithNullableList;
+
+// When user has initialization logic in their parameterless constructor,
+// the generated constructor should chain to it
+public class ModelTypeForChaining
+{
+    public int MaxValue { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+[Facet(typeof(ModelTypeForChaining), GenerateParameterlessConstructor = false, ChainToParameterlessConstructor = true)]
+public partial class ChainedConstructorDto
+{
+    public int Value { get; set; }
+    public bool Initialized { get; set; }
+
+    public ChainedConstructorDto()
+    {
+        // Custom initialization logic that should run when mapping
+        Value = 100;
+        Initialized = true;
+    }
+}
+
+// Test without chaining (default behavior) for comparison
+[Facet(typeof(ModelTypeForChaining), GenerateParameterlessConstructor = false)]
+public partial class NonChainedConstructorDto
+{
+    public int Value { get; set; }
+    public bool Initialized { get; set; }
+
+    public NonChainedConstructorDto()
+    {
+        Value = 100;
+        Initialized = true;
+    }
+}
+
+// Test chaining with generated parameterless constructor disabled but still using the user's
+[Facet(typeof(ModelTypeForChaining), GenerateParameterlessConstructor = false, ChainToParameterlessConstructor = true, MaxDepth = 0, PreserveReferences = false)]
+public partial class ChainedConstructorNoDepthDto
+{
+    public int Value { get; set; }
+    public bool Initialized { get; set; }
+
+    public ChainedConstructorNoDepthDto()
+    {
+        Value = 200;
+        Initialized = true;
+    }
+}

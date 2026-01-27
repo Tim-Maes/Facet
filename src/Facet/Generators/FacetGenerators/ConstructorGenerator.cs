@@ -139,6 +139,11 @@ internal static class ConstructorGenerator
                 model.Members.Select(m => ExpressionBuilder.GetSourceValueExpression(m, "source")));
             ctorSig += $" : this({args})";
         }
+        else if (model.ChainToParameterlessConstructor && !isPositional)
+        {
+            // Chain to user-defined parameterless constructor
+            ctorSig += " : this()";
+        }
 
         if (hasRequiredProperties)
         {
@@ -270,6 +275,11 @@ internal static class ConstructorGenerator
             var args = string.Join(", ",
                 model.Members.Select(m => ExpressionBuilder.GetSourceValueExpression(m, "source", model.MaxDepth, true, model.PreserveReferences)));
             ctorSig += $" : this({args})";
+        }
+        else if (model.ChainToParameterlessConstructor && !isPositional)
+        {
+            // Chain to user-defined parameterless constructor
+            ctorSig += " : this()";
         }
 
         if (hasRequiredProperties)

@@ -16,6 +16,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public string Accessibility { get; }
     public bool GenerateConstructor { get; }
     public bool GenerateParameterlessConstructor { get; }
+    public bool ChainToParameterlessConstructor { get; }
     public bool GenerateExpressionProjection { get; }
     public bool GenerateToSource { get; }
     public string SourceTypeName { get; }
@@ -65,7 +66,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         ImmutableArray<string> baseClassMemberNames = default,
         ImmutableArray<string> flattenToTypes = default,
         string? beforeMapConfigurationTypeName = null,
-        string? afterMapConfigurationTypeName = null)
+        string? afterMapConfigurationTypeName = null,
+        bool chainToParameterlessConstructor = false)
     {
         Name = name;
         Namespace = @namespace;
@@ -75,6 +77,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         Accessibility = accessibility;
         GenerateConstructor = generateConstructor;
         GenerateParameterlessConstructor = generateParameterlessConstructor;
+        ChainToParameterlessConstructor = chainToParameterlessConstructor;
         GenerateExpressionProjection = generateExpressionProjection;
         GenerateToSource = generateToSource;
         SourceTypeName = sourceTypeName;
@@ -110,6 +113,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && Accessibility == other.Accessibility
             && GenerateConstructor == other.GenerateConstructor
             && GenerateParameterlessConstructor == other.GenerateParameterlessConstructor
+            && ChainToParameterlessConstructor == other.ChainToParameterlessConstructor
             && GenerateExpressionProjection == other.GenerateExpressionProjection
             && SourceTypeName == other.SourceTypeName
             && SourceContainingTypes.SequenceEqual(other.SourceContainingTypes)
@@ -146,6 +150,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + (Accessibility?.GetHashCode() ?? 0);
             hash = hash * 31 + GenerateConstructor.GetHashCode();
             hash = hash * 31 + GenerateParameterlessConstructor.GetHashCode();
+            hash = hash * 31 + ChainToParameterlessConstructor.GetHashCode();
             hash = hash * 31 + GenerateExpressionProjection.GetHashCode();
             hash = hash * 31 + (SourceTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + (ConfigurationTypeName?.GetHashCode() ?? 0);
