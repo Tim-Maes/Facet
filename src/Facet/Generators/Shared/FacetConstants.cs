@@ -95,6 +95,7 @@ internal static class FacetConstants
         public const string IncludeFields = "IncludeFields";
         public const string GenerateConstructor = "GenerateConstructor";
         public const string GenerateParameterlessConstructor = "GenerateParameterlessConstructor";
+        public const string ChainToParameterlessConstructor = "ChainToParameterlessConstructor";
         public const string GenerateProjection = "GenerateProjection";
         public const string GenerateToSource = "GenerateToSource";
         public const string PreserveInitOnlyProperties = "PreserveInitOnlyProperties";

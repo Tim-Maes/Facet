@@ -27,6 +27,7 @@ public partial class MyFacet { }
 | `IncludeFields`                | `bool`    | Include public fields from the source type (default: false for include mode, false for exclude mode). |
 | `GenerateConstructor`          | `bool`    | Generate a constructor that copies values from the source (default: true).   |
 | `GenerateParameterlessConstructor` | `bool` | Generate a parameterless constructor for testing and initialization (default: true). |
+| `ChainToParameterlessConstructor` | `bool` | Chain generated constructors to the user-defined parameterless constructor using `: this()` (default: false). See [Constructor Chaining](#constructor-chaining) below. |
 | `Configuration`                | `Type?`   | Custom mapping config type (see [Custom Mapping](04_CustomMapping.md)).      |
 | `GenerateProjection`           | `bool`    | Generate a static LINQ projection (default: true).                          |
 | `GenerateToSource`             | `bool`    | Generate a method to map back from facet to source type (default: false).    |
@@ -44,7 +45,7 @@ public partial class MyFacet { }
 The `Include` and `Exclude` parameters are mutually exclusive:
 
 - **Exclude Mode**: Include all properties except those listed in `exclude` (default behavior)
-- **Include Mode**: Only include properties listed in `Include` array
+- **Include Mode**: Only include properties listed in the `Include` array
 
 ### Include Mode Behavior
 
