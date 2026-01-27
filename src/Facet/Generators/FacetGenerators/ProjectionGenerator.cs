@@ -65,6 +65,7 @@ internal static class ProjectionGenerator
     /// <summary>
     /// Generates the projection expression body using object initializer syntax for EF Core compatibility.
     /// This allows EF Core to automatically include navigation properties without requiring explicit .Include() calls.
+    /// For positional records without a parameterless constructor, uses constructor invocation syntax instead.
     /// </summary>
     private static void GenerateProjectionExpression(
         StringBuilder sb,
@@ -73,6 +74,61 @@ internal static class ProjectionGenerator
         Dictionary<string, FacetTargetModel> facetLookup)
     {
         var indent = baseIndent + "    ";
+        
+        // Check if this is a positional record without a parameterless constructor
+        // In this case, we need to use constructor syntax instead of object initializer
+        var isPositionalWithoutParameterless = model.IsRecord && 
+                                                !model.HasExistingPrimaryConstructor && 
+                                                !model.GenerateParameterlessConstructor;
+        
+        if (isPositionalWithoutParameterless)
+        {
+            // Use constructor invocation syntax for positional records
+            GeneratePositionalRecordProjection(sb, model, indent, facetLookup);
+        }
+        else
+        {
+            // Use object initializer syntax (standard approach)
+            GenerateObjectInitializerProjection(sb, model, indent, facetLookup);
+        }
+    }
+
+    /// <summary>
+    /// Generates projection using constructor invocation syntax for positional records.
+    /// </summary>
+    private static void GeneratePositionalRecordProjection(
+        StringBuilder sb,
+        FacetTargetModel model,
+        string indent,
+        Dictionary<string, FacetTargetModel> facetLookup)
+    {
+        var visitedTypes = new HashSet<string> { model.Name };
+        var includedMembers = model.Members.Where(m => m.MapFromIncludeInProjection).ToArray();
+        
+        sb.Append($"{indent}source => new {model.Name}(");
+        
+        for (int i = 0; i < includedMembers.Length; i++)
+        {
+            var member = includedMembers[i];
+            var projectionValue = GetProjectionValueExpression(member, "source", indent, facetLookup, visitedTypes, 0, model.MaxDepth);
+            sb.Append(projectionValue);
+            
+            if (i < includedMembers.Length - 1)
+                sb.Append(", ");
+        }
+        
+        sb.AppendLine(");");
+    }
+
+    /// <summary>
+    /// Generates projection using object initializer syntax (standard approach).
+    /// </summary>
+    private static void GenerateObjectInitializerProjection(
+        StringBuilder sb,
+        FacetTargetModel model,
+        string indent,
+        Dictionary<string, FacetTargetModel> facetLookup)
+    {
         sb.AppendLine($"{indent}source => new {model.Name}");
         sb.AppendLine($"{indent}{{");
 

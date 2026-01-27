@@ -160,3 +160,44 @@ public class InitOnlyWithInitializers
 
 [Facet(typeof(InitOnlyWithInitializers))]
 public partial class InitOnlyWithInitializersDto;
+
+// Test entity for GitHub issue #251 - Nullable issues with object properties
+// When a model has a single reference type property like List<string>,
+// the generated record positional constructor can become ambiguous with
+// the compiler-generated copy constructor
+public class ModelWithListProperty
+{
+    public List<string> Tags { get; set; } = [];
+}
+
+// These tests verify that the ambiguity is resolved by using typed default values
+// in the generated parameterless constructor
+
+[Facet(typeof(ModelWithListProperty))]
+public partial record RecordWithListDefault;
+
+[Facet(typeof(ModelWithListProperty), GenerateParameterlessConstructor = false)]
+public partial record RecordWithListNoParameterless;
+
+[Facet(typeof(ModelWithListProperty), GenerateProjection = false)]
+public partial record RecordWithListNoProjection;
+
+// Test with multiple properties to ensure the fix doesn't break normal cases
+public class ModelWithMultipleProperties
+{
+    public string Name { get; set; } = string.Empty;
+    public List<string> Tags { get; set; } = [];
+    public int Count { get; set; }
+}
+
+[Facet(typeof(ModelWithMultipleProperties))]
+public partial record RecordWithMultipleProperties;
+
+// Test with nullable reference type property
+public class ModelWithNullableList
+{
+    public List<string>? Tags { get; set; }
+}
+
+[Facet(typeof(ModelWithNullableList))]
+public partial record RecordWithNullableList;

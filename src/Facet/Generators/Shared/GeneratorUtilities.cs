@@ -209,10 +209,10 @@ internal static class GeneratorUtilities
     /// <returns>A C# expression string representing the default value.</returns>
     public static string GetDefaultValue(string typeName)
     {
-        // Handle nullable types
+        // Handle nullable types - use typed null to avoid ambiguity with record copy constructors
         if (typeName.EndsWith("?"))
         {
-            return "null";
+            return $"({typeName})null";
         }
 
         // Handle common value types
@@ -236,8 +236,11 @@ internal static class GeneratorUtilities
             var t when t.StartsWith("System.DateTimeOffset") => "default",
             var t when t.StartsWith("System.TimeSpan") => "default",
             var t when t.StartsWith("System.Guid") => "default",
-            // For other types, use default() expression
-            _ => $"default({typeName})"
+            // For value types, use default() expression
+            var t when IsValueType(t) => $"default({typeName})",
+            // For reference types (collections, objects, etc.), use typed default to avoid 
+            // ambiguity with record copy constructors when null could match multiple parameter types
+            _ => $"default({typeName})!"
         };
     }
 
