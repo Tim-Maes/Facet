@@ -192,7 +192,8 @@ internal static class ExpressionBuilder
                 return $"__depth < {maxDepth} && {sourceVariableName}.{sourcePropName} != null ? {collectionExpression} : null";
             }
 
-            return $"__depth < {maxDepth} ? {collectionExpression} : null";
+            // For non-nullable collections, use null-forgiving operator when depth is exceeded
+            return $"__depth < {maxDepth} ? {collectionExpression} : null!";
         }
         else
         {
@@ -248,7 +249,9 @@ internal static class ExpressionBuilder
             if (preserveReferences && useDepthParameter)
             {
                 // Check against __processed (not updatedProcessed) to detect if this exact object was already processed
-                return $"(__processed != null && __processed.Contains({sourceExpr}) ? null : {ctorCall})";
+                // For non-nullable types, use null-forgiving operator to avoid CS8601 compiler warnings
+                var nullFallback = isNullable ? "null" : "null!";
+                return $"(__processed != null && __processed.Contains({sourceExpr}) ? {nullFallback} : {ctorCall})";
             }
 
             return ctorCall;
@@ -264,7 +267,12 @@ internal static class ExpressionBuilder
                 return $"__depth < {maxDepth} && {sourceVariableName}.{sourcePropName} != null ? {constructorCall} : null";
             }
 
-            return $"__depth < {maxDepth} ? {constructorCall} : null";
+            // For non-nullable properties, use null-forgiving operator when depth is exceeded
+            // This is pragmatic because:
+            // 1. Circular references triggering this are rare
+            // 2. The depth limit is generous (default 10)
+            // 3. Required properties need a value, and null! is the best fallback
+            return $"__depth < {maxDepth} ? {constructorCall} : null!";
         }
         else
         {

@@ -192,6 +192,62 @@ var mappedEmployee = employeeDto.ToSource();
 - Reference types (string, objects) remain reference types but are marked nullable
 - Disable `GenerateToSource` to avoid mapping issues from nullable to non-nullable types
 
+## Constructor Chaining
+
+The `ChainToParameterlessConstructor` parameter allows the generated constructor to chain to your user-defined parameterless constructor using `: this()`. This ensures any custom initialization logic in your constructor runs before property mapping.
+
+### Usage
+
+```csharp
+public class ModelType
+{
+    public int MaxValue { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+[Facet(typeof(ModelType), GenerateParameterlessConstructor = false, ChainToParameterlessConstructor = true)]
+public partial class MyDto
+{
+    public int Value { get; set; }
+    public bool Initialized { get; set; }
+
+    public MyDto()
+    {
+        // Custom initialization logic that runs before mapping
+        Value = 100;
+        Initialized = true;
+    }
+}
+
+// Usage
+var source = new ModelType { MaxValue = 42, Name = "Test" };
+var dto = new MyDto(source);
+// dto.Value == 100 (from parameterless constructor)
+// dto.Initialized == true (from parameterless constructor)
+// dto.MaxValue == 42 (from source mapping)
+// dto.Name == "Test" (from source mapping)
+```
+
+### Generated Code
+
+With `ChainToParameterlessConstructor = true`, the generated constructor chains to your parameterless constructor:
+
+```csharp
+public MyDto(ModelType source) : this()  // <-- Chains to your constructor
+{
+    this.MaxValue = source.MaxValue;
+    this.Name = source.Name;
+}
+```
+
+### When to Use
+
+- When you have initialization logic in your parameterless constructor that needs to run during mapping
+- When you need to set default values that aren't simply copied from the source
+- When you have computed or derived properties that need initial values
+
+**Note:** Set `GenerateParameterlessConstructor = false` to prevent the generator from creating its own parameterless constructor, which would conflict with yours.
+
 ## Attribute Copying
 
 The `CopyAttributes` parameter allows you to copy attributes from the source type's members to the generated facet members. This is particularly useful for preserving data validation attributes when creating DTOs for API models.
