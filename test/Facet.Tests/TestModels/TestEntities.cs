@@ -251,3 +251,41 @@ public partial class ChainedConstructorNoDepthDto
         Initialized = true;
     }
 }
+
+// When source has a required non-nullable nested property, 
+// the generated facet should respect that nullability
+public class UserModelWithRequiredSettings
+{
+    public int Id { get; set; }
+    public int SettingsId { get; set; }
+    public required UserSettingsModelForNested Settings { get; set; }
+}
+
+public class UserSettingsModelForNested
+{
+    public int Id { get; set; }
+    public int StartTick { get; set; }
+    public int StopTick { get; set; }
+}
+
+[Facet(typeof(UserSettingsModelForNested), nameof(UserSettingsModelForNested.Id))]
+public partial class UserSettingsFacet;
+
+// This should generate a non-nullable Settings property because:
+// 1. Source property is marked as 'required'
+// 2. Source property type has NotAnnotated nullable annotation (non-nullable)
+[Facet(typeof(UserModelWithRequiredSettings), PreserveRequiredProperties = true, NestedFacets = [typeof(UserSettingsFacet)])]
+public partial class UserWithRequiredSettingsFacet
+{
+    public int ProcessedTicks => Settings.StopTick - Settings.StartTick;
+}
+
+// Test without required - should be nullable for safety
+public class UserModelWithOptionalSettings
+{
+    public int Id { get; set; }
+    public UserSettingsModelForNested Settings { get; set; } = new();
+}
+
+[Facet(typeof(UserModelWithOptionalSettings), NestedFacets = [typeof(UserSettingsFacet)])]
+public partial class UserWithOptionalSettingsFacet;
