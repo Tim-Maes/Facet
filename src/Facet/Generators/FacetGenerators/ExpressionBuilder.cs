@@ -192,8 +192,9 @@ internal static class ExpressionBuilder
                 return $"__depth < {maxDepth} && {sourceVariableName}.{sourcePropName} != null ? {collectionExpression} : null";
             }
 
-            // For non-nullable collections, use null-forgiving operator when depth is exceeded
-            return $"__depth < {maxDepth} ? {collectionExpression} : null!";
+            // For non-nullable collections, add null check with descriptive exception when within depth,
+            // and use null-forgiving operator when depth is exceeded
+            return $"__depth < {maxDepth} ? ({sourceVariableName}.{sourcePropName} != null ? {collectionExpression} : throw new System.ArgumentNullException(\"{sourcePropName}\", \"Required nested facet collection property '{sourcePropName}' on source type was null. Ensure the source property is populated before mapping.\")) : null!";
         }
         else
         {
@@ -219,7 +220,8 @@ internal static class ExpressionBuilder
                 return $"{sourceVariableName}.{sourcePropName} != null ? {collectionExpression} : null";
             }
 
-            return collectionExpression;
+            // For non-nullable collections without depth tracking, add null check with descriptive exception
+            return $"{sourceVariableName}.{sourcePropName} != null ? {collectionExpression} : throw new System.ArgumentNullException(\"{sourcePropName}\", \"Required nested facet collection property '{sourcePropName}' on source type was null. Ensure the source property is populated before mapping.\")";
         }
     }
 
@@ -267,12 +269,9 @@ internal static class ExpressionBuilder
                 return $"__depth < {maxDepth} && {sourceVariableName}.{sourcePropName} != null ? {constructorCall} : null";
             }
 
-            // For non-nullable properties, use null-forgiving operator when depth is exceeded
-            // This is pragmatic because:
-            // 1. Circular references triggering this are rare
-            // 2. The depth limit is generous (default 10)
-            // 3. Required properties need a value, and null! is the best fallback
-            return $"__depth < {maxDepth} ? {constructorCall} : null!";
+            // For non-nullable properties, add null check with descriptive exception
+            // This prevents NullReferenceException inside the nested constructor when source property is unexpectedly null
+            return $"__depth < {maxDepth} ? ({sourceVariableName}.{sourcePropName} != null ? {constructorCall} : throw new System.ArgumentNullException(\"{sourcePropName}\", \"Required nested facet property '{sourcePropName}' on source type was null. Ensure the source property is populated before mapping.\")) : null!";
         }
         else
         {
@@ -283,8 +282,8 @@ internal static class ExpressionBuilder
                 return $"{sourceVariableName}.{sourcePropName} != null ? {constructorCall} : null";
             }
 
-            // Use the nested facet's generated constructor
-            return constructorCall;
+            // For non-nullable properties without depth tracking, add null check with descriptive exception
+            return $"{sourceVariableName}.{sourcePropName} != null ? {constructorCall} : throw new System.ArgumentNullException(\"{sourcePropName}\", \"Required nested facet property '{sourcePropName}' on source type was null. Ensure the source property is populated before mapping.\")";
         }
     }
 

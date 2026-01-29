@@ -289,3 +289,15 @@ public class UserModelWithOptionalSettings
 
 [Facet(typeof(UserModelWithOptionalSettings), NestedFacets = [typeof(UserSettingsFacet)])]
 public partial class UserWithOptionalSettingsFacet;
+
+// Test entities for GitHub issue #258 - Required collection nested facets
+// When source has a required non-nullable collection nested property
+public class TeamModelWithRequiredMembers
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public required List<UserSettingsModelForNested> Members { get; set; }
+}
+
+[Facet(typeof(TeamModelWithRequiredMembers), PreserveRequiredProperties = true, NestedFacets = [typeof(UserSettingsFacet)])]
+public partial class TeamWithRequiredMembersFacet;
