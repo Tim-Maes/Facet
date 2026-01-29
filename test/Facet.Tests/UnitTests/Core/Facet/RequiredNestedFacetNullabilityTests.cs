@@ -158,4 +158,116 @@ public class RequiredNestedFacetNullabilityTests
         dtos[0].Settings.StartTick.Should().Be(0);
         dtos[0].Settings.StopTick.Should().Be(100);
     }
+
+    /// <summary>
+    /// When a required nested facet source property is null at runtime,
+    /// the constructor should throw ArgumentNullException with a descriptive message
+    /// instead of a cryptic NullReferenceException.
+    /// This tests the fix for GitHub issue #258.
+    /// </summary>
+    [Fact]
+    public void RequiredNestedFacet_WhenSourcePropertyIsNull_ShouldThrowArgumentNullException()
+    {
+        // Arrange - Force null on a required property (using null! to bypass compiler)
+        var source = new UserModelWithRequiredSettings
+        {
+            Id = 1,
+            SettingsId = 100,
+            Settings = null!  // This violates the required constraint at runtime
+        };
+
+        // Act & Assert
+        var action = () => new UserWithRequiredSettingsFacet(source);
+        
+        action.Should().Throw<ArgumentNullException>()
+            .WithMessage("*Settings*")
+            .WithMessage("*Required nested facet property*");
+    }
+
+    /// <summary>
+    /// Verifies that the ArgumentNullException contains helpful information
+    /// about which property was null.
+    /// </summary>
+    [Fact]
+    public void RequiredNestedFacet_WhenSourcePropertyIsNull_ExceptionShouldContainPropertyName()
+    {
+        // Arrange
+        var source = new UserModelWithRequiredSettings
+        {
+            Id = 1,
+            SettingsId = 100,
+            Settings = null!
+        };
+
+        // Act
+        ArgumentNullException? exception = null;
+        try
+        {
+            _ = new UserWithRequiredSettingsFacet(source);
+        }
+        catch (ArgumentNullException ex)
+        {
+            exception = ex;
+        }
+
+        // Assert
+        exception.Should().NotBeNull();
+        exception!.ParamName.Should().Be("Settings");
+        exception.Message.Should().Contain("Required nested facet property");
+        exception.Message.Should().Contain("was null");
+    }
+
+    /// <summary>
+    /// When a required collection nested facet source property is null at runtime,
+    /// the constructor should throw ArgumentNullException with a descriptive message.
+    /// This tests the collection variant of the fix for GitHub issue #258.
+    /// </summary>
+    [Fact]
+    public void RequiredCollectionNestedFacet_WhenSourcePropertyIsNull_ShouldThrowArgumentNullException()
+    {
+        // Arrange - Force null on a required collection property
+        var source = new TeamModelWithRequiredMembers
+        {
+            Id = 1,
+            Name = "Team Alpha",
+            Members = null!  // This violates the required constraint at runtime
+        };
+
+        // Act & Assert
+        var action = () => new TeamWithRequiredMembersFacet(source);
+        
+        action.Should().Throw<ArgumentNullException>()
+            .WithMessage("*Members*")
+            .WithMessage("*Required nested facet collection property*");
+    }
+
+    /// <summary>
+    /// Verifies that a required collection nested facet works correctly when source is populated.
+    /// </summary>
+    [Fact]
+    public void RequiredCollectionNestedFacet_WhenSourcePropertyIsPopulated_ShouldMapCorrectly()
+    {
+        // Arrange
+        var source = new TeamModelWithRequiredMembers
+        {
+            Id = 1,
+            Name = "Team Alpha",
+            Members = new List<UserSettingsModelForNested>
+            {
+                new() { Id = 1, StartTick = 10, StopTick = 50 },
+                new() { Id = 2, StartTick = 20, StopTick = 60 }
+            }
+        };
+
+        // Act
+        var dto = new TeamWithRequiredMembersFacet(source);
+
+        // Assert
+        dto.Id.Should().Be(1);
+        dto.Name.Should().Be("Team Alpha");
+        dto.Members.Should().NotBeNull();
+        dto.Members.Should().HaveCount(2);
+        dto.Members[0].StartTick.Should().Be(10);
+        dto.Members[1].StartTick.Should().Be(20);
+    }
 }
