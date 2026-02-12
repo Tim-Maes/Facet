@@ -106,5 +106,6 @@ internal static class FacetConstants
         public const string PreserveReferences = "PreserveReferences";
         public const string UseFullName = "UseFullName";
         public const string ReadOnly = "ReadOnly";
+        public const string ConvertEnumsTo = "ConvertEnumsTo";
     }
 }

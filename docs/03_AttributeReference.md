@@ -39,6 +39,7 @@ public partial class MyFacet { }
 | `MaxDepth`                     | `int`     | Maximum depth for nested facet recursion to prevent stack overflow (default: 3). Set to 0 for unlimited (not recommended). See [Circular Reference Protection](#circular-reference-protection) below. |
 | `PreserveReferences`           | `bool`    | Enable runtime circular reference detection using object tracking (default: true). See [Circular Reference Protection](#circular-reference-protection) below. |
 | `SourceSignature`              | `string?` | Hash signature to track source entity changes. Emits FAC022 warning when source structure changes. See [Source Signature Change Tracking](16_SourceSignature.md). |
+| `ConvertEnumsTo`               | `Type?`   | When set, all enum properties are converted to the specified type (`typeof(string)` or `typeof(int)`) in the generated facet. Default is null (enums retain their original types). See [Enum Conversion](20_ConvertEnumsTo.md). |
 
 ## Include vs Exclude
 
@@ -535,6 +536,45 @@ public DateTime? CompletedAt { get; set; }
 ```
 
 See [MapWhen Conditional Mapping](17_MapWhen.md) for full documentation.
+
+---
+
+## Enum Conversion
+
+The `ConvertEnumsTo` property converts all enum properties to `string` or `int` in the generated facet.
+
+### Basic Usage
+
+```csharp
+// Convert enums to strings (for API responses)
+[Facet(typeof(User), ConvertEnumsTo = typeof(string))]
+public partial class UserDto;
+
+// Convert enums to integers (for storage)
+[Facet(typeof(User), ConvertEnumsTo = typeof(int))]
+public partial class UserDto;
+```
+
+### With Reverse Mapping
+
+```csharp
+[Facet(typeof(User), ConvertEnumsTo = typeof(string), GenerateToSource = true)]
+public partial class UserDto;
+
+var dto = new UserDto(user);
+dto.Status // "Active" (string)
+
+var entity = dto.ToSource();
+entity.Status // UserStatus.Active (enum)
+```
+
+### Nullable Enums
+
+Nullable enum properties preserve their nullability after conversion:
+- `UserStatus?` ? `string?` (null when source is null)
+- `UserStatus?` ? `int?` (nullable int)
+
+See [Enum Conversion](20_ConvertEnumsTo.md) for full documentation.
 
 ---
 

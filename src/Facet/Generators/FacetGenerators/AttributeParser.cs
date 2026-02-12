@@ -198,6 +198,28 @@ internal static class AttributeParser
     }
 
     /// <summary>
+    /// Extracts the ConvertEnumsTo type from the attribute.
+    /// Returns "string" or "int" if specified, otherwise null.
+    /// </summary>
+    public static string? ExtractConvertEnumsTo(AttributeData attribute)
+    {
+        var arg = attribute.NamedArguments
+            .FirstOrDefault(kvp => kvp.Key == FacetConstants.AttributeNames.ConvertEnumsTo);
+
+        if (arg.Value.Value is INamedTypeSymbol typeSymbol)
+        {
+            return typeSymbol.SpecialType switch
+            {
+                SpecialType.System_String => "string",
+                SpecialType.System_Int32 => "int",
+                _ => null
+            };
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Extracts the FlattenTo types from the FlattenTo parameter.
     /// Returns a list of fully qualified type names of flatten target types.
     /// </summary>

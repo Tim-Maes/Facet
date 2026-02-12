@@ -220,3 +220,29 @@ public partial class UserWithEnumQueryDto;
 // Test for excluding inherited property from base class
 [Facet(typeof(Category), "Id")]
 public partial record UpdateCategoryViewModel;
+
+// ConvertEnumsTo functionality test DTOs
+[Facet(typeof(UserWithEnum), ConvertEnumsTo = typeof(string), GenerateToSource = true)]
+public partial class UserWithEnumToStringDto;
+
+[Facet(typeof(UserWithEnum), ConvertEnumsTo = typeof(int), GenerateToSource = true)]
+public partial class UserWithEnumToIntDto;
+
+// Test with nullable enum property
+public class EntityWithNullableEnum
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public UserStatus? Status { get; set; }
+    public UserStatus NonNullableStatus { get; set; }
+}
+
+[Facet(typeof(EntityWithNullableEnum), ConvertEnumsTo = typeof(string), GenerateToSource = true)]
+public partial class NullableEnumToStringDto;
+
+[Facet(typeof(EntityWithNullableEnum), ConvertEnumsTo = typeof(int), GenerateToSource = true)]
+public partial class NullableEnumToIntDto;
+
+// Test ConvertEnumsTo with NullableProperties = true
+[Facet(typeof(UserWithEnum), ConvertEnumsTo = typeof(string), NullableProperties = true)]
+public partial class UserWithEnumToStringNullableDto;

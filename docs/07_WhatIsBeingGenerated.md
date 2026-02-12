@@ -865,6 +865,108 @@ public partial class MyDto;
 
 ---
 
+## 12. ConvertEnumsTo - Enum Type Conversion
+
+### Input
+
+```csharp
+public enum UserStatus { Active, Inactive, Pending, Suspended }
+
+public class User
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public UserStatus Status { get; set; }
+    public string Email { get; set; }
+}
+
+[Facet(typeof(User), ConvertEnumsTo = typeof(string), GenerateToSource = true)]
+public partial class UserStringDto;
+```
+
+### Generated Output
+
+```csharp
+public partial class UserStringDto
+{
+    // Status is string instead of UserStatus
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string Status { get; set; }     // ? Converted from UserStatus
+    public string Email { get; set; }
+
+    public UserStringDto() { }
+
+    public UserStringDto(User source)
+    {
+        this.Id = source.Id;
+        this.Name = source.Name;
+        this.Status = source.Status.ToString();   // ? Enum ? string
+        this.Email = source.Email;
+    }
+
+    public static UserStringDto FromSource(User source)
+    {
+        return new UserStringDto
+        {
+            Id = source.Id,
+            Name = source.Name,
+            Status = source.Status.ToString(),
+            Email = source.Email
+        };
+    }
+
+    public static Expression<Func<User, UserStringDto>> Projection =>
+        source => new UserStringDto
+        {
+            Id = source.Id,
+            Name = source.Name,
+            Status = source.Status.ToString(),    // ? Works in EF Core
+            Email = source.Email
+        };
+
+    public User ToSource()
+    {
+        return new User
+        {
+            Id = this.Id,
+            Name = this.Name,
+            Status = (UserStatus)System.Enum.Parse(typeof(UserStatus), this.Status),  // ? string ? Enum
+            Email = this.Email
+        };
+    }
+}
+```
+
+### Int Conversion
+
+With `ConvertEnumsTo = typeof(int)`, the generated code uses casts instead:
+
+```csharp
+// Constructor
+this.Status = (int)source.Status;
+
+// Projection
+Status = (int)source.Status
+
+// ToSource
+Status = (UserStatus)this.Status
+```
+
+### Nullable Enum Handling
+
+For `UserStatus? Status`, null safety is preserved:
+
+```csharp
+// String: constructor
+this.Status = source.Status?.ToString();
+
+// Int: constructor  
+this.Status = source.Status.HasValue ? (int?)source.Status.Value : null;
+```
+
+---
+
 ## Summary of Generated Members
 
 For a basic facet, Facet generates:
@@ -873,6 +975,7 @@ For a basic facet, Facet generates:
 - All non-excluded properties from source
 - User-defined properties from partial class
 - XML documentation copied from source
+- Enum properties converted to `string` or `int` (when `ConvertEnumsTo` is set)
 
 ### Constructors
 - `Dto(Source source)` - primary constructor

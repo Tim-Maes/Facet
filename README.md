@@ -42,6 +42,7 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 - **[Facet Dashboard](https://github.com/Tim-Maes/Facet/tree/master/src/Facet.Dashboard)**
 - [What is being generated?](docs/07_WhatIsBeingGenerated.md)
 - [Configure generated files output location](docs/12_GeneratedFilesOutput.md)
+- [Enum Conversion (ConvertEnumsTo)](docs/20_ConvertEnumsTo.md)
 - [Comprehensive article about Facetting](https://tim-maes.com/blog/2025/09/28/facets-in-dotnet-(2)/)
 
 ## :star: Features
@@ -69,6 +70,7 @@ Click on a section to expand/collapse
 - **Property mapping with `[MapFrom]`** for declarative property renaming
 - **Conditional mapping with `[MapWhen]`** for status-dependent fields
 - **Before/After mapping hooks** for validation, defaults, and computed values
+- **Enum conversion with `ConvertEnumsTo`** for automatic enum-to-string/int mapping
 
 </details>
 
@@ -558,6 +560,83 @@ public class UserEnrichmentHook : IFacetAfterMapConfigurationAsyncInstance<User,
 | Configuration (Map) | After mapping | Simple computed properties |
 
 **Execution order**: BeforeMap → Property Mapping → Configuration.Map → AfterMap
+
+</details>
+
+<details>
+  <summary>Enum Conversion with ConvertEnumsTo</summary>
+
+Automatically convert all enum properties in the source type to `string` or `int` in the generated facet. Perfect for API DTOs, serialization, and frontend consumption:
+
+```csharp
+public enum UserStatus { Active, Inactive, Pending, Suspended }
+
+public class User
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public UserStatus Status { get; set; }
+    public string Email { get; set; }
+}
+
+// Convert enums to strings (for JSON APIs)
+[Facet(typeof(User), ConvertEnumsTo = typeof(string), GenerateToSource = true)]
+public partial class UserStringDto;
+
+// Convert enums to integers (for compact storage)
+[Facet(typeof(User), ConvertEnumsTo = typeof(int), GenerateToSource = true)]
+public partial class UserIntDto;
+```
+
+#### Usage
+
+```csharp
+var user = new User { Id = 1, Name = "John", Status = UserStatus.Active, Email = "john@test.com" };
+
+// String conversion
+var stringDto = new UserStringDto(user);
+stringDto.Status // "Active" (string)
+
+// Int conversion
+var intDto = new UserIntDto(user);
+intDto.Status // 0 (int)
+
+// Round-trip back to entity
+var entity = stringDto.ToSource();
+entity.Status // UserStatus.Active (enum)
+
+// Works with LINQ / EF Core projections
+var dtos = await dbContext.Users
+    .Select(UserStringDto.Projection)
+    .ToListAsync();
+```
+
+#### Nullable Enum Support
+
+Nullable enum properties preserve nullability:
+
+```csharp
+public class Entity
+{
+    public UserStatus? Status { get; set; }  // Nullable enum
+}
+
+[Facet(typeof(Entity), ConvertEnumsTo = typeof(string))]
+public partial class EntityDto;
+// Status becomes string (null when source is null)
+
+[Facet(typeof(Entity), ConvertEnumsTo = typeof(int))]
+public partial class EntityIntDto;
+// Status becomes int? (nullable)
+```
+
+#### Combining with NullableProperties
+
+```csharp
+[Facet(typeof(User), ConvertEnumsTo = typeof(string), NullableProperties = true)]
+public partial class UserQueryDto;
+// All properties nullable + enums converted to string
+```
 
 </details>
 

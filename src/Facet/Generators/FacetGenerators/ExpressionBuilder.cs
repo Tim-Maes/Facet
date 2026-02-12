@@ -52,6 +52,12 @@ internal static class ExpressionBuilder
             valueExpression = $"{sourceVariableName}.{member.SourcePropertyName}";
         }
 
+        // Apply enum conversion if this member was converted from an enum type
+        if (member.IsEnumConversion && member.OriginalEnumTypeName != null)
+        {
+            valueExpression = ApplyEnumToTargetConversion(valueExpression, member);
+        }
+
         // Apply MapWhen conditions if present
         if (member.MapWhenConditions.Count > 0)
         {
@@ -82,6 +88,12 @@ internal static class ExpressionBuilder
         else if (member.IsNestedFacet)
         {
             return BuildSingleToSourceExpression(member, facetTypeIsNullable);
+        }
+
+        // Handle enum conversion (reverse: string/int back to enum)
+        if (member.IsEnumConversion && member.OriginalEnumTypeName != null)
+        {
+            return ApplyTargetToEnumConversion(member);
         }
 
         // For regular properties/fields:
@@ -334,6 +346,83 @@ internal static class ExpressionBuilder
     // Expression parsing methods delegated to shared ExpressionHelper
     private static bool IsExpression(string source) => ExpressionHelper.IsExpression(source);
     private static string TransformExpression(string expression, string sourceVariableName) => ExpressionHelper.TransformExpression(expression, sourceVariableName);
+
+    /// <summary>
+    /// Applies enum-to-target-type conversion (source enum ? facet string/int).
+    /// </summary>
+    private static string ApplyEnumToTargetConversion(string valueExpression, FacetMember member)
+    {
+        // Determine if the source enum property is nullable
+        bool isNullableEnum = member.SourceMemberTypeName?.Contains("?") ?? false;
+
+        if (member.TypeName.TrimEnd('?') == "string")
+        {
+            // Enum to string conversion
+            if (isNullableEnum)
+            {
+                return $"{valueExpression}?.ToString()";
+            }
+            return $"{valueExpression}.ToString()";
+        }
+        else if (member.TypeName.TrimEnd('?') == "int")
+        {
+            // Enum to int conversion
+            if (isNullableEnum)
+            {
+                return $"(int?){valueExpression}";
+            }
+            return $"(int){valueExpression}";
+        }
+
+        return valueExpression;
+    }
+
+    /// <summary>
+    /// Applies target-type-to-enum conversion (facet string/int ? source enum) for ToSource mapping.
+    /// </summary>
+    private static string ApplyTargetToEnumConversion(FacetMember member)
+    {
+        var enumTypeName = member.OriginalEnumTypeName!;
+        bool facetTypeIsNullable = member.TypeName.Contains("?");
+        bool sourceTypeIsNullable = member.SourceMemberTypeName?.Contains("?") ?? false;
+
+        if (member.TypeName.TrimEnd('?') == "string")
+        {
+            // String to enum conversion
+            if (facetTypeIsNullable && sourceTypeIsNullable)
+            {
+                return $"this.{member.Name} != null ? ({enumTypeName}?)System.Enum.Parse<{enumTypeName}>(this.{member.Name}) : null";
+            }
+            else if (facetTypeIsNullable)
+            {
+                // Facet is nullable string but source expects non-nullable enum
+                return $"System.Enum.Parse<{enumTypeName}>(this.{member.Name}!)";
+            }
+            else
+            {
+                return $"System.Enum.Parse<{enumTypeName}>(this.{member.Name})";
+            }
+        }
+        else if (member.TypeName.TrimEnd('?') == "int")
+        {
+            // Int to enum conversion
+            if (facetTypeIsNullable && sourceTypeIsNullable)
+            {
+                return $"this.{member.Name} != null ? ({enumTypeName}?)({enumTypeName})this.{member.Name}.Value : null";
+            }
+            else if (facetTypeIsNullable)
+            {
+                // Facet is nullable int but source expects non-nullable enum
+                return $"({enumTypeName})(this.{member.Name} ?? default)";
+            }
+            else
+            {
+                return $"({enumTypeName})this.{member.Name}";
+            }
+        }
+
+        return $"this.{member.Name}";
+    }
 
     #endregion
 }

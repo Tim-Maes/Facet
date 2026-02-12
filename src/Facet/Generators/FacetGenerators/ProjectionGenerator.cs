@@ -201,6 +201,12 @@ internal static class ProjectionGenerator
             valueExpression = $"{sourceVariableName}.{member.SourcePropertyName}";
         }
 
+        // Apply enum conversion if this member was converted from an enum type
+        if (member.IsEnumConversion && member.OriginalEnumTypeName != null)
+        {
+            valueExpression = ApplyEnumProjectionConversion(valueExpression, member);
+        }
+
         // Apply MapWhen conditions if present and IncludeInProjection is true
         if (member.MapWhenConditions.Count > 0 && member.MapWhenIncludeInProjection)
         {
@@ -460,6 +466,36 @@ internal static class ProjectionGenerator
     // Expression parsing methods delegated to shared ExpressionHelper
     private static bool IsExpression(string source) => ExpressionHelper.IsExpression(source);
     private static string TransformExpression(string expression, string sourceVariableName) => ExpressionHelper.TransformExpression(expression, sourceVariableName);
+
+    /// <summary>
+    /// Applies enum-to-target-type conversion for projection expressions (EF Core compatible).
+    /// Uses expression-tree-compatible patterns.
+    /// </summary>
+    private static string ApplyEnumProjectionConversion(string valueExpression, FacetMember member)
+    {
+        bool isNullableEnum = member.SourceMemberTypeName?.Contains("?") ?? false;
+
+        if (member.TypeName.TrimEnd('?') == "string")
+        {
+            // For EF Core projections, .ToString() on enums translates to SQL
+            if (isNullableEnum)
+            {
+                return $"{valueExpression} != null ? {valueExpression}.Value.ToString() : null";
+            }
+            return $"{valueExpression}.ToString()";
+        }
+        else if (member.TypeName.TrimEnd('?') == "int")
+        {
+            // Cast enum to int - EF Core supports this in projections
+            if (isNullableEnum)
+            {
+                return $"(int?){valueExpression}";
+            }
+            return $"(int){valueExpression}";
+        }
+
+        return valueExpression;
+    }
 
     /// <summary>
     /// Wraps a value expression with MapWhen condition(s), generating a ternary expression.
