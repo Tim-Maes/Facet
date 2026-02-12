@@ -181,7 +181,7 @@ internal static class ExpressionBuilder
                 : $"{sourceVariableName}.{sourcePropName}";
 
             var projection = preserveReferences
-                ? $"{sourceCollection}.Select(x => __processed != null && __processed.Contains(x) ? null : new {elementTypeName}(x, __depth + 1, {updatedProcessed})).Where(x => x != null)"
+                ? $"{sourceCollection}.Select(x => __processed != null && __processed.Contains(x) ? null : new {elementTypeName}(x, __depth + 1, {updatedProcessed})).Where(x => x != null).OfType<{elementTypeName}>()"
                 : $"{sourceCollection}.Select(x => new {elementTypeName}(x, __depth + 1, {updatedProcessed}))";
 
             // Convert back to the appropriate collection type
@@ -208,7 +208,7 @@ internal static class ExpressionBuilder
 
             var projection = useDepthParameter
                 ? (preserveReferences
-                    ? $"{sourceCollection}.Select(x => __processed != null && __processed.Contains(x) ? null : new {elementTypeName}(x, __depth + 1, {updatedProcessed})).Where(x => x != null)"
+                    ? $"{sourceCollection}.Select(x => __processed != null && __processed.Contains(x) ? null : new {elementTypeName}(x, __depth + 1, {updatedProcessed})).Where(x => x != null).OfType<{elementTypeName}>()"
                     : $"{sourceCollection}.Select(x => new {elementTypeName}(x, __depth + 1, {updatedProcessed}))")
                 : $"{sourceCollection}.Select(x => new {elementTypeName}(x))";
 
