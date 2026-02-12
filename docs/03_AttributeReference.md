@@ -571,7 +571,7 @@ entity.Status // UserStatus.Active (enum)
 ### Nullable Enums
 
 Nullable enum properties preserve their nullability after conversion:
-- `UserStatus?` ? `string` (null when source is null)
+- `UserStatus?` ? `string?` (null when source is null)
 - `UserStatus?` ? `int?` (nullable int)
 
 See [Enum Conversion](20_ConvertEnumsTo.md) for full documentation.
