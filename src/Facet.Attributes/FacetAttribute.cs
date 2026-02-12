@@ -307,6 +307,25 @@ public sealed class FacetAttribute : Attribute
     public bool ChainToParameterlessConstructor { get; set; } = false;
 
     /// <summary>
+    /// When set, all enum properties from the source type will be converted to the specified type
+    /// in the generated facet. Supported types are <see cref="string"/> (converts using .ToString() / Enum.Parse)
+    /// and <see cref="int"/> (converts using a cast).
+    /// When null (default), enum properties retain their original enum types.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// [Facet(typeof(MyEntity), ConvertEnumsTo = typeof(string))]
+    /// public partial class MyEntityDto;
+    /// // Enum properties like MyEnum Status will become string Status
+    ///
+    /// [Facet(typeof(MyEntity), ConvertEnumsTo = typeof(int))]
+    /// public partial class MyEntityDto;
+    /// // Enum properties like MyEnum Status will become int Status
+    /// </code>
+    /// </example>
+    public Type? ConvertEnumsTo { get; set; }
+
+    /// <summary>
     /// Creates a new FacetAttribute that targets a given source type and excludes specified members.
     /// </summary>
     /// <param name="sourceType">The type to generate from.</param>

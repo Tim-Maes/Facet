@@ -755,6 +755,97 @@ void ApplyPatch(User user, UserPatchDto patch)
 public partial record ProductQueryRecord;
 ```
 
+## Enum Conversion
+
+The `ConvertEnumsTo` property converts all enum properties in the source type to `string` or `int` in the generated facet, which is useful for API responses, serialization, and database storage.
+
+### Convert to String
+
+```csharp
+public enum OrderStatus { Draft, Submitted, Processing, Completed, Cancelled }
+
+public class Order
+{
+    public int Id { get; set; }
+    public string CustomerName { get; set; }
+    public OrderStatus Status { get; set; }
+    public decimal Total { get; set; }
+}
+
+[Facet(typeof(Order), ConvertEnumsTo = typeof(string), GenerateToSource = true)]
+public partial class OrderDto;
+
+// Usage
+var order = new Order { Id = 1, CustomerName = "Alice", Status = OrderStatus.Processing, Total = 99.99m };
+var dto = new OrderDto(order);
+dto.Status // "Processing" (string, not OrderStatus)
+
+// Round-trip
+var entity = dto.ToSource();
+entity.Status // OrderStatus.Processing
+```
+
+### Convert to Int
+
+```csharp
+[Facet(typeof(Order), ConvertEnumsTo = typeof(int), GenerateToSource = true)]
+public partial class OrderIntDto;
+
+var dto = new OrderIntDto(order);
+dto.Status // 2 (int value of OrderStatus.Processing)
+```
+
+### Nullable Enum Handling
+
+Nullable enum properties preserve their nullability after conversion:
+
+```csharp
+public class Entity
+{
+    public int Id { get; set; }
+    public OrderStatus? Status { get; set; }       // Nullable
+    public OrderStatus Priority { get; set; }      // Non-nullable
+}
+
+[Facet(typeof(Entity), ConvertEnumsTo = typeof(string))]
+public partial class EntityStringDto;
+// Status: string (null when source is null)
+// Priority: string
+
+[Facet(typeof(Entity), ConvertEnumsTo = typeof(int))]
+public partial class EntityIntDto;
+// Status: int? (nullable)
+// Priority: int
+```
+
+### Combining with NullableProperties
+
+```csharp
+[Facet(typeof(Order), ConvertEnumsTo = typeof(string), NullableProperties = true, GenerateToSource = false)]
+public partial class OrderQueryDto;
+// All properties nullable + enums as strings - perfect for filter DTOs
+```
+
+### EF Core Projections
+
+Enum conversions are included in the generated Projection expression and translate correctly to SQL:
+
+```csharp
+var results = await dbContext.Orders
+    .Where(o => o.Status == OrderStatus.Completed)
+    .Select(OrderDto.Projection)
+    .ToListAsync();
+// Status column returned as string in the DTO
+```
+
+### Important Notes
+
+- **All enums are converted**: The setting applies to every enum property. For mixed behavior, use separate facets or custom configurations.
+- **Non-enum properties are unaffected**: Only enum-typed properties are converted.
+- **Supported target types**: Only `typeof(string)` and `typeof(int)` are supported.
+
+See [Enum Conversion](20_ConvertEnumsTo.md) for the full reference.
+
 ## Mixed Usage Patterns
 
 ### API Layer Pattern

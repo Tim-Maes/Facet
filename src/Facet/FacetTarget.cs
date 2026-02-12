@@ -38,6 +38,11 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public ImmutableArray<string> BaseClassMemberNames { get; }
     public ImmutableArray<string> FlattenToTypes { get; }
 
+    /// <summary>
+    /// The target type for enum conversion. "string" or "int", or null if no conversion.
+    /// </summary>
+    public string? ConvertEnumsTo { get; }
+
     public FacetTargetModel(
         string name,
         string? @namespace,
@@ -67,7 +72,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         ImmutableArray<string> flattenToTypes = default,
         string? beforeMapConfigurationTypeName = null,
         string? afterMapConfigurationTypeName = null,
-        bool chainToParameterlessConstructor = false)
+        bool chainToParameterlessConstructor = false,
+        string? convertEnumsTo = null)
     {
         Name = name;
         Namespace = @namespace;
@@ -98,6 +104,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         PreserveReferences = preserveReferences;
         BaseClassMemberNames = baseClassMemberNames.IsDefault ? ImmutableArray<string>.Empty : baseClassMemberNames;
         FlattenToTypes = flattenToTypes.IsDefault ? ImmutableArray<string>.Empty : flattenToTypes;
+        ConvertEnumsTo = convertEnumsTo;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -132,7 +139,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && MaxDepth == other.MaxDepth
             && PreserveReferences == other.PreserveReferences
             && BaseClassMemberNames.SequenceEqual(other.BaseClassMemberNames)
-            && FlattenToTypes.SequenceEqual(other.FlattenToTypes);
+            && FlattenToTypes.SequenceEqual(other.FlattenToTypes)
+            && ConvertEnumsTo == other.ConvertEnumsTo;
     }
 
     public override bool Equals(object? obj) => obj is FacetTargetModel other && Equals(other);
@@ -164,6 +172,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + CopyAttributes.GetHashCode();
             hash = hash * 31 + MaxDepth.GetHashCode();
             hash = hash * 31 + PreserveReferences.GetHashCode();
+            hash = hash * 31 + (ConvertEnumsTo?.GetHashCode() ?? 0);
             hash = hash * 31 + Members.Length.GetHashCode();
 
             foreach (var member in Members)

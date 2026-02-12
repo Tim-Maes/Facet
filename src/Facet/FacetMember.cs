@@ -40,6 +40,17 @@ internal sealed class FacetMember : IEquatable<FacetMember>
     /// </summary>
     public string? DefaultValue { get; }
 
+    /// <summary>
+    /// Whether this member's type was converted from an enum type (via ConvertEnumsTo).
+    /// </summary>
+    public bool IsEnumConversion { get; }
+
+    /// <summary>
+    /// The original fully-qualified enum type name before conversion (e.g., "global::MyNamespace.MyEnum").
+    /// Only set when <see cref="IsEnumConversion"/> is true.
+    /// </summary>
+    public string? OriginalEnumTypeName { get; }
+
     public FacetMember(
         string name,
         string typeName,
@@ -64,7 +75,9 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         string? mapWhenDefault = null,
         bool mapWhenIncludeInProjection = true,
         IReadOnlyList<string>? attributeNamespaces = null,
-        string? defaultValue = null)
+        string? defaultValue = null,
+        bool isEnumConversion = false,
+        string? originalEnumTypeName = null)
     {
         Name = name;
         TypeName = typeName;
@@ -90,6 +103,8 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         MapWhenDefault = mapWhenDefault;
         MapWhenIncludeInProjection = mapWhenIncludeInProjection;
         DefaultValue = defaultValue;
+        IsEnumConversion = isEnumConversion;
+        OriginalEnumTypeName = originalEnumTypeName;
     }
 
     public bool Equals(FacetMember? other) =>
@@ -114,6 +129,8 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         MapWhenDefault == other.MapWhenDefault &&
         MapWhenIncludeInProjection == other.MapWhenIncludeInProjection &&
         DefaultValue == other.DefaultValue &&
+        IsEnumConversion == other.IsEnumConversion &&
+        OriginalEnumTypeName == other.OriginalEnumTypeName &&
         Attributes.SequenceEqual(other.Attributes) &&
         AttributeNamespaces.SequenceEqual(other.AttributeNamespaces) &&
         MapWhenConditions.SequenceEqual(other.MapWhenConditions);
@@ -145,6 +162,8 @@ internal sealed class FacetMember : IEquatable<FacetMember>
             hash = hash * 31 + (MapWhenDefault?.GetHashCode() ?? 0);
             hash = hash * 31 + MapWhenIncludeInProjection.GetHashCode();
             hash = hash * 31 + (DefaultValue?.GetHashCode() ?? 0);
+            hash = hash * 31 + IsEnumConversion.GetHashCode();
+            hash = hash * 31 + (OriginalEnumTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + Attributes.Count.GetHashCode();
             foreach (var attr in Attributes)
                 hash = hash * 31 + (attr?.GetHashCode() ?? 0);

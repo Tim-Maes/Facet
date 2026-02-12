@@ -70,6 +70,9 @@ internal static class ModelBuilder
         var maxDepth = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.MaxDepth, FacetConstants.DefaultMaxDepth);
         var preserveReferences = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.PreserveReferences, FacetConstants.DefaultPreserveReferences);
 
+        // Extract ConvertEnumsTo parameter
+        var convertEnumsTo = AttributeParser.ExtractConvertEnumsTo(attribute);
+
         // Extract nested facets parameter and build mapping from source type to child facet type
         var nestedFacetMappings = AttributeParser.ExtractNestedFacetMappings(attribute, context.SemanticModel.Compilation);
 
@@ -97,6 +100,7 @@ internal static class ModelBuilder
             nestedFacetMappings,
             mapFromMappings,
             mapWhenMappings,
+            convertEnumsTo,
             token);
 
         // Add expression-based members (from MapFrom with expressions)
@@ -200,7 +204,8 @@ internal static class ModelBuilder
             flattenToTypes,
             beforeMapConfigurationTypeName,
             afterMapConfigurationTypeName,
-            chainToParameterlessConstructor);
+            chainToParameterlessConstructor,
+            convertEnumsTo);
     }
 
     #region Private Helper Methods
@@ -218,6 +223,7 @@ internal static class ModelBuilder
         Dictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings,
         Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName)> mapFromMappings,
         Dictionary<string, (List<string> conditions, string? defaultValue, bool includeInProjection)> mapWhenMappings,
+        string? convertEnumsTo,
         CancellationToken token)
     {
         var members = new List<FacetMember>();
@@ -250,6 +256,7 @@ internal static class ModelBuilder
                     nestedFacetMappings,
                     mapFromMappings,
                     mapWhenMappings,
+                    convertEnumsTo,
                     members,
                     excludedRequiredMembers,
                     addedMembers);
@@ -284,6 +291,7 @@ internal static class ModelBuilder
         Dictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings,
         Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName)> mapFromMappings,
         Dictionary<string, (List<string> conditions, string? defaultValue, bool includeInProjection)> mapWhenMappings,
+        string? convertEnumsTo,
         List<FacetMember> members,
         List<FacetMember> excludedRequiredMembers,
         HashSet<string> addedMembers)
@@ -425,6 +433,48 @@ internal static class ModelBuilder
             }
         }
 
+        // Enum conversion: if ConvertEnumsTo is set and this property is an enum type, convert it
+        bool isEnumConversion = false;
+        string? originalEnumTypeName = null;
+        if (convertEnumsTo != null && !isNestedFacet && !isCollection && !isUserDeclared)
+        {
+            // Get the underlying type (strip nullable wrapper if present)
+            var underlyingType = property.Type;
+            bool isNullableEnum = false;
+            if (underlyingType is INamedTypeSymbol namedType && namedType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+            {
+                underlyingType = namedType.TypeArguments[0];
+                isNullableEnum = true;
+            }
+
+            if (underlyingType.TypeKind == TypeKind.Enum)
+            {
+                isEnumConversion = true;
+                originalEnumTypeName = underlyingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+                if (convertEnumsTo == "string")
+                {
+                    typeName = isNullableEnum ? "string?" : "string";
+                }
+                else if (convertEnumsTo == "int")
+                {
+                    typeName = isNullableEnum ? "int?" : "int";
+                }
+
+                // Update sourceMemberTypeName to reflect the original type before conversion
+                sourceMemberTypeName = GeneratorUtilities.GetTypeNameWithNullability(property.Type);
+
+                // Apply NullableProperties if needed
+                if (nullableProperties)
+                {
+                    typeName = GeneratorUtilities.MakeNullable(typeName);
+                }
+
+                // Clear default value since it's an enum initializer and won't match the new type
+                defaultValue = null;
+            }
+        }
+
         members.Add(new FacetMember(
             memberName,
             typeName,
@@ -449,7 +499,9 @@ internal static class ModelBuilder
             mapWhenDefault,
             mapWhenIncludeInProjection,
             attributeNamespaces,
-            defaultValue));
+            defaultValue,
+            isEnumConversion,
+            originalEnumTypeName));
         addedMembers.Add(memberName);
     }
 
