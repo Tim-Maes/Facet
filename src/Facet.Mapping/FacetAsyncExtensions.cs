@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -29,7 +30,8 @@ public static class FacetAsyncExtensions
     /// This method uses reflection to determine the source type at runtime.
     /// For better performance, use the overload with explicit type parameters.
     /// </remarks>
-    public static async Task<TTarget> ToFacetAsync<TTarget, TAsyncMapper>(
+    [RequiresUnreferencedCode("This method uses reflection to discover mapper methods at runtime. Use the strongly-typed ToFacetAsync<TSource, TTarget, TAsyncMapper> overload instead.")]
+    public static async Task<TTarget> ToFacetAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicConstructors)] TTarget, TAsyncMapper>(
         this object source, 
         CancellationToken cancellationToken = default)
         where TTarget : class
@@ -64,7 +66,7 @@ public static class FacetAsyncExtensions
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>A task containing the mapped target instance</returns>
     /// <exception cref="ArgumentNullException">Thrown when source is null</exception>
-    public static async Task<TTarget> ToFacetAsync<TSource, TTarget, TAsyncMapper>(
+    public static async Task<TTarget> ToFacetAsync<TSource, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicConstructors)] TTarget, TAsyncMapper>(
         this TSource source, 
         CancellationToken cancellationToken = default)
         where TTarget : class
@@ -88,7 +90,7 @@ public static class FacetAsyncExtensions
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>A task containing the mapped target instance</returns>
     /// <exception cref="ArgumentNullException">Thrown when source or mapper is null</exception>
-    public static async Task<TTarget> ToFacetAsync<TSource, TTarget>(
+    public static async Task<TTarget> ToFacetAsync<TSource, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicConstructors)] TTarget>(
         this TSource source,
         IFacetMapConfigurationAsyncInstance<TSource, TTarget> mapper,
         CancellationToken cancellationToken = default)
@@ -113,7 +115,7 @@ public static class FacetAsyncExtensions
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>A task containing the mapped target instance</returns>
     /// <exception cref="ArgumentNullException">Thrown when source is null</exception>
-    public static async Task<TTarget> ToFacetWithConstructorAsync<TSource, TTarget, TAsyncMapper>(
+    public static async Task<TTarget> ToFacetWithConstructorAsync<TSource, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TTarget, TAsyncMapper>(
         this TSource source,
         CancellationToken cancellationToken = default)
         where TTarget : class
@@ -141,7 +143,7 @@ public static class FacetAsyncExtensions
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>A task containing the mapped target instance</returns>
     /// <exception cref="ArgumentNullException">Thrown when source or mapper is null</exception>
-    public static async Task<TTarget> ToFacetWithConstructorAsync<TSource, TTarget>(
+    public static async Task<TTarget> ToFacetWithConstructorAsync<TSource, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TTarget>(
         this TSource source,
         IFacetMapConfigurationAsyncInstance<TSource, TTarget> mapper,
         CancellationToken cancellationToken = default)
@@ -203,7 +205,8 @@ public static class FacetAsyncExtensions
     /// This method uses reflection to determine the source type at runtime.
     /// For better performance, use the overload with explicit type parameters.
     /// </remarks>
-    public static async Task<List<TTarget>> ToFacetsAsync<TTarget, TAsyncMapper>(
+    [RequiresUnreferencedCode("This method uses reflection to discover mapper methods at runtime. Use the strongly-typed ToFacetsAsync<TSource, TTarget, TAsyncMapper> overload instead.")]
+    public static async Task<List<TTarget>> ToFacetsAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicConstructors)] TTarget, TAsyncMapper>(
         this IEnumerable source,
         CancellationToken cancellationToken = default)
         where TTarget : class
@@ -308,7 +311,8 @@ public static class FacetAsyncExtensions
     /// This method uses reflection to determine the source type at runtime.
     /// For better performance, use the overload with explicit type parameters.
     /// </remarks>
-    public static async Task<List<TTarget>> ToFacetsParallelAsync<TTarget, TAsyncMapper>(
+    [RequiresUnreferencedCode("This method uses reflection to discover mapper methods at runtime. Use the strongly-typed ToFacetsParallelAsync<TSource, TTarget, TAsyncMapper> overload instead.")]
+    public static async Task<List<TTarget>> ToFacetsParallelAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicConstructors)] TTarget, TAsyncMapper>(
         this IEnumerable source,
         int maxDegreeOfParallelism = -1,
         CancellationToken cancellationToken = default)
@@ -392,7 +396,7 @@ public static class FacetAsyncExtensions
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>A task containing the mapped target instance</returns>
     /// <exception cref="ArgumentNullException">Thrown when source is null</exception>
-    public static async Task<TTarget> ToFacetHybridAsync<TSource, TTarget, TSyncMapper, TAsyncMapper>(
+    public static async Task<TTarget> ToFacetHybridAsync<TSource, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicConstructors)] TTarget, TSyncMapper, TAsyncMapper>(
         this TSource source,
         CancellationToken cancellationToken = default)
         where TTarget : class
@@ -425,7 +429,7 @@ public static class FacetAsyncExtensions
     /// Consider implementing both IFacetMapConfiguration and IFacetMapConfigurationAsync directly.
     /// </remarks>
 #pragma warning disable CS0618 // Type or member is obsolete
-    public static async Task<TTarget> ToFacetHybridAsync<TSource, TTarget, THybridMapper>(
+    public static async Task<TTarget> ToFacetHybridAsync<TSource, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicConstructors)] TTarget, THybridMapper>(
         this TSource source,
         CancellationToken cancellationToken = default)
         where TTarget : class
@@ -462,7 +466,8 @@ public static class FacetAsyncExtensions
     /// This method uses the obsolete IFacetMapConfigurationHybrid interface pattern.
     /// </remarks>
 #pragma warning disable CS0618 // Type or member is obsolete
-    public static async Task<TTarget> ToFacetHybridAsync<TTarget, THybridMapper>(
+    [RequiresUnreferencedCode("This method uses reflection to discover mapper methods at runtime. Use the strongly-typed ToFacetHybridAsync<TSource, TTarget, THybridMapper> overload instead.")]
+    public static async Task<TTarget> ToFacetHybridAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicConstructors)] TTarget, THybridMapper>(
         this object source,
         CancellationToken cancellationToken = default)
         where TTarget : class
@@ -509,7 +514,7 @@ public static class FacetAsyncExtensions
     /// Consider implementing both IFacetMapConfigurationInstance and IFacetMapConfigurationAsyncInstance directly.
     /// </remarks>
 #pragma warning disable CS0618 // Type or member is obsolete
-    public static async Task<TTarget> ToFacetHybridAsync<TSource, TTarget>(
+    public static async Task<TTarget> ToFacetHybridAsync<TSource, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicConstructors)] TTarget>(
         this TSource source,
         IFacetMapConfigurationHybridInstance<TSource, TTarget> mapper,
         CancellationToken cancellationToken = default)
@@ -530,7 +535,7 @@ public static class FacetAsyncExtensions
     }
 #pragma warning restore CS0618 // Type or member is obsolete
 
-    private static TTarget CreateFacetInstance<TTarget>(object source, Type sourceType, Type targetType)
+    private static TTarget CreateFacetInstance<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicConstructors)] TTarget>(object source, Type sourceType, Type targetType)
         where TTarget : class
     {
         var fromSource = targetType.GetMethod(
