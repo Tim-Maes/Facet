@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -59,7 +60,7 @@ public static class FacetExtensions
     /// <param name="source">The source instance to map.</param>
     /// <returns>A new <typeparamref name="TTarget"/> instance populated from <paramref name="source"/>.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="source"/> is <c>null</c>.</exception>
-    public static TTarget ToFacet<TSource, TTarget>(this TSource source)
+    public static TTarget ToFacet<TSource, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicConstructors)] TTarget>(this TSource source)
         where TTarget : class
     {
         if (source is null) throw new ArgumentNullException(nameof(source));    
@@ -79,7 +80,9 @@ public static class FacetExtensions
     /// not assignable to the declared source type for the target facet.</description></item> <item><description>The
     /// conversion process fails due to a missing constructor or static <c>FromSource</c> method.</description></item>
     /// </list></exception>
-    public static TTarget ToFacet<TTarget>(this object source)
+    [RequiresUnreferencedCode("This method uses MakeGenericMethod which is not compatible with trimming. Use the strongly-typed ToFacet<TSource, TTarget> overload instead.")]
+    [RequiresDynamicCode("This method uses MakeGenericMethod which requires dynamic code generation. Use the strongly-typed ToFacet<TSource, TTarget> overload instead.")]
+    public static TTarget ToFacet<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicConstructors)] TTarget>(this object source)
         where TTarget : class
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
@@ -115,7 +118,7 @@ public static class FacetExtensions
     /// <param name="facet">The facet instance to map.</param>
     /// <returns>A new <typeparamref name="TFacetSource"/> instance populated from <paramref name="facet"/>.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="facet"/> is <c>null</c>.</exception>
-    public static TFacetSource ToSource<TFacet, TFacetSource>(this TFacet facet)
+    public static TFacetSource ToSource<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TFacet, TFacetSource>(this TFacet facet)
         where TFacet : class
         where TFacetSource : class
     {
@@ -132,7 +135,7 @@ public static class FacetExtensions
     /// <returns>A new <typeparamref name="TFacetSource"/> instance populated from <paramref name="facet"/>.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="facet"/> is <c>null</c>.</exception>
     [Obsolete("Use ToSource instead. This method will be removed in a future version.")]
-    public static TFacetSource BackTo<TFacet, TFacetSource>(this TFacet facet)
+    public static TFacetSource BackTo<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TFacet, TFacetSource>(this TFacet facet)
         where TFacet : class
         where TFacetSource : class
         => ToSource<TFacet, TFacetSource>(facet);
@@ -149,6 +152,8 @@ public static class FacetExtensions
     /// the declared source type for the facet.</description></item> <item><description>The
     /// conversion process fails due to a missing ToSource method on the facet.</description></item>
     /// </list></exception>
+    [RequiresUnreferencedCode("This method uses MakeGenericMethod which is not compatible with trimming. Use the strongly-typed ToSource<TFacet, TFacetSource> overload instead.")]
+    [RequiresDynamicCode("This method uses MakeGenericMethod which requires dynamic code generation. Use the strongly-typed ToSource<TFacet, TFacetSource> overload instead.")]
     public static TFacetSource ToSource<TFacetSource>(this object facet)
         where TFacetSource : class
     {
@@ -189,6 +194,8 @@ public static class FacetExtensions
     /// conversion process fails due to a missing ToSource method on the facet.</description></item>
     /// </list></exception>
     [Obsolete("Use ToSource instead. This method will be removed in a future version.")]
+    [RequiresUnreferencedCode("This method uses MakeGenericMethod which is not compatible with trimming. Use the strongly-typed ToSource<TFacet, TFacetSource> overload instead.")]
+    [RequiresDynamicCode("This method uses MakeGenericMethod which requires dynamic code generation. Use the strongly-typed ToSource<TFacet, TFacetSource> overload instead.")]
     public static TFacetSource BackTo<TFacetSource>(this object facet)
         where TFacetSource : class
         => ToSource<TFacetSource>(facet);
@@ -202,7 +209,7 @@ public static class FacetExtensions
     /// <param name="source">The enumerable source of entities.</param>
     /// <returns>An <see cref="IEnumerable{TTarget}"/> containing mapped facet instances.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="source"/> is <c>null</c>.</exception>
-    public static IEnumerable<TTarget> SelectFacets<TSource, TTarget>(this IEnumerable<TSource> source)
+    public static IEnumerable<TTarget> SelectFacets<TSource, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicConstructors)] TTarget>(this IEnumerable<TSource> source)
         where TTarget : class
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
@@ -236,7 +243,7 @@ public static class FacetExtensions
     /// <param name="facets">The source collection of facets.</param>
     /// <returns>An <see cref="IEnumerable{TFacetSource}"/> mapped from the input.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="facets"/> is <c>null</c>.</exception>
-    public static IEnumerable<TFacetSource> SelectFacetSources<TFacet, TFacetSource>(this IEnumerable<TFacet> facets)
+    public static IEnumerable<TFacetSource> SelectFacetSources<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TFacet, TFacetSource>(this IEnumerable<TFacet> facets)
         where TFacet : class
         where TFacetSource : class
     {
@@ -283,6 +290,8 @@ public static class FacetExtensions
     /// <exception cref="InvalidOperationException">
     /// Thrown at iteration time if any facet object is not annotated with <c>[Facet(typeof(TFacetSource))]</c> or lacks a generated ToSource method.
     /// </exception>
+    [RequiresUnreferencedCode("This method uses MakeGenericMethod which is not compatible with trimming. Use the strongly-typed SelectFacetSources<TFacet, TFacetSource> overload instead.")]
+    [RequiresDynamicCode("This method uses MakeGenericMethod which requires dynamic code generation. Use the strongly-typed SelectFacetSources<TFacet, TFacetSource> overload instead.")]
     public static IEnumerable<TFacetSource> SelectFacetSources<TFacetSource>(this IEnumerable facets)
         where TFacetSource : class
     {
@@ -318,7 +327,9 @@ public static class FacetExtensions
     /// <exception cref="ArgumentNullException">
     /// Thrown if <paramref name="source"/> is <see langword="null"/>.
     /// </exception>
-    public static IEnumerable<TTarget> SelectFacets<TTarget>(this IEnumerable source)
+    [RequiresUnreferencedCode("This method uses MakeGenericMethod which is not compatible with trimming. Use the strongly-typed SelectFacets<TSource, TTarget> overload instead.")]
+    [RequiresDynamicCode("This method uses MakeGenericMethod which requires dynamic code generation. Use the strongly-typed SelectFacets<TSource, TTarget> overload instead.")]
+    public static IEnumerable<TTarget> SelectFacets<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods | DynamicallyAccessedMemberTypes.PublicConstructors)] TTarget>(this IEnumerable source)
         where TTarget : class
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
@@ -341,7 +352,7 @@ public static class FacetExtensions
     /// <exception cref="InvalidOperationException">
     /// Thrown when <typeparamref name="TTarget"/> does not define a static <c>Projection</c> property.
     /// </exception>
-    public static IQueryable<TTarget> SelectFacet<TSource, TTarget>(this IQueryable<TSource> source)
+    public static IQueryable<TTarget> SelectFacet<TSource, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TTarget>(this IQueryable<TSource> source)
         where TTarget : class
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
@@ -375,7 +386,7 @@ public static class FacetExtensions
     /// <exception cref="ArgumentNullException">Thrown if <paramref name="source"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">Thrown if <typeparamref name="TTarget"/> is not annotated with a <c>[Facet]</c> attribute or does not define a
     /// static <c>Projection</c> property.</exception>
-    public static IQueryable<TTarget> SelectFacet<TTarget>(this IQueryable source)
+    public static IQueryable<TTarget> SelectFacet<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TTarget>(this IQueryable source)
         where TTarget : class
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
@@ -398,7 +409,7 @@ public static class FacetExtensions
         return source.Provider.CreateQuery<TTarget>(selectCall);
     }
 
-    private static Type? GetDeclaredSourceType(Type targetType)
+    private static Type? GetDeclaredSourceType([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type targetType)
     {
         if (_declaredSourceTypeByTarget.TryGetValue(targetType, out var cached))
             return cached;
@@ -420,7 +431,7 @@ public static class FacetExtensions
         return declared;
     }
 
-    private static LambdaExpression GetDeclaredProjectionLambda(Type targetType)
+    private static LambdaExpression GetDeclaredProjectionLambda([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type targetType)
     {
         if (_declaredProjectionByTarget.TryGetValue(targetType, out var cached))
             return cached;
@@ -483,7 +494,7 @@ public static class FacetExtensions
     /// // user.Name is now "Jane", Email unchanged
     /// </code>
     /// </example>
-    public static TSource ApplyFacet<TSource, TFacet>(this TSource source, TFacet facet)
+    public static TSource ApplyFacet<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TSource, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TFacet>(this TSource source, TFacet facet)
         where TSource : class
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
@@ -535,7 +546,8 @@ public static class FacetExtensions
     /// // user.Name is now "Jane", Email unchanged
     /// </code>
     /// </example>
-    public static object ApplyFacet<TFacet>(this object source, TFacet facet)
+    [RequiresUnreferencedCode("This method uses reflection on the runtime type of the source object. Use the strongly-typed ApplyFacet<TSource, TFacet> overload instead.")]
+    public static object ApplyFacet<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TFacet>(this object source, TFacet facet)
         where TFacet : class
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
@@ -589,7 +601,7 @@ public static class FacetExtensions
     /// }
     /// </code>
     /// </example>
-    public static FacetApplyResult<TSource> ApplyFacetWithChanges<TSource, TFacet>(this TSource source, TFacet facet)
+    public static FacetApplyResult<TSource> ApplyFacetWithChanges<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TSource, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TFacet>(this TSource source, TFacet facet)
         where TSource : class
     {
         if (source is null) throw new ArgumentNullException(nameof(source));

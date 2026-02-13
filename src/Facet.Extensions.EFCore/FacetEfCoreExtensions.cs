@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -17,7 +18,7 @@ public static class FacetEfCoreExtensions
     /// Asynchronously projects an IQueryable&lt;TSource&gt; to a List&lt;TTarget&gt;
     /// using the generated Projection expression and Entity Framework Core's ToListAsync.
     /// </summary>
-    public static Task<List<TTarget>> ToFacetsAsync<TSource, TTarget>(
+    public static Task<List<TTarget>> ToFacetsAsync<TSource, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TTarget>(
         this IQueryable<TSource> source,
         CancellationToken cancellationToken = default)
         where TTarget : class
@@ -32,7 +33,7 @@ public static class FacetEfCoreExtensions
     /// using the generated Projection expression and Entity Framework Core's ToListAsync.
     /// The source type is inferred from the query.
     /// </summary>
-    public static Task<List<TTarget>> ToFacetsAsync<TTarget>(
+    public static Task<List<TTarget>> ToFacetsAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TTarget>(
         this IQueryable source,
         CancellationToken cancellationToken = default)
         where TTarget : class
@@ -46,7 +47,7 @@ public static class FacetEfCoreExtensions
     /// Asynchronously projects the first element of an IQueryable&lt;TSource&gt;
     /// to a facet, or returns null if none found, using Entity Framework Core's FirstOrDefaultAsync.
     /// </summary>
-    public static Task<TTarget?> FirstFacetAsync<TSource, TTarget>(
+    public static Task<TTarget?> FirstFacetAsync<TSource, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TTarget>(
         this IQueryable<TSource> source,
         CancellationToken cancellationToken = default)
         where TTarget : class
@@ -61,7 +62,7 @@ public static class FacetEfCoreExtensions
     /// to a facet, or returns null if none found, using Entity Framework Core's FirstOrDefaultAsync.
     /// The source type is inferred from the query.
     /// </summary>
-    public static Task<TTarget?> FirstFacetAsync<TTarget>(
+    public static Task<TTarget?> FirstFacetAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TTarget>(
         this IQueryable source,
         CancellationToken cancellationToken = default)
         where TTarget : class
@@ -75,7 +76,7 @@ public static class FacetEfCoreExtensions
     /// Asynchronously projects a single element of an IQueryable&lt;TSource&gt;
     /// to a facet, throwing if not exactly one element exists, using Entity Framework Core's SingleAsync.
     /// </summary>
-    public static Task<TTarget> SingleFacetAsync<TSource, TTarget>(
+    public static Task<TTarget> SingleFacetAsync<TSource, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TTarget>(
         this IQueryable<TSource> source,
         CancellationToken cancellationToken = default)
         where TTarget : class
@@ -90,7 +91,7 @@ public static class FacetEfCoreExtensions
     /// to a facet, throwing if not exactly one element exists, using Entity Framework Core's SingleAsync.
     /// The source type is inferred from the query.
     /// </summary>
-    public static Task<TTarget> SingleFacetAsync<TTarget>(
+    public static Task<TTarget> SingleFacetAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TTarget>(
         this IQueryable source,
         CancellationToken cancellationToken = default)
         where TTarget : class
@@ -127,7 +128,7 @@ public static class FacetEfCoreExtensions
     /// }
     /// </code>
     /// </example>
-    public static TEntity UpdateFromFacet<TEntity, TFacet>(
+    public static TEntity UpdateFromFacet<TEntity, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TFacet>(
         this TEntity entity,
         TFacet facet,
         DbContext context)
@@ -196,7 +197,7 @@ public static class FacetEfCoreExtensions
     /// }
     /// </code>
     /// </example>
-    public static Task<TEntity> UpdateFromFacetAsync<TEntity, TFacet>(
+    public static Task<TEntity> UpdateFromFacetAsync<TEntity, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TFacet>(
         this TEntity entity,
         TFacet facet,
         DbContext context,
@@ -230,7 +231,7 @@ public static class FacetEfCoreExtensions
     /// }
     /// </code>
     /// </example>
-    public static FacetUpdateResult<TEntity> UpdateFromFacetWithChanges<TEntity, TFacet>(
+    public static FacetUpdateResult<TEntity> UpdateFromFacetWithChanges<TEntity, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TFacet>(
         this TEntity entity,
         TFacet facet,
         DbContext context)

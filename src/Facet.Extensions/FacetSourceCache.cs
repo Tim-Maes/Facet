@@ -1,7 +1,7 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Reflection.Emit;
 
 namespace Facet;
 
@@ -22,7 +22,7 @@ namespace Facet;
 /// <exception cref="InvalidOperationException">
 /// Thrown when no usable <c>FromFacet</c> factory or compatible constructor is found on <typeparamref name="TFacetSource"/>.
 /// </exception>
-internal static class FacetSourceCache<TFacet, TFacetSource>
+internal static class FacetSourceCache<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TFacet, TFacetSource>
     where TFacet : class
     where TFacetSource : class
 {
@@ -48,25 +48,11 @@ internal static class FacetSourceCache<TFacet, TFacetSource>
 
         if (toEntityMethod != null && toEntityMethod.ReturnType == typeof(TFacetSource))
         {
-            var method = new DynamicMethod(
-                name: $"Call_{typeof(TFacet).Name}_ToSource",
-                returnType: typeof(TFacetSource),
-                parameterTypes: new[] { typeof(TFacet) },
-                m: typeof(FacetSourceCache<TFacet, TFacetSource>).Module,
-                skipVisibility: true);
-
-            var il = method.GetILGenerator();
-
-            // Load the facet parameter onto the stack
-            il.Emit(OpCodes.Ldarg_0);
-
-            // Call the ToSource/BackTo method
-            il.Emit(OpCodes.Callvirt, toEntityMethod);
-
-            // Return the result
-            il.Emit(OpCodes.Ret);
-
-            return (Func<TFacet, TFacetSource>)method.CreateDelegate(typeof(Func<TFacet, TFacetSource>));
+            // Use compiled expression instead of DynamicMethod for AOT/trimming compatibility
+            var param = Expression.Parameter(typeof(TFacet), "facet");
+            var callExpr = Expression.Call(param, toEntityMethod);
+            var lambda = Expression.Lambda<Func<TFacet, TFacetSource>>(callExpr, param);
+            return lambda.Compile();
         }
 
         // If no ToSource/BackTo method is found, provide a helpful error message

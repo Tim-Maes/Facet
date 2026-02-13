@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace Facet.Mapping;
@@ -43,7 +44,7 @@ public static class FacetSyncExtensions
     /// <param name="mapper">The synchronous mapper instance (supports dependency injection)</param>
     /// <returns>The mapped target instance</returns>
     /// <exception cref="ArgumentNullException">Thrown when source or mapper is null</exception>
-    public static TTarget ToFacetWithConstructor<TSource, TTarget>(
+    public static TTarget ToFacetWithConstructor<TSource, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TTarget>(
         this TSource source,
         IFacetMapConfigurationInstance<TSource, TTarget> mapper)
         where TTarget : class
