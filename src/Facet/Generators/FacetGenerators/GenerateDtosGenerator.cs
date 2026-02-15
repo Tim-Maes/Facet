@@ -465,6 +465,13 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             propDef += " { get; set; }";
         }
 
+        // For non-nullable reference type properties without a required modifier,
+        // add "= default!" to suppress CS8618 warnings in the generated code
+        if (!member.IsValueType && !member.IsRequired && !NullabilityAnalyzer.IsNullableTypeName(member.TypeName))
+        {
+            propDef += " = default!;";
+        }
+
         if (member.IsRequired)
         {
             propDef = $"required {propDef}";
@@ -487,6 +494,12 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
             var defaultValue = GeneratorUtilities.GetDefaultValueForType(member.TypeName);
             fieldDef += $" = {defaultValue}";
+        }
+        else if (!member.IsValueType && !member.IsRequired && !NullabilityAnalyzer.IsNullableTypeName(member.TypeName))
+        {
+            // For non-nullable reference type fields without a required modifier,
+            // add "= default!" to suppress CS8618 warnings
+            fieldDef += " = default!";
         }
 
         fieldDef += ";";

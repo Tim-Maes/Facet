@@ -301,3 +301,22 @@ public class TeamModelWithRequiredMembers
 
 [Facet(typeof(TeamModelWithRequiredMembers), PreserveRequiredProperties = true, NestedFacets = [typeof(UserSettingsFacet)])]
 public partial class TeamWithRequiredMembersFacet;
+
+// This entity has non-nullable string properties WITHOUT initializers
+// The generated facet should not trigger CS8618 warnings
+public class EntityWithNonNullableProperties
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string Description { get; set; }
+    public string ComputedValue => $"{Name}-{Id}";
+    public string? NullableField { get; set; }
+    public int NumericValue { get; set; }
+}
+
+[Facet(typeof(EntityWithNonNullableProperties))]
+public partial class NonNullablePropertyFacet;
+
+// Also test with a required property - should not get default!
+[Facet(typeof(EntityWithNonNullableProperties), PreserveRequiredProperties = false)]
+public partial class NonNullablePropertyFacetNoRequired;

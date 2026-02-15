@@ -68,6 +68,12 @@ internal static class MemberGenerator
         {
             propDef += $" = {member.DefaultValue};";
         }
+        else if (!member.IsValueType && !member.IsRequired && !NullabilityAnalyzer.IsNullableTypeName(member.TypeName))
+        {
+            // For non-nullable reference type properties without an initializer and not marked as required,
+            // add "= default!" to suppress CS8618 warnings in the generated code 
+            propDef += " = default!;";
+        }
 
         if (member.IsRequired)
         {
@@ -85,6 +91,12 @@ internal static class MemberGenerator
         if (!string.IsNullOrEmpty(member.DefaultValue))
         {
             fieldDef += $" = {member.DefaultValue}";
+        }
+        else if (!member.IsValueType && !member.IsRequired && !NullabilityAnalyzer.IsNullableTypeName(member.TypeName))
+        {
+            // For non-nullable reference type fields without an initializer and not marked as required,
+            // add "= default!" to suppress CS8618 warnings in the generated code
+            fieldDef += " = default!";
         }
         
         fieldDef += ";";

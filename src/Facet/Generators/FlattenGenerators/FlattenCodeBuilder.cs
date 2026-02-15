@@ -108,7 +108,11 @@ internal static class FlattenCodeBuilder
             }
 
             // Property declaration
-            sb.AppendLine($"    public {property.TypeName} {property.Name} {{ get; set; }}");
+            // For non-nullable reference type properties, add "= default!" to suppress CS8618 warnings
+            var defaultSuffix = (!property.IsValueType && !NullabilityAnalyzer.IsNullableTypeName(property.TypeName))
+                ? " = default!;"
+                : "";
+            sb.AppendLine($"    public {property.TypeName} {property.Name} {{ get; set; }}{defaultSuffix}");
             sb.AppendLine();
         }
     }
