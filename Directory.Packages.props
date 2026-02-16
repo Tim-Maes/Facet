@@ -54,7 +54,7 @@
 		<PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
 
 		<!-- SourceLink for debugging support -->
-		<PackageVersion Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
+		<PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.103" />
 
 		<!-- Testing Dependencies -->
 		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
