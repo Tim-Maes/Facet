@@ -422,8 +422,8 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         }
 
         // For non-positional types, we need a parameterless constructor and accessible setters
-        var hasAccessibleConstructor = HasAccessibleParameterlessConstructor(sourceType);
-        
+        var hasAccessibleConstructor = HasAccessibleParameterlessConstructor(sourceType, context.Compilation.Assembly);
+
         if (!hasAccessibleConstructor)
         {
             context.ReportDiagnostic(Diagnostic.Create(
@@ -520,20 +520,26 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         return false;
     }
 
-    private static bool HasAccessibleParameterlessConstructor(INamedTypeSymbol sourceType)
+    private static bool HasAccessibleParameterlessConstructor(INamedTypeSymbol sourceType, IAssemblySymbol? compilationAssembly = null)
     {
         var constructors = sourceType.InstanceConstructors;
 
-        // Check for a parameterless constructor (explicit or implicit)
         // Note: For classes without explicit constructors, the compiler provides an implicit
         // parameterless constructor which will be marked as IsImplicitlyDeclared = true
         foreach (var constructor in constructors)
         {
             if (constructor.Parameters.Length == 0)
             {
-                // Public constructors are always accessible
                 if (constructor.DeclaredAccessibility == Accessibility.Public)
                     return true;
+
+                // Internal constructors are accessible when the source type is in the same assembly
+                if (constructor.DeclaredAccessibility == Accessibility.Internal &&
+                    compilationAssembly != null &&
+                    SymbolEqualityComparer.Default.Equals(sourceType.ContainingAssembly, compilationAssembly))
+                {
+                    return true;
+                }
             }
         }
 

@@ -131,7 +131,7 @@ internal static class TypeAnalyzer
     /// Checks if the source type has an accessible parameterless constructor.
     /// For ToSource generation, we need a public or internal parameterless constructor.
     /// </summary>
-    public static bool HasAccessibleParameterlessConstructor(INamedTypeSymbol sourceType)
+    public static bool HasAccessibleParameterlessConstructor(INamedTypeSymbol sourceType, IAssemblySymbol? compilationAssembly = null)
     {
         // Check for implicit parameterless constructor (when no constructors are defined)
         var constructors = sourceType.InstanceConstructors;
@@ -149,9 +149,14 @@ internal static class TypeAnalyzer
                 if (constructor.DeclaredAccessibility == Accessibility.Public)
                     return true;
 
-                // Internal constructors might be accessible if in same assembly
-                // For now, we'll be conservative and only allow public
-                // TODO: In future, detect if in same assembly and allow internal
+                // Internal constructors are accessible when the source type is in the same assembly
+                // as the generated code (which is always the case for types in the user's project)
+                if (constructor.DeclaredAccessibility == Accessibility.Internal &&
+                    compilationAssembly != null &&
+                    SymbolEqualityComparer.Default.Equals(sourceType.ContainingAssembly, compilationAssembly))
+                {
+                    return true;
+                }
             }
         }
 

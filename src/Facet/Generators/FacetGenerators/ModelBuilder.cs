@@ -158,7 +158,7 @@ internal static class ModelBuilder
         if (generateToSource && !hasPositionalConstructor)
         {
             // For non-positional types, we need a parameterless constructor and accessible setters
-            var hasAccessibleConstructor = TypeAnalyzer.HasAccessibleParameterlessConstructor(sourceType);
+            var hasAccessibleConstructor = TypeAnalyzer.HasAccessibleParameterlessConstructor(sourceType, context.SemanticModel.Compilation.Assembly);
             var hasAccessibleSetters = TypeAnalyzer.AllPropertiesHaveAccessibleSetters(sourceType, members);
 
             if (!hasAccessibleConstructor || !hasAccessibleSetters)
