@@ -97,6 +97,16 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "MaxDepth values should typically be between 1 and 10 for most scenarios.");
 
+    // FAC023: GenerateToSource cannot be generated
+    public static readonly DiagnosticDescriptor GenerateToSourceNotPossibleRule = new DiagnosticDescriptor(
+        "FAC023",
+        "ToSource method cannot be generated",
+        "GenerateToSource is set to true, but ToSource cannot be generated because {0}",
+        "Usage",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "ToSource method requires either a positional constructor or both an accessible parameterless constructor and accessible setters on all mapped properties.");
+
     // FAC022: Source signature mismatch
     public static readonly DiagnosticDescriptor SourceSignatureMismatchRule = new DiagnosticDescriptor(
         "FAC022",
@@ -116,6 +126,7 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         CircularReferenceWarningRule,
         IncludeAndExcludeBothSpecifiedRule,
         MaxDepthWarningRule,
+        GenerateToSourceNotPossibleRule,
         SourceSignatureMismatchRule);
 
     public override void Initialize(AnalysisContext context)
@@ -173,6 +184,7 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         ValidateNestedFacets(context, facetAttr, namedArgs.NestedFacets);
         ValidateCircularReferenceSafety(context, facetAttr, namedArgs);
         ValidateSourceSignature(context, facetAttr, sourceType, namedArgs);
+        ValidateGenerateToSource(context, facetAttr, sourceType, targetType, namedArgs);
     }
 
     /// <summary>
@@ -187,6 +199,7 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         public KeyValuePair<string, TypedConstant> PreserveReferences { get; }
         public KeyValuePair<string, TypedConstant> SourceSignature { get; }
         public KeyValuePair<string, TypedConstant> IncludeFields { get; }
+        public KeyValuePair<string, TypedConstant> GenerateToSource { get; }
 
         public FacetNamedArguments(ImmutableArray<KeyValuePair<string, TypedConstant>> namedArguments)
         {
@@ -197,6 +210,7 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
             PreserveReferences = namedArguments.FirstOrDefault(a => a.Key == "PreserveReferences");
             SourceSignature = namedArguments.FirstOrDefault(a => a.Key == "SourceSignature");
             IncludeFields = namedArguments.FirstOrDefault(a => a.Key == "IncludeFields");
+            GenerateToSource = namedArguments.FirstOrDefault(a => a.Key == "GenerateToSource");
         }
     }
 
@@ -387,6 +401,187 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
                 sourceType.ToDisplayString(),
                 actualSignature));
         }
+    }
+
+    private static void ValidateGenerateToSource(SymbolAnalysisContext context, AttributeData facetAttr, INamedTypeSymbol sourceType, INamedTypeSymbol targetType, FacetNamedArguments namedArgs)
+    {
+        // Check if GenerateToSource is set to true
+        if (namedArgs.GenerateToSource.Equals(default) || namedArgs.GenerateToSource.Value.IsNull)
+            return;
+
+        if (namedArgs.GenerateToSource.Value.Value is not bool generateToSource || !generateToSource)
+            return;
+
+        // Check if the source type has a positional constructor
+        var hasPositionalConstructor = HasPositionalConstructor(sourceType);
+
+        if (hasPositionalConstructor)
+        {
+            // Positional constructors can always generate ToSource
+            return;
+        }
+
+        // For non-positional types, we need a parameterless constructor and accessible setters
+        var hasAccessibleConstructor = HasAccessibleParameterlessConstructor(sourceType);
+        
+        if (!hasAccessibleConstructor)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                GenerateToSourceNotPossibleRule,
+                facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
+                "the source type does not have an accessible parameterless constructor"));
+            return;
+        }
+
+        // Check if all properties that would be mapped have accessible setters
+        // We need to extract the members to check this
+        var excluded = ExtractExcludedMembers(facetAttr);
+        var (included, isIncludeMode) = ExtractIncludedMembers(facetAttr);
+        var includeFields = !namedArgs.IncludeFields.Equals(default) &&
+                           namedArgs.IncludeFields.Value.Value is bool includeFieldsValue &&
+                           includeFieldsValue;
+
+        var hasAccessibleSetters = AllPropertiesHaveAccessibleSetters(sourceType, excluded, included, isIncludeMode, includeFields);
+
+        if (!hasAccessibleSetters)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                GenerateToSourceNotPossibleRule,
+                facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
+                "one or more properties in the source type do not have accessible setters"));
+        }
+    }
+
+    private static HashSet<string> ExtractExcludedMembers(AttributeData attribute)
+    {
+        var excluded = new HashSet<string>();
+        if (attribute.ConstructorArguments.Length > 1 && !attribute.ConstructorArguments[1].IsNull)
+        {
+            foreach (var value in attribute.ConstructorArguments[1].Values)
+            {
+                if (value.Value is string propertyName && !string.IsNullOrEmpty(propertyName))
+                {
+                    excluded.Add(propertyName);
+                }
+            }
+        }
+        return excluded;
+    }
+
+    private static (HashSet<string> included, bool isIncludeMode) ExtractIncludedMembers(AttributeData attribute)
+    {
+        var included = new HashSet<string>();
+        var includeArg = attribute.NamedArguments.FirstOrDefault(a => a.Key == "Include");
+        
+        if (!includeArg.Equals(default) && !includeArg.Value.IsNull && includeArg.Value.Kind == TypedConstantKind.Array)
+        {
+            foreach (var value in includeArg.Value.Values)
+            {
+                if (value.Value is string propertyName && !string.IsNullOrEmpty(propertyName))
+                {
+                    included.Add(propertyName);
+                }
+            }
+            return (included, true);
+        }
+        
+        return (included, false);
+    }
+
+    private static bool HasPositionalConstructor(INamedTypeSymbol sourceType)
+    {
+        if (sourceType.TypeKind == TypeKind.Class || sourceType.TypeKind == TypeKind.Struct)
+        {
+            var syntaxRef = sourceType.DeclaringSyntaxReferences.FirstOrDefault();
+            if (syntaxRef != null)
+            {
+                var syntax = syntaxRef.GetSyntax();
+
+                // Check for record with parameter list
+                if (syntax is RecordDeclarationSyntax recordDecl && recordDecl.ParameterList != null && recordDecl.ParameterList.Parameters.Count > 0)
+                {
+                    return true;
+                }
+
+                // Check for regular class/struct with primary constructor (C# 12+)
+                if ((syntax is ClassDeclarationSyntax classDecl && classDecl.ParameterList != null && classDecl.ParameterList.Parameters.Count > 0) ||
+                    (syntax is StructDeclarationSyntax structDecl && structDecl.ParameterList != null && structDecl.ParameterList.Parameters.Count > 0))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasAccessibleParameterlessConstructor(INamedTypeSymbol sourceType)
+    {
+        var constructors = sourceType.InstanceConstructors;
+
+        // If no constructors are explicitly defined, there's an implicit public parameterless constructor
+        if (!constructors.Any())
+            return true;
+
+        // Check if there's an explicitly defined parameterless constructor that's accessible
+        foreach (var constructor in constructors)
+        {
+            if (constructor.Parameters.Length == 0)
+            {
+                // Public constructors are always accessible
+                if (constructor.DeclaredAccessibility == Accessibility.Public)
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool AllPropertiesHaveAccessibleSetters(
+        INamedTypeSymbol sourceType,
+        HashSet<string> excluded,
+        HashSet<string> included,
+        bool isIncludeMode,
+        bool includeFields)
+    {
+        var members = GetAllPublicMembers(sourceType);
+
+        foreach (var member in members)
+        {
+            // Apply include/exclude filters
+            if (isIncludeMode)
+            {
+                if (!included.Contains(member.Name))
+                    continue;
+            }
+            else
+            {
+                if (excluded.Contains(member.Name))
+                    continue;
+            }
+
+            // Skip fields unless includeFields is true
+            if (member.Kind == SymbolKind.Field && !includeFields)
+                continue;
+
+            // Check properties for accessible setters
+            if (member is IPropertySymbol property)
+            {
+                // Check if the property has a setter and if it's accessible
+                if (property.SetMethod == null)
+                    return false;
+
+                // Check setter accessibility
+                var setterAccessibility = property.SetMethod.DeclaredAccessibility;
+                if (setterAccessibility != Accessibility.Public &&
+                    setterAccessibility != Accessibility.Internal)
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     private static void ReportInvalidPropertyName(
