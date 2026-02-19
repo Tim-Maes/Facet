@@ -2,9 +2,6 @@ using Facet;
 
 namespace Facet.Tests.UnitTests.Core;
 
-/// <summary>
-/// Tests for the Optional&lt;T&gt; type used in Patch DTOs.
-/// </summary>
 public class OptionalTests
 {
     [Fact]

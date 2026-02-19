@@ -4,8 +4,6 @@ namespace Facet.Tests.UnitTests.Core.Facet;
 
 public class EnumConversionTests
 {
-    #region ConvertEnumsTo = typeof(string)
-
     [Fact]
     public void ConvertEnumsTo_String_ShouldGenerateStringProperty()
     {
@@ -99,10 +97,6 @@ public class EnumConversionTests
         entity.Name.Should().Be("John");
     }
 
-    #endregion
-
-    #region ConvertEnumsTo = typeof(int)
-
     [Fact]
     public void ConvertEnumsTo_Int_ShouldGenerateIntProperty()
     {
@@ -168,10 +162,6 @@ public class EnumConversionTests
         // Assert
         entity.Status.Should().Be(UserStatus.Pending);
     }
-
-    #endregion
-
-    #region Nullable enum properties
 
     [Fact]
     public void ConvertEnumsTo_String_NullableEnum_ShouldHandleNonNullValue()
@@ -269,10 +259,6 @@ public class EnumConversionTests
         statusProperty!.PropertyType.Should().Be(typeof(int?));
     }
 
-    #endregion
-
-    #region NullableProperties combined with ConvertEnumsTo
-
     [Fact]
     public void ConvertEnumsTo_String_WithNullableProperties_ShouldMakeAllNullable()
     {
@@ -296,10 +282,6 @@ public class EnumConversionTests
         statusProperty.Should().NotBeNull();
         statusProperty!.PropertyType.Should().Be(typeof(string)); // string is already nullable ref type
     }
-
-    #endregion
-
-    #region Projection tests
 
     [Fact]
     public void ConvertEnumsTo_String_Projection_ShouldExist()
@@ -350,10 +332,6 @@ public class EnumConversionTests
         dtos[0].Status.Should().Be(0); // Active
         dtos[1].Status.Should().Be(3); // Suspended
     }
-
-    #endregion
-
-    #region ToSource round-trip tests
 
     [Theory]
     [InlineData(UserStatus.Active)]
@@ -408,6 +386,4 @@ public class EnumConversionTests
         // Assert
         result.Status.Should().Be(status);
     }
-
-    #endregion
 }

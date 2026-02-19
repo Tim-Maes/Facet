@@ -4,8 +4,6 @@ namespace Facet.Tests.UnitTests.Core.Facet;
 
 public class CircularReferenceTests
 {
-    #region MaxDepth Tests
-
     [Fact]
     public void MaxDepth_Should_Prevent_StackOverflow_With_Circular_References()
     {
@@ -83,10 +81,6 @@ public class CircularReferenceTests
             book.Author.Books.Should().BeNull();
         }
     }
-
-    #endregion
-
-    #region PreserveReferences Tests
 
     [Fact]
     public void PreserveReferences_Should_Detect_And_Break_Circular_References()
@@ -174,10 +168,6 @@ public class CircularReferenceTests
         nonNullReports.Count.Should().BeLessThanOrEqualTo(1);
     }
 
-    #endregion
-
-    #region Self-Referencing Tests
-
     [Fact]
     public void SelfReferencing_OrgEmployee_Should_Handle_Hierarchy_Without_StackOverflow()
     {
@@ -223,7 +213,7 @@ public class CircularReferenceTests
         // Act - Should not cause stack overflow
         var facet = new OrgEmployeeFacet(ceo);
 
-        // Assert - No stack overflow occurred, that's the main succces
+        // Assert - No stack overflow occurred, that's the main success
         facet.Should().NotBeNull();
         facet.Id.Should().Be(1);
         facet.Name.Should().Be("CEO");
@@ -279,10 +269,6 @@ public class CircularReferenceTests
         facet.Manager.Manager.Should().NotBeNull();
         facet.Manager.Manager!.Name.Should().Be("Director");
     }
-
-    #endregion
-
-    #region Edge Cases
 
     [Fact]
     public void CircularReference_Should_Handle_Null_Collections()
@@ -396,10 +382,6 @@ public class CircularReferenceTests
         facet.Books[0].Author.Should().BeNull();
     }
 
-    #endregion
-
-    #region Combined MaxDepth and PreserveReferences Tests
-
     [Fact]
     public void MaxDepth_And_PreserveReferences_Should_Work_Together()
     {
@@ -468,10 +450,6 @@ public class CircularReferenceTests
         facet.Name.Should().Be("Level 1");
     }
 
-    #endregion
-
-    #region Collection Mapping Tests
-
     [Fact]
     public void Collection_With_Circular_References_Should_Map_Correctly()
     {
@@ -520,10 +498,6 @@ public class CircularReferenceTests
         facet.DirectReports.Should().BeEmpty();
     }
 
-    #endregion
-
-    #region BackTo Tests with Circular References
-
     [Fact]
     public void BackTo_Should_Handle_Circular_References_Without_Error()
     {
@@ -555,10 +529,6 @@ public class CircularReferenceTests
         mappedAuthor.Name.Should().Be("Test Author");
         mappedAuthor.Books.Should().NotBeNull();
     }
-
-    #endregion
-
-    #region Performance Tests
 
     [Fact]
     public void CircularReference_Detection_Should_Be_Fast_For_Large_Graphs()
@@ -602,10 +572,6 @@ public class CircularReferenceTests
             CreateOrgHierarchy(child, depth + 1, maxDepth, childrenPerLevel);
         }
     }
-
-    #endregion
-
-    #region Default Settings Tests (MaxDepth=3, PreserveReferences=true)
 
     [Fact]
     public void DefaultSettings_Should_Prevent_StackOverflow_With_Bidirectional_References()
@@ -882,8 +848,6 @@ public class CircularReferenceTests
         facet.Name.Should().Be("Entity A");
         facet.BReferences.Should().NotBeNull();
     }
-
-    #endregion
 }
 
 #region Additional Test Models for New Tests

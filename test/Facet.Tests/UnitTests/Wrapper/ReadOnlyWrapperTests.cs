@@ -1,13 +1,7 @@
-using FluentAssertions;
-
 namespace Facet.Tests.UnitTests.Wrapper;
 
-/// <summary>
-/// Tests for ReadOnly wrapper functionality
-/// </summary>
 public partial class ReadOnlyWrapperTests
 {
-    // Test domain model
     public class Product
     {
         public int Id { get; set; }
@@ -17,11 +11,9 @@ public partial class ReadOnlyWrapperTests
         public int Stock { get; set; }
     }
 
-    // Read-only wrapper - prevents modifications
     [Wrapper(typeof(Product), ReadOnly = true)]
     public partial class ReadOnlyProductWrapper { }
 
-    // Regular mutable wrapper for comparison
     [Wrapper(typeof(Product))]
     public partial class MutableProductWrapper { }
 
@@ -52,19 +44,12 @@ public partial class ReadOnlyWrapperTests
     [Fact]
     public void ReadOnlyWrapper_Should_Not_Have_Setters()
     {
-        // This test verifies at compile-time that ReadOnly wrappers don't have setters
-        // If this test compiles, it proves the setters are missing
-
+        // Setters are absent — verified at compile time
         var product = new Product { Id = 1, Name = "Test" };
         var wrapper = new ReadOnlyProductWrapper(product);
 
-        // These should compile (getters exist)
         _ = wrapper.Id;
         _ = wrapper.Name;
-
-        // These should NOT compile (setters don't exist):
-        // wrapper.Id = 2;          // CS0200: Property or indexer 'ReadOnlyProductWrapper.Id' cannot be assigned to -- it is read only
-        // wrapper.Name = "New";    // CS0200: Property or indexer 'ReadOnlyProductWrapper.Name' cannot be assigned to -- it is read only
     }
 
     [Fact]

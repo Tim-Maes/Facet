@@ -5,8 +5,6 @@ namespace Facet.Tests.UnitTests.Extensions.Mapping;
 
 public class AsyncMappingTests
 {
-    #region ToFacetAsync<TTarget, TMapper> Tests
-
     [Fact]
     public async Task ToFacetAsync_ShouldMapSingleInstance()
     {
@@ -77,10 +75,6 @@ public class AsyncMappingTests
         result.Price.Should().Be(99.99m);
     }
 
-    #endregion
-
-    #region ToFacetsAsync<TTarget, TMapper> Tests
-
     [Fact]
     public async Task ToFacetsAsync_ShouldMapCollection()
     {
@@ -144,10 +138,6 @@ public class AsyncMappingTests
         var act = () => users.ToFacetsAsync<UserDto, UserDtoAsyncMapper>(cts.Token);
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
-
-    #endregion
-
-    #region ToFacetsParallelAsync<TTarget, TMapper> Tests
 
     [Fact]
     public async Task ToFacetsParallelAsync_ShouldMapCollectionInParallel()
@@ -213,10 +203,6 @@ public class AsyncMappingTests
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
-    #endregion
-
-    #region ToFacetHybridAsync<TTarget, TMapper> Tests
-
     [Fact]
     public async Task ToFacetHybridAsync_ShouldApplyBothSyncAndAsyncMapping()
     {
@@ -266,10 +252,6 @@ public class AsyncMappingTests
         result.FullName.Should().Be("Alice Johnson (Hybrid)");
     }
 
-    #endregion
-
-    #region Error Handling Tests
-
     [Fact]
     public async Task ToFacetAsync_ShouldThrowWhenSourceIsNull()
     {
@@ -318,10 +300,6 @@ public class AsyncMappingTests
             .WithMessage("*source*");
     }
 
-    #endregion
-
-    #region Performance Comparison Tests
-
     [Fact]
     public async Task SimplifiedSyntax_ShouldProduceEquivalentResults_ToExplicitSyntax()
     {
@@ -339,6 +317,4 @@ public class AsyncMappingTests
         explicitResult.FullName.Should().Be("John Doe");
         simplifiedResult.FullName.Should().Be("John Doe");
     }
-
-    #endregion
 }

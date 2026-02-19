@@ -19,8 +19,6 @@ public class CustomMapperTests : IDisposable
         SeedTestData();
     }
 
-    #region ToFacetsAsync with Custom Mapper Tests
-
     [Fact]
     public async Task ToFacetsAsync_WithInstanceMapper_ShouldApplyCustomMapping()
     {
@@ -70,10 +68,6 @@ public class CustomMapperTests : IDisposable
         users.All(u => !string.IsNullOrEmpty(u.Email)).Should().BeTrue();
         users.All(u => u.Id > 0).Should().BeTrue();
     }
-
-    #endregion
-
-    #region FirstFacetAsync with Custom Mapper Tests
 
     [Fact]
     public async Task FirstFacetAsync_WithInstanceMapper_ShouldApplyCustomMapping()
@@ -133,10 +127,6 @@ public class CustomMapperTests : IDisposable
         user.Should().BeNull();
     }
 
-    #endregion
-
-    #region SingleFacetAsync with Custom Mapper Tests
-
     [Fact]
     public async Task SingleFacetAsync_WithInstanceMapper_ShouldApplyCustomMapping()
     {
@@ -183,10 +173,6 @@ public class CustomMapperTests : IDisposable
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
-    #endregion
-
-    #region Null Argument Tests
-
     [Fact]
     public async Task ToFacetsAsync_WithNullMapper_ShouldThrowArgumentNullException()
     {
@@ -232,10 +218,6 @@ public class CustomMapperTests : IDisposable
             .WithMessage("*mapper*");
     }
 
-    #endregion
-
-    #region Cancellation Token Tests
-
     [Fact]
     public async Task ToFacetsAsync_WithInstanceMapper_ShouldRespectCancellationToken()
     {
@@ -268,8 +250,6 @@ public class CustomMapperTests : IDisposable
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
-    #endregion
-
     private void SeedTestData()
     {
         var baseId = Random.Shared.Next(1000, 9999);
@@ -295,14 +275,12 @@ public class CustomMapperTests : IDisposable
     }
 }
 
-// Test DTO
 [Facet(typeof(User), "Password", "CreatedAt")]
 public partial class TestUserDto
 {
     public string FullName { get; set; } = string.Empty;
 }
 
-// Instance mapper (supports DI)
 public class TestUserDtoAsyncMapper : IFacetMapConfigurationAsyncInstance<User, TestUserDto>
 {
     public Task MapAsync(User source, TestUserDto target, CancellationToken cancellationToken = default)
@@ -312,7 +290,6 @@ public class TestUserDtoAsyncMapper : IFacetMapConfigurationAsyncInstance<User, 
     }
 }
 
-// Static mapper
 public class TestUserDtoStaticMapper : IFacetMapConfigurationAsync<User, TestUserDto>
 {
     public static Task MapAsync(User source, TestUserDto target, CancellationToken cancellationToken = default)

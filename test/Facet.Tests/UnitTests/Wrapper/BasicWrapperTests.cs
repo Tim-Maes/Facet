@@ -1,13 +1,7 @@
-using FluentAssertions;
-
 namespace Facet.Tests.UnitTests.Wrapper;
 
-/// <summary>
-/// Tests for basic wrapper functionality
-/// </summary>
 public partial class BasicWrapperTests
 {
-    // Test domain model
     public class User
     {
         public int Id { get; set; }
@@ -18,7 +12,6 @@ public partial class BasicWrapperTests
         public decimal Salary { get; set; }
     }
 
-    // Wrapper that excludes sensitive properties
     [Wrapper(typeof(User), "Password", "Salary")]
     public partial class PublicUserWrapper { }
 
@@ -72,18 +65,12 @@ public partial class BasicWrapperTests
     [Fact]
     public void Wrapper_Should_Exclude_Specified_Properties()
     {
-        // The wrapper should not have Password or Salary properties
-        // This is verified at compile time - if this test compiles, it works
+        // Password and Salary are excluded — verified at compile time
         var user = new User { Password = "secret", Salary = 75000 };
         var wrapper = new PublicUserWrapper(user);
 
-        // These should compile
         _ = wrapper.FirstName;
         _ = wrapper.Email;
-
-        // These should NOT compile (would be caught by the compiler):
-        // _ = wrapper.Password;  // CS1061: 'PublicUserWrapper' does not contain a definition for 'Password'
-        // _ = wrapper.Salary;    // CS1061: 'PublicUserWrapper' does not contain a definition for 'Salary'
     }
 
     [Fact]

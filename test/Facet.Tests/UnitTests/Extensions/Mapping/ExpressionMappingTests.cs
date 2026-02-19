@@ -1,20 +1,12 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
-using Facet.Extensions;
 using Facet.Mapping.Expressions;
 using Facet.Tests.TestModels;
 using Facet.Tests.Utilities;
-using FluentAssertions;
-using Xunit;
 
 namespace Facet.Tests.UnitTests.Extensions.Mapping;
 
 public class ExpressionMappingTests
 {
-    #region Test Data Setup
-
     private static List<User> CreateTestUsers()
     {
         var users = new List<User>
@@ -39,10 +31,6 @@ public class ExpressionMappingTests
         var users = CreateTestUsers();
         return users.Select(u => u.ToFacet<User, UserDto>()).ToList();
     }
-
-    #endregion
-
-    #region Predicate Mapping Tests
 
     [Fact]
     public void MapToFacet_ShouldTransformSimplePredicate()
@@ -135,10 +123,6 @@ public class ExpressionMappingTests
         act.Should().Throw<ArgumentNullException>();
     }
 
-    #endregion
-
-    #region Selector Expression Mapping Tests
-
     [Fact]
     public void MapToFacet_ShouldTransformSelector()
     {
@@ -199,10 +183,6 @@ public class ExpressionMappingTests
         results.Should().Contain("ALICE");
     }
 
-    #endregion
-
-    #region Generic Expression Mapping Tests
-
     [Fact]
     public void MapToFacetGeneric_ShouldTransformLambdaExpression()
     {
@@ -240,10 +220,6 @@ public class ExpressionMappingTests
         // Just verify we can execute the compiled expression without error
         (result is bool).Should().BeTrue();
     }
-
-    #endregion
-
-    #region Expression Composition Tests
 
     [Fact]
     public void CombineWithAnd_ShouldCombineMultiplePredicates()
@@ -358,10 +334,6 @@ public class ExpressionMappingTests
         act.Should().Throw<ArgumentNullException>();
     }
 
-    #endregion
-
-    #region Integration Tests
-
     [Fact]
     public void IntegrationTest_PredicateMappingWithComposition()
     {
@@ -438,10 +410,6 @@ public class ExpressionMappingTests
             dto.IsActive);
     }
 
-    #endregion
-
-    #region Error Handling Tests
-
     [Fact]
     public void MapToFacet_WithNullArguments_ShouldThrowArgumentNullException()
     {
@@ -477,10 +445,6 @@ public class ExpressionMappingTests
         act.Should().Throw<ArgumentNullException>();
     }
 
-    #endregion
-
-    #region Property Mapping Edge Cases
-
     [Fact]
     public void MapToFacet_ShouldHandlePropertyThatExistsInBothTypes()
     {
@@ -499,6 +463,4 @@ public class ExpressionMappingTests
         results.Should().HaveCountGreaterThan(0);
         results.Should().OnlyContain(dto => dto.Id > 0 && !string.IsNullOrEmpty(dto.FirstName));
     }
-
-    #endregion
 }
