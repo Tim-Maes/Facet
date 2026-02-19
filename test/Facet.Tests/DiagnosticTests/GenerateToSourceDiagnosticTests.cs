@@ -93,7 +93,7 @@ public partial class FacetFromRecord
 public class SourceWithImplicitConstructor
 {
     public int Id { get; set; }
-    public string Name { get; set; } = string.Empty;
+    public string Name { get; set; }
 }
 
 // This should NOT trigger FAC023 warning - implicit parameterless constructor exists

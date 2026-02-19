@@ -524,11 +524,9 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
     {
         var constructors = sourceType.InstanceConstructors;
 
-        // If no constructors are explicitly defined, there's an implicit public parameterless constructor
-        if (!constructors.Any())
-            return true;
-
-        // Check if there's an explicitly defined parameterless constructor that's accessible
+        // Check for a parameterless constructor (explicit or implicit)
+        // Note: For classes without explicit constructors, the compiler provides an implicit
+        // parameterless constructor which will be marked as IsImplicitlyDeclared = true
         foreach (var constructor in constructors)
         {
             if (constructor.Parameters.Length == 0)
@@ -540,53 +538,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         }
 
         return false;
-    }
-
-    private static bool AllPropertiesHaveAccessibleSetters(
-        INamedTypeSymbol sourceType,
-        HashSet<string> excluded,
-        HashSet<string> included,
-        bool isIncludeMode,
-        bool includeFields)
-    {
-        var members = GetAllPublicMembers(sourceType);
-
-        foreach (var member in members)
-        {
-            // Apply include/exclude filters
-            if (isIncludeMode)
-            {
-                if (!included.Contains(member.Name))
-                    continue;
-            }
-            else
-            {
-                if (excluded.Contains(member.Name))
-                    continue;
-            }
-
-            // Skip fields unless includeFields is true
-            if (member.Kind == SymbolKind.Field && !includeFields)
-                continue;
-
-            // Check properties for accessible setters
-            if (member is IPropertySymbol property)
-            {
-                // Check if the property has a setter and if it's accessible
-                if (property.SetMethod == null)
-                    return false;
-
-                // Check setter accessibility
-                var setterAccessibility = property.SetMethod.DeclaredAccessibility;
-                if (setterAccessibility != Accessibility.Public &&
-                    setterAccessibility != Accessibility.Internal)
-                {
-                    return false;
-                }
-            }
-        }
-
-        return true;
     }
 
     private static List<string> GetInaccessibleSetterProperties(
