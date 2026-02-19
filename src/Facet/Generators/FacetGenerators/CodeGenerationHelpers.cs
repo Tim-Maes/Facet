@@ -46,8 +46,8 @@ internal static class CodeGenerationHelpers
                 }
             }
 
-            // Skip nested facets - they will be handled by CollectStaticUsingTypes
-            if (member.IsNestedFacet)
+            // Skip nested facets and nested types - they will be handled by CollectStaticUsingTypes
+            if (member.IsNestedFacet || member.IsNestedType)
             {
                 continue;
             }
@@ -117,6 +117,41 @@ internal static class CodeGenerationHelpers
             {
                 var containingType = sourceTypeName.Substring(0, lastDotIndex);
                 staticUsingTypes.Add(containingType);
+            }
+        }
+
+        // Check for members whose type is a nested type (declared within another type)
+        // These need 'using static' for the containing type instead of a regular 'using' for the namespace
+        // Example: Application.Example1.Foo.Bar.Arr -> using static Application.Example1.Foo.Bar;
+        foreach (var member in model.Members)
+        {
+            if (member.IsNestedType && !member.IsNestedFacet)
+            {
+                var memberTypeName = member.TypeName;
+
+                // Remove global:: prefix if present
+                memberTypeName = GeneratorUtilities.StripGlobalPrefix(memberTypeName);
+
+                // Remove generic parameters if present
+                var genericIndex = memberTypeName.IndexOf('<');
+                if (genericIndex > 0)
+                {
+                    memberTypeName = memberTypeName.Substring(0, genericIndex);
+                }
+
+                // Remove nullable marker if present
+                if (memberTypeName.EndsWith("?"))
+                {
+                    memberTypeName = memberTypeName.Substring(0, memberTypeName.Length - 1);
+                }
+
+                // Extract the containing type (everything before the last dot)
+                var lastDotIndex = memberTypeName.LastIndexOf('.');
+                if (lastDotIndex > 0)
+                {
+                    var containingType = memberTypeName.Substring(0, lastDotIndex);
+                    staticUsingTypes.Add(containingType);
+                }
             }
         }
 

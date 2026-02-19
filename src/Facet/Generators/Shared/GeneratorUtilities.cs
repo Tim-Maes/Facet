@@ -323,6 +323,31 @@ internal static class GeneratorUtilities
     }
 
     /// <summary>
+    /// Determines if a type symbol represents a nested type (a type declared within another type).
+    /// Unwraps nullable annotations and collection element types to check the underlying type.
+    /// </summary>
+    /// <param name="typeSymbol">The type symbol to check.</param>
+    /// <returns>True if the underlying type is nested within another type; otherwise, false.</returns>
+    public static bool IsNestedType(ITypeSymbol typeSymbol)
+    {
+        // For collections, check the element type
+        if (TryGetCollectionElementType(typeSymbol, out var elementType, out _) && elementType != null)
+        {
+            return elementType.ContainingType != null;
+        }
+
+        // For Nullable<T> value types, check the inner type
+        if (typeSymbol is INamedTypeSymbol namedType &&
+            namedType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+        {
+            return namedType.TypeArguments[0].ContainingType != null;
+        }
+
+        // For regular types (including nullable reference types), ContainingType is on the type itself
+        return typeSymbol.ContainingType != null;
+    }
+
+    /// <summary>
     /// Wraps an element type name in the appropriate collection type.
     /// </summary>
     /// <param name="elementTypeName">The fully qualified element type name.</param>
