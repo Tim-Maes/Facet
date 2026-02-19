@@ -441,14 +441,19 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
                            namedArgs.IncludeFields.Value.Value is bool includeFieldsValue &&
                            includeFieldsValue;
 
-        var hasAccessibleSetters = AllPropertiesHaveAccessibleSetters(sourceType, excluded, included, isIncludeMode, includeFields);
+        var inaccessibleProperties = GetInaccessibleSetterProperties(sourceType, excluded, included, isIncludeMode, includeFields);
 
-        if (!hasAccessibleSetters)
+        if (inaccessibleProperties.Count > 0)
         {
+            var propertyList = string.Join(", ", inaccessibleProperties.Take(3).Select(p => $"'{p}'"));
+            var message = inaccessibleProperties.Count > 3
+                ? $"properties {propertyList} and {inaccessibleProperties.Count - 3} more do not have accessible setters"
+                : $"propert{(inaccessibleProperties.Count == 1 ? "y" : "ies")} {propertyList} {(inaccessibleProperties.Count == 1 ? "does" : "do")} not have accessible setter{(inaccessibleProperties.Count == 1 ? "" : "s")}";
+            
             context.ReportDiagnostic(Diagnostic.Create(
                 GenerateToSourceNotPossibleRule,
                 facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
-                "one or more properties in the source type do not have accessible setters"));
+                message));
         }
     }
 
@@ -582,6 +587,57 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         }
 
         return true;
+    }
+
+    private static List<string> GetInaccessibleSetterProperties(
+        INamedTypeSymbol sourceType,
+        HashSet<string> excluded,
+        HashSet<string> included,
+        bool isIncludeMode,
+        bool includeFields)
+    {
+        var inaccessibleProperties = new List<string>();
+        var members = GetAllPublicMembers(sourceType);
+
+        foreach (var member in members)
+        {
+            // Apply include/exclude filters
+            if (isIncludeMode)
+            {
+                if (!included.Contains(member.Name))
+                    continue;
+            }
+            else
+            {
+                if (excluded.Contains(member.Name))
+                    continue;
+            }
+
+            // Skip fields unless includeFields is true
+            if (member.Kind == SymbolKind.Field && !includeFields)
+                continue;
+
+            // Check properties for accessible setters
+            if (member is IPropertySymbol property)
+            {
+                // Check if the property has a setter and if it's accessible
+                if (property.SetMethod == null)
+                {
+                    inaccessibleProperties.Add(property.Name);
+                    continue;
+                }
+
+                // Check setter accessibility
+                var setterAccessibility = property.SetMethod.DeclaredAccessibility;
+                if (setterAccessibility != Accessibility.Public &&
+                    setterAccessibility != Accessibility.Internal)
+                {
+                    inaccessibleProperties.Add(property.Name);
+                }
+            }
+        }
+
+        return inaccessibleProperties;
     }
 
     private static void ReportInvalidPropertyName(
