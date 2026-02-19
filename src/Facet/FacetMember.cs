@@ -21,6 +21,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
     public bool IsCollection { get; }
     public string? CollectionWrapper { get; }
     public string? SourceMemberTypeName { get; }
+    public bool IsNestedType { get; }
 
     // MapFrom attribute properties
     public string? MapFromSource { get; }
@@ -77,7 +78,8 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         IReadOnlyList<string>? attributeNamespaces = null,
         string? defaultValue = null,
         bool isEnumConversion = false,
-        string? originalEnumTypeName = null)
+        string? originalEnumTypeName = null,
+        bool isNestedType = false)
     {
         Name = name;
         TypeName = typeName;
@@ -105,6 +107,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         DefaultValue = defaultValue;
         IsEnumConversion = isEnumConversion;
         OriginalEnumTypeName = originalEnumTypeName;
+        IsNestedType = isNestedType;
     }
 
     public bool Equals(FacetMember? other) =>
@@ -131,6 +134,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         DefaultValue == other.DefaultValue &&
         IsEnumConversion == other.IsEnumConversion &&
         OriginalEnumTypeName == other.OriginalEnumTypeName &&
+        IsNestedType == other.IsNestedType &&
         Attributes.SequenceEqual(other.Attributes) &&
         AttributeNamespaces.SequenceEqual(other.AttributeNamespaces) &&
         MapWhenConditions.SequenceEqual(other.MapWhenConditions);
@@ -164,6 +168,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
             hash = hash * 31 + (DefaultValue?.GetHashCode() ?? 0);
             hash = hash * 31 + IsEnumConversion.GetHashCode();
             hash = hash * 31 + (OriginalEnumTypeName?.GetHashCode() ?? 0);
+            hash = hash * 31 + IsNestedType.GetHashCode();
             hash = hash * 31 + Attributes.Count.GetHashCode();
             foreach (var attr in Attributes)
                 hash = hash * 31 + (attr?.GetHashCode() ?? 0);

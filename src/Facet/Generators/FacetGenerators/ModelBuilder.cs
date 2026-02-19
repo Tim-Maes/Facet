@@ -329,6 +329,10 @@ internal static class ModelBuilder
         bool isCollection = false;
         string? collectionWrapper = null;
 
+        // Detect if the property type is a nested type (has a containing type)
+        // This is needed to generate 'using static' instead of 'using' for the containing type
+        bool isNestedType = GeneratorUtilities.IsNestedType(property.Type);
+
         // Check if the property type is nullable (reference types)
         bool isNullableReferenceType = property.Type.NullableAnnotation == NullableAnnotation.Annotated;
         bool shouldTreatAsNullable = isNullableReferenceType;
@@ -501,7 +505,8 @@ internal static class ModelBuilder
             attributeNamespaces,
             defaultValue,
             isEnumConversion,
-            originalEnumTypeName));
+            originalEnumTypeName,
+            isNestedType));
         addedMembers.Add(memberName);
     }
 
