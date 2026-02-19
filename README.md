@@ -36,7 +36,7 @@ Think of your domain model as a **gem with many facets**! Different views for di
 
 Instead of manually creating each facet, **Facet** auto-generates them from a single source of truth.
 
-### Example Facet with all properties from source
+### Example Facet (full)
 
 ```csharp
 // You just need one attribute
@@ -68,19 +68,19 @@ user.ApplyFacet(dto);  // patch changed properties back
 
 ### Mapping & Customization
 - Include/exclude properties with simple attribute arguments
-- **`[MapFrom]`** — declarative property renaming with optional reverse mapping and expression support
-- **`[MapWhen]`** — conditional mapping based on runtime values, works in SQL projections
-- **Before/After hooks** — inject validation, defaults, or computed values around auto-mapping
-- **`ConvertEnumsTo`** — convert all enums to `string` or `int` with full round-trip support
+- **`[MapFrom]`** - declarative property renaming with optional reverse mapping and expression support
+- **`[MapWhen]`** - conditional mapping based on runtime values, works in SQL projections
+- **Before/After hooks** - inject validation, defaults, or computed values around auto-mapping
+- **`ConvertEnumsTo`** - convert all enums to `string` or `int` with full round-trip support
 - Sync and async custom mapping configurations (static or DI-resolved instances)
 
 ### Advanced Features
-- **`[Flatten]`** — collapse nested object graphs into top-level properties
-- **`[Wrapper]`** — reference-based delegation for facades, ViewModels, and decorators
-- **`[GenerateDtos]`** — auto-generate full CRUD DTO sets (Create, Update, Response, Query, Upsert, Patch)
-- **Source signature tracking** — compile-time warning when a source entity's structure changes
-- **Inheritance** — traverses base classes; suppresses duplicates when facets inherit base types
-- **Expression transformation** — remap predicates and selectors from entity types to their projections
+- **`[Flatten]`** - collapse nested object graphs into top-level properties
+- **`[Wrapper]`** - reference-based delegation for facades, ViewModels, and decorators
+- **`[GenerateDtos]`** - auto-generate full CRUD DTO sets (Create, Update, Response, Query, Upsert, Patch)
+- **Source signature tracking** - compile-time warning when a source entity's structure changes
+- **Inheritance** - traverses base classes; suppresses duplicates when facets inherit base types
+- **Expression transformation** - remap predicates and selectors from entity types to their projections
 
 ### Integration
 - Full **Entity Framework Core** support — automatic navigation loading, no `.Include()` required
