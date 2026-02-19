@@ -25,7 +25,7 @@
 
 ---
 
-**Facet** is a C# source generator that automatically creates DTOs, mappings, and LINQ projections from your domain models at compile time, eliminating boilerplate with zero runtime cost.
+**Facet** is a C# source generator that eliminates DTO boilerplate. Declare what you want, and Facet generates the type, constructor, LINQ projection, and reverse mapping, all at compile time with zero runtime overhead.
 
 ## :gem: What is a Facet?
 
@@ -35,6 +35,20 @@ Think of your domain model as a **gem with many facets**! Different views for di
 - Database queries need efficient projections
 
 Instead of manually creating each facet, **Facet** auto-generates them from a single source of truth.
+
+### Example Facet with all properties from source
+
+```csharp
+// You just need one attribute
+[Facet(typeof(User))]
+public partial record UserDto;
+
+// Fully generated: constructor, projection, reverse mapping, patch
+var dto    = user.ToFacet<UserDto>();
+var dtos   = await db.Users.SelectFacet<UserDto>().ToListAsync();  // SQL projection, no .Include() needed
+var source = dto.ToSource();
+user.ApplyFacet(dto);  // patch changed properties back
+```
 
 ## :clipboard: Documentation
 
@@ -46,54 +60,35 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 
 ## :star: Features
 
-Click on a section to expand/collapse
-
-<details>
-  <summary>Code Generation</summary>
-  
+### Code Generation
 - Generate DTOs as classes, records, structs, or record structs
-- Constructors & LINQ projection expressions
-- Handle complex nested objects & collections automatically
-- Preserve XML documentation
-  
-</details>
+- Constructor, static factory, and LINQ projection expression — all generated
+- Nested objects and collections mapped automatically
+- Preserves XML documentation and data validation attributes
 
-<details>
-  <summary>Configuration & customization</summary>
+### Mapping & Customization
+- Include/exclude properties with simple attribute arguments
+- **`[MapFrom]`** — declarative property renaming with optional reverse mapping and expression support
+- **`[MapWhen]`** — conditional mapping based on runtime values, works in SQL projections
+- **Before/After hooks** — inject validation, defaults, or computed values around auto-mapping
+- **`ConvertEnumsTo`** — convert all enums to `string` or `int` with full round-trip support
+- Sync and async custom mapping configurations (static or DI-resolved instances)
 
-- Include/exclude pattern with simple attributes
-- Copy data validation attributes
-- Reverse & custom mapping configurations (sync & async)
-- Patch/update source with change tracking
-- Expression transformation utilities for business logic reuse
-- **Property mapping with `[MapFrom]`** for declarative property renaming
-- **Conditional mapping with `[MapWhen]`** for status-dependent fields
-- **Before/After mapping hooks** for validation, defaults, and computed values
-- **Enum conversion with `ConvertEnumsTo`** for automatic enum-to-string/int mapping
+### Advanced Features
+- **`[Flatten]`** — collapse nested object graphs into top-level properties
+- **`[Wrapper]`** — reference-based delegation for facades, ViewModels, and decorators
+- **`[GenerateDtos]`** — auto-generate full CRUD DTO sets (Create, Update, Response, Query, Upsert, Patch)
+- **Source signature tracking** — compile-time warning when a source entity's structure changes
+- **Inheritance** — traverses base classes; suppresses duplicates when facets inherit base types
+- **Expression transformation** — remap predicates and selectors from entity types to their projections
 
-</details>
-
-<details>
-  <summary>Additional Features</summary>
-
-- **Flatten** nested objects into top-level properties
-- **Wrapper** pattern for reference-based delegation (facades, decorators, ViewModels)
-- **Auto-generate CRUD DTOs** (Create, Update, Response, Query, Upsert, Patch)
-- **Source signature tracking** for detecting breaking changes when source entities change
-- **Inheritance support** for source types and facet base classes
-
-</details> 
-
-<details>
-  <summary>Integration</summary>
-
-- Full **Entity Framework Core** support with automatic navigation loading
-- Works with any LINQ provider (via Facet.Extensions)
-- Expression tree transformation for predicates & selectors
-- Zero runtime cost and no reflection, everything happens at compile time
-- Supports **.NET 8, .NET 9, and .NET 10** (LTS)
-
-</details>
+### Integration
+- Full **Entity Framework Core** support — automatic navigation loading, no `.Include()` required
+- Works with any LINQ provider via `Facet.Extensions`
+- Async EF Core variants with cancellation token support
+- Custom async mappers with dependency injection for mappings that require I/O
+- Supports **.NET 8, .NET 9, and .NET 10**
+- Zero runtime cost — no reflection, everything generated at compile time
 
 ## :rocket: Quick Start
 
