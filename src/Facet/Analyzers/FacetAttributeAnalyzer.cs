@@ -406,7 +406,7 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
     private static void ValidateGenerateToSource(SymbolAnalysisContext context, AttributeData facetAttr, INamedTypeSymbol sourceType, INamedTypeSymbol targetType, FacetNamedArguments namedArgs)
     {
         // Check if GenerateToSource is set to true
-        if (namedArgs.GenerateToSource.Equals(default) || namedArgs.GenerateToSource.Value.IsNull)
+        if (namedArgs.GenerateToSource.Key == null || namedArgs.GenerateToSource.Value.IsNull)
             return;
 
         if (namedArgs.GenerateToSource.Value.Value is not bool generateToSource || !generateToSource)
