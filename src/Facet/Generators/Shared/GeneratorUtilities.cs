@@ -60,21 +60,31 @@ internal static class GeneratorUtilities
     /// </summary>
     private static bool IsPartialImplementingDeclaration(IPropertySymbol property)
     {
+        var sawPartialDeclaration = false;
+
         foreach (var syntaxRef in property.DeclaringSyntaxReferences)
         {
             if (syntaxRef.GetSyntax() is PropertyDeclarationSyntax propSyntax)
             {
                 var hasPartial = propSyntax.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword));
-                if (!hasPartial) continue;
+                if (!hasPartial)
+                    continue;
+
+                sawPartialDeclaration = true;
 
                 var hasAccessorBody = propSyntax.AccessorList?.Accessors
                     .Any(a => a.Body != null || a.ExpressionBody != null) == true;
 
-                if (hasAccessorBody)
-                    return true;
+                // A partial declaration without accessor bodies is the defining declaration.
+                // If we find one, this property is not "implementing-only" and should not be skipped.
+                if (!hasAccessorBody)
+                    return false;
             }
         }
-        return false;
+
+        // Return true only if we saw at least one partial declaration and *all* of them
+        // had accessor bodies (i.e., there is no defining declaration).
+        return sawPartialDeclaration;
     }
 
     /// <summary>
