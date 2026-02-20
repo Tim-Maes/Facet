@@ -34,21 +34,7 @@ Think of your domain model as a **gem with many facets**! Different views for di
 - Admin endpoints need a different facet with additional fields
 - Database queries need efficient projections
 
-Instead of manually creating each facet, **Facet** auto-generates them from a single source of truth.
-
-### Example Facet (full)
-
-```csharp
-// You just need one attribute
-[Facet(typeof(User))]
-public partial record UserDto;
-
-// Fully generated: constructor, projection, reverse mapping, patch
-var dto    = user.ToFacet<UserDto>();
-var dtos   = await db.Users.SelectFacet<UserDto>().ToListAsync();  // SQL projection, no .Include() needed
-var source = dto.ToSource();
-user.ApplyFacet(dto);  // patch changed properties back
-```
+Instead of manually creating each facet, **Facet** auto-generates them from a single source of truth. Generates constructors, projections, reverse mappings, patch, etc...
 
 ## :clipboard: Documentation
 
