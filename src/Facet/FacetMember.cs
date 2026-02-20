@@ -23,6 +23,8 @@ internal sealed class FacetMember : IEquatable<FacetMember>
     public string? SourceMemberTypeName { get; }
     public bool IsNestedType { get; }
 
+    public bool IsPartial { get; }
+
     // MapFrom attribute properties
     public string? MapFromSource { get; }
     public bool MapFromReversible { get; }
@@ -79,7 +81,8 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         string? defaultValue = null,
         bool isEnumConversion = false,
         string? originalEnumTypeName = null,
-        bool isNestedType = false)
+        bool isNestedType = false,
+        bool isPartial = false)
     {
         Name = name;
         TypeName = typeName;
@@ -108,6 +111,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         IsEnumConversion = isEnumConversion;
         OriginalEnumTypeName = originalEnumTypeName;
         IsNestedType = isNestedType;
+        IsPartial = isPartial;
     }
 
     public bool Equals(FacetMember? other) =>
@@ -135,6 +139,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         IsEnumConversion == other.IsEnumConversion &&
         OriginalEnumTypeName == other.OriginalEnumTypeName &&
         IsNestedType == other.IsNestedType &&
+        IsPartial == other.IsPartial &&
         Attributes.SequenceEqual(other.Attributes) &&
         AttributeNamespaces.SequenceEqual(other.AttributeNamespaces) &&
         MapWhenConditions.SequenceEqual(other.MapWhenConditions);
@@ -169,6 +174,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
             hash = hash * 31 + IsEnumConversion.GetHashCode();
             hash = hash * 31 + (OriginalEnumTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + IsNestedType.GetHashCode();
+            hash = hash * 31 + IsPartial.GetHashCode();
             hash = hash * 31 + Attributes.Count.GetHashCode();
             foreach (var attr in Attributes)
                 hash = hash * 31 + (attr?.GetHashCode() ?? 0);

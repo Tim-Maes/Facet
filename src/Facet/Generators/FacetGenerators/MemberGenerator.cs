@@ -52,7 +52,10 @@ internal static class MemberGenerator
 
     private static void GenerateProperty(StringBuilder sb, FacetMember member, string indent)
     {
-        var propDef = $"public {member.TypeName} {member.Name}";
+        // Partial properties (C# 13+) need the 'partial' modifier so that other source generators
+        // (e.g., CommunityToolkit.Mvvm) can generate the implementing declaration.
+        var partialModifier = member.IsPartial ? "partial " : "";
+        var propDef = $"public {partialModifier}{member.TypeName} {member.Name}";
 
         if (member.IsInitOnly)
         {
@@ -63,16 +66,20 @@ internal static class MemberGenerator
             propDef += " { get; set; }";
         }
 
-        // Add default value/initializer if present
-        if (!string.IsNullOrEmpty(member.DefaultValue))
+        // Partial property defining declarations (C# 13+) cannot have property initializers.
+        // For regular properties, add a default value or the "= default!" null-suppression.
+        if (!member.IsPartial)
         {
-            propDef += $" = {member.DefaultValue};";
-        }
-        else if (!member.IsValueType && !member.IsRequired && !NullabilityAnalyzer.IsNullableTypeName(member.TypeName))
-        {
-            // For non-nullable reference type properties without an initializer and not marked as required,
-            // add "= default!" to suppress CS8618 warnings in the generated code 
-            propDef += " = default!;";
+            if (!string.IsNullOrEmpty(member.DefaultValue))
+            {
+                propDef += $" = {member.DefaultValue};";
+            }
+            else if (!member.IsValueType && !member.IsRequired && !NullabilityAnalyzer.IsNullableTypeName(member.TypeName))
+            {
+                // For non-nullable reference type properties without an initializer and not marked as required,
+                // add "= default!" to suppress CS8618 warnings in the generated code
+                propDef += " = default!;";
+            }
         }
 
         if (member.IsRequired)
