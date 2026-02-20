@@ -251,6 +251,48 @@ public class CopyAttributesTests
         defaultSortAttr!.Direction.Should().Be(SortDirection.Ascending);
         defaultSortAttr.SortPrecedence.Should().Be(1);
     }
+
+    [Fact]
+    public void Facet_ShouldCopyAttributes_FromPartialProperty()
+    {
+        // Verify that attributes from a partial property defining declaration are copied
+        // to the generated DTO property
+        var nameProperty = typeof(SourceWithPartialPropertyDto).GetProperty("Name");
+        nameProperty.Should().NotBeNull();
+        nameProperty!.GetCustomAttribute<RequiredAttribute>().Should().NotBeNull(
+            "attributes from partial property defining declarations should be copied");
+    }
+
+    [Fact]
+    public void Facet_ShouldNotGenerateDuplicateProperty_WhenSourceHasPartialProperty()
+    {
+        // Verify that Facet does not create duplicate properties when the source type
+        // has both a defining and implementing partial property declaration.
+        var nameProperties = typeof(SourceWithPartialPropertyDto).GetProperties()
+            .Where(p => p.Name == "Name")
+            .ToList();
+        nameProperties.Should().HaveCount(1, "a partial property should appear only once in the DTO");
+    }
+
+    [Fact]
+    public void Facet_ShouldGenerateRegularProperty_ForNonPartialProperty_InPartialSourceType()
+    {
+        // Non-partial properties in the same source class should remain regular (non-partial).
+        var ageProperty = typeof(SourceWithPartialPropertyDto).GetProperty("Age");
+        ageProperty.Should().NotBeNull();
+        // Age has no [Required] on the source, so it should not appear on the DTO either
+        ageProperty!.GetCustomAttribute<RequiredAttribute>().Should().BeNull();
+    }
+
+    [Fact]
+    public void Facet_ShouldMapPartialPropertyValue_ThroughConstructor()
+    {
+        // Verify the generated constructor correctly maps values from the source's partial property.
+        var source = new SourceWithPartialProperty { Name = "Alice", Age = 30 };
+        var dto = new SourceWithPartialPropertyDto(source);
+        dto.Name.Should().Be("Alice");
+        dto.Age.Should().Be(30);
+    }
 }
 
 // Source model with data annotations
@@ -535,4 +577,39 @@ public class DatabaseTableWithGenericAttribute
 [Facet(typeof(DatabaseTableWithGenericAttribute), CopyAttributes = true)]
 public partial class DatabaseTableWithGenericAttributeDto
 {
+}
+
+public partial class SourceWithPartialProperty
+{
+    // Defining declaration: partial modifier + no accessor body
+    [Required]
+    public partial string Name { get; set; }
+
+    public int Age { get; set; }
+}
+
+// Implementing declaration
+public partial class SourceWithPartialProperty
+{
+    private string _sourceName = string.Empty;
+    public partial string Name
+    {
+        get => _sourceName;
+        set => _sourceName = value;
+    }
+}
+
+// Facet DTO — Facet generates:
+//   [Required] public partial string Name { get; set; }
+//   public int Age { get; set; } = default!;
+//   + constructor, projection, etc.
+[Facet(typeof(SourceWithPartialProperty), CopyAttributes = true)]
+public partial class SourceWithPartialPropertyDto
+{
+    private string _dtoName = string.Empty;
+    public partial string Name
+    {
+        get => _dtoName;
+        set => _dtoName = value;
+    }
 }

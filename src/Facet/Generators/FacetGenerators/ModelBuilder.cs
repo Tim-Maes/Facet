@@ -1,5 +1,6 @@
 using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -401,12 +402,19 @@ internal static class ModelBuilder
             attributeNamespaces = new List<string>();
         }
 
+        // Detect if the source property is a partial defining declaration (C# 13+).
+        // Partial properties (e.g., [ObservableProperty] with the new property-based MVVM pattern)
+        // must be generated as partial in the target type so that other source generators
+        // (e.g., CommunityToolkit.Mvvm) can provide the implementing declaration.
+        var isPartial = IsPartialDefiningProperty(property);
+
         // Extract property initializer/default value from source
         // Skip initializers for:
         // 1. Nested facets - the type changes and the initializer won't be compatible
         // 2. NullableProperties = true - query DTOs should default to null, not the source initializer
+        // 3. Partial properties - defining declarations cannot have initializers in C# 13+
         string? defaultValue = null;
-        if (!isNestedFacet && !nullableProperties)
+        if (!isNestedFacet && !nullableProperties && !isPartial)
         {
             defaultValue = ExtractPropertyInitializer(property);
         }
@@ -506,8 +514,33 @@ internal static class ModelBuilder
             defaultValue,
             isEnumConversion,
             originalEnumTypeName,
-            isNestedType));
+            isNestedType,
+            isPartial));
         addedMembers.Add(memberName);
+    }
+
+    /// <summary>
+    /// Determines whether a property symbol is a partial property defining declaration (C# 13+).
+    /// A defining declaration has the <c>partial</c> modifier but no accessor body implementations.
+    /// </summary>
+    private static bool IsPartialDefiningProperty(IPropertySymbol property)
+    {
+        foreach (var syntaxRef in property.DeclaringSyntaxReferences)
+        {
+            if (syntaxRef.GetSyntax() is PropertyDeclarationSyntax propSyntax)
+            {
+                var hasPartial = propSyntax.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword));
+                if (!hasPartial) continue;
+
+                // Defining declaration: partial modifier present and no accessor has a body
+                var hasAccessorBody = propSyntax.AccessorList?.Accessors
+                    .Any(a => a.Body != null || a.ExpressionBody != null) == true;
+
+                if (!hasAccessorBody)
+                    return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>
