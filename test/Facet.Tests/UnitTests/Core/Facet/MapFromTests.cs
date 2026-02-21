@@ -124,6 +124,10 @@ public partial class MapFromSingleLevelPathFacet
 
     [MapFrom("Company.Address")]
     public string CompanyAddress { get; set; } = string.Empty;
+    
+    // Same as above but not a hardcoded string literal - should generate same mapping
+    [MapFrom(nameof(@MapFromNestedPropertyEntity.Company.CompanyName))]
+    public string AlternativeCompanyName { get; set; } = string.Empty;
 }
 
 // Test multi-level nested property path: Employee.Company.CompanyName
@@ -549,6 +553,7 @@ public class MapFromTests
         facet.Name.Should().Be("John Doe");
         facet.CompanyName.Should().Be("Acme Corporation"); // From Company.CompanyName
         facet.CompanyAddress.Should().Be("123 Main Street"); // From Company.Address
+        facet.AlternativeCompanyName.Should().Be("Acme Corporation"); // using nameof(@MapFromNestedPropertyEntity.Company.CompanyName)
     }
 
     [Fact]
