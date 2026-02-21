@@ -48,7 +48,7 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 
 ### Code Generation
 - Generate DTOs as classes, records, structs, or record structs
-- Constructor, static factory, and LINQ projection expression — all generated
+- Constructor, static factory, and LINQ projection expression, all generated
 - Nested objects and collections mapped automatically
 - Preserves XML documentation and data validation attributes
 
@@ -74,7 +74,7 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 - Async EF Core variants with cancellation token support
 - Custom async mappers with dependency injection for mappings that require I/O
 - Supports **.NET 8, .NET 9, and .NET 10**
-- Zero runtime cost — no reflection, everything generated at compile time
+- Zero runtime cost, no reflection, everything generated at compile time
 
 ## :rocket: Quick Start
 
