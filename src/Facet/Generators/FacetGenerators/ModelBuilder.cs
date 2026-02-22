@@ -677,89 +677,125 @@ internal static class ModelBuilder
     /// Returns a dictionary mapping source property names to (targetName, source, reversible, includeInProjection, typeName).
     /// Also returns a list of expression-based members that should be added directly.
     /// </summary>
-    private static Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName)> ExtractMapFromMappings(
-        INamedTypeSymbol targetSymbol,
-        List<FacetMember> expressionMembers,
-        bool nullableProperties)
+private static Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName)> ExtractMapFromMappings(
+    INamedTypeSymbol targetSymbol,
+    List<FacetMember> expressionMembers,
+    bool nullableProperties)
+{
+    var mappings = new Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName)>();
+
+    // Get all members from the target type (user-declared properties)
+    foreach (var member in targetSymbol.GetMembers())
     {
-        var mappings = new Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName)>();
+        if (member is not IPropertySymbol property) continue;
 
-        // Get all members from the target type (user-declared properties)
-        foreach (var member in targetSymbol.GetMembers())
+        // Look for MapFrom attribute
+        foreach (var attr in property.GetAttributes())
         {
-            if (member is not IPropertySymbol property) continue;
-
-            // Look for MapFrom attribute
-            foreach (var attr in property.GetAttributes())
+            if (attr.AttributeClass?.ToDisplayString() == FacetConstants.MapFromAttributeFullName)
             {
-                if (attr.AttributeClass?.ToDisplayString() == FacetConstants.MapFromAttributeFullName)
+                // Try to obtain the source string from the compiled attribute data first
+                string? sourceFromData = null;
+                if (attr.ConstructorArguments.Length > 0 && attr.ConstructorArguments[0].Value is string s)
                 {
-                    // Get the Source constructor argument
-                    if (attr.ConstructorArguments.Length > 0 && attr.ConstructorArguments[0].Value is string source)
+                    sourceFromData = s;
+                }
+
+                // Try to resolve original syntax (to detect `@` in nameof, etc.)
+                string? source = sourceFromData;
+                bool hadLeadingAt = false;
+                if (attr.ApplicationSyntaxReference?.GetSyntax() is AttributeSyntax attrSyntax)
+                {
+                    var firstArgExpr = attrSyntax.ArgumentList?.Arguments.FirstOrDefault()?.Expression;
+                    if (firstArgExpr != null)
                     {
-                        // Get named arguments
-                        var reversible = false;
-                        var includeInProjection = true;
-
-                        foreach (var namedArg in attr.NamedArguments)
+                        var (resolved, hadAt) = NameOfResolver.ResolveExpression(firstArgExpr);
+                        // Only use the resolved value if it came from a nameof() expression with @ prefix
+                        // For string literals, stick with the compiled data to avoid including quotes
+                        if (!string.IsNullOrEmpty(resolved) && hadAt && IsNameOfExpression(firstArgExpr))
                         {
-                            if (namedArg.Key == "Reversible" && namedArg.Value.Value is bool rev)
+                            // When using @nameof(TypeName.PropertyPath), extract just the property path
+                            // by removing the first segment (the source type name)
+                            var segments = resolved.Split('.');
+                            if (segments.Length > 1)
                             {
-                                reversible = rev;
+                                // Skip the first segment (type name) and rebuild the path
+                                source = string.Join(".", segments.Skip(1));
                             }
-                            else if (namedArg.Key == "IncludeInProjection" && namedArg.Value.Value is bool incProj)
+                            else
                             {
-                                includeInProjection = incProj;
+                                source = resolved;
                             }
-                        }
-
-                        // Get the property type name
-                        var typeName = GeneratorUtilities.GetTypeNameWithNullability(property.Type);
-                        if (nullableProperties)
-                        {
-                            typeName = GeneratorUtilities.MakeNullable(typeName);
-                        }
-
-                        // Check if this is an expression (contains operators or spaces) or a nested property path
-                        if (IsExpression(source) || source.Contains("."))
-                        {
-                            // Expression-based member or nested property path - add directly to members list
-                            // Nested paths bypass source property processing since multiple target properties
-                            // can map from different nested paths under the same source property
-                            expressionMembers.Add(new FacetMember(
-                                property.Name,
-                                typeName,
-                                FacetMemberKind.Property,
-                                property.Type.IsValueType,
-                                false, // isInitOnly
-                                false, // isRequired
-                                false, // isReadOnly
-                                null,  // xmlDocumentation
-                                false, // isNestedFacet
-                                null,  // nestedFacetSourceTypeName
-                                null,  // attributes
-                                false, // isCollection
-                                null,  // collectionWrapper
-                                null,  // sourceMemberTypeName
-                                source, // mapFromSource
-                                reversible,
-                                includeInProjection,
-                                property.Name, // sourcePropertyName (use target name as placeholder)
-                                true)); // isUserDeclared
-                        }
-                        else
-                        {
-                            // Simple property rename - map to source property
-                            mappings[source] = (property.Name, source, reversible, includeInProjection, typeName);
+                            hadLeadingAt = hadAt;
                         }
                     }
+                }
+
+                if (string.IsNullOrEmpty(source))
+                {
+                    // nothing meaningful to do
                     break;
+                }
+
+                // Get named arguments
+                var reversible = false;
+                var includeInProjection = true;
+
+                foreach (var namedArg in attr.NamedArguments)
+                {
+                    if (namedArg.Key == "Reversible" && namedArg.Value.Value is bool rev)
+                    {
+                        reversible = rev;
+                    }
+                    else if (namedArg.Key == "IncludeInProjection" && namedArg.Value.Value is bool incProj)
+                    {
+                        includeInProjection = incProj;
+                    }
+                }
+
+                // Get the property type name
+                var typeName = GeneratorUtilities.GetTypeNameWithNullability(property.Type);
+                if (nullableProperties)
+                {
+                    typeName = GeneratorUtilities.MakeNullable(typeName);
+                }
+
+                // If the argument is an expression, a nested path, or was written with @nameof(...) to force a full path,
+                // treat it as an expression-based member / nested path.
+                if (IsExpression(source) || source.Contains(".") || hadLeadingAt)
+                {
+                    expressionMembers.Add(new FacetMember(
+                        property.Name,
+                        typeName,
+                        FacetMemberKind.Property,
+                        property.Type.IsValueType,
+                        false, // isInitOnly
+                        false, // isRequired
+                        false, // isReadOnly
+                        null,  // xmlDocumentation
+                        false, // isNestedFacet
+                        null,  // nestedFacetSourceTypeName
+                        null,  // attributes
+                        false, // isCollection
+                        null,  // collectionWrapper
+                        null,  // sourceMemberTypeName
+                        source, // mapFromSource
+                        reversible,
+                        includeInProjection,
+                        property.Name, // sourcePropertyName (use target name as placeholder)
+                        true)); // isUserDeclared
+                }
+                else
+                {
+                    // Simple property rename - map to source property
+                    mappings[source] = (property.Name, source, reversible, includeInProjection, typeName);
                 }
             }
         }
-
-        return mappings;
     }
+
+    return mappings;
+}
 
     /// <summary>
     /// Determines if the source string is an expression (contains operators, spaces, etc.)
@@ -879,6 +915,27 @@ internal static class ModelBuilder
             decimal m => $"{m}m",
             _ => value.Value?.ToString()
         };
+    }
+
+    /// <summary>
+    /// Checks if an expression is a nameof() call.
+    /// </summary>
+    private static bool IsNameOfExpression(ExpressionSyntax? expr)
+    {
+        if (expr is InvocationExpressionSyntax invocation)
+        {
+            var invokedExpr = invocation.Expression;
+            var invokedName = invokedExpr switch
+            {
+                IdentifierNameSyntax id => id.Identifier.ValueText,
+                MemberAccessExpressionSyntax ma when ma.Name is IdentifierNameSyntax id2 => id2.Identifier.ValueText,
+                _ => null
+            };
+
+            return string.Equals(invokedName, "nameof", System.StringComparison.Ordinal);
+        }
+
+        return false;
     }
 
     #endregion
