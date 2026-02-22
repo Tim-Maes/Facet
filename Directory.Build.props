@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <!-- Centralized version for all Facet packages -->
-    <Version>5.6.4</Version>
+    <Version>5.6.5</Version>
 
     <!-- Common package properties -->
     <Authors>Tim Maes</Authors>
