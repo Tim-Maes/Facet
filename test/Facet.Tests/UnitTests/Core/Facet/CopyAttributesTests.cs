@@ -588,7 +588,7 @@ public partial class SourceWithPartialProperty
     public int Age { get; set; }
 }
 
-// Implementing declaration
+// Implementing declaration for the source type's partial property
 public partial class SourceWithPartialProperty
 {
     private string _sourceName = string.Empty;
@@ -599,17 +599,14 @@ public partial class SourceWithPartialProperty
     }
 }
 
-// Facet DTO — Facet generates:
-//   [Required] public partial string Name { get; set; }
-//   public int Age { get; set; } = default!;
+// Facet DTO — Facet now generates regular (non-partial) properties from partial source properties.
+// The partial modifier is NOT propagated because source generators don't chain,
+// so another generator (e.g., CommunityToolkit.Mvvm) can't provide an implementing declaration. (GitHub issue #277)
+// Generated:
+//   [Required] public string Name { get; set; } = default!;
+//   public int Age { get; set; }
 //   + constructor, projection, etc.
 [Facet(typeof(SourceWithPartialProperty), CopyAttributes = true)]
 public partial class SourceWithPartialPropertyDto
 {
-    private string _dtoName = string.Empty;
-    public partial string Name
-    {
-        get => _dtoName;
-        set => _dtoName = value;
-    }
 }

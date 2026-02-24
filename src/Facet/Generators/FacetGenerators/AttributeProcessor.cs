@@ -43,6 +43,12 @@ internal static class AttributeProcessor
             // Skip the base ValidationAttribute class itself (but allow derived classes)
             if (attributeFullName == "global::System.ComponentModel.DataAnnotations.ValidationAttribute") continue;
 
+            // Skip attributes that are consumed by other source generators to trigger code generation.
+            // Copying these to a generated DTO would cause analyzer errors from those generators.
+            // For example, [ObservableProperty] from CommunityToolkit.Mvvm triggers the MVVM
+            // analyzer on the DTO, which is not an ObservableObject. (GitHub issue #277)
+            if (IsSourceGeneratorTriggerAttribute(attributeFullName)) continue;
+
             // Check if attribute can be applied to the target member type
             var attributeTargets = GetAttributeTargets(attr.AttributeClass);
             if (targetKind == FacetMemberKind.Property && !attributeTargets.HasFlag(AttributeTargets.Property)) continue;
@@ -348,5 +354,33 @@ internal static class AttributeProcessor
             // If conversion fails, try direct comparison
             return fieldValue.Equals(constantValue);
         }
+    }
+
+    /// <summary>
+    /// Namespace prefixes of attributes that are consumed by other source generators to trigger
+    /// code generation. Copying these to a Facet-generated DTO would cause analyzer errors
+    /// because the DTO is not set up for that source generator's pipeline.
+    /// See GitHub issue #277.
+    /// </summary>
+    private static readonly string[] SourceGeneratorTriggerNamespacePrefixes = new[]
+    {
+        // CommunityToolkit.Mvvm — [ObservableProperty], [RelayCommand], [NotifyPropertyChangedFor], etc.
+        "global::CommunityToolkit.Mvvm.",
+    };
+
+    /// <summary>
+    /// Determines whether an attribute is a source-generator-triggering attribute that should
+    /// not be copied to generated DTOs. These attributes are consumed by other source generators
+    /// and copying them would cause analyzer errors on the target type.
+    /// </summary>
+    private static bool IsSourceGeneratorTriggerAttribute(string attributeFullName)
+    {
+        foreach (var prefix in SourceGeneratorTriggerNamespacePrefixes)
+        {
+            if (attributeFullName.StartsWith(prefix))
+                return true;
+        }
+
+        return false;
     }
 }

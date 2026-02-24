@@ -403,18 +403,22 @@ internal static class ModelBuilder
         }
 
         // Detect if the source property is a partial defining declaration (C# 13+).
-        // Partial properties (e.g., [ObservableProperty] with the new property-based MVVM pattern)
-        // must be generated as partial in the target type so that other source generators
-        // (e.g., CommunityToolkit.Mvvm) can provide the implementing declaration.
-        var isPartial = IsPartialDefiningProperty(property);
+        // We detect this to properly handle initializer extraction (partial defining declarations
+        // cannot have initializers in C# 13+), but we do NOT propagate the partial modifier
+        // to the generated target type. Generating a partial defining declaration would require
+        // the user to provide an implementing declaration, which breaks the DTO use case.
+        // It also doesn't work with other source generators (e.g., CommunityToolkit.Mvvm)
+        // because source generators don't chain. (GitHub issue #277)
+        var isSourcePartial = IsPartialDefiningProperty(property);
 
         // Extract property initializer/default value from source
         // Skip initializers for:
         // 1. Nested facets - the type changes and the initializer won't be compatible
         // 2. NullableProperties = true - query DTOs should default to null, not the source initializer
-        // 3. Partial properties - defining declarations cannot have initializers in C# 13+
+        // 3. Partial source properties - the source defining declaration cannot have initializers,
+        //    so there's nothing to extract anyway
         string? defaultValue = null;
-        if (!isNestedFacet && !nullableProperties && !isPartial)
+        if (!isNestedFacet && !nullableProperties && !isSourcePartial)
         {
             defaultValue = ExtractPropertyInitializer(property);
         }
@@ -515,7 +519,7 @@ internal static class ModelBuilder
             isEnumConversion,
             originalEnumTypeName,
             isNestedType,
-            isPartial));
+            isPartial: false)); // Never propagate partial from source (GitHub issue #277)
         addedMembers.Add(memberName);
     }
 
