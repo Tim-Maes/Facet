@@ -71,13 +71,24 @@ internal static class CodeBuilder
         var hasRequiredProperties = model.Members.Any(m => m.IsRequired);
         var hasCustomMapping = !string.IsNullOrWhiteSpace(model.ConfigurationTypeName);
 
+        // Determine if we need to generate equality (skip for records which already have value equality)
+        var shouldGenerateEquality = model.GenerateEquality && !model.IsRecord;
+
         // Only generate positional declaration if there's no existing primary constructor
         if (isPositional)
         {
             GeneratePositionalDeclaration(sb, model, keyword, containingTypeIndent);
         }
 
-        sb.AppendLine($"{containingTypeIndent}{model.Accessibility} partial {keyword} {model.Name}");
+        // Generate the type declaration, including IEquatable<T> if equality is requested
+        if (shouldGenerateEquality)
+        {
+            sb.AppendLine($"{containingTypeIndent}{model.Accessibility} partial {keyword} {model.Name} : {EqualityGenerator.GetEquatableInterface(model)}");
+        }
+        else
+        {
+            sb.AppendLine($"{containingTypeIndent}{model.Accessibility} partial {keyword} {model.Name}");
+        }
         sb.AppendLine($"{containingTypeIndent}{{");
 
         var memberIndent = containingTypeIndent + "    ";
@@ -101,6 +112,12 @@ internal static class CodeBuilder
             ConstructorGenerator.GenerateConstructor(sb, model, isPositional, hasInitOnlyProperties, hasCustomMapping, hasRequiredProperties);
         }
 
+        // Generate copy constructor
+        if (model.GenerateCopyConstructor)
+        {
+            CopyConstructorGenerator.Generate(sb, model, memberIndent);
+        }
+
         // Generate projection
         if (model.GenerateExpressionProjection)
         {
@@ -117,6 +134,13 @@ internal static class CodeBuilder
         if (model.FlattenToTypes.Length > 0)
         {
             FlattenToGenerator.Generate(sb, model, memberIndent, facetLookup);
+        }
+
+        // Generate equality members (Equals, GetHashCode, ==, !=)
+        // Skip for records which already have value-based equality
+        if (shouldGenerateEquality)
+        {
+            EqualityGenerator.Generate(sb, model, memberIndent);
         }
 
         sb.AppendLine($"{containingTypeIndent}}}");

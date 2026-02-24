@@ -40,6 +40,8 @@ public partial class MyFacet { }
 | `PreserveReferences`           | `bool`    | Enable runtime circular reference detection using object tracking (default: true). See [Circular Reference Protection](#circular-reference-protection) below. |
 | `SourceSignature`              | `string?` | Hash signature to track source entity changes. Emits FAC022 warning when source structure changes. See [Source Signature Change Tracking](16_SourceSignature.md). |
 | `ConvertEnumsTo`               | `Type?`   | When set, all enum properties are converted to the specified type (`typeof(string)` or `typeof(int)`) in the generated facet. Default is null (enums retain their original types). See [Enum Conversion](20_ConvertEnumsTo.md). |
+| `GenerateCopyConstructor`      | `bool`    | Generate a copy constructor that accepts another instance of the same facet type and copies all member values (default: false). See [Copy Constructor](#copy-constructor) below. |
+| `GenerateEquality`             | `bool`    | Generate value-based equality members (`Equals`, `GetHashCode`, `==`, `!=`) and implement `IEquatable<T>` (default: false). Ignored for records. See [Equality Generation](#equality-generation) below. |
 
 ## Include vs Exclude
 
@@ -575,6 +577,135 @@ Nullable enum properties preserve their nullability after conversion:
 - `UserStatus?` ? `int?` (nullable int)
 
 See [Enum Conversion](20_ConvertEnumsTo.md) for full documentation.
+
+---
+
+## Copy Constructor
+
+The `GenerateCopyConstructor` property generates a constructor that accepts another instance of the same facet type and copies all member values. This is useful for MVVM scenarios, cloning DTOs, or creating independent copies.
+
+### Basic Usage
+
+```csharp
+[Facet(typeof(User), GenerateCopyConstructor = true)]
+public partial class UserDto;
+
+// Usage
+var original = new UserDto(user);
+var copy = new UserDto(original); // Copy constructor
+
+// Modify the copy without affecting the original
+copy.FirstName = "Changed";
+original.FirstName; // Still "John"
+```
+
+### Generated Code
+
+```csharp
+public partial class UserDto
+{
+    /// <summary>
+    /// Initializes a new instance by copying all member values from another instance.
+    /// </summary>
+    public UserDto(UserDto other)
+    {
+        if (other is null) throw new ArgumentNullException(nameof(other));
+        this.Id = other.Id;
+        this.FirstName = other.FirstName;
+        this.LastName = other.LastName;
+        this.Email = other.Email;
+    }
+}
+```
+
+### When to Use
+
+- **MVVM ViewModels**: Clone a view model for editing while preserving the original for cancel/revert
+- **DTO Cloning**: Create independent copies of DTOs for caching or comparison
+- **Undo/Redo**: Snapshot DTO state before modifications
+- **Inheritance Scenarios**: Use with base class inheritance where you need to copy facet properties to derived types
+
+---
+
+## Equality Generation
+
+The `GenerateEquality` property generates value-based equality members for class and struct facets. This includes `Equals(T)`, `Equals(object)`, `GetHashCode()`, and the `==` / `!=` operators. The generated type also implements `IEquatable<T>`.
+
+> **Note:** This option is ignored for record types, which already have built-in value-based equality from the C# language.
+
+### Basic Usage
+
+```csharp
+[Facet(typeof(User), GenerateEquality = true)]
+public partial class UserDto;
+
+// Value-based comparison
+var dto1 = new UserDto(user);
+var dto2 = new UserDto(user);
+dto1.Equals(dto2); // true
+dto1 == dto2;      // true
+dto1.GetHashCode() == dto2.GetHashCode(); // true
+
+// Works in collections
+var set = new HashSet<UserDto> { dto1 };
+set.Contains(dto2); // true — same values
+```
+
+### Combining with Copy Constructor
+
+```csharp
+[Facet(typeof(User), GenerateCopyConstructor = true, GenerateEquality = true)]
+public partial class UserDto;
+
+var original = new UserDto(user);
+var copy = new UserDto(original);
+original == copy; // true — same values, different instances
+```
+
+### Generated Code
+
+```csharp
+public partial class UserDto : System.IEquatable<UserDto>
+{
+    public bool Equals(UserDto? other)
+    {
+        if (other is null) return false;
+        if (ReferenceEquals(this, other)) return true;
+        return this.Id == other.Id
+            && EqualityComparer<string>.Default.Equals(this.FirstName, other.FirstName)
+            && EqualityComparer<string>.Default.Equals(this.LastName, other.LastName);
+    }
+
+    public override bool Equals(object? obj) => obj is UserDto other && Equals(other);
+
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            int hash = 17;
+            hash = hash * 31 + Id.GetHashCode();
+            hash = hash * 31 + (FirstName?.GetHashCode() ?? 0);
+            hash = hash * 31 + (LastName?.GetHashCode() ?? 0);
+            return hash;
+        }
+    }
+
+    public static bool operator ==(UserDto? left, UserDto? right) { ... }
+    public static bool operator !=(UserDto? left, UserDto? right) => !(left == right);
+}
+```
+
+### When to Use
+
+- **Class-based DTOs** that need value comparison without converting to records
+- **Change detection**: Compare DTOs to check if data has been modified
+- **Caching**: Use DTOs as dictionary keys or in hash sets
+- **Testing**: Assert DTO equality in unit tests
+
+### When NOT to Use
+
+- **Records**: Records already have value-based equality — `GenerateEquality` is automatically ignored
+- **Reference equality needed**: If you need identity-based comparison, don't enable this
 
 ---
 

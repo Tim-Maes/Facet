@@ -161,7 +161,6 @@ public class InitOnlyWithInitializers
 [Facet(typeof(InitOnlyWithInitializers))]
 public partial class InitOnlyWithInitializersDto;
 
-// Test entity for GitHub issue #251 - Nullable issues with object properties
 // When a model has a single reference type property like List<string>,
 // the generated record positional constructor can become ambiguous with
 // the compiler-generated copy constructor
@@ -290,7 +289,6 @@ public class UserModelWithOptionalSettings
 [Facet(typeof(UserModelWithOptionalSettings), NestedFacets = [typeof(UserSettingsFacet)])]
 public partial class UserWithOptionalSettingsFacet;
 
-// Test entities for GitHub issue #258 - Required collection nested facets
 // When source has a required non-nullable collection nested property
 public class TeamModelWithRequiredMembers
 {
@@ -320,3 +318,33 @@ public partial class NonNullablePropertyFacet;
 // Also test with a required property - should not get default!
 [Facet(typeof(EntityWithNonNullableProperties), PreserveRequiredProperties = false)]
 public partial class NonNullablePropertyFacetNoRequired;
+
+// Test entity for GenerateCopyConstructor and GenerateEquality
+public class PersonForCopyAndEquality
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public int Age { get; set; }
+    public DateTime? BirthDate { get; set; }
+}
+
+// Facet with copy constructor
+[Facet(typeof(PersonForCopyAndEquality), GenerateCopyConstructor = true)]
+public partial class PersonWithCopyConstructorDto;
+
+// Facet with equality
+[Facet(typeof(PersonForCopyAndEquality), GenerateEquality = true)]
+public partial class PersonWithEqualityDto;
+
+// Facet with both copy constructor and equality
+[Facet(typeof(PersonForCopyAndEquality), GenerateCopyConstructor = true, GenerateEquality = true)]
+public partial class PersonWithCopyAndEqualityDto;
+
+// Facet with equality on a record — equality should be ignored since records already have it
+[Facet(typeof(PersonForCopyAndEquality), GenerateEquality = true)]
+public partial record PersonRecordWithEquality;
+
+// Facet with copy constructor on a struct
+[Facet(typeof(PersonForCopyAndEquality), GenerateCopyConstructor = true, GenerateEquality = true)]
+public partial struct PersonStructWithCopyAndEquality;
