@@ -43,6 +43,16 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     /// </summary>
     public string? ConvertEnumsTo { get; }
 
+    /// <summary>
+    /// Whether to generate a copy constructor that accepts another instance of the same facet type.
+    /// </summary>
+    public bool GenerateCopyConstructor { get; }
+
+    /// <summary>
+    /// Whether to generate value-based equality members (Equals, GetHashCode, ==, !=).
+    /// </summary>
+    public bool GenerateEquality { get; }
+
     public FacetTargetModel(
         string name,
         string? @namespace,
@@ -73,7 +83,9 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         string? beforeMapConfigurationTypeName = null,
         string? afterMapConfigurationTypeName = null,
         bool chainToParameterlessConstructor = false,
-        string? convertEnumsTo = null)
+        string? convertEnumsTo = null,
+        bool generateCopyConstructor = false,
+        bool generateEquality = false)
     {
         Name = name;
         Namespace = @namespace;
@@ -105,6 +117,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         BaseClassMemberNames = baseClassMemberNames.IsDefault ? ImmutableArray<string>.Empty : baseClassMemberNames;
         FlattenToTypes = flattenToTypes.IsDefault ? ImmutableArray<string>.Empty : flattenToTypes;
         ConvertEnumsTo = convertEnumsTo;
+        GenerateCopyConstructor = generateCopyConstructor;
+        GenerateEquality = generateEquality;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -140,7 +154,9 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && PreserveReferences == other.PreserveReferences
             && BaseClassMemberNames.SequenceEqual(other.BaseClassMemberNames)
             && FlattenToTypes.SequenceEqual(other.FlattenToTypes)
-            && ConvertEnumsTo == other.ConvertEnumsTo;
+            && ConvertEnumsTo == other.ConvertEnumsTo
+            && GenerateCopyConstructor == other.GenerateCopyConstructor
+            && GenerateEquality == other.GenerateEquality;
     }
 
     public override bool Equals(object? obj) => obj is FacetTargetModel other && Equals(other);
@@ -173,6 +189,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + MaxDepth.GetHashCode();
             hash = hash * 31 + PreserveReferences.GetHashCode();
             hash = hash * 31 + (ConvertEnumsTo?.GetHashCode() ?? 0);
+            hash = hash * 31 + GenerateCopyConstructor.GetHashCode();
+            hash = hash * 31 + GenerateEquality.GetHashCode();
             hash = hash * 31 + Members.Length.GetHashCode();
 
             foreach (var member in Members)

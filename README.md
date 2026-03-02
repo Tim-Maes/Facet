@@ -58,6 +58,8 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 - **`[MapWhen]`** - conditional mapping based on runtime values, works in SQL projections
 - **Before/After hooks** - inject validation, defaults, or computed values around auto-mapping
 - **`ConvertEnumsTo`** - convert all enums to `string` or `int` with full round-trip support
+- **`GenerateCopyConstructor`** - generate a copy constructor for cloning and MVVM scenarios
+- **`GenerateEquality`** - generate value-based `Equals`, `GetHashCode`, `==`, `!=` for class DTOs
 - Sync and async custom mapping configurations (static or DI-resolved instances)
 
 ### Advanced Features
@@ -616,6 +618,63 @@ public partial class EntityIntDto;
 [Facet(typeof(User), ConvertEnumsTo = typeof(string), NullableProperties = true)]
 public partial class UserQueryDto;
 // All properties nullable + enums converted to string
+```
+
+</details>
+
+<details>
+  <summary>Copy Constructor and Value Equality</summary>
+
+Generate a copy constructor for cloning DTOs, and/or value-based equality members for class-based facets:
+
+#### Copy Constructor
+
+```csharp
+[Facet(typeof(User), GenerateCopyConstructor = true)]
+public partial class UserDto;
+
+// Clone a DTO
+var original = new UserDto(user);
+var copy = new UserDto(original); // Copy constructor
+
+// Modify the copy without affecting the original
+copy.FirstName = "Changed";
+original.FirstName; // Still "John"
+```
+
+Use cases: MVVM undo/redo, caching snapshots, editing copies while preserving originals.
+
+#### Value Equality
+
+```csharp
+[Facet(typeof(User), GenerateEquality = true)]
+public partial class UserDto;
+
+var dto1 = new UserDto(user);
+var dto2 = new UserDto(user);
+
+dto1 == dto2;          // true — value-based comparison
+dto1.Equals(dto2);     // true
+dto1.GetHashCode() == dto2.GetHashCode(); // true
+
+// Works in collections
+var set = new HashSet<UserDto> { dto1 };
+set.Contains(dto2);    // true
+```
+
+The generated type implements `IEquatable<T>` with `Equals(T)`, `Equals(object)`, `GetHashCode()`, `==`, and `!=`.
+
+> **Note:** `GenerateEquality` is automatically ignored for record types, which already have built-in value equality.
+
+#### Combining Both
+
+```csharp
+[Facet(typeof(User), GenerateCopyConstructor = true, GenerateEquality = true)]
+public partial class UserDto;
+
+var original = new UserDto(user);
+var copy = new UserDto(original);
+original == copy; // true — same values, different instances
 ```
 
 </details>

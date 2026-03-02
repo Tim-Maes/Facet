@@ -326,6 +326,51 @@ public sealed class FacetAttribute : Attribute
     public Type? ConvertEnumsTo { get; set; }
 
     /// <summary>
+    /// When true, generates a copy constructor that accepts another instance of the same facet type
+    /// and copies all generated member values. This is useful for MVVM scenarios where you need to
+    /// create copies of view models, or for general DTO cloning.
+    /// Default is false.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// [Facet(typeof(User), GenerateCopyConstructor = true)]
+    /// public partial class UserDto;
+    ///
+    /// // Generated:
+    /// // public UserDto(UserDto other)
+    /// // {
+    /// //     this.Id = other.Id;
+    /// //     this.FirstName = other.FirstName;
+    /// //     ...
+    /// // }
+    ///
+    /// var original = new UserDto(user);
+    /// var copy = new UserDto(original); // Copy constructor
+    /// </code>
+    /// </example>
+    public bool GenerateCopyConstructor { get; set; } = false;
+
+    /// <summary>
+    /// When true, generates value-based equality members: <c>Equals(T)</c>, <c>Equals(object)</c>,
+    /// <c>GetHashCode()</c>, and the <c>==</c> and <c>!=</c> operators.
+    /// The generated type will implement <see cref="System.IEquatable{T}"/>.
+    /// This is useful for class-based DTOs that need value comparison semantics without using records.
+    /// Default is false. Ignored for record types (which already have value-based equality).
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// [Facet(typeof(User), GenerateEquality = true)]
+    /// public partial class UserDto;
+    ///
+    /// var dto1 = new UserDto(user);
+    /// var dto2 = new UserDto(user);
+    /// dto1.Equals(dto2); // true — value-based comparison
+    /// dto1 == dto2;      // true — operator overload
+    /// </code>
+    /// </example>
+    public bool GenerateEquality { get; set; } = false;
+
+    /// <summary>
     /// Creates a new FacetAttribute that targets a given source type and excludes specified members.
     /// </summary>
     /// <param name="sourceType">The type to generate from.</param>

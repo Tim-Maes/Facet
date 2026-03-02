@@ -74,6 +74,10 @@ internal static class ModelBuilder
         // Extract ConvertEnumsTo parameter
         var convertEnumsTo = AttributeParser.ExtractConvertEnumsTo(attribute);
 
+        // Extract GenerateCopyConstructor and GenerateEquality parameters
+        var generateCopyConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateCopyConstructor, false);
+        var generateEquality = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateEquality, false);
+
         // Extract nested facets parameter and build mapping from source type to child facet type
         var nestedFacetMappings = AttributeParser.ExtractNestedFacetMappings(attribute, context.SemanticModel.Compilation);
 
@@ -206,7 +210,9 @@ internal static class ModelBuilder
             beforeMapConfigurationTypeName,
             afterMapConfigurationTypeName,
             chainToParameterlessConstructor,
-            convertEnumsTo);
+            convertEnumsTo,
+            generateCopyConstructor,
+            generateEquality);
     }
 
     #region Private Helper Methods
@@ -403,18 +409,22 @@ internal static class ModelBuilder
         }
 
         // Detect if the source property is a partial defining declaration (C# 13+).
-        // Partial properties (e.g., [ObservableProperty] with the new property-based MVVM pattern)
-        // must be generated as partial in the target type so that other source generators
-        // (e.g., CommunityToolkit.Mvvm) can provide the implementing declaration.
-        var isPartial = IsPartialDefiningProperty(property);
+        // We detect this to properly handle initializer extraction (partial defining declarations
+        // cannot have initializers in C# 13+), but we do NOT propagate the partial modifier
+        // to the generated target type. Generating a partial defining declaration would require
+        // the user to provide an implementing declaration, which breaks the DTO use case.
+        // It also doesn't work with other source generators (e.g., CommunityToolkit.Mvvm)
+        // because source generators don't chain. (GitHub issue #277)
+        var isSourcePartial = IsPartialDefiningProperty(property);
 
         // Extract property initializer/default value from source
         // Skip initializers for:
         // 1. Nested facets - the type changes and the initializer won't be compatible
         // 2. NullableProperties = true - query DTOs should default to null, not the source initializer
-        // 3. Partial properties - defining declarations cannot have initializers in C# 13+
+        // 3. Partial source properties - the source defining declaration cannot have initializers,
+        //    so there's nothing to extract anyway
         string? defaultValue = null;
-        if (!isNestedFacet && !nullableProperties && !isPartial)
+        if (!isNestedFacet && !nullableProperties && !isSourcePartial)
         {
             defaultValue = ExtractPropertyInitializer(property);
         }
@@ -515,7 +525,7 @@ internal static class ModelBuilder
             isEnumConversion,
             originalEnumTypeName,
             isNestedType,
-            isPartial));
+            isPartial: false)); // Never propagate partial from source (GitHub issue #277)
         addedMembers.Add(memberName);
     }
 
