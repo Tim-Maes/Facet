@@ -17,7 +17,10 @@ internal static class ModelBuilder
     /// <summary>
     /// Builds a FacetTargetModel from the generator attribute syntax context.
     /// </summary>
-    public static FacetTargetModel? BuildModel(GeneratorAttributeSyntaxContext context, CancellationToken token)
+    public static FacetTargetModel? BuildModel(
+        GeneratorAttributeSyntaxContext context,
+        GlobalConfigurationDefaults globalDefaults,
+        CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         if (context.TargetSymbol is not INamedTypeSymbol targetSymbol) return null;
@@ -33,13 +36,13 @@ internal static class ModelBuilder
         var excluded = AttributeParser.ExtractExcludedMembers(attribute);
         var (included, isIncludeMode) = AttributeParser.ExtractIncludedMembers(attribute);
 
-        // Extract configuration settings
-        var includeFields = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.IncludeFields, false);
-        var generateConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateConstructor, true);
-        var generateParameterlessConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateParameterlessConstructor, true);
-        var chainToParameterlessConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.ChainToParameterlessConstructor, false);
-        var generateProjection = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateProjection, true);
-        var generateToSource = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateToSource, false);
+        // Extract configuration settings - use global defaults when not explicitly set on the attribute
+        var includeFields = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.IncludeFields, globalDefaults.IncludeFields);
+        var generateConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateConstructor, globalDefaults.GenerateConstructor);
+        var generateParameterlessConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateParameterlessConstructor, globalDefaults.GenerateParameterlessConstructor);
+        var chainToParameterlessConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.ChainToParameterlessConstructor, globalDefaults.ChainToParameterlessConstructor);
+        var generateProjection = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateProjection, globalDefaults.GenerateProjection);
+        var generateToSource = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateToSource, globalDefaults.GenerateToSource);
         var configurationTypeName = AttributeParser.ExtractConfigurationTypeName(attribute);
         var beforeMapConfigurationTypeName = AttributeParser.ExtractBeforeMapConfigurationTypeName(attribute);
         var afterMapConfigurationTypeName = AttributeParser.ExtractAfterMapConfigurationTypeName(attribute);
@@ -66,17 +69,17 @@ internal static class ModelBuilder
 
         var preserveInitOnly = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.PreserveInitOnlyProperties, preserveInitOnlyDefault);
         var preserveRequired = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.PreserveRequiredProperties, preserveRequiredDefault);
-        var nullableProperties = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.NullableProperties, false);
-        var copyAttributes = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.CopyAttributes, false);
-        var maxDepth = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.MaxDepth, FacetConstants.DefaultMaxDepth);
-        var preserveReferences = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.PreserveReferences, FacetConstants.DefaultPreserveReferences);
+        var nullableProperties = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.NullableProperties, globalDefaults.NullableProperties);
+        var copyAttributes = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.CopyAttributes, globalDefaults.CopyAttributes);
+        var maxDepth = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.MaxDepth, globalDefaults.MaxDepth);
+        var preserveReferences = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.PreserveReferences, globalDefaults.PreserveReferences);
 
         // Extract ConvertEnumsTo parameter
         var convertEnumsTo = AttributeParser.ExtractConvertEnumsTo(attribute);
 
-        // Extract GenerateCopyConstructor and GenerateEquality parameters
-        var generateCopyConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateCopyConstructor, false);
-        var generateEquality = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateEquality, false);
+        // Extract GenerateCopyConstructor and GenerateEquality parameters - use global defaults
+        var generateCopyConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateCopyConstructor, globalDefaults.GenerateCopyConstructor);
+        var generateEquality = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateEquality, globalDefaults.GenerateEquality);
 
         // Extract nested facets parameter and build mapping from source type to child facet type
         var nestedFacetMappings = AttributeParser.ExtractNestedFacetMappings(attribute, context.SemanticModel.Compilation);
@@ -119,8 +122,8 @@ internal static class ModelBuilder
             ? null
             : targetSymbol.ContainingNamespace.ToDisplayString();
 
-        // Determine full name
-        var useFullName = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.UseFullName, false);
+        // Determine full name - use global default
+        var useFullName = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.UseFullName, globalDefaults.UseFullName);
 
         // Get containing types for nested classes
         var containingTypes = TypeAnalyzer.GetContainingTypes(targetSymbol);

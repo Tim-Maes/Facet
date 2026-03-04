@@ -12,11 +12,17 @@ public sealed class FacetGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
+        // Read global configuration defaults from MSBuild properties
+        var globalOptions = context.AnalyzerConfigOptionsProvider
+            .Select(static (provider, _) => GlobalConfigurationDefaults.FromOptions(provider.GlobalOptions));
+
         var facets = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 FacetConstants.FacetAttributeFullName,
                 predicate: static (node, _) => node is TypeDeclarationSyntax,
-                transform: static (ctx, token) => ModelBuilder.BuildModel(ctx, token))
+                transform: static (ctx, token) => (ctx, token))
+            .Combine(globalOptions)
+            .Select(static (combined, token) => ModelBuilder.BuildModel(combined.Left.ctx, combined.Right, combined.Left.token))
             .Where(static m => m is not null);
 
         // Collect all facet models to enable nested facet lookup during generation
