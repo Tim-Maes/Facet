@@ -42,6 +42,7 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 - **[Facet Dashboard](https://github.com/Tim-Maes/Facet/tree/master/src/Facet.Dashboard)**
 - [What is being generated?](docs/07_WhatIsBeingGenerated.md)
 - [Configure generated files output location](docs/12_GeneratedFilesOutput.md)
+- [Global configuration defaults](docs/21_GlobalConfigurationDefaults.md) - Override attribute defaults project-wide
 - [Comprehensive article about Facetting](https://tim-maes.com/blog/2025/09/28/facets-in-dotnet-(2)/)
 
 ## :star: Features
@@ -54,6 +55,7 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 
 ### Mapping & Customization
 - Include/exclude properties with simple attribute arguments
+- **Global Configuration** - override default attribute settings project-wide via MSBuild properties ([docs](docs/21_GlobalConfigurationDefaults.md))
 - **`[MapFrom]`** - declarative property renaming with optional reverse mapping and expression support
 - **`[MapWhen]`** - conditional mapping based on runtime values, works in SQL projections
 - **Before/After hooks** - inject validation, defaults, or computed values around auto-mapping
