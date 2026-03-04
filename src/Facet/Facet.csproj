@@ -51,6 +51,15 @@
               PackagePath="analyzers/dotnet/cs"
               Visible="false" />
 
+        <None Include="Facet.props"
+              Pack="true"
+              PackagePath="build/Facet.props"
+              Visible="false" />
+        <None Include="Facet.props"
+              Pack="true"
+              PackagePath="buildTransitive/Facet.props"
+              Visible="false" />
+
         <None Include="..\..\README.md" Pack="true" PackagePath="" />
     </ItemGroup>
 

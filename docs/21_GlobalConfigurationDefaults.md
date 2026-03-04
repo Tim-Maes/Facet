@@ -176,6 +176,7 @@ Preserve validation and serialization attributes from source types:
 - These settings only affect the `[Facet]` attribute (support for `[Wrapper]` and `[GenerateDtos]` may be added in future versions)
 - Boolean values should be `true` or `false` (case-insensitive)
 - Numeric values (like `MaxDepth`) should be valid integers
+- The Facet package automatically makes these properties visible to the source generator via `CompilerVisibleProperty` - no manual configuration needed
 
 ## Related Documentation
 

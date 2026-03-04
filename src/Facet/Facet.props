@@ -1,0 +1,22 @@
+<Project>
+  <!--
+    This file is automatically imported by MSBuild when Facet package is referenced.
+    It makes the Facet global configuration properties visible to the source generator.
+  -->
+
+  <ItemGroup>
+    <CompilerVisibleProperty Include="Facet_GenerateConstructor" />
+    <CompilerVisibleProperty Include="Facet_GenerateParameterlessConstructor" />
+    <CompilerVisibleProperty Include="Facet_GenerateProjection" />
+    <CompilerVisibleProperty Include="Facet_GenerateToSource" />
+    <CompilerVisibleProperty Include="Facet_IncludeFields" />
+    <CompilerVisibleProperty Include="Facet_ChainToParameterlessConstructor" />
+    <CompilerVisibleProperty Include="Facet_NullableProperties" />
+    <CompilerVisibleProperty Include="Facet_CopyAttributes" />
+    <CompilerVisibleProperty Include="Facet_UseFullName" />
+    <CompilerVisibleProperty Include="Facet_GenerateCopyConstructor" />
+    <CompilerVisibleProperty Include="Facet_GenerateEquality" />
+    <CompilerVisibleProperty Include="Facet_MaxDepth" />
+    <CompilerVisibleProperty Include="Facet_PreserveReferences" />
+  </ItemGroup>
+</Project>
