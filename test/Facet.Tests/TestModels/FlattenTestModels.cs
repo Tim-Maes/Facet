@@ -492,3 +492,18 @@ public partial class EntityWithVariousCollectionsFlatDto
 {
     // All collection types should be included as-is
 }
+// Test models for nameof resolution in Flatten Exclude
+// Version 2: Fixed to use CollectionExpressionSyntax support
+[Flatten(typeof(Company), Exclude = [nameof(@Company.HeadquartersAddress.ZipCode)])]
+public partial class CompanyFlatWithNameOfExcludeDto
+{
+    // Should exclude the ZipCode nested property using nameof
+}
+
+[Flatten(typeof(Person), Exclude = [nameof(@Person.Address.Country)])]
+public partial class PersonFlatWithNameOfExcludeDto
+{
+    // Should exclude nested Country properties using nameof
+}
+
+

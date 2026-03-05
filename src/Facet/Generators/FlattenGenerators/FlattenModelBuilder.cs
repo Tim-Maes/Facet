@@ -1,6 +1,8 @@
 using Facet.Generators.Shared;
 using Facet.Generators;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -30,7 +32,7 @@ internal static class FlattenModelBuilder
         if (sourceType == null) return null;
 
         // Extract attribute parameters
-        var excludedPaths = ExtractExcludedPaths(attribute);
+        var excludedPaths = ExtractExcludedPaths(attribute, context);
         var maxDepth = GetNamedArg(attribute.NamedArguments, "MaxDepth", 3);
         var namingStrategy = GetNamedArg(attribute.NamedArguments, "NamingStrategy", FlattenNamingStrategy.Prefix);
         var includeFields = GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
@@ -88,10 +90,137 @@ internal static class FlattenModelBuilder
             maxDepth);
     }
 
-    private static HashSet<string> ExtractExcludedPaths(AttributeData attribute)
+    private static HashSet<string> ExtractExcludedPaths(AttributeData attribute, GeneratorAttributeSyntaxContext? context = null)
     {
         var excluded = new HashSet<string>();
 
+        // Get the source type name for stripping from full nameof paths
+        var sourceType = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
+        var sourceTypeName = sourceType?.Name ?? string.Empty;
+
+        // Helper to process a single expression and add to set
+        void ProcessExpression(ExpressionSyntax expr)
+        {
+            if (expr == null) return;
+
+            try
+            {
+                var (resolved, hadLeadingAt) = NameOfResolver.ResolveExpression(expr);
+                if (!string.IsNullOrEmpty(resolved))
+                {
+                    // If @ was used, the path includes the source type name, so strip it
+                    // e.g., @Company.HeadquartersAddress.ZipCode -> HeadquartersAddress.ZipCode
+                    var path = resolved!;
+                    if (hadLeadingAt && !string.IsNullOrEmpty(sourceTypeName) && path.StartsWith(sourceTypeName + "."))
+                    {
+                        path = path.Substring(sourceTypeName.Length + 1);
+                    }
+                    excluded.Add(path);
+                    return;
+                }
+            }
+            catch
+            {
+                // ignore and fallback
+            }
+
+            // Prefer literal extraction for string literals
+            if (expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
+            {
+                var val = lit.Token.ValueText;
+                if (!string.IsNullOrEmpty(val)) excluded.Add(val);
+                return;
+            }
+
+            // Handle array/initializer or other expressions by textual fallback (strip quotes)
+            var text = expr.ToString().Trim();
+            if (text.Length == 0) return;
+
+            if ((text.StartsWith("@\"") && text.EndsWith("\"")) || (text.StartsWith("\"") && text.EndsWith("\"")))
+            {
+                var firstQuote = text.IndexOf('"');
+                if (firstQuote >= 0 && text.Length - firstQuote - 2 > 0)
+                    text = text.Substring(firstQuote + 1, text.Length - firstQuote - 2);
+                else
+                    text = string.Empty;
+            }
+
+            if (!string.IsNullOrEmpty(text)) excluded.Add(text);
+        }
+
+        // Try to resolve from syntax if context is available
+        if (context != null && attribute.ApplicationSyntaxReference?.GetSyntax() is AttributeSyntax attrSyntax)
+        {
+            // Try positional argument first (constructor params)
+            var positionalArgs = attrSyntax.ArgumentList?.Arguments.Where(a => a.NameEquals == null && a.NameColon == null).ToList();
+            if (positionalArgs != null && positionalArgs.Count > 1)
+            {
+                // Second positional argument is the exclude array
+                var excludeArg = positionalArgs[1];
+                var expr = excludeArg.Expression;
+                InitializerExpressionSyntax? initializer = null;
+                switch (expr)
+                {
+                    case ImplicitArrayCreationExpressionSyntax implicitArray:
+                        initializer = implicitArray.Initializer;
+                        break;
+                    case ArrayCreationExpressionSyntax arrayCreation:
+                        initializer = arrayCreation.Initializer;
+                        break;
+                    case InitializerExpressionSyntax directInit:
+                        initializer = directInit;
+                        break;
+                }
+
+                if (initializer != null)
+                {
+                    foreach (var e in initializer.Expressions)
+                        ProcessExpression(e);
+                    return excluded;
+                }
+            }
+
+            // Try named argument (Exclude = ...)
+            var excludeNamed = attrSyntax.ArgumentList?.Arguments.FirstOrDefault(a => (a.NameEquals?.Name.Identifier.ValueText == "Exclude") || (a.NameColon?.Name.Identifier.ValueText == "Exclude"));
+            if (excludeNamed != null)
+            {
+                var expr = excludeNamed.Expression;
+                InitializerExpressionSyntax? initializer = null;
+                
+                switch (expr)
+                {
+                    case ImplicitArrayCreationExpressionSyntax implicitArray:
+                        initializer = implicitArray.Initializer;
+                        break;
+                    case ArrayCreationExpressionSyntax arrayCreation:
+                        initializer = arrayCreation.Initializer;
+                        break;
+                    case InitializerExpressionSyntax directInit:
+                        initializer = directInit;
+                        break;
+                    case CollectionExpressionSyntax collectionExpr:
+                        // Handle C# 12 collection expression syntax: [item1, item2, ...]
+                        foreach (var element in collectionExpr.Elements)
+                        {
+                            if (element is ExpressionElementSyntax exprElem)
+                            {
+                                ProcessExpression(exprElem.Expression);
+                            }
+                        }
+                        return excluded;
+                }
+
+                if (initializer != null)
+                {
+                    foreach (var e in initializer.Expressions)
+                        ProcessExpression(e);
+                    return excluded;
+                }
+            }
+
+        }
+
+        // Fallback to compiled attribute data
         // Check constructor argument (params string[] exclude)
         if (attribute.ConstructorArguments.Length > 1)
         {
