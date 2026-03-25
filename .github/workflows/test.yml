@@ -65,7 +65,7 @@ jobs:
           retention-days: 7
 
       - name: Publish Test Results
-        uses: dorny/test-reporter@v2
+        uses: dorny/test-reporter@v3
         if: success() || failure()
         with:
           name: Unit Test Results
