@@ -105,13 +105,9 @@ internal static class TypeAnalyzer
         if (typeKind == TypeKind.Struct || typeKind == TypeKind.Class)
         {
             var syntax = targetSymbol.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-            if (syntax != null)
+            if (syntax is RecordDeclarationSyntax)
             {
-                var syntaxText = syntax.ToString();
-                if (syntaxText.Contains("record struct") || syntaxText.Contains("record "))
-                {
-                    isRecord = true;
-                }
+                isRecord = true;
             }
 
             // Additional check for records by looking for the compiler-generated Clone method
