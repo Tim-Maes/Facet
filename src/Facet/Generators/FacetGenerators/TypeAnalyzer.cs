@@ -45,14 +45,14 @@ internal static class TypeAnalyzer
                 var syntax = syntaxRef.GetSyntax();
 
                 // Check for record with parameter list
-                if (syntax is RecordDeclarationSyntax recordDecl && recordDecl.ParameterList != null && recordDecl.ParameterList.Parameters.Count > 0)
+                if (syntax is RecordDeclarationSyntax recordDecl && recordDecl.ParameterList != null)
                 {
                     return true;
                 }
 
                 // Check for regular class/struct with primary constructor (C# 12+)
-                if ((syntax is ClassDeclarationSyntax classDecl && classDecl.ParameterList != null && classDecl.ParameterList.Parameters.Count > 0) ||
-                    (syntax is StructDeclarationSyntax structDecl && structDecl.ParameterList != null && structDecl.ParameterList.Parameters.Count > 0))
+                if ((syntax is ClassDeclarationSyntax classDecl && classDecl.ParameterList != null) ||
+                    (syntax is StructDeclarationSyntax structDecl && structDecl.ParameterList != null))
                 {
                     return true;
                 }
