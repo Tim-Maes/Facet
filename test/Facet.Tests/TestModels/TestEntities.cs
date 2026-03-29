@@ -348,3 +348,7 @@ public partial record PersonRecordWithEquality;
 // Facet with copy constructor on a struct
 [Facet(typeof(PersonForCopyAndEquality), GenerateCopyConstructor = true, GenerateEquality = true)]
 public partial struct PersonStructWithCopyAndEquality;
+
+// Facet with parameterless constructor
+[Facet(typeof(User))]
+public partial record UserRecordWithConstructor();
