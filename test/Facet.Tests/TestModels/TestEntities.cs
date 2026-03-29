@@ -341,10 +341,14 @@ public partial class PersonWithEqualityDto;
 [Facet(typeof(PersonForCopyAndEquality), GenerateCopyConstructor = true, GenerateEquality = true)]
 public partial class PersonWithCopyAndEqualityDto;
 
-// Facet with equality on a record — equality should be ignored since records already have it
+// Facet with equality on a record ï¿½ equality should be ignored since records already have it
 [Facet(typeof(PersonForCopyAndEquality), GenerateEquality = true)]
 public partial record PersonRecordWithEquality;
 
 // Facet with copy constructor on a struct
 [Facet(typeof(PersonForCopyAndEquality), GenerateCopyConstructor = true, GenerateEquality = true)]
 public partial struct PersonStructWithCopyAndEquality;
+
+// Facet with parameterless constructor
+[Facet(typeof(User))]
+public partial record UserRecordWithConstructor();
