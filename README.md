@@ -1304,7 +1304,7 @@ Note that these are perfomed by using the `<TSource, TDestination>` mapping meth
 
 
 
-## 💖 Contributors
+## Contributors
 
 Facet wouldn't be the same without these awesome contributors. Thank you!
 
