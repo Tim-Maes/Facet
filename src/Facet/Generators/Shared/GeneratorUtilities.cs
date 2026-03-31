@@ -103,6 +103,7 @@ internal static class GeneratorUtilities
             foreach (var member in current.GetMembers())
             {
                 if (member.DeclaredAccessibility == Accessibility.Public &&
+                    !member.IsStatic &&
                     !visited.Contains(member.Name))
                 {
                     if (member is IPropertySymbol prop)
