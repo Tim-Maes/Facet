@@ -201,9 +201,8 @@ internal static class ConstructorGenerator
             else
             {
                 // No custom mapping - copy properties directly
-                // Cache filtered members to avoid multiple enumerations
-                var assignableMembers = model.Members.Where(x => !x.IsInitOnly).ToArray();
-                foreach (var m in assignableMembers)
+                // Init-only properties are included because constructors can set init accessors
+                foreach (var m in model.Members)
                 {
                     var sourceValue = ExpressionBuilder.GetSourceValueExpression(m, "source");
                     sb.AppendLine($"        this.{m.Name} = {sourceValue};");
@@ -338,9 +337,8 @@ internal static class ConstructorGenerator
         else
         {
             // No custom mapping - copy properties directly with depth tracking
-            // Cache filtered members to avoid multiple enumerations
-            var assignableMembers = model.Members.Where(x => !x.IsInitOnly).ToArray();
-            foreach (var m in assignableMembers)
+            // Init-only properties are included because constructors can set init accessors
+            foreach (var m in model.Members)
             {
                 var sourceValue = ExpressionBuilder.GetSourceValueExpression(m, "source", model.MaxDepth, true, model.PreserveReferences);
                 sb.AppendLine($"        this.{m.Name} = {sourceValue};");

@@ -29,6 +29,10 @@ public partial record ModernUserDto
 [Facet(typeof(UserWithEnum), GenerateToSource = true)]
 public partial class UserWithEnumDto;
 
+// Exact scenario from issue #298: plain record facet with required properties, no () workaround
+[Facet(typeof(ModernUser), "PasswordHash", "Bio", PreserveRequiredProperties = true)]
+public partial record ModernUserRequiredDto;
+
 [Facet(typeof(User), "Password", "CreatedAt")]
 public partial record struct UserSummary;
 
