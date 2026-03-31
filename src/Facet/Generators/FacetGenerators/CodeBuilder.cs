@@ -66,9 +66,14 @@ internal static class CodeBuilder
         }
 
         var keyword = GetTypeKeyword(model);
-        var isPositional = model.IsRecord && !model.HasExistingPrimaryConstructor;
         var hasInitOnlyProperties = model.Members.Any(m => m.IsInitOnly);
         var hasRequiredProperties = model.Members.Any(m => m.IsRequired);
+
+        // For record classes, avoid positional declarations when there are required members,
+        // because C# doesn't support the 'required' modifier on positional parameters of record classes.
+        // Record structs DO support 'required' on positional parameters, so they can stay positional.
+        var isPositional = model.IsRecord && !model.HasExistingPrimaryConstructor
+            && !(model.TypeKind == TypeKind.Class && hasRequiredProperties);
         var hasCustomMapping = !string.IsNullOrWhiteSpace(model.ConfigurationTypeName);
 
         // Determine if we need to generate equality (skip for records which already have value equality)

@@ -1,3 +1,4 @@
+using System.Reflection;
 using Facet.Tests.TestModels;
 using Facet.Tests.Utilities;
 
@@ -170,5 +171,50 @@ public class ModernRecordTests
         var dtoType = dto.GetType();
         dtoType.GetProperty("FirstName").Should().NotBeNull();
         dtoType.GetProperty("firstname").Should().BeNull(); // lowercase should not exist
+    }
+
+    [Fact]
+    public void RecordFacet_ShouldPreserveRequiredModifier_WithoutWorkaround()
+    {
+        // Issue #298: PreserveRequiredProperties should work for record facets
+        // without needing the empty primary constructor () workaround
+        var dtoType = typeof(ModernUserRequiredDto);
+
+        // Verify required properties from source are marked required in the generated record
+        var idProp = dtoType.GetProperty("Id")!;
+        idProp.Should().NotBeNull();
+        idProp.GetCustomAttribute<System.Runtime.CompilerServices.RequiredMemberAttribute>()
+            .Should().NotBeNull("Id should be marked as required");
+
+        var firstNameProp = dtoType.GetProperty("FirstName")!;
+        firstNameProp.Should().NotBeNull();
+        firstNameProp.GetCustomAttribute<System.Runtime.CompilerServices.RequiredMemberAttribute>()
+            .Should().NotBeNull("FirstName should be marked as required");
+
+        var lastNameProp = dtoType.GetProperty("LastName")!;
+        lastNameProp.Should().NotBeNull();
+        lastNameProp.GetCustomAttribute<System.Runtime.CompilerServices.RequiredMemberAttribute>()
+            .Should().NotBeNull("LastName should be marked as required");
+    }
+
+    [Fact]
+    public void RecordFacet_WithRequiredProperties_ShouldMapCorrectly()
+    {
+        // Issue #298: Verify the record facet with required properties maps correctly
+        var modernUser = new ModernUser
+        {
+            Id = "test-id",
+            FirstName = "Jane",
+            LastName = "Doe",
+            Email = "jane@example.com",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        var dto = modernUser.ToFacet<ModernUser, ModernUserRequiredDto>();
+
+        dto.Id.Should().Be("test-id");
+        dto.FirstName.Should().Be("Jane");
+        dto.LastName.Should().Be("Doe");
+        dto.Email.Should().Be("jane@example.com");
     }
 }
