@@ -33,6 +33,10 @@ public partial class UserWithEnumDto;
 [Facet(typeof(ModernUser), "PasswordHash", "Bio", PreserveRequiredProperties = true)]
 public partial record ModernUserRequiredDto;
 
+// Issue #300: static properties should not be included in facets
+[Facet(typeof(EntityWithStaticMembers))]
+public partial record StaticMemberTestDto;
+
 [Facet(typeof(User), "Password", "CreatedAt")]
 public partial record struct UserSummary;
 

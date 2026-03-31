@@ -130,6 +130,15 @@ public class Category : BaseEntity<uint>
     public string? Description { get; set; }
 }
 
+// Test entity with static/const members that should be excluded from facets (issue #300)
+public class EntityWithStaticMembers
+{
+    public const string AConst = "A";
+    public static readonly string AStaticReadonly = "A";
+    public string AProperty { get; set; } = "A";
+    public static string AStaticProperty => "A";
+}
+
 // Test entity with non-nullable reference type properties with initializers (GitHub issue)
 public class UserModel
 {
@@ -341,7 +350,7 @@ public partial class PersonWithEqualityDto;
 [Facet(typeof(PersonForCopyAndEquality), GenerateCopyConstructor = true, GenerateEquality = true)]
 public partial class PersonWithCopyAndEqualityDto;
 
-// Facet with equality on a record — equality should be ignored since records already have it
+// Facet with equality on a record ï¿½ equality should be ignored since records already have it
 [Facet(typeof(PersonForCopyAndEquality), GenerateEquality = true)]
 public partial record PersonRecordWithEquality;
 
