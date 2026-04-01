@@ -516,8 +516,8 @@ public static class FacetExtensions
                 var facetValue = facetProperty.GetValue(facet);
                 var sourceValue = sourceProperty.GetValue(source);
 
-                // Only update if values are different
-                if (!Equals(facetValue, sourceValue))
+                // Only update if values are different (using sequence equality for collections)
+                if (!ValuesAreEqual(facetValue, sourceValue))
                 {
                     sourceProperty.SetValue(source, facetValue);
                 }
@@ -571,8 +571,8 @@ public static class FacetExtensions
                 var facetValue = facetProperty.GetValue(facet);
                 var sourceValue = sourceProperty.GetValue(source);
 
-                // Only update if values are different
-                if (!Equals(facetValue, sourceValue))
+                // Only update if values are different (using sequence equality for collections)
+                if (!ValuesAreEqual(facetValue, sourceValue))
                 {
                     sourceProperty.SetValue(source, facetValue);
                 }
@@ -625,8 +625,8 @@ public static class FacetExtensions
                 var facetValue = facetProperty.GetValue(facet);
                 var sourceValue = sourceProperty.GetValue(source);
 
-                // Only update if values are different
-                if (!Equals(facetValue, sourceValue))
+                // Only update if values are different (using sequence equality for collections)
+                if (!ValuesAreEqual(facetValue, sourceValue))
                 {
                     sourceProperty.SetValue(source, facetValue);
                     changedProperties.Add(sourceProperty.Name);
@@ -648,6 +648,49 @@ public static class FacetExtensions
         }
         protected override Expression VisitParameter(ParameterExpression node)
             => node == _oldParam ? _newExpr : base.VisitParameter(node);
+    }
+
+    /// <summary>
+    /// Compares two values for equality, using element-wise comparison for collections
+    /// instead of reference equality. This ensures that two different collection instances
+    /// with identical elements are considered equal.
+    /// </summary>
+    private static bool ValuesAreEqual(object? a, object? b)
+    {
+        if (Equals(a, b))
+            return true;
+
+        // If both are non-null enumerables (but not strings), compare element-wise
+        if (a is IEnumerable enumerableA && b is IEnumerable enumerableB
+            && a is not string && b is not string)
+        {
+            var enumeratorA = enumerableA.GetEnumerator();
+            var enumeratorB = enumerableB.GetEnumerator();
+            try
+            {
+                while (true)
+                {
+                    var hasNextA = enumeratorA.MoveNext();
+                    var hasNextB = enumeratorB.MoveNext();
+
+                    if (hasNextA != hasNextB)
+                        return false; // Different lengths
+
+                    if (!hasNextA)
+                        return true; // Both exhausted
+
+                    if (!Equals(enumeratorA.Current, enumeratorB.Current))
+                        return false;
+                }
+            }
+            finally
+            {
+                (enumeratorA as IDisposable)?.Dispose();
+                (enumeratorB as IDisposable)?.Dispose();
+            }
+        }
+
+        return false;
     }
 }
 
