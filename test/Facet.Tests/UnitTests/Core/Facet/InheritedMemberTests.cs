@@ -35,6 +35,40 @@ public partial class InheritedIncludeFacet : BaseWithName
 {
 }
 
+// ToSource should include inherited facet base class properties
+
+// Source entity hierarchy
+public class ModifiedByBaseEntity
+{
+    public int Id { get; set; }
+    public string ModifiedBy { get; set; } = "";
+}
+
+public class SettingEntity : ModifiedByBaseEntity
+{
+    public string ApplicationType { get; set; } = "";
+    public string Settings { get; set; } = "";
+    public string UserId { get; set; } = "";
+}
+
+// Facet DTO hierarchy
+public class ModifiedByBaseDto
+{
+    public int Id { get; set; }
+    public string ModifiedBy { get; set; } = "";
+}
+
+// Include only lists the SettingEntity-specific properties,
+// but ModifiedByBaseDto has Id and ModifiedBy which should also be mapped.
+[Facet(typeof(SettingEntity),
+    Include = new[] { "ApplicationType", "Settings", "UserId" },
+    GenerateToSource = true)]
+public partial class SettingFacetDto : ModifiedByBaseDto;
+
+// Same scenario but with Exclude mode instead of Include mode (for comparison)
+[Facet(typeof(SettingEntity), GenerateToSource = true)]
+public partial class SettingFacetExcludeDto : ModifiedByBaseDto;
+
 public class InheritedMemberTests
 {
     [Fact]
@@ -130,5 +164,79 @@ public class InheritedMemberTests
         facets[1].Id.Should().Be(2);
         facets[1].State.Should().Be(20);
         facets[1].Name.Should().Be("Test2");
+    }
+
+    [Fact]
+    public void ToSource_IncludeMode_ShouldMapInheritedBaseClassProperties()
+    {
+        // Arrange — facet with Include mode, base class has Id and ModifiedBy
+        var facet = new SettingFacetDto
+        {
+            Id = 42,
+            ModifiedBy = "admin",
+            ApplicationType = "Web",
+            Settings = "{}",
+            UserId = "user-1"
+        };
+
+        // Act
+        var source = facet.ToSource();
+
+        // Assert — all properties should be mapped, including inherited ones
+        source.Should().NotBeNull();
+        source.ApplicationType.Should().Be("Web");
+        source.Settings.Should().Be("{}");
+        source.UserId.Should().Be("user-1");
+        source.Id.Should().Be(42, because: "Id is inherited from ModifiedByBaseDto and should be mapped to source");
+        source.ModifiedBy.Should().Be("admin", because: "ModifiedBy is inherited from ModifiedByBaseDto and should be mapped to source");
+    }
+
+    [Fact]
+    public void ToSource_ExcludeMode_ShouldMapInheritedBaseClassProperties()
+    {
+        // Arrange — facet with default (exclude) mode, base class has Id and ModifiedBy
+        var facet = new SettingFacetExcludeDto
+        {
+            Id = 99,
+            ModifiedBy = "system",
+            ApplicationType = "API",
+            Settings = "{\"key\":\"value\"}",
+            UserId = "user-2"
+        };
+
+        // Act
+        var source = facet.ToSource();
+
+        // Assert — all properties should be mapped
+        source.Should().NotBeNull();
+        source.ApplicationType.Should().Be("API");
+        source.Settings.Should().Be("{\"key\":\"value\"}");
+        source.UserId.Should().Be("user-2");
+        source.Id.Should().Be(99);
+        source.ModifiedBy.Should().Be("system");
+    }
+
+    [Fact]
+    public void Constructor_IncludeMode_ShouldMapInheritedBaseClassProperties()
+    {
+        // Arrange
+        var entity = new SettingEntity
+        {
+            Id = 42,
+            ModifiedBy = "admin",
+            ApplicationType = "Web",
+            Settings = "{}",
+            UserId = "user-1"
+        };
+
+        // Act
+        var facet = new SettingFacetDto(entity);
+
+        // Assert — inherited properties should be populated from source
+        facet.Id.Should().Be(42);
+        facet.ModifiedBy.Should().Be("admin");
+        facet.ApplicationType.Should().Be("Web");
+        facet.Settings.Should().Be("{}");
+        facet.UserId.Should().Be("user-1");
     }
 }

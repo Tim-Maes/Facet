@@ -94,6 +94,9 @@ internal static class ModelBuilder
         // Extract type-level XML documentation from the source type
         var typeXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(sourceType);
 
+        // Collect base class member names early, needed by ExtractMembers to auto-include
+        var baseClassMemberNames = GetBaseClassMemberNames(targetSymbol);
+
         // Build members
         var (members, excludedRequiredMembers) = ExtractMembers(
             sourceType,
@@ -109,6 +112,7 @@ internal static class ModelBuilder
             mapFromMappings,
             mapWhenMappings,
             convertEnumsTo,
+            baseClassMemberNames,
             token);
 
         // Add expression-based members (from MapFrom with expressions)
@@ -180,9 +184,6 @@ internal static class ModelBuilder
             }
         }
 
-        // Collect base class member names to avoid generating duplicate properties
-        var baseClassMemberNames = GetBaseClassMemberNames(targetSymbol);
-
         // Extract FlattenTo types for generating collection flattening methods
         var flattenToTypes = AttributeParser.ExtractFlattenToTypes(attribute);
 
@@ -237,6 +238,7 @@ internal static class ModelBuilder
         Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName)> mapFromMappings,
         Dictionary<string, (List<string> conditions, string? defaultValue, bool includeInProjection)> mapWhenMappings,
         string? convertEnumsTo,
+        ImmutableArray<string> baseClassMemberNames,
         CancellationToken token)
     {
         var members = new List<FacetMember>();
@@ -254,6 +256,14 @@ internal static class ModelBuilder
             bool shouldIncludeMember = isIncludeMode
                 ? included.Contains(member.Name)
                 : !excluded.Contains(member.Name);
+
+            // In Include mode, also include source properties that match properties inherited
+            // by the facet from its base class. These properties won't be generated (MemberGenerator
+            // skips them) but need to be in the model for ToSource/FromSource/projection mappings.
+            if (!shouldIncludeMember && isIncludeMode && baseClassMemberNames.Contains(member.Name))
+            {
+                shouldIncludeMember = true;
+            }
 
             if (member is IPropertySymbol property && property.DeclaredAccessibility == Accessibility.Public)
             {
