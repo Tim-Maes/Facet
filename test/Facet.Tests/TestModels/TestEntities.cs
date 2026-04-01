@@ -139,6 +139,17 @@ public class EntityWithStaticMembers
     public static string AStaticProperty => "A";
 }
 
+// Entity with collection property for ApplyFacetWithChanges equality testing
+internal sealed class TaggedItem
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public IList<string> Tags { get; set; } = [];
+}
+
+[Facet(typeof(TaggedItem), GenerateEquality = true, GenerateToSource = true)]
+internal partial record TaggedItemFacet;
+
 // DDD-style entity with private constructor and non-public setters (issue #302)
 public partial class DDDSample
 {
