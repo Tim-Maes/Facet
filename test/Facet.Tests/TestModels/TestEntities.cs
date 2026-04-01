@@ -173,6 +173,35 @@ public partial record OutsideFacetRecord;
 [Facet(typeof(DDDSample))]
 public partial class OutsideFacetClass;
 
+// DDD-style entity with internal constructor, outside facets in the same assembly can generate ToSource
+// but only for properties with public or internal setters
+public class DDDSampleInternal
+{
+    internal DDDSampleInternal() { }
+
+    public static DDDSampleInternal Create(string aProperty, string aPrivateSetterProperty, string aInternalSetterProperty)
+    {
+        return new DDDSampleInternal
+        {
+            AProperty = aProperty,
+            APrivateSetterProperty = aPrivateSetterProperty,
+            AInternalSetterProperty = aInternalSetterProperty
+        };
+    }
+
+    public string AProperty { get; set; } = default!;
+    public string APrivateSetterProperty { get; private set; } = default!;
+    public string AInternalSetterProperty { get; internal set; } = default!;
+}
+
+// Outside facet with internal constructor
+[Facet(typeof(DDDSampleInternal))]
+public partial class OutsideFacetInternalCtorClass;
+
+// Excluding the private-setter property allows ToSource to be generated
+[Facet(typeof(DDDSampleInternal), "APrivateSetterProperty", GenerateToSource = true)]
+public partial class OutsideFacetInternalCtorWithToSource;
+
 // Test entity with non-nullable reference type properties with initializers (GitHub issue)
 public class UserModel
 {

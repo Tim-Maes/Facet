@@ -80,4 +80,33 @@ public class DDDNestedFacetTests
         var hasToSource = typeof(OutsideFacetRecord).GetMethod("ToSource");
         hasToSource.Should().BeNull("outside facets cannot access private constructor for ToSource");
     }
+
+    [Fact]
+    public void OutsideFacet_WithInternalCtor_ShouldMapAllProperties()
+    {
+        // Outside facets in the same assembly can read all public properties
+        var source = DDDSampleInternal.Create("pub", "priv", "intern");
+        var dto = source.ToFacet<DDDSampleInternal, OutsideFacetInternalCtorClass>();
+
+        dto.AProperty.Should().Be("pub");
+        dto.APrivateSetterProperty.Should().Be("priv");
+        dto.AInternalSetterProperty.Should().Be("intern");
+    }
+
+    [Fact]
+    public void OutsideFacet_WithInternalCtor_ExcludingPrivateSetter_ShouldGenerateToSource()
+    {
+        // Internal constructor is accessible from same assembly.
+        // Excluding APrivateSetterProperty (private setter) allows ToSource to work
+        // because the remaining properties have public or internal setters.
+        var source = DDDSampleInternal.Create("pub", "priv", "intern");
+        var dto = source.ToFacet<DDDSampleInternal, OutsideFacetInternalCtorWithToSource>();
+
+        var hasToSource = typeof(OutsideFacetInternalCtorWithToSource).GetMethod("ToSource");
+        hasToSource.Should().NotBeNull("internal ctor + public/internal setters should allow ToSource");
+
+        var roundTripped = dto.ToSource();
+        roundTripped.AProperty.Should().Be("pub");
+        roundTripped.AInternalSetterProperty.Should().Be("intern");
+    }
 }
