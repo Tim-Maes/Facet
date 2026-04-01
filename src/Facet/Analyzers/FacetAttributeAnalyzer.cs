@@ -421,8 +421,11 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
             return;
         }
 
+        // Nested types in C# have access to all members of their containing type, including private
+        var isNestedInSource = IsNestedInsideType(targetType, sourceType);
+
         // For non-positional types, we need a parameterless constructor and accessible setters
-        var hasAccessibleConstructor = HasAccessibleParameterlessConstructor(sourceType, context.Compilation.Assembly);
+        var hasAccessibleConstructor = HasAccessibleParameterlessConstructor(sourceType, context.Compilation.Assembly, isNestedInSource);
 
         if (!hasAccessibleConstructor)
         {
@@ -441,7 +444,7 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
                            namedArgs.IncludeFields.Value.Value is bool includeFieldsValue &&
                            includeFieldsValue;
 
-        var inaccessibleProperties = GetInaccessibleSetterProperties(sourceType, excluded, included, isIncludeMode, includeFields);
+        var inaccessibleProperties = GetInaccessibleSetterProperties(sourceType, excluded, included, isIncludeMode, includeFields, isNestedInSource);
 
         if (inaccessibleProperties.Count > 0)
         {
@@ -520,7 +523,7 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         return false;
     }
 
-    private static bool HasAccessibleParameterlessConstructor(INamedTypeSymbol sourceType, IAssemblySymbol? compilationAssembly = null)
+    private static bool HasAccessibleParameterlessConstructor(INamedTypeSymbol sourceType, IAssemblySymbol? compilationAssembly = null, bool isNestedInSourceType = false)
     {
         var constructors = sourceType.InstanceConstructors;
 
@@ -531,6 +534,10 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
             if (constructor.Parameters.Length == 0)
             {
                 if (constructor.DeclaredAccessibility == Accessibility.Public)
+                    return true;
+
+                // Nested types have access to all members of their containing type, including private
+                if (isNestedInSourceType)
                     return true;
 
                 // Internal constructors are accessible when the source type is in the same assembly
@@ -551,9 +558,15 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         HashSet<string> excluded,
         HashSet<string> included,
         bool isIncludeMode,
-        bool includeFields)
+        bool includeFields,
+        bool isNestedInSourceType = false)
     {
         var inaccessibleProperties = new List<string>();
+
+        // Nested types have access to all members of their containing type
+        if (isNestedInSourceType)
+            return inaccessibleProperties;
+
         var members = GetAllPublicMembers(sourceType);
 
         foreach (var member in members)
@@ -635,6 +648,22 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
     {
         return type.GetAttributes().Any(attr =>
             attr.AttributeClass?.ToDisplayString() == "Facet.FacetAttribute");
+    }
+
+    /// <summary>
+    /// Checks if the target type is nested inside the source type (at any depth).
+    /// Nested types in C# have access to all members of their containing type, including private ones.
+    /// </summary>
+    private static bool IsNestedInsideType(INamedTypeSymbol innerType, INamedTypeSymbol outerType)
+    {
+        var current = innerType.ContainingType;
+        while (current != null)
+        {
+            if (SymbolEqualityComparer.Default.Equals(current, outerType))
+                return true;
+            current = current.ContainingType;
+        }
+        return false;
     }
 
     private static bool ImplementsConfigurationInterface(INamedTypeSymbol configurationType, INamedTypeSymbol sourceType, INamedTypeSymbol targetType)

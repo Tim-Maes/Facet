@@ -125,9 +125,10 @@ internal static class TypeAnalyzer
 
     /// <summary>
     /// Checks if the source type has an accessible parameterless constructor.
-    /// For ToSource generation, we need a public or internal parameterless constructor.
+    /// For ToSource generation, we need a public or internal parameterless constructor,
+    /// or any parameterless constructor if the facet is nested inside the source type.
     /// </summary>
-    public static bool HasAccessibleParameterlessConstructor(INamedTypeSymbol sourceType, IAssemblySymbol? compilationAssembly = null)
+    public static bool HasAccessibleParameterlessConstructor(INamedTypeSymbol sourceType, IAssemblySymbol? compilationAssembly = null, bool isNestedInSourceType = false)
     {
         // Check for implicit parameterless constructor (when no constructors are defined)
         var constructors = sourceType.InstanceConstructors;
@@ -143,6 +144,10 @@ internal static class TypeAnalyzer
             {
                 // Public constructors are always accessible
                 if (constructor.DeclaredAccessibility == Accessibility.Public)
+                    return true;
+
+                // Nested types have access to all members of their containing type, including private
+                if (isNestedInSourceType)
                     return true;
 
                 // Internal constructors are accessible when the source type is in the same assembly
@@ -161,11 +166,13 @@ internal static class TypeAnalyzer
 
     /// <summary>
     /// Checks if all the specified properties have accessible setters.
-    /// For ToSource generation using object initializer syntax, we need public or internal setters.
+    /// For ToSource generation using object initializer syntax, we need public or internal setters,
+    /// or any setters if the facet is nested inside the source type.
     /// </summary>
     public static bool AllPropertiesHaveAccessibleSetters(
         INamedTypeSymbol sourceType,
-        IEnumerable<FacetMember> members)
+        IEnumerable<FacetMember> members,
+        bool isNestedInSourceType = false)
     {
         foreach (var member in members)
         {
@@ -185,6 +192,10 @@ internal static class TypeAnalyzer
             if (sourceProperty.SetMethod == null)
                 return false; // No setter at all
 
+            // Nested types have access to all members of their containing type
+            if (isNestedInSourceType)
+                continue;
+
             // Check setter accessibility
             var setterAccessibility = sourceProperty.SetMethod.DeclaredAccessibility;
             if (setterAccessibility != Accessibility.Public &&
@@ -195,5 +206,21 @@ internal static class TypeAnalyzer
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Checks if the target type is nested inside the source type (at any depth).
+    /// Nested types in C# have access to all members of their containing type, including private ones.
+    /// </summary>
+    public static bool IsNestedInsideType(INamedTypeSymbol innerType, INamedTypeSymbol outerType)
+    {
+        var current = innerType.ContainingType;
+        while (current != null)
+        {
+            if (SymbolEqualityComparer.Default.Equals(current, outerType))
+                return true;
+            current = current.ContainingType;
+        }
+        return false;
     }
 }
