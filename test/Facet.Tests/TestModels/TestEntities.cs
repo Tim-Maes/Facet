@@ -139,6 +139,40 @@ public class EntityWithStaticMembers
     public static string AStaticProperty => "A";
 }
 
+// DDD-style entity with private constructor and non-public setters (issue #302)
+public partial class DDDSample
+{
+    private DDDSample() { }
+
+    public static DDDSample Create(string aProperty, string aPrivateSetterProperty, string aInternalSetterProperty)
+    {
+        return new DDDSample
+        {
+            AProperty = aProperty,
+            APrivateSetterProperty = aPrivateSetterProperty,
+            AInternalSetterProperty = aInternalSetterProperty
+        };
+    }
+
+    public string AProperty { get; set; } = default!;
+    public string APrivateSetterProperty { get; private set; } = default!;
+    public string AInternalSetterProperty { get; internal set; } = default!;
+
+    // Nested facets should have access to private constructor and private setters
+    [Facet(typeof(DDDSample), GenerateToSource = true)]
+    public partial record InsideFacetRecord;
+
+    [Facet(typeof(DDDSample), GenerateToSource = true)]
+    public partial class InsideFacetClass;
+}
+
+// Outside facets cannot access private constructor, so ToSource cannot be generated
+[Facet(typeof(DDDSample))]
+public partial record OutsideFacetRecord;
+
+[Facet(typeof(DDDSample))]
+public partial class OutsideFacetClass;
+
 // Test entity with non-nullable reference type properties with initializers (GitHub issue)
 public class UserModel
 {
