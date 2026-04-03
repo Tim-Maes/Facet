@@ -151,10 +151,11 @@ internal static class TypeAnalyzer
                     return true;
 
                 // Internal constructors are accessible when the source type is in the same assembly
-                // as the generated code (which is always the case for types in the user's project)
+                // as the generated code (which is always the case for types in the user's project),
+                // or when the source assembly grants access via [InternalsVisibleTo]
                 if (constructor.DeclaredAccessibility == Accessibility.Internal &&
                     compilationAssembly != null &&
-                    SymbolEqualityComparer.Default.Equals(sourceType.ContainingAssembly, compilationAssembly))
+                    IsInternalAccessible(sourceType.ContainingAssembly, compilationAssembly))
                 {
                     return true;
                 }
@@ -172,7 +173,8 @@ internal static class TypeAnalyzer
     public static bool AllPropertiesHaveAccessibleSetters(
         INamedTypeSymbol sourceType,
         IEnumerable<FacetMember> members,
-        bool isNestedInSourceType = false)
+        bool isNestedInSourceType = false,
+        IAssemblySymbol? compilationAssembly = null)
     {
         foreach (var member in members)
         {
@@ -198,11 +200,18 @@ internal static class TypeAnalyzer
 
             // Check setter accessibility
             var setterAccessibility = sourceProperty.SetMethod.DeclaredAccessibility;
-            if (setterAccessibility != Accessibility.Public &&
-                setterAccessibility != Accessibility.Internal)
+            if (setterAccessibility == Accessibility.Public)
+                continue;
+
+            // Internal setters are accessible in same assembly or via [InternalsVisibleTo]
+            if (setterAccessibility == Accessibility.Internal &&
+                compilationAssembly != null &&
+                IsInternalAccessible(sourceType.ContainingAssembly, compilationAssembly))
             {
-                return false; // Setter is private, protected, or otherwise inaccessible
+                continue;
             }
+
+            return false; // Setter is private, protected, or otherwise inaccessible
         }
 
         return true;
@@ -221,6 +230,38 @@ internal static class TypeAnalyzer
                 return true;
             current = current.ContainingType;
         }
+        return false;
+    }
+
+    /// <summary>
+    /// Checks if internal members of the source assembly are accessible from the compilation assembly.
+    /// This is true when both assemblies are the same, or when the source assembly has an
+    /// [InternalsVisibleTo] attribute that references the compilation assembly.
+    /// </summary>
+    public static bool IsInternalAccessible(IAssemblySymbol sourceAssembly, IAssemblySymbol compilationAssembly)
+    {
+        // Same assembly — always accessible
+        if (SymbolEqualityComparer.Default.Equals(sourceAssembly, compilationAssembly))
+            return true;
+
+        // Check [InternalsVisibleTo] on the source assembly
+        var compilationAssemblyName = compilationAssembly.Name;
+        foreach (var attr in sourceAssembly.GetAttributes())
+        {
+            if (attr.AttributeClass?.Name == "InternalsVisibleToAttribute" &&
+                attr.AttributeClass.ContainingNamespace?.ToDisplayString() == "System.Runtime.CompilerServices" &&
+                attr.ConstructorArguments.Length > 0 &&
+                attr.ConstructorArguments[0].Value is string assemblyName)
+            {
+                // Handle assembly names with public key tokens (e.g. "MyAssembly, PublicKey=...")
+                var commaIndex = assemblyName.IndexOf(',');
+                var name = commaIndex >= 0 ? assemblyName.Substring(0, commaIndex).Trim() : assemblyName.Trim();
+
+                if (name == compilationAssemblyName)
+                    return true;
+            }
+        }
+
         return false;
     }
 }
