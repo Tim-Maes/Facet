@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Facet.Generators;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -444,7 +445,7 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
                            namedArgs.IncludeFields.Value.Value is bool includeFieldsValue &&
                            includeFieldsValue;
 
-        var inaccessibleProperties = GetInaccessibleSetterProperties(sourceType, excluded, included, isIncludeMode, includeFields, isNestedInSource);
+        var inaccessibleProperties = GetInaccessibleSetterProperties(sourceType, excluded, included, isIncludeMode, includeFields, isNestedInSource, context.Compilation.Assembly);
 
         if (inaccessibleProperties.Count > 0)
         {
@@ -540,10 +541,10 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
                 if (isNestedInSourceType)
                     return true;
 
-                // Internal constructors are accessible when the source type is in the same assembly
+                // Internal constructors are accessible in same assembly or via [InternalsVisibleTo]
                 if (constructor.DeclaredAccessibility == Accessibility.Internal &&
                     compilationAssembly != null &&
-                    SymbolEqualityComparer.Default.Equals(sourceType.ContainingAssembly, compilationAssembly))
+                    TypeAnalyzer.IsInternalAccessible(sourceType.ContainingAssembly, compilationAssembly))
                 {
                     return true;
                 }
@@ -559,7 +560,8 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         HashSet<string> included,
         bool isIncludeMode,
         bool includeFields,
-        bool isNestedInSourceType = false)
+        bool isNestedInSourceType = false,
+        IAssemblySymbol? compilationAssembly = null)
     {
         var inaccessibleProperties = new List<string>();
 
@@ -599,11 +601,18 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
 
                 // Check setter accessibility
                 var setterAccessibility = property.SetMethod.DeclaredAccessibility;
-                if (setterAccessibility != Accessibility.Public &&
-                    setterAccessibility != Accessibility.Internal)
+                if (setterAccessibility == Accessibility.Public)
+                    continue;
+
+                // Internal setters are accessible in same assembly or via [InternalsVisibleTo]
+                if (setterAccessibility == Accessibility.Internal &&
+                    compilationAssembly != null &&
+                    TypeAnalyzer.IsInternalAccessible(sourceType.ContainingAssembly, compilationAssembly))
                 {
-                    inaccessibleProperties.Add(property.Name);
+                    continue;
                 }
+
+                inaccessibleProperties.Add(property.Name);
             }
         }
 
