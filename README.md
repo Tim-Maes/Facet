@@ -54,6 +54,8 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 - Preserves XML documentation and data validation attributes
 
 ### Mapping & Customization
+- Sync and async custom mapping configurations (static or DI-resolved instances)
+- Custom reverse mapping config to map back to source
 - Include/exclude properties with simple attribute arguments
 - **Global Configuration** - override default attribute settings project-wide via MSBuild properties ([docs](docs/21_GlobalConfigurationDefaults.md))
 - **`[MapFrom]`** - declarative property renaming with optional reverse mapping and expression support
@@ -62,7 +64,6 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 - **`ConvertEnumsTo`** - convert all enums to `string` or `int` with full round-trip support
 - **`GenerateCopyConstructor`** - generate a copy constructor for cloning and MVVM scenarios
 - **`GenerateEquality`** - generate value-based `Equals`, `GetHashCode`, `==`, `!=` for class DTOs
-- Sync and async custom mapping configurations (static or DI-resolved instances)
 
 ### Advanced Features
 - **`[Flatten]`** - collapse nested object graphs into top-level properties
@@ -281,6 +282,55 @@ public partial class UserDto
     public int Age { get; set; }
 }
 ```
+</details>
+
+<details>
+  <summary>Custom Reverse Mapping with ToSourceConfiguration</summary>
+
+When `GenerateToSource = true`, Facet generates a `ToSource()` method that maps the DTO back to the source entity. Use `ToSourceConfiguration` to hook in custom logic for properties that need special treatment on the reverse path, for example, serialising a parsed object back to a JSON column.
+
+```csharp
+// Entity with a JSON-stored column
+public class UnitEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string PrinterSettingsJson { get; set; }  // Stored as JSON in DB
+}
+
+// Forward mapper: Entity > DTO (parse the JSON)
+public class UnitDtoForwardConfig : IFacetMapConfiguration<UnitEntity, UnitDto>
+{
+    public static void Map(UnitEntity source, UnitDto target)
+        => target.PrinterSettings = PrinterSettings.Parse(source.PrinterSettingsJson);
+}
+
+// Reverse mapper: DTO > Entity (serialise back to JSON)
+public class UnitDtoToSourceConfig : IFacetToSourceConfiguration<UnitDto, UnitEntity>
+{
+    public static void Map(UnitDto facet, UnitEntity target)
+        => target.PrinterSettingsJson = facet.PrinterSettings?.ToJson() ?? "{}";
+}
+
+[Facet(typeof(UnitEntity),
+    nameof(UnitEntity.PrinterSettingsJson),          // exclude raw JSON, DTO uses parsed object
+    Configuration = typeof(UnitDtoForwardConfig),
+    ToSourceConfiguration = typeof(UnitDtoToSourceConfig),
+    GenerateToSource = true)]
+public partial class UnitDto
+{
+    public PrinterSettings? PrinterSettings { get; set; }
+}
+
+// Usage
+var dto = new UnitDto(entity);           // PrinterSettingsJson > PrinterSettings (parsed)
+var entity = dto.ToSource();             // PrinterSettings > PrinterSettingsJson (serialised)
+```
+
+The `Map` method in `ToSourceConfiguration` is called **after** all auto-mapped properties are copied, so you only need to handle the properties that require custom logic.
+
+> Both configs can live in the same class by implementing both interfaces.
+
 </details>
 
 <details>

@@ -254,3 +254,59 @@ public partial class NullableEnumToIntDto;
 // Test ConvertEnumsTo with NullableProperties = true
 [Facet(typeof(UserWithEnum), ConvertEnumsTo = typeof(string), NullableProperties = true)]
 public partial class UserWithEnumToStringNullableDto;
+
+// ToSourceConfiguration tests
+
+/// <summary>
+/// Simulates parsing/serialising a JSON metadata property on the round-trip.
+/// Forward  (Entity > DTO):  MetadataJson string > OrderMetadata object
+/// Reverse  (DTO > Entity):  OrderMetadata object > MetadataJson string
+/// </summary>
+public class OrderMetadata
+{
+    public string Tag { get; set; } = string.Empty;
+    public int Priority { get; set; }
+
+    public static OrderMetadata Parse(string json)
+    {
+        // Minimal hand-rolled parsing to avoid a JSON dependency in tests
+        var tag = "";
+        var priority = 0;
+        foreach (var part in json.Trim('{', '}').Split(','))
+        {
+            var kv = part.Split(':');
+            if (kv.Length == 2)
+            {
+                var key = kv[0].Trim().Trim('"');
+                var val = kv[1].Trim().Trim('"');
+                if (key == "tag") tag = val;
+                if (key == "priority" && int.TryParse(val, out var p)) priority = p;
+            }
+        }
+        return new OrderMetadata { Tag = tag, Priority = priority };
+    }
+
+    public string Serialize() => $"{{\"tag\":\"{Tag}\",\"priority\":{Priority}}}";
+}
+
+public class OrderDtoForwardMapper : IFacetMapConfiguration<JsonStoredEntity, OrderDto>
+{
+    public static void Map(JsonStoredEntity source, OrderDto target)
+        => target.Metadata = OrderMetadata.Parse(source.MetadataJson);
+}
+
+public class OrderDtoToSourceMapper : IFacetToSourceConfiguration<OrderDto, JsonStoredEntity>
+{
+    public static void Map(OrderDto facet, JsonStoredEntity target)
+        => target.MetadataJson = facet.Metadata?.Serialize() ?? "{}";
+}
+
+[Facet(typeof(JsonStoredEntity),
+    nameof(JsonStoredEntity.MetadataJson),  // excluded, DTO uses parsed Metadata instead
+    Configuration = typeof(OrderDtoForwardMapper),
+    ToSourceConfiguration = typeof(OrderDtoToSourceMapper),
+    GenerateToSource = true)]
+public partial class OrderDto
+{
+    public OrderMetadata? Metadata { get; set; }
+}

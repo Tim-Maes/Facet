@@ -53,6 +53,11 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     /// </summary>
     public bool GenerateEquality { get; }
 
+    /// <summary>
+    /// Optional type name for custom reverse-mapping logic called inside <c>ToSource()</c>.
+    /// </summary>
+    public string? ToSourceConfigurationTypeName { get; }
+
     public FacetTargetModel(
         string name,
         string? @namespace,
@@ -85,7 +90,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         bool chainToParameterlessConstructor = false,
         string? convertEnumsTo = null,
         bool generateCopyConstructor = false,
-        bool generateEquality = false)
+        bool generateEquality = false,
+        string? toSourceConfigurationTypeName = null)
     {
         Name = name;
         Namespace = @namespace;
@@ -119,6 +125,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         ConvertEnumsTo = convertEnumsTo;
         GenerateCopyConstructor = generateCopyConstructor;
         GenerateEquality = generateEquality;
+        ToSourceConfigurationTypeName = toSourceConfigurationTypeName;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -156,7 +163,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && FlattenToTypes.SequenceEqual(other.FlattenToTypes)
             && ConvertEnumsTo == other.ConvertEnumsTo
             && GenerateCopyConstructor == other.GenerateCopyConstructor
-            && GenerateEquality == other.GenerateEquality;
+            && GenerateEquality == other.GenerateEquality
+            && ToSourceConfigurationTypeName == other.ToSourceConfigurationTypeName;
     }
 
     public override bool Equals(object? obj) => obj is FacetTargetModel other && Equals(other);
@@ -191,6 +199,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + (ConvertEnumsTo?.GetHashCode() ?? 0);
             hash = hash * 31 + GenerateCopyConstructor.GetHashCode();
             hash = hash * 31 + GenerateEquality.GetHashCode();
+            hash = hash * 31 + (ToSourceConfigurationTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + Members.Length.GetHashCode();
 
             foreach (var member in Members)

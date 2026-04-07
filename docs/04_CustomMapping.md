@@ -464,6 +464,88 @@ var mapper = serviceProvider.GetRequiredService<ExistingAsyncMapperWithDI>();
 var result = await user.ToFacetAsync(mapper);
 ```
 
+## Reverse Mapping: ToSourceConfiguration
+
+When `GenerateToSource = true`, Facet generates a `ToSource()` method that maps a DTO back to the source entity. By default this performs a straight property copy. Use `ToSourceConfiguration` to hook in custom logic for properties that can't be copied directly — for example, a JSON column stored as a string in the entity but exposed as a parsed object on the DTO.
+
+### How it works
+
+The `Map` method is called **after** automatic property copying, so you only need to handle the properties that require custom treatment:
+
+```
+var result = new TSource { ...auto-copied props... };
+ToSourceConfiguration.Map(this, result);   // your custom logic runs here
+return result;
+```
+
+### 1. Implement IFacetToSourceConfiguration
+
+```csharp
+using Facet.Mapping;
+
+public class UnitDtoToSourceConfig : IFacetToSourceConfiguration<UnitDto, UnitEntity>
+{
+    public static void Map(UnitDto facet, UnitEntity target)
+    {
+        target.PrinterSettingsJson = facet.PrinterSettings.ToJson();
+    }
+}
+```
+
+### 2. Reference in the Facet Attribute
+
+```csharp
+[Facet(typeof(UnitEntity),
+    nameof(UnitEntity.PrinterSettingsJson),  // exclude raw JSON — DTO exposes parsed object
+    Configuration = typeof(UnitDtoForwardConfig),      // Entity > DTO
+    ToSourceConfiguration = typeof(UnitDtoToSourceConfig), // DTO > Entity
+    GenerateToSource = true)]
+public partial class UnitDto
+{
+    public PrinterSettings? PrinterSettings { get; set; }
+}
+```
+
+The generated `ToSource()` method will look like:
+
+```csharp
+public UnitEntity ToSource()
+{
+    var result = new UnitEntity
+    {
+        Name = this.Name,
+        // ...other auto-mapped properties
+    };
+    global::MyNamespace.UnitDtoToSourceConfig.Map(this, result);
+    return result;
+}
+```
+
+### Separate classes or one combined class?
+
+You can keep the forward and reverse configs in the same class by implementing both interfaces:
+
+```csharp
+public class UnitDtoMapConfig
+    : IFacetMapConfiguration<UnitEntity, UnitDto>         // Entity >→ DTO
+    , IFacetToSourceConfiguration<UnitDto, UnitEntity>    // DTO > Entity
+{
+    public static void Map(UnitEntity source, UnitDto target)
+        => target.PrinterSettings = source.ToPrinterSettings();
+
+    public static void Map(UnitDto facet, UnitEntity target)
+        => target.PrinterSettingsJson = facet.PrinterSettings.ToJson();
+}
+
+[Facet(typeof(UnitEntity),
+    Configuration = typeof(UnitDtoMapConfig),
+    ToSourceConfiguration = typeof(UnitDtoMapConfig),  // same class
+    GenerateToSource = true)]
+public partial class UnitDto { ... }
+```
+
+---
+
 ## Notes
 
 - **Backward Compatibility**: All existing static mapper interfaces and extension methods continue to work unchanged

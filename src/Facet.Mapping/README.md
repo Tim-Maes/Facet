@@ -20,6 +20,11 @@ With **Facet.Mapping**, you can go further and define custom logic like combinin
 2. Define a static `Map` method.
 3. Point the `[Facet(...)]` attribute to the config class using `Configuration = typeof(...)`.
 
+### Reverse Mapping (DTO → Entity)
+1. Implement the `IFacetToSourceConfiguration<TFacet, TSource>` interface.
+2. Define a static `Map(TFacet facet, TSource target)` method.
+3. Point the `[Facet(...)]` attribute using `ToSourceConfiguration = typeof(...)` and set `GenerateToSource = true`.
+
 ### Instance Mappers (With Dependency Injection)
 1. Implement the `IFacetMapConfigurationAsyncInstance<TSource, TTarget>` interface.
 2. Define an instance `MapAsync` method.
@@ -245,6 +250,30 @@ public class UserHybridMapperWithDI : IFacetMapConfigurationHybridInstance<User,
         target.ReputationScore = await _reputationService.CalculateReputationAsync(source.Email, cancellationToken);
     }
 }
+
+### Reverse Mapping (DTO > Entity)
+
+Use `IFacetToSourceConfiguration<TFacet, TSource>` to customise the generated `ToSource()` method, useful when a property requires non-trivial conversion on the way back (e.g. serialising a parsed object back to a JSON string stored in the entity).
+
+```csharp
+public class UnitDtoToSourceConfig : IFacetToSourceConfiguration<UnitDto, UnitEntity>
+{
+    public static void Map(UnitDto facet, UnitEntity target)
+        => target.PrinterSettingsJson = facet.PrinterSettings?.ToJson() ?? "{}";
+}
+
+[Facet(typeof(UnitEntity),
+    nameof(UnitEntity.PrinterSettingsJson),               // exclude raw JSON column from auto-map
+    Configuration = typeof(UnitDtoForwardConfig),         // Entity → DTO (forward)
+    ToSourceConfiguration = typeof(UnitDtoToSourceConfig), // DTO → Entity (reverse)
+    GenerateToSource = true)]
+public partial class UnitDto
+{
+    public PrinterSettings? PrinterSettings { get; set; }
+}
+```
+
+The `Map` method is called **after** automatic property copying, so you only need to handle properties that require custom logic.
 
 // Usage
 var userDto = await user.ToFacetHybridAsync(hybridMapperWithDI);

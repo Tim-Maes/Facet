@@ -109,5 +109,6 @@ internal static class FacetConstants
         public const string ConvertEnumsTo = "ConvertEnumsTo";
         public const string GenerateCopyConstructor = "GenerateCopyConstructor";
         public const string GenerateEquality = "GenerateEquality";
+        public const string ToSourceConfiguration = "ToSourceConfiguration";
     }
 }

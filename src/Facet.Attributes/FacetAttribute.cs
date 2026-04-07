@@ -45,6 +45,36 @@ public sealed class FacetAttribute : Attribute
     public bool GenerateParameterlessConstructor { get; set; } = true;
 
     /// <summary>
+    /// Optional type that provides custom reverse-mapping logic when converting the facet type back
+    /// to the source type via <c>ToSource()</c>.
+    /// Must implement <c>IFacetToSourceConfiguration&lt;TFacet, TSource&gt;</c> with a static
+    /// <c>Map(TFacet facet, TSource target)</c> method.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The <c>Map</c> method is called after all automatically-mapped properties have been written
+    /// to the newly-constructed source object, allowing you to override or supplement properties
+    /// that require custom logic (e.g., serialising a JSON column, computing a derived value).
+    /// </para>
+    /// <para>
+    /// Example:
+    /// <code>
+    /// public class UnitDtoToSourceConfig : IFacetToSourceConfiguration&lt;UnitDto, UnitEntity&gt;
+    /// {
+    ///     public static void Map(UnitDto facet, UnitEntity target)
+    ///         => target.PrinterSettings = facet.PrinterSettings.ToPrinterSettingsAsJson();
+    /// }
+    ///
+    /// [Facet(typeof(UnitEntity),
+    ///     GenerateToSource = true,
+    ///     ToSourceConfiguration = typeof(UnitDtoToSourceConfig))]
+    /// public partial class UnitDto { ... }
+    /// </code>
+    /// </para>
+    /// </remarks>
+    public Type? ToSourceConfiguration { get; set; }
+
+    /// <summary>
     /// Optional type that provides custom mapping logic via a static Map(source, target) method.
     /// Must match the signature defined in IFacetMapConfiguration&lt;TSource, TTarget&gt;.
     /// </summary>
@@ -364,8 +394,8 @@ public sealed class FacetAttribute : Attribute
     ///
     /// var dto1 = new UserDto(user);
     /// var dto2 = new UserDto(user);
-    /// dto1.Equals(dto2); // true — value-based comparison
-    /// dto1 == dto2;      // true — operator overload
+    /// dto1.Equals(dto2); // true ï¿½ value-based comparison
+    /// dto1 == dto2;      // true ï¿½ operator overload
     /// </code>
     /// </example>
     public bool GenerateEquality { get; set; } = false;
