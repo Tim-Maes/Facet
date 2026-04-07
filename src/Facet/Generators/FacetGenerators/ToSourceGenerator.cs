@@ -21,7 +21,7 @@ internal static class ToSourceGenerator
         sb.AppendLine($"    /// Converts this instance of <see cref=\"{model.Name}\"/> to an instance of the source type.");
         sb.AppendLine("    /// </summary>");
         sb.AppendLine($"    /// <returns>An instance of the source type with properties mapped from this instance.</returns>");
-        sb.AppendLine($"    public {model.SourceTypeName} ToSource()");
+        sb.AppendLine($"    public {(model.BaseHidesFacetMembers ? "new " : "")}{model.SourceTypeName} ToSource()");
         sb.AppendLine("    {");
 
         if (model.SourceHasPositionalConstructor)
@@ -42,7 +42,7 @@ internal static class ToSourceGenerator
         sb.AppendLine("    /// </summary>");
         sb.AppendLine($"    /// <returns>An instance of the source type with properties mapped from this instance.</returns>");
         sb.AppendLine("    [global::System.Obsolete(\"Use ToSource() instead. This method will be removed in a future version.\")]");
-        sb.AppendLine($"    public {model.SourceTypeName} BackTo() => ToSource();");
+        sb.AppendLine($"    public {(model.BaseHidesFacetMembers ? "new " : "")}{model.SourceTypeName} BackTo() => ToSource();");
     }
 
     private static void GeneratePositionalToSource(StringBuilder sb, FacetTargetModel model)

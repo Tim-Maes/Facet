@@ -69,6 +69,27 @@ public partial class SettingFacetDto : ModifiedByBaseDto;
 [Facet(typeof(SettingEntity), GenerateToSource = true)]
 public partial class SettingFacetExcludeDto : ModifiedByBaseDto;
 
+// Facet inheriting from another Facet, verifies 'new' keyword on
+// FromSource / ToSource / Projection / BackTo to suppress CS0108.
+public class BaseValidationEntity
+{
+    public int Id { get; set; }
+    public string Code { get; set; } = "";
+}
+
+public class DerivedValidationEntity : BaseValidationEntity
+{
+    public string Description { get; set; } = "";
+}
+
+// Base facet — generates FromSource, ToSource, Projection
+[Facet(typeof(BaseValidationEntity), GenerateToSource = true)]
+public partial class BaseValidationFacet;
+
+// Derived facet inherits the base facet — without 'new' this would be CS0108
+[Facet(typeof(DerivedValidationEntity), GenerateToSource = true)]
+public partial class DerivedValidationFacet : BaseValidationFacet;
+
 public class InheritedMemberTests
 {
     [Fact]
@@ -238,5 +259,57 @@ public class InheritedMemberTests
         facet.ApplicationType.Should().Be("Web");
         facet.Settings.Should().Be("{}");
         facet.UserId.Should().Be("user-1");
+    }
+
+    // -----------------------------------------------------------------------
+    // new keyword tests — if the 'new' modifier is missing the project would
+    // not compile (CS0108 is an error in strict pipelines), so a successful
+    // build already proves the fix. These tests also verify runtime behaviour.
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void DerivedFacet_Constructor_ShouldMapAllProperties()
+    {
+        // Arrange
+        var entity = new DerivedValidationEntity { Id = 5, Code = "XYZ", Description = "desc" };
+
+        // Act — uses the generated constructor on the derived facet
+        var facet = new DerivedValidationFacet(entity);
+
+        // Assert
+        facet.Id.Should().Be(5);
+        facet.Code.Should().Be("XYZ");
+        facet.Description.Should().Be("desc");
+    }
+
+    [Fact]
+    public void DerivedFacet_ToSource_ShouldRoundTrip()
+    {
+        // Arrange
+        var entity = new DerivedValidationEntity { Id = 7, Code = "ABC", Description = "hello" };
+        var facet = new DerivedValidationFacet(entity);
+
+        // Act — calls the 'new' ToSource on the derived facet
+        var result = facet.ToSource();
+
+        // Assert
+        result.Id.Should().Be(7);
+        result.Code.Should().Be("ABC");
+        result.Description.Should().Be("hello");
+    }
+
+    [Fact]
+    public void DerivedFacet_FromSource_ShouldReturnDerivedInstance()
+    {
+        // Arrange
+        var entity = new DerivedValidationEntity { Id = 3, Code = "DEF", Description = "world" };
+
+        // Act — calls the 'new' static FromSource on the derived facet
+        var facet = DerivedValidationFacet.FromSource(entity);
+
+        // Assert
+        facet.Should().BeOfType<DerivedValidationFacet>();
+        facet.Id.Should().Be(3);
+        facet.Description.Should().Be("world");
     }
 }
