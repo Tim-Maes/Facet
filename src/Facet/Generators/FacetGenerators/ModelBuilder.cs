@@ -81,6 +81,9 @@ internal static class ModelBuilder
         var generateCopyConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateCopyConstructor, globalDefaults.GenerateCopyConstructor);
         var generateEquality = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateEquality, globalDefaults.GenerateEquality);
 
+        // Extract ToSourceConfiguration parameter
+        var toSourceConfigurationTypeName = AttributeParser.ExtractToSourceConfigurationTypeName(attribute);
+
         // Extract nested facets parameter and build mapping from source type to child facet type
         var nestedFacetMappings = AttributeParser.ExtractNestedFacetMappings(attribute, context.SemanticModel.Compilation);
 
@@ -219,7 +222,8 @@ internal static class ModelBuilder
             chainToParameterlessConstructor,
             convertEnumsTo,
             generateCopyConstructor,
-            generateEquality);
+            generateEquality,
+            toSourceConfigurationTypeName);
     }
 
     #region Private Helper Methods

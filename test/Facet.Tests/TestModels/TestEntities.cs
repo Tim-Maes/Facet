@@ -435,3 +435,11 @@ public partial struct PersonStructWithCopyAndEquality;
 // Facet with parameterless constructor
 [Facet(typeof(User))]
 public partial record UserRecordWithConstructor();
+
+// Entity for ToSourceConfiguration testing
+public class JsonStoredEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string MetadataJson { get; set; } = "{}";
+}

@@ -47,43 +47,59 @@ internal static class ToSourceGenerator
 
     private static void GeneratePositionalToSource(StringBuilder sb, FacetTargetModel model)
     {
-        // For source types with positional constructors (like records), use positional syntax
-        // Only include members that are reversible
         var constructorArgs = string.Join(", ",
             model.Members
                 .Where(m => m.MapFromReversible)
                 .Select(m => ExpressionBuilder.GetToSourceValueExpression(m)));
-        sb.AppendLine($"        return new {model.SourceTypeName}({constructorArgs});");
+
+        if (model.ToSourceConfigurationTypeName != null)
+        {
+            sb.AppendLine($"        var result = new {model.SourceTypeName}({constructorArgs});");
+            sb.AppendLine($"        {model.ToSourceConfigurationTypeName}.Map(this, result);");
+            sb.AppendLine("        return result;");
+        }
+        else
+        {
+            sb.AppendLine($"        return new {model.SourceTypeName}({constructorArgs});");
+        }
     }
 
     private static void GenerateObjectInitializerToSource(StringBuilder sb, FacetTargetModel model)
     {
-        // For source types without positional constructors, use object initializer syntax
-        sb.AppendLine($"        return new {model.SourceTypeName}");
-        sb.AppendLine("        {");
-
         var propertyAssignments = new List<string>();
 
-        // Add assignments for included properties (only if reversible)
         foreach (var member in model.Members)
         {
-            // Skip non-reversible members
             if (!member.MapFromReversible)
                 continue;
 
             var toSourceValue = ExpressionBuilder.GetToSourceValueExpression(member);
-            // Use SourcePropertyName for the target property name (supports MapFrom)
             propertyAssignments.Add($"            {member.SourcePropertyName} = {toSourceValue}");
         }
 
-        // Add default values for excluded required members
         foreach (var excludedMember in model.ExcludedRequiredMembers)
         {
             var defaultValue = GeneratorUtilities.GetDefaultValueForType(excludedMember.TypeName);
             propertyAssignments.Add($"            {excludedMember.Name} = {defaultValue}");
         }
 
-        sb.AppendLine(string.Join(",\n", propertyAssignments));
-        sb.AppendLine("        };");
+        var initializer = string.Join(",\n", propertyAssignments);
+
+        if (model.ToSourceConfigurationTypeName != null)
+        {
+            sb.AppendLine($"        var result = new {model.SourceTypeName}");
+            sb.AppendLine("        {");
+            sb.AppendLine(initializer);
+            sb.AppendLine("        };");
+            sb.AppendLine($"        {model.ToSourceConfigurationTypeName}.Map(this, result);");
+            sb.AppendLine("        return result;");
+        }
+        else
+        {
+            sb.AppendLine($"        return new {model.SourceTypeName}");
+            sb.AppendLine("        {");
+            sb.AppendLine(initializer);
+            sb.AppendLine("        };");
+        }
     }
 }
