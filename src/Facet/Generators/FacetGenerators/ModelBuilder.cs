@@ -190,6 +190,9 @@ internal static class ModelBuilder
         // Extract FlattenTo types for generating collection flattening methods
         var flattenToTypes = AttributeParser.ExtractFlattenToTypes(attribute);
 
+        // Check if the base class already declares any of the generated members
+        var baseHidesFacetMembers = BaseHidesFacetMembers(targetSymbol);
+
         return new FacetTargetModel(
             targetSymbol.Name,
             ns,
@@ -223,7 +226,8 @@ internal static class ModelBuilder
             convertEnumsTo,
             generateCopyConstructor,
             generateEquality,
-            toSourceConfigurationTypeName);
+            toSourceConfigurationTypeName,
+            baseHidesFacetMembers);
     }
 
     #region Private Helper Methods
@@ -869,6 +873,35 @@ private static Dictionary<string, (string targetName, string source, bool revers
         }
 
         return memberNames.ToImmutableArray();
+    }
+
+    /// <summary>
+    /// Returns true when any base class of the target type declares a member whose name matches
+    /// one of the members Facet generates (FromSource, ToSource, BackTo, Projection).
+    /// When true, the 'new' modifier must be emitted on those members to suppress CS0108.
+    /// </summary>
+    private static bool BaseHidesFacetMembers(INamedTypeSymbol targetSymbol)
+    {
+        var generatedMemberNames = new System.Collections.Generic.HashSet<string>
+        {
+            "FromSource", "ToSource", "BackTo", "Projection"
+        };
+
+        var baseType = targetSymbol.BaseType;
+        while (baseType != null && baseType.SpecialType != SpecialType.System_Object)
+        {
+            foreach (var member in baseType.GetMembers())
+            {
+                if (generatedMemberNames.Contains(member.Name) &&
+                    member.DeclaredAccessibility == Accessibility.Public)
+                {
+                    return true;
+                }
+            }
+            baseType = baseType.BaseType;
+        }
+
+        return false;
     }
 
     /// <summary>

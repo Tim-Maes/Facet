@@ -58,6 +58,13 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     /// </summary>
     public string? ToSourceConfigurationTypeName { get; }
 
+    /// <summary>
+    /// When true, the base class of this facet already declares one or more of the generated
+    /// members (<c>FromSource</c>, <c>ToSource</c>, <c>Projection</c>, <c>BackTo</c>).
+    /// The <c>new</c> modifier will be emitted on those members to suppress CS0108.
+    /// </summary>
+    public bool BaseHidesFacetMembers { get; }
+
     public FacetTargetModel(
         string name,
         string? @namespace,
@@ -91,7 +98,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         string? convertEnumsTo = null,
         bool generateCopyConstructor = false,
         bool generateEquality = false,
-        string? toSourceConfigurationTypeName = null)
+        string? toSourceConfigurationTypeName = null,
+        bool baseHidesFacetMembers = false)
     {
         Name = name;
         Namespace = @namespace;
@@ -126,6 +134,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         GenerateCopyConstructor = generateCopyConstructor;
         GenerateEquality = generateEquality;
         ToSourceConfigurationTypeName = toSourceConfigurationTypeName;
+        BaseHidesFacetMembers = baseHidesFacetMembers;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -164,7 +173,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && ConvertEnumsTo == other.ConvertEnumsTo
             && GenerateCopyConstructor == other.GenerateCopyConstructor
             && GenerateEquality == other.GenerateEquality
-            && ToSourceConfigurationTypeName == other.ToSourceConfigurationTypeName;
+            && ToSourceConfigurationTypeName == other.ToSourceConfigurationTypeName
+            && BaseHidesFacetMembers == other.BaseHidesFacetMembers;
     }
 
     public override bool Equals(object? obj) => obj is FacetTargetModel other && Equals(other);
@@ -200,6 +210,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + GenerateCopyConstructor.GetHashCode();
             hash = hash * 31 + GenerateEquality.GetHashCode();
             hash = hash * 31 + (ToSourceConfigurationTypeName?.GetHashCode() ?? 0);
+            hash = hash * 31 + BaseHidesFacetMembers.GetHashCode();
             hash = hash * 31 + Members.Length.GetHashCode();
 
             foreach (var member in Members)

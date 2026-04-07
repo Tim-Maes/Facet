@@ -28,7 +28,7 @@ internal static class ProjectionGenerator
         else
         {
             GenerateProjectionDocumentation(sb, model, memberIndent);
-            sb.AppendLine($"{memberIndent}public static Expression<Func<{model.SourceTypeName}, {model.Name}>> Projection =>");
+            sb.AppendLine($"{memberIndent}public static {(model.BaseHidesFacetMembers ? "new " : "")}Expression<Func<{model.SourceTypeName}, {model.Name}>> Projection =>");
 
             // Generate object initializer projection for EF Core compatibility
             GenerateProjectionExpression(sb, model, memberIndent, facetLookup);
