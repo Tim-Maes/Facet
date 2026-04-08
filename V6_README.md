@@ -42,7 +42,7 @@ New analyzer warning `FAC023` when `GenerateToSource = true` but `ToSource` cann
 Before/After hooks to inject validation, defaults, or computed values around the auto-mapping pipeline.
 
 ### Facet Dashboard (#231)
-New companion package `Facet.Dashboard` — a visual overview of all facets, their source types, and generated members in your solution.
+New companion package `Facet.Dashboard`, a visual overview of all facets, their source types, and generated members in your solution.
 
 ### `ApplyFacet` (#211)
 Apply a facet's mapping to an existing instance rather than creating a new one.
