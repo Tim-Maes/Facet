@@ -6,7 +6,7 @@ Everything new since V5.0.0.
 
 ## New Features
 
-### Collection Type Mapping — `CollectionTargetType` & `AsCollection` (#319, #315)
+### Collection Type Mapping, `CollectionTargetType` & `AsCollection` (#319, #315)
 Remap source collection types (e.g. EF Core's `Collection<T>`) to `List<T>` or any other collection type.
 - **`CollectionTargetType`** on `[Facet]`, remaps **all** collection properties on the facet to the given type.
 - **`AsCollection`** on `[MapFrom]`, remaps a **single** collection property.
@@ -32,13 +32,13 @@ Override default `[Facet]` attribute settings project-wide via MSBuild propertie
 ### `nameof(@Object.Member.SubMember)` Support for Flatten Exclude (#284)
 Full-path `nameof` expressions using the `@` symbol are now supported in `[Flatten(Exclude = ...)]`.
 
-### Enum Conversions — `ConvertEnumsTo` (#263)
+### Enum Conversions, `ConvertEnumsTo` (#263)
 Convert all enum properties on a facet to `string` or `int` with full round-trip support in both projection and `ToSource()`.
 
 ### FAC023 Diagnostic (#271)
 New analyzer warning `FAC023` when `GenerateToSource = true` but `ToSource` cannot be generated for specific properties, including the property names in the message.
 
-### Mapping Hooks — `MapHooks` (#234)
+### Mapping Hooks, `MapHooks` (#234)
 Before/After hooks to inject validation, defaults, or computed values around the auto-mapping pipeline.
 
 ### Facet Dashboard (#231)
