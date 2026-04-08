@@ -183,6 +183,7 @@ internal static class WrapperModelBuilder
             attributes,
             false, // isCollection
             null,  // collectionWrapper
+            null,  // sourceCollectionWrapper
             GeneratorUtilities.GetTypeNameWithNullability(property.Type), // sourceMemberTypeName
             null,  // mapFromSource
             false, // mapFromReversible
@@ -248,7 +249,8 @@ internal static class WrapperModelBuilder
             nestedWrapperSourceTypeName,
             attributes,
             false, // isCollection
-            null,
+            null,  // collectionWrapper
+            null,  // sourceCollectionWrapper
             GeneratorUtilities.GetTypeNameWithNullability(field.Type),
             null,  // mapFromSource
             false, // mapFromReversible

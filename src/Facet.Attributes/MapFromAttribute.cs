@@ -104,6 +104,13 @@ public sealed class MapFromAttribute : Attribute
     public bool IncludeInProjection { get; set; } = true;
 
     /// <summary>
+    /// Overrides the collection type for this specific property.
+    /// Use an open generic type like <c>typeof(List&lt;&gt;)</c>.
+    /// When specified, the generated mapping expression will materialize to this collection type.
+    /// </summary>
+    public Type? AsCollection { get; set; }
+
+    /// <summary>
     /// Creates a new MapFromAttribute that maps from the specified source property or expression.
     /// </summary>
     /// <param name="source">The source property name or expression to map from.</param>

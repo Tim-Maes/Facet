@@ -396,6 +396,8 @@ internal static class ProjectionGenerator
             {
                 FacetConstants.CollectionWrappers.Array => $"{circularProjection}.ToArray()",
                 FacetConstants.CollectionWrappers.IEnumerable => circularProjection,
+                FacetConstants.CollectionWrappers.Collection =>
+                    $"new global::System.Collections.ObjectModel.Collection<{elementFacetTypeName}>({circularProjection}.ToList())",
                 _ => $"{circularProjection}.ToList()"
             };
         }
@@ -431,6 +433,8 @@ internal static class ProjectionGenerator
         {
             FacetConstants.CollectionWrappers.Array => $"{projection}.ToArray()",
             FacetConstants.CollectionWrappers.IEnumerable => projection,
+            FacetConstants.CollectionWrappers.Collection =>
+                $"new global::System.Collections.ObjectModel.Collection<{elementFacetTypeName}>({projection}.ToList())",
             _ => $"{projection}.ToList()"
         };
     }

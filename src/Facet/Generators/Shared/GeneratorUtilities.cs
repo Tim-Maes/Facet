@@ -290,7 +290,7 @@ internal static class GeneratorUtilities
 
     /// <summary>
     /// Attempts to extract the element type from a collection type.
-    /// Handles List&lt;T&gt;, ICollection&lt;T&gt;, IEnumerable&lt;T&gt;, IList&lt;T&gt;, IReadOnlyList&lt;T&gt;, IReadOnlyCollection&lt;T&gt;, and T[].
+    /// Handles List&lt;T&gt;, ICollection&lt;T&gt;, IEnumerable&lt;T&gt;, IList&lt;T&gt;, IReadOnlyList&lt;T&gt;, IReadOnlyCollection&lt;T&gt;, Collection&lt;T&gt;, and T[].
     /// </summary>
     /// <param name="typeSymbol">The type symbol to analyze.</param>
     /// <param name="elementType">The extracted element type symbol if successful.</param>
@@ -361,6 +361,14 @@ internal static class GeneratorUtilities
                 collectionWrapper = "IReadOnlyCollection";
                 return true;
             }
+
+            // Check for Collection<T> (System.Collections.ObjectModel)
+            if (typeDefinition == "global::System.Collections.ObjectModel.Collection<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "Collection";
+                return true;
+            }
         }
 
         return false;
@@ -395,7 +403,7 @@ internal static class GeneratorUtilities
     /// Wraps an element type name in the appropriate collection type.
     /// </summary>
     /// <param name="elementTypeName">The fully qualified element type name.</param>
-    /// <param name="collectionWrapper">The collection wrapper type ("List", "ICollection", "IList", "IEnumerable", "IReadOnlyList", "IReadOnlyCollection", "array").</param>
+    /// <param name="collectionWrapper">The collection wrapper type ("List", "ICollection", "IList", "IEnumerable", "IReadOnlyList", "IReadOnlyCollection", "Collection", "array").</param>
     /// <returns>The fully qualified collection type name.</returns>
     public static string WrapInCollectionType(string elementTypeName, string collectionWrapper)
     {
@@ -407,6 +415,7 @@ internal static class GeneratorUtilities
             "IEnumerable" => $"global::System.Collections.Generic.IEnumerable<{elementTypeName}>",
             "IReadOnlyList" => $"global::System.Collections.Generic.IReadOnlyList<{elementTypeName}>",
             "IReadOnlyCollection" => $"global::System.Collections.Generic.IReadOnlyCollection<{elementTypeName}>",
+            "Collection" => $"global::System.Collections.ObjectModel.Collection<{elementTypeName}>",
             "array" => $"{elementTypeName}[]",
             _ => elementTypeName
         };

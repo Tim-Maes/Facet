@@ -78,6 +78,7 @@ internal static class FacetConstants
         public const string IReadOnlyList = "IReadOnlyList";
         public const string IReadOnlyCollection = "IReadOnlyCollection";
         public const string Array = "array";
+        public const string Collection = "Collection";
     }
 
     /// <summary>
@@ -110,5 +111,7 @@ internal static class FacetConstants
         public const string GenerateCopyConstructor = "GenerateCopyConstructor";
         public const string GenerateEquality = "GenerateEquality";
         public const string ToSourceConfiguration = "ToSourceConfiguration";
+        public const string CollectionTargetType = "CollectionTargetType";
+        public const string AsCollection = "AsCollection";
     }
 }

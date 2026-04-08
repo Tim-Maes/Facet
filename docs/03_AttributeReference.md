@@ -41,6 +41,7 @@ public partial class MyFacet { }
 | `PreserveReferences`           | `bool`    | Enable runtime circular reference detection using object tracking (default: true). See [Circular Reference Protection](#circular-reference-protection) below. |
 | `SourceSignature`              | `string?` | Hash signature to track source entity changes. Emits FAC022 warning when source structure changes. See [Source Signature Change Tracking](16_SourceSignature.md). |
 | `ConvertEnumsTo`               | `Type?`   | When set, all enum properties are converted to the specified type (`typeof(string)` or `typeof(int)`) in the generated facet. Default is null (enums retain their original types). See [Enum Conversion](20_ConvertEnumsTo.md). |
+| `CollectionTargetType`         | `Type?`   | Overrides the collection type used for **all** mapped collection properties on this facet. Use an open generic type such as `typeof(List<>)` to remap source collections (e.g. `Collection<T>` from EF Core entities) to a different target type. See [Collection Type Mapping](#collection-type-mapping) below. |
 | `GenerateCopyConstructor`      | `bool`    | Generate a copy constructor that accepts another instance of the same facet type and copies all member values (default: false). See [Copy Constructor](#copy-constructor) below. |
 | `GenerateEquality`             | `bool`    | Generate value-based equality members (`Equals`, `GetHashCode`, `==`, `!=`) and implement `IEquatable<T>` (default: false). Ignored for records. See [Equality Generation](#equality-generation) below. |
 
@@ -707,6 +708,73 @@ public partial class UserDto : System.IEquatable<UserDto>
 
 - **Records**: Records already have value-based equality � `GenerateEquality` is automatically ignored
 - **Reference equality needed**: If you need identity-based comparison, don't enable this
+
+---
+
+## Collection Type Mapping
+
+By default, Facet preserves the source collection type when mapping nested facet collections. For example, if an EF Core entity uses `Collection<T>`, the generated facet property will also use `Collection<T>`. Use `CollectionTargetType` to override this for all collection properties on a facet.
+
+### Supported Types
+
+Any open generic collection type is accepted:
+
+| `CollectionTargetType`            | Generated property type        | Materialized via           |
+|-----------------------------------|-------------------------------|---------------------------|
+| `typeof(List<>)`                  | `List<TFacet>`                | `.ToList()`               |
+| `typeof(IList<>)`                 | `IList<TFacet>`               | `.ToList()`               |
+| `typeof(ICollection<>)`           | `ICollection<TFacet>`         | `.ToList()`               |
+| `typeof(IEnumerable<>)`           | `IEnumerable<TFacet>`         | lazy (no materialization) |
+| `typeof(IReadOnlyList<>)`         | `IReadOnlyList<TFacet>`       | `.ToList()`               |
+| `typeof(IReadOnlyCollection<>)`   | `IReadOnlyCollection<TFacet>` | `.ToList()`               |
+| `typeof(Collection<>)`            | `Collection<TFacet>`          | `new Collection<>(…)`     |
+
+### Facet-Level Override
+
+Remap all `Collection<T>` (or any source collection type) to `List<T>`:
+
+```csharp
+public class UnitEntity
+{
+    public int Id { get; set; }
+    public Collection<UnitItemEntity> Items { get; set; } = new();
+}
+
+[Facet(typeof(UnitEntity),
+    NestedFacets = [typeof(UnitItemDto)],
+    CollectionTargetType = typeof(List<>))]
+public partial class UnitDto { }
+
+// Generated: public List<UnitItemDto> Items { get; set; }
+```
+
+### Per-Property Override with `[MapFrom]`
+
+Use `AsCollection` on `[MapFrom]` to override a single property:
+
+```csharp
+[Facet(typeof(UnitEntity), NestedFacets = [typeof(UnitItemDto)])]
+public partial class UnitDto
+{
+    [MapFrom(nameof(UnitEntity.Items), AsCollection = typeof(List<>))]
+    public List<UnitItemDto> Items { get; set; } = new();
+}
+```
+
+### Round-Trip Support
+
+When `GenerateToSource = true`, `ToSource()` restores the **original source collection type** even when the facet uses a different type:
+
+```csharp
+[Facet(typeof(UnitEntity),
+    NestedFacets = [typeof(UnitItemDto)],
+    CollectionTargetType = typeof(List<>),
+    GenerateToSource = true)]
+public partial class UnitDto { }
+
+// facet.Items is List<UnitItemDto>
+// facet.ToSource().Items is Collection<UnitItemEntity> , original source type restored
+```
 
 ---
 

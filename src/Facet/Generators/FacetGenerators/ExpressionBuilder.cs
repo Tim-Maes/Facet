@@ -197,7 +197,7 @@ internal static class ExpressionBuilder
                 : $"{sourceCollection}.Select(x => new {elementTypeName}(x, __depth + 1, {updatedProcessed}))";
 
             // Convert back to the appropriate collection type
-            var collectionExpression = WrapCollectionProjection(projection, member.CollectionWrapper!);
+            var collectionExpression = WrapCollectionProjection(projection, member.CollectionWrapper!, elementTypeName);
 
             if (isNullable)
             {
@@ -225,7 +225,7 @@ internal static class ExpressionBuilder
                 : $"{sourceCollection}.Select(x => new {elementTypeName}(x))";
 
             // Convert back to the appropriate collection type
-            var collectionExpression = WrapCollectionProjection(projection, member.CollectionWrapper!);
+            var collectionExpression = WrapCollectionProjection(projection, member.CollectionWrapper!, elementTypeName);
 
             if (isNullable)
             {
@@ -304,8 +304,10 @@ internal static class ExpressionBuilder
         // Use LINQ Select to map each element back
         var projection = $"this.{member.Name}.Select(x => x.ToSource())";
 
-        // Convert back to the appropriate collection type
-        var collectionExpression = WrapCollectionProjection(projection, member.CollectionWrapper!);
+        // Use the original source collection wrapper (before any CollectionTargetType override)
+        // so that the generated expression produces the correct source type.
+        var toSourceWrapper = member.SourceCollectionWrapper ?? member.CollectionWrapper!;
+        var collectionExpression = WrapCollectionProjection(projection, toSourceWrapper, member.NestedFacetSourceTypeName);
 
         // Add null check for nullable collections
         if (facetTypeIsNullable)
@@ -328,7 +330,7 @@ internal static class ExpressionBuilder
         return $"this.{member.Name}.ToSource()";
     }
 
-    private static string WrapCollectionProjection(string projection, string collectionWrapper)
+    private static string WrapCollectionProjection(string projection, string collectionWrapper, string? elementTypeName = null)
     {
         return collectionWrapper switch
         {
@@ -339,6 +341,9 @@ internal static class ExpressionBuilder
             FacetConstants.CollectionWrappers.IReadOnlyCollection => $"{projection}.ToList()",
             FacetConstants.CollectionWrappers.IEnumerable => projection,
             FacetConstants.CollectionWrappers.Array => $"{projection}.ToArray()",
+            FacetConstants.CollectionWrappers.Collection when elementTypeName != null =>
+                $"new global::System.Collections.ObjectModel.Collection<{elementTypeName}>({projection}.ToList())",
+            FacetConstants.CollectionWrappers.Collection => $"{projection}.ToList()",
             _ => projection
         };
     }

@@ -20,6 +20,12 @@ internal sealed class FacetMember : IEquatable<FacetMember>
     public IReadOnlyList<string> AttributeNamespaces { get; }
     public bool IsCollection { get; }
     public string? CollectionWrapper { get; }
+    /// <summary>
+    /// The original source collection wrapper before any <c>CollectionTargetType</c> or <c>AsCollection</c>
+    /// override was applied. Used by <c>ToSource()</c> to produce the correct source collection type.
+    /// Null when no override was applied (in which case <see cref="CollectionWrapper"/> is used).
+    /// </summary>
+    public string? SourceCollectionWrapper { get; }
     public string? SourceMemberTypeName { get; }
     public bool IsNestedType { get; }
 
@@ -68,6 +74,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         IReadOnlyList<string>? attributes = null,
         bool isCollection = false,
         string? collectionWrapper = null,
+        string? sourceCollectionWrapper = null,
         string? sourceMemberTypeName = null,
         string? mapFromSource = null,
         bool mapFromReversible = false,
@@ -98,6 +105,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         AttributeNamespaces = attributeNamespaces ?? Array.Empty<string>();
         IsCollection = isCollection;
         CollectionWrapper = collectionWrapper;
+        SourceCollectionWrapper = sourceCollectionWrapper;
         SourceMemberTypeName = sourceMemberTypeName;
         MapFromSource = mapFromSource;
         MapFromReversible = mapFromReversible;
@@ -127,6 +135,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         NestedFacetSourceTypeName == other.NestedFacetSourceTypeName &&
         IsCollection == other.IsCollection &&
         CollectionWrapper == other.CollectionWrapper &&
+        SourceCollectionWrapper == other.SourceCollectionWrapper &&
         SourceMemberTypeName == other.SourceMemberTypeName &&
         MapFromSource == other.MapFromSource &&
         MapFromReversible == other.MapFromReversible &&
@@ -162,6 +171,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
             hash = hash * 31 + (NestedFacetSourceTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + IsCollection.GetHashCode();
             hash = hash * 31 + (CollectionWrapper?.GetHashCode() ?? 0);
+            hash = hash * 31 + (SourceCollectionWrapper?.GetHashCode() ?? 0);
             hash = hash * 31 + (SourceMemberTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + (MapFromSource?.GetHashCode() ?? 0);
             hash = hash * 31 + MapFromReversible.GetHashCode();
