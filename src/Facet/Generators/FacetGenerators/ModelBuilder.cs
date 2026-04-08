@@ -84,6 +84,9 @@ internal static class ModelBuilder
         // Extract ToSourceConfiguration parameter
         var toSourceConfigurationTypeName = AttributeParser.ExtractToSourceConfigurationTypeName(attribute);
 
+        // Extract CollectionTargetType parameter
+        var collectionTargetType = AttributeParser.ExtractCollectionTargetType(attribute);
+
         // Extract nested facets parameter and build mapping from source type to child facet type
         var nestedFacetMappings = AttributeParser.ExtractNestedFacetMappings(attribute, context.SemanticModel.Compilation);
 
@@ -116,6 +119,7 @@ internal static class ModelBuilder
             mapWhenMappings,
             convertEnumsTo,
             baseClassMemberNames,
+            collectionTargetType,
             token);
 
         // Add expression-based members (from MapFrom with expressions)
@@ -243,10 +247,11 @@ internal static class ModelBuilder
         bool nullableProperties,
         bool copyAttributes,
         Dictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings,
-        Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName)> mapFromMappings,
+        Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName, string? asCollection)> mapFromMappings,
         Dictionary<string, (List<string> conditions, string? defaultValue, bool includeInProjection)> mapWhenMappings,
         string? convertEnumsTo,
         ImmutableArray<string> baseClassMemberNames,
+        string? collectionTargetType,
         CancellationToken token)
     {
         var members = new List<FacetMember>();
@@ -288,6 +293,7 @@ internal static class ModelBuilder
                     mapFromMappings,
                     mapWhenMappings,
                     convertEnumsTo,
+                    collectionTargetType,
                     members,
                     excludedRequiredMembers,
                     addedMembers);
@@ -320,9 +326,10 @@ internal static class ModelBuilder
         bool nullableProperties,
         bool copyAttributes,
         Dictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings,
-        Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName)> mapFromMappings,
+        Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName, string? asCollection)> mapFromMappings,
         Dictionary<string, (List<string> conditions, string? defaultValue, bool includeInProjection)> mapWhenMappings,
         string? convertEnumsTo,
+        string? collectionTargetType,
         List<FacetMember> members,
         List<FacetMember> excludedRequiredMembers,
         HashSet<string> addedMembers)
@@ -359,6 +366,7 @@ internal static class ModelBuilder
         string? nestedFacetSourceTypeName = null;
         bool isCollection = false;
         string? collectionWrapper = null;
+        string? sourceCollectionWrapper = null;
 
         // Detect if the property type is a nested type (has a containing type)
         // This is needed to generate 'using static' instead of 'using' for the containing type
@@ -387,13 +395,18 @@ internal static class ModelBuilder
             var elementTypeName = elementType!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             if (nestedFacetMappings.TryGetValue(elementTypeName, out var nestedMapping))
             {
-                // Wrap the child facet type in the same collection type
-                var wrappedType = GeneratorUtilities.WrapInCollectionType(nestedMapping.childFacetTypeName, wrapper!);
+                // Apply CollectionTargetType override if set, otherwise preserve the source wrapper
+                var effectiveWrapper = collectionTargetType ?? wrapper!;
+                var sourceWrapper = (collectionTargetType != null && collectionTargetType != wrapper) ? wrapper : null;
+
+                // Wrap the child facet type in the target collection type
+                var wrappedType = GeneratorUtilities.WrapInCollectionType(nestedMapping.childFacetTypeName, effectiveWrapper);
                 // Preserve nullability if the collection itself was nullable
                 typeName = shouldTreatAsNullable ? wrappedType + "?" : wrappedType;
                 isNestedFacet = true;
                 isCollection = true;
-                collectionWrapper = wrapper;
+                collectionWrapper = effectiveWrapper;
+                sourceCollectionWrapper = sourceWrapper;
                 nestedFacetSourceTypeName = nestedMapping.sourceTypeName;
             }
         }
@@ -458,6 +471,7 @@ internal static class ModelBuilder
         var mapFromSource = hasMapFrom ? mapFromInfo.source : null;
         var mapFromReversible = hasMapFrom ? mapFromInfo.reversible : true;
         var mapFromIncludeInProjection = hasMapFrom ? mapFromInfo.includeInProjection : true;
+        var mapFromAsCollection = hasMapFrom ? mapFromInfo.asCollection : null;
         var sourcePropertyName = property.Name; // Always use the actual source property name
 
         // Get MapWhen conditions for this property (keyed by target property name)
@@ -477,6 +491,15 @@ internal static class ModelBuilder
             {
                 typeName = GeneratorUtilities.MakeNullable(typeName);
             }
+        }
+
+        // Apply AsCollection override from MapFrom attribute
+        if (mapFromAsCollection != null && isCollection)
+        {
+            var originalWrapper = collectionWrapper;
+            collectionWrapper = mapFromAsCollection;
+            if (originalWrapper != mapFromAsCollection)
+                sourceCollectionWrapper = originalWrapper;
         }
 
         // Enum conversion: if ConvertEnumsTo is set and this property is an enum type, convert it
@@ -535,6 +558,7 @@ internal static class ModelBuilder
             attributes,
             isCollection,
             collectionWrapper,
+            sourceCollectionWrapper,
             sourceMemberTypeName,
             mapFromSource,
             mapFromReversible,
@@ -673,6 +697,7 @@ internal static class ModelBuilder
             attributes,
             false, // Fields are not collections
             null,  // No collection wrapper for fields
+            null,  // sourceCollectionWrapper
             sourceMemberTypeName,
             null,  // mapFromSource
             false, // mapFromReversible
@@ -711,12 +736,12 @@ internal static class ModelBuilder
     /// Returns a dictionary mapping source property names to (targetName, source, reversible, includeInProjection, typeName).
     /// Also returns a list of expression-based members that should be added directly.
     /// </summary>
-private static Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName)> ExtractMapFromMappings(
+private static Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName, string? asCollection)> ExtractMapFromMappings(
     INamedTypeSymbol targetSymbol,
     List<FacetMember> expressionMembers,
     bool nullableProperties)
 {
-    var mappings = new Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName)>();
+    var mappings = new Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName, string? asCollection)>();
 
     // Get all members from the target type (user-declared properties)
     foreach (var member in targetSymbol.GetMembers())
@@ -774,6 +799,7 @@ private static Dictionary<string, (string targetName, string source, bool revers
                 // Get named arguments
                 var reversible = false;
                 var includeInProjection = true;
+                string? asCollection = null;
 
                 foreach (var namedArg in attr.NamedArguments)
                 {
@@ -784,6 +810,10 @@ private static Dictionary<string, (string targetName, string source, bool revers
                     else if (namedArg.Key == "IncludeInProjection" && namedArg.Value.Value is bool incProj)
                     {
                         includeInProjection = incProj;
+                    }
+                    else if (namedArg.Key == "AsCollection" && namedArg.Value.Value is INamedTypeSymbol asCollectionType)
+                    {
+                        asCollection = AttributeParser.TypeToCollectionWrapper(asCollectionType);
                     }
                 }
 
@@ -812,6 +842,7 @@ private static Dictionary<string, (string targetName, string source, bool revers
                         null,  // attributes
                         false, // isCollection
                         null,  // collectionWrapper
+                        null,  // sourceCollectionWrapper
                         null,  // sourceMemberTypeName
                         source, // mapFromSource
                         reversible,
@@ -822,7 +853,7 @@ private static Dictionary<string, (string targetName, string source, bool revers
                 else
                 {
                     // Simple property rename - map to source property
-                    mappings[source] = (property.Name, source, reversible, includeInProjection, typeName);
+                    mappings[source] = (property.Name, source, reversible, includeInProjection, typeName, asCollection);
                 }
             }
         }

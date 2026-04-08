@@ -45,6 +45,19 @@ public sealed class FacetAttribute : Attribute
     public bool GenerateParameterlessConstructor { get; set; } = true;
 
     /// <summary>
+    /// Overrides the collection type used for all mapped collection properties on this facet.
+    /// Use an open generic type like <c>typeof(List&lt;&gt;)</c> to remap all source collections
+    /// (e.g., <see cref="System.Collections.ObjectModel.Collection{T}"/>) to a different target type.
+    /// </summary>
+    /// <remarks>
+    /// Supported types: <c>typeof(List&lt;&gt;)</c>, <c>typeof(IList&lt;&gt;)</c>,
+    /// <c>typeof(ICollection&lt;&gt;)</c>, <c>typeof(IEnumerable&lt;&gt;)</c>,
+    /// <c>typeof(IReadOnlyList&lt;&gt;)</c>, <c>typeof(IReadOnlyCollection&lt;&gt;)</c>,
+    /// <c>typeof(Collection&lt;&gt;)</c>.
+    /// </remarks>
+    public Type? CollectionTargetType { get; set; }
+
+    /// <summary>
     /// Optional type that provides custom reverse-mapping logic when converting the facet type back
     /// to the source type via <c>ToSource()</c>.
     /// Must implement <c>IFacetToSourceConfiguration&lt;TFacet, TSource&gt;</c> with a static

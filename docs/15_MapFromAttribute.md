@@ -121,6 +121,29 @@ Use `IncludeInProjection = false` for:
 - Properties requiring client-side evaluation
 - Complex expressions that EF Core doesn't support
 
+### AsCollection
+
+Overrides the collection type for a single mapped collection property. Accepts an open generic type such as `typeof(List<>)`. This is useful when the source uses `Collection<T>` (common in EF Core entities) but you want a `List<T>` in your DTO, without applying the override globally to all collection properties.
+
+```csharp
+public class UnitEntity
+{
+    public int Id { get; set; }
+    public Collection<UnitItemEntity> Items { get; set; } = new();
+    public Collection<UnitItemEntity> ArchivedItems { get; set; } = new();
+}
+
+[Facet(typeof(UnitEntity), NestedFacets = [typeof(UnitItemDto)])]
+public partial class UnitDto
+{
+    // Only Items is remapped to List<>; ArchivedItems keeps its source type
+    [MapFrom(nameof(UnitEntity.Items), AsCollection = typeof(List<>))]
+    public List<UnitItemDto> Items { get; set; } = new();
+}
+```
+
+For a facet-wide override of all collection properties, use `CollectionTargetType` on the `[Facet]` attribute instead. See [Collection Type Mapping](03_AttributeReference.md#collection-type-mapping).
+
 ## Examples
 
 ### Simple Property Rename

@@ -62,6 +62,7 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 - **`[MapWhen]`** - conditional mapping based on runtime values, works in SQL projections
 - **Before/After hooks** - inject validation, defaults, or computed values around auto-mapping
 - **`ConvertEnumsTo`** - convert all enums to `string` or `int` with full round-trip support
+- **`CollectionTargetType`** - remap source collection types (e.g. `Collection<T>`) to `List<T>` or any target collection type globally per facet; per-property via `[MapFrom(..., AsCollection = typeof(List<>))]`
 - **`GenerateCopyConstructor`** - generate a copy constructor for cloning and MVVM scenarios
 - **`GenerateEquality`** - generate value-based `Equals`, `GetHashCode`, `==`, `!=` for class DTOs
 
@@ -208,7 +209,7 @@ Create focused facets for different scenarios:
   public partial record UserDetailDto;
   // Multi-level nesting supported
 
-  // 7. Collections - Automatic collection mapping
+  // 7. Collections - Automatic collection mapping, with type override support
   [Facet(typeof(Project))]
   public partial record ProjectDto;
 
@@ -217,7 +218,15 @@ Create focused facets for different scenarios:
       NestedFacets = [typeof(ProjectDto)])]
   public partial record UserWithProjectsDto;
   // List<Project> -> List<ProjectDto> automatically!
-  // Arrays, ICollection<T>, IEnumerable<T> all supported
+  // Arrays, ICollection<T>, IEnumerable<T>, Collection<T> all supported
+
+  // 7b. Collection type override - remap Collection<T> (EF Core) to List<T> in DTOs
+  [Facet(typeof(User),
+      NestedFacets = [typeof(ProjectDto)],
+      CollectionTargetType = typeof(List<>))]
+  public partial record UserListDto;
+  // Collection<Project> on entity -> List<ProjectDto> in DTO
+  // ToSource() restores the original Collection<T> automatically
 
   // 8. Everything Combined
   [Facet(typeof(User),

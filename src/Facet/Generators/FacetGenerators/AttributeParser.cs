@@ -236,6 +236,52 @@ internal static class AttributeParser
     }
 
     /// <summary>
+    /// Extracts the CollectionTargetType from the FacetAttribute and converts it to a collection wrapper constant string.
+    /// Returns null if not specified.
+    /// </summary>
+    public static string? ExtractCollectionTargetType(AttributeData attribute)
+    {
+        var arg = attribute.NamedArguments
+            .FirstOrDefault(kvp => kvp.Key == FacetConstants.AttributeNames.CollectionTargetType);
+
+        if (arg.Value.Value is INamedTypeSymbol typeSymbol)
+            return TypeToCollectionWrapper(typeSymbol);
+
+        return null;
+    }
+
+    /// <summary>
+    /// Extracts the AsCollection type from a MapFromAttribute and converts it to a collection wrapper constant string.
+    /// Returns null if not specified.
+    /// </summary>
+    public static string? ExtractAsCollection(AttributeData attribute)
+    {
+        var arg = attribute.NamedArguments
+            .FirstOrDefault(kvp => kvp.Key == FacetConstants.AttributeNames.AsCollection);
+
+        if (arg.Value.Value is INamedTypeSymbol typeSymbol)
+            return TypeToCollectionWrapper(typeSymbol);
+
+        return null;
+    }
+
+    public static string? TypeToCollectionWrapper(INamedTypeSymbol typeSymbol)
+    {
+        var displayName = typeSymbol.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        return displayName switch
+        {
+            "global::System.Collections.Generic.List<T>" => FacetConstants.CollectionWrappers.List,
+            "global::System.Collections.Generic.IList<T>" => FacetConstants.CollectionWrappers.IList,
+            "global::System.Collections.Generic.ICollection<T>" => FacetConstants.CollectionWrappers.ICollection,
+            "global::System.Collections.Generic.IEnumerable<T>" => FacetConstants.CollectionWrappers.IEnumerable,
+            "global::System.Collections.Generic.IReadOnlyList<T>" => FacetConstants.CollectionWrappers.IReadOnlyList,
+            "global::System.Collections.Generic.IReadOnlyCollection<T>" => FacetConstants.CollectionWrappers.IReadOnlyCollection,
+            "global::System.Collections.ObjectModel.Collection<T>" => FacetConstants.CollectionWrappers.Collection,
+            _ => null
+        };
+    }
+
+    /// <summary>
     /// Extracts the FlattenTo types from the FlattenTo parameter.
     /// Returns a list of fully qualified type names of flatten target types.
     /// </summary>
