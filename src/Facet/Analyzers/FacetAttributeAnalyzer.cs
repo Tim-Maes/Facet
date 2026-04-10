@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Facet.Generators;
+using Facet.Generators.Shared;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -98,6 +99,16 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "MaxDepth values should typically be between 1 and 10 for most scenarios.");
 
+    // FAC024: MapFrom references a non-existing source property
+    public static readonly DiagnosticDescriptor InvalidMapFromPropertyRule = new DiagnosticDescriptor(
+        "FAC024",
+        "MapFrom source property does not exist in source type",
+        "Property '{0}' in [MapFrom] does not exist in source type '{1}'",
+        "Usage",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The property name specified in [MapFrom] must match a property or field that exists in the source type. Expression-based mappings and dotted-path navigation are excluded from this check.");
+
     // FAC023: GenerateToSource cannot be generated
     public static readonly DiagnosticDescriptor GenerateToSourceNotPossibleRule = new DiagnosticDescriptor(
         "FAC023",
@@ -128,7 +139,8 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         IncludeAndExcludeBothSpecifiedRule,
         MaxDepthWarningRule,
         GenerateToSourceNotPossibleRule,
-        SourceSignatureMismatchRule);
+        SourceSignatureMismatchRule,
+        InvalidMapFromPropertyRule);
 
     public override void Initialize(AnalysisContext context)
     {
@@ -186,6 +198,7 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         ValidateCircularReferenceSafety(context, facetAttr, namedArgs);
         ValidateSourceSignature(context, facetAttr, sourceType, namedArgs);
         ValidateGenerateToSource(context, facetAttr, sourceType, targetType, namedArgs);
+        ValidateMapFromAttributes(context, targetType, sourceType, sourceMembers);
     }
 
     /// <summary>
@@ -458,6 +471,75 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
                 GenerateToSourceNotPossibleRule,
                 facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
                 message));
+        }
+    }
+
+    /// <summary>
+    /// Validates that property names used in [MapFrom] attributes on the target type's properties
+    /// actually exist in the source type. Skips expression-based and dotted-path mappings since
+    /// those cannot be validated with a simple member lookup.
+    /// Also skips @nameof(...) expressions, which the generator resolves to full navigation paths.
+    /// </summary>
+    private static void ValidateMapFromAttributes(
+        SymbolAnalysisContext context,
+        INamedTypeSymbol targetType,
+        INamedTypeSymbol sourceType,
+        HashSet<string> sourceMembers)
+    {
+        foreach (var member in targetType.GetMembers())
+        {
+            if (member is not IPropertySymbol property)
+                continue;
+
+            foreach (var attr in property.GetAttributes())
+            {
+                if (attr.AttributeClass?.ToDisplayString() != FacetConstants.MapFromAttributeFullName)
+                    continue;
+
+                if (attr.ConstructorArguments.Length == 0 || attr.ConstructorArguments[0].Value is not string sourcePropertyName)
+                    continue;
+
+                if (string.IsNullOrEmpty(sourcePropertyName))
+                    continue;
+
+                // Skip @nameof(...) expressions: the generator resolves these to full navigation
+                // paths at syntax level (e.g. @nameof(T.A.B) -> "A.B"), so the compiled string
+                // value alone is not sufficient for validation.
+                if (attr.ApplicationSyntaxReference?.GetSyntax() is AttributeSyntax attrSyntax)
+                {
+                    var firstArgExpr = attrSyntax.ArgumentList?.Arguments.FirstOrDefault()?.Expression;
+                    if (firstArgExpr != null)
+                    {
+                        var (_, hadAt) = NameOfResolver.ResolveExpression(firstArgExpr);
+                        if (hadAt)
+                            continue;
+                    }
+                }
+
+                // Skip expression-based values (contains operators/spaces) and dotted-path navigation.
+                // These are complex mappings that cannot be validated with a simple member lookup.
+                if (sourcePropertyName.Contains(" ") ||
+                    sourcePropertyName.Contains("+") ||
+                    sourcePropertyName.Contains("-") ||
+                    sourcePropertyName.Contains("*") ||
+                    sourcePropertyName.Contains("/") ||
+                    sourcePropertyName.Contains("(") ||
+                    sourcePropertyName.Contains("?") ||
+                    sourcePropertyName.Contains(":") ||
+                    sourcePropertyName.Contains("."))
+                    continue;
+
+                if (!sourceMembers.Contains(sourcePropertyName))
+                {
+                    var location = attr.ApplicationSyntaxReference?.GetSyntax().GetLocation()
+                        ?? member.Locations.FirstOrDefault();
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InvalidMapFromPropertyRule,
+                        location,
+                        sourcePropertyName,
+                        sourceType.ToDisplayString()));
+                }
+            }
         }
     }
 
