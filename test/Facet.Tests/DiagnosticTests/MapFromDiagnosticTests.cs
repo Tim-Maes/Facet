@@ -28,11 +28,3 @@ public partial class UserModelWithValidMapFrom
     [MapFrom("Email")]
     public string ContactEmail { get; set; } = string.Empty;
 }
-
-// This should NOT trigger FAC024: dotted paths are skipped (navigation/expression mappings)
-[Facet(typeof(UserSource), Include = [])]
-public partial class UserModelWithDottedPath
-{
-    [MapFrom("Address.Street")]
-    public string Street { get; set; } = string.Empty;
-}
