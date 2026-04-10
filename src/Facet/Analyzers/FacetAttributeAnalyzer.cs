@@ -478,6 +478,7 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
     /// Validates that property names used in [MapFrom] attributes on the target type's properties
     /// actually exist in the source type. Skips expression-based and dotted-path mappings since
     /// those cannot be validated with a simple member lookup.
+    /// Also skips @nameof(...) expressions, which the generator resolves to full navigation paths.
     /// </summary>
     private static void ValidateMapFromAttributes(
         SymbolAnalysisContext context,
@@ -500,6 +501,20 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
 
                 if (string.IsNullOrEmpty(sourcePropertyName))
                     continue;
+
+                // Skip @nameof(...) expressions: the generator resolves these to full navigation
+                // paths at syntax level (e.g. @nameof(T.A.B) -> "A.B"), so the compiled string
+                // value alone is not sufficient for validation.
+                if (attr.ApplicationSyntaxReference?.GetSyntax() is AttributeSyntax attrSyntax)
+                {
+                    var firstArgExpr = attrSyntax.ArgumentList?.Arguments.FirstOrDefault()?.Expression;
+                    if (firstArgExpr != null)
+                    {
+                        var (_, hadAt) = NameOfResolver.ResolveExpression(firstArgExpr);
+                        if (hadAt)
+                            continue;
+                    }
+                }
 
                 // Skip expression-based values (contains operators/spaces) and dotted-path navigation.
                 // These are complex mappings that cannot be validated with a simple member lookup.
