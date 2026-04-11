@@ -735,6 +735,8 @@ internal static class ModelBuilder
     /// Extracts MapFrom attribute mappings from the target type's properties.
     /// Returns a dictionary mapping source property names to (targetName, source, reversible, includeInProjection, typeName).
     /// Also returns a list of expression-based members that should be added directly.
+    /// Walks the full base-class chain so that [MapFrom] mappings declared in a base DTO class
+    /// are inherited by derived DTO classes.
     /// </summary>
 private static Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName, string? asCollection)> ExtractMapFromMappings(
     INamedTypeSymbol targetSymbol,
@@ -743,9 +745,26 @@ private static Dictionary<string, (string targetName, string source, bool revers
 {
     var mappings = new Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName, string? asCollection)>();
 
-    // Get all members from the target type (user-declared properties)
-    foreach (var member in targetSymbol.GetMembers())
+    // Build the type chain from the most-base class up to (and including) the direct target.
+    // Processing in this order means derived-class declarations overwrite base-class ones.
+    var typeChain = new List<INamedTypeSymbol>();
+    var ancestor = targetSymbol.BaseType;
+    while (ancestor != null && ancestor.SpecialType != SpecialType.System_Object)
     {
+        typeChain.Add(ancestor);
+        ancestor = ancestor.BaseType;
+    }
+    typeChain.Reverse();       // most-base first
+    typeChain.Add(targetSymbol); // direct target last (highest priority)
+
+    // Track expression-member target names already added so we don't duplicate.
+    // Using a dict here so the derived-class declaration (processed last) overwrites the base.
+    var pendingExpressionMembers = new Dictionary<string, FacetMember>();
+
+    foreach (var typeToProcess in typeChain)
+    {
+        foreach (var member in typeToProcess.GetMembers())
+        {
         if (member is not IPropertySymbol property) continue;
 
         // Look for MapFrom attribute
@@ -828,7 +847,8 @@ private static Dictionary<string, (string targetName, string source, bool revers
                 // treat it as an expression-based member / nested path.
                 if (IsExpression(source) || source.Contains(".") || hadLeadingAt)
                 {
-                    expressionMembers.Add(new FacetMember(
+                    // Store in dict — derived-class entry (processed last) overwrites base-class entry.
+                    pendingExpressionMembers[property.Name] = new FacetMember(
                         property.Name,
                         typeName,
                         FacetMemberKind.Property,
@@ -848,16 +868,23 @@ private static Dictionary<string, (string targetName, string source, bool revers
                         reversible,
                         includeInProjection,
                         property.Name, // sourcePropertyName (use target name as placeholder)
-                        true)); // isUserDeclared
+                        true); // isUserDeclared
                 }
                 else
                 {
-                    // Simple property rename - map to source property
+                    // Simple property rename - map to source property.
+                    // Derived-class declaration overwrites base-class (last write wins since
+                    // typeChain is ordered most-base first, direct target last).
                     mappings[source] = (property.Name, source, reversible, includeInProjection, typeName, asCollection);
                 }
             }
         }
+        }
     }
+
+    // Flush expression members collected from the whole type chain
+    foreach (var em in pendingExpressionMembers.Values)
+        expressionMembers.Add(em);
 
     return mappings;
 }
