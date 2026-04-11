@@ -90,6 +90,28 @@ public partial class BaseValidationFacet;
 [Facet(typeof(DerivedValidationEntity), GenerateToSource = true)]
 public partial class DerivedValidationFacet : BaseValidationFacet;
 
+// Source entity used for the MapFrom-on-derived-class tests
+public class UserEntityForMapFromInheritance
+{
+    public int Id { get; set; }
+    public bool Enabled { get; set; }
+    public string Email { get; set; } = string.Empty;
+}
+
+// Base DTO renames Enabled -> Active via [MapFrom]
+[Facet(typeof(UserEntityForMapFromInheritance), Include = [])]
+public partial class UserCreateModelMapFromBase
+{
+    [MapFrom(nameof(UserEntityForMapFromInheritance.Enabled), Reversible = true)]
+    public bool Active { get; set; }
+}
+
+// Derived DTO should inherit the Enabled->Active mapping; must NOT generate a new "Enabled" property
+[Facet(typeof(UserEntityForMapFromInheritance), Include = [nameof(UserEntityForMapFromInheritance.Email)])]
+public partial class UserDetailsModelMapFromDerived : UserCreateModelMapFromBase
+{
+}
+
 public class InheritedMemberTests
 {
     [Fact]
@@ -311,5 +333,53 @@ public class InheritedMemberTests
         facet.Should().BeOfType<DerivedValidationFacet>();
         facet.Id.Should().Be(3);
         facet.Description.Should().Be("world");
+    }
+
+    // -----------------------------------------------------------------------
+    // GitHub issue #322: derived DTO inheriting MapFrom from base DTO
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void DerivedDto_ShouldNotDeclarePropertyWithOriginalSourceName()
+    {
+        // "Enabled" must NOT appear as a declared property on the derived DTO;
+        // only the renamed "Active" (declared on the base) should exist.
+        var declaredProps = typeof(UserDetailsModelMapFromDerived)
+            .GetProperties(System.Reflection.BindingFlags.DeclaredOnly |
+                           System.Reflection.BindingFlags.Public |
+                           System.Reflection.BindingFlags.Instance)
+            .Select(p => p.Name)
+            .ToList();
+
+        declaredProps.Should().NotContain("Enabled",
+            because: "Enabled is mapped to Active in the base DTO and should not be re-generated");
+    }
+
+    [Fact]
+    public void DerivedDto_Constructor_ShouldMapRenamedPropertyFromBase()
+    {
+        var entity = new UserEntityForMapFromInheritance { Id = 1, Enabled = true, Email = "a@b.com" };
+
+        var facet = new UserDetailsModelMapFromDerived(entity);
+
+        facet.Active.Should().BeTrue(because: "Active is the renamed property mapped from Enabled");
+        facet.Email.Should().Be("a@b.com");
+    }
+
+    [Fact]
+    public void DerivedDto_Projection_ShouldUseRenamedProperty()
+    {
+        var entities = new[]
+        {
+            new UserEntityForMapFromInheritance { Id = 1, Enabled = true,  Email = "x@y.com" },
+            new UserEntityForMapFromInheritance { Id = 2, Enabled = false, Email = "y@z.com" },
+        }.AsQueryable();
+
+        var results = entities.Select(UserDetailsModelMapFromDerived.Projection).ToList();
+
+        results[0].Active.Should().BeTrue();
+        results[0].Email.Should().Be("x@y.com");
+        results[1].Active.Should().BeFalse();
+        results[1].Email.Should().Be("y@z.com");
     }
 }
