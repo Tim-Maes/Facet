@@ -20,6 +20,11 @@ With **Facet.Mapping**, you can go further and define custom logic like combinin
 2. Define a static `Map` method.
 3. Point the `[Facet(...)]` attribute to the config class using `Configuration = typeof(...)`.
 
+### Projection Mapping (EF Core-compatible computed properties)
+1. Implement `IFacetProjectionMapConfiguration<TSource, TTarget>` alongside `IFacetMapConfiguration<TSource, TTarget>`.
+2. Define a static `ConfigureProjection` method that registers expression bindings via the builder.
+3. The generator detects the interface and switches `Projection` to a lazily-built `MemberInitExpression` — fully translatable by EF Core.
+
 ### Reverse Mapping (DTO → Entity)
 1. Implement the `IFacetToSourceConfiguration<TFacet, TSource>` interface.
 2. Define a static `Map(TFacet facet, TSource target)` method.
@@ -274,6 +279,43 @@ public partial class UnitDto
 ```
 
 The `Map` method is called **after** automatic property copying, so you only need to handle properties that require custom logic.
+
+### Projection Mapping (EF Core-compatible computed properties)
+
+`IFacetMapConfiguration.Map()` is imperative code — EF Core cannot translate it inside a `Select` query. `IFacetProjectionMapConfiguration` lets you declare the SQL-translatable subset as pure expression trees that are inlined into the generated `Projection` property.
+
+```csharp
+public class UserDtoMapConfig
+    : IFacetMapConfiguration<User, UserDto>,
+      IFacetProjectionMapConfiguration<User, UserDto>
+{
+    // Runs in constructors and FromSource() — can call services, do anything
+    public static void Map(User source, UserDto target)
+    {
+        target.FullName  = source.FirstName + " " + source.LastName;
+        target.AuditNote = AuditService.GetNote(source.Id); // DI-dependent, not in projection
+    }
+
+    // Runs once to build the Projection expression — SQL-translatable expressions only
+    public static void ConfigureProjection(IFacetProjectionBuilder<User, UserDto> builder)
+    {
+        builder.Map(d => d.FullName, s => s.FirstName + " " + s.LastName);
+    }
+}
+
+[Facet(typeof(User), Configuration = typeof(UserDtoMapConfig), GenerateProjection = true)]
+public partial class UserDto
+{
+    public string FullName   { get; set; } = string.Empty;
+    public string AuditNote  { get; set; } = string.Empty;
+}
+
+// Usage — FullName is computed directly in SQL; AuditNote is left at its default
+var dtos = await context.Users
+    .Where(u => u.IsActive)
+    .Select(UserDto.Projection)
+    .ToListAsync();
+```
 
 // Usage
 var userDto = await user.ToFacetHybridAsync(hybridMapperWithDI);

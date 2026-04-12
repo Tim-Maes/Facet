@@ -166,6 +166,16 @@ internal static class AttributeParser
     }
 
     /// <summary>
+    /// Extracts the configuration type symbol from the attribute, or null if not set.
+    /// </summary>
+    public static INamedTypeSymbol? ExtractConfigurationTypeSymbol(AttributeData attribute)
+    {
+        var arg = attribute.NamedArguments
+            .FirstOrDefault(kvp => kvp.Key == FacetConstants.AttributeNames.Configuration);
+        return arg.Value.Value as INamedTypeSymbol;
+    }
+
+    /// <summary>
     /// Extracts the BeforeMapConfiguration type name from the attribute.
     /// </summary>
     public static string? ExtractBeforeMapConfigurationTypeName(AttributeData attribute)

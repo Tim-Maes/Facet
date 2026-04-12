@@ -10,6 +10,7 @@ Facet supports custom mapping logic for advanced scenarios via multiple interfac
 | `IFacetMapConfiguration<TSource, TTarget>` | Synchronous mapping | Fast, in-memory operations |
 | `IFacetMapConfigurationAsync<TSource, TTarget>` | Asynchronous mapping | I/O operations, database calls, API calls |
 | `IFacetMapConfigurationHybrid<TSource, TTarget>` | Combined sync/async | Optimal performance with mixed operations |
+| `IFacetProjectionMapConfiguration<TSource, TTarget>` | Expression-based projection mapping | Computed properties in EF Core `Projection` |
 
 ### Instance Mappers (With Dependency Injection Support)
 | Interface | Purpose | Use Case |
@@ -29,6 +30,12 @@ Facet supports custom mapping logic for advanced scenarios via multiple interfac
 - **Best for**: Complex scenarios requiring external services (databases, APIs, file systems)
 - **Benefits**: Full dependency injection support, easier testing, better separation of concerns
 - **Usage**: Pass mapper instances with injected dependencies
+
+### Projection Mappers (`IFacetProjectionMapConfiguration`)
+- **Best for**: Computed properties that must appear in EF Core `Select(DTO.Projection)` queries
+- **Benefits**: Custom bindings are inlined as `MemberInitExpression`, fully SQL-translatable, no `Invoke` nodes
+- **Limitations**: Expressions must be EF Core-translatable (property access, arithmetic, ternaries, no method calls, no DI)
+- **See also**: [Projection mapping section below](#projection-mapping-ifacetprojectionmapconfiguration)
 
 ## Facet.Mapping Extension Methods
 
@@ -556,5 +563,74 @@ public partial class UnitDto { ... }
 - **Thread Safety**: Each instance should handle its own thread-safety requirements for injected services
 - **Cancellation**: All async methods support `CancellationToken` for proper cancellation
 - **Error Handling**: Instance mappers can inject loggers and other services for better error handling
+
+---
+
+## Projection Mapping: IFacetProjectionMapConfiguration
+
+`IFacetMapConfiguration.Map()` is imperative code, EF Core cannot translate arbitrary method calls inside a `Select(DTO.Projection)` query to SQL. `IFacetProjectionMapConfiguration` solves this by letting you declare custom property mappings as **pure expression trees** that EF Core can translate.
+
+### When to use it
+
+Use `IFacetProjectionMapConfiguration` when:
+- You have a computed property (e.g. `FullName = FirstName + " " + LastName`) that must work in EF Core `Select` queries
+- Your `Map()` method sets some properties that are expressible as SQL and others that are not (DI-dependent); you want the SQL-translatable ones in the `Projection`
+
+### Division of responsibility
+
+| Interface | Runs in | Purpose |
+|---|---|---|
+| `IFacetMapConfiguration` — `Map()` | Constructors, `FromSource()` | Imperative logic, DI-dependent work, anything not SQL-translatable |
+| `IFacetProjectionMapConfiguration` - `ConfigureProjection()` | `Projection` build (once, lazy) | Expression-only mappings that EF Core can translate to SQL |
+
+### Example
+
+```csharp
+public class UserDto325MapConfig
+    : IFacetMapConfiguration<UserEntity, UserDto>,
+      IFacetProjectionMapConfiguration<UserEntity, UserDto>
+{
+    // Runs in constructors and FromSource(), can call services, do anything
+    public static void Map(UserEntity source, UserDto target)
+    {
+        target.FullName  = source.FirstName + " " + source.LastName;
+        target.AuditNote = AuditService.GetNote(source.Id); // DI-dependent, omitted from projection
+    }
+
+    // Runs once at app startup to build the Projection expression — expressions only
+    public static void ConfigureProjection(IFacetProjectionBuilder<UserEntity, UserDto> builder)
+    {
+        builder.Map(d => d.FullName, s => s.FirstName + " " + s.LastName);
+        // AuditNote intentionally omitted — cannot be expressed as a SQL-translatable expression
+    }
+}
+
+[Facet(typeof(UserEntity), Configuration = typeof(UserDto325MapConfig), GenerateProjection = true)]
+public partial class UserDto
+{
+    public string FullName   { get; set; } = string.Empty;
+    public string AuditNote  { get; set; } = string.Empty;
+}
+```
+
+When the generator detects that the `Configuration` type implements `IFacetProjectionMapConfiguration`, it switches the generated `Projection` property from a static expression literal to a **lazily-built expression tree**:
+
+```csharp
+// Generated code (simplified):
+private static Expression<Func<UserEntity, UserDto>>? _projection;
+
+public static Expression<Func<UserEntity, UserDto>> Projection
+    => LazyInitializer.EnsureInitialized(ref _projection, BuildProjection);
+```
+
+The `BuildProjection()` method assembles a `MemberInitExpression`, inlines the `ConfigureProjection` bindings via parameter substitution, and returns a pure expression tree — identical in structure to what EF Core already translates to SQL.
+
+### Limitations
+
+- Expressions in `ConfigureProjection` must be EF Core-translatable (property access, arithmetic, string concatenation, ternaries). Facet cannot validate this at compile time; EF Core will throw at runtime if they are not.
+- `ConfigureProjection` is called **once** during lazy initialisation, do not reference instance state or external services.
+- Properties omitted from `ConfigureProjection` but present in `Map()` will **not** appear in `Projection`. This is intentional.
+- Nested facet bindings in the lazy projection are not auto-generated; add them in `ConfigureProjection` if needed.
+- Thread safety is provided by `LazyInitializer.EnsureInitialized`.
 
 ---

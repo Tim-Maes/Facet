@@ -84,6 +84,20 @@ internal static class ModelBuilder
         // Extract ToSourceConfiguration parameter
         var toSourceConfigurationTypeName = AttributeParser.ExtractToSourceConfigurationTypeName(attribute);
 
+        // Detect if the configuration type implements IFacetProjectionMapConfiguration<TSource, TTarget>
+        var configTypeSymbol = AttributeParser.ExtractConfigurationTypeSymbol(attribute);
+        var hasProjectionMapConfiguration = false;
+        if (configTypeSymbol != null)
+        {
+            var projectionConfigInterface = context.SemanticModel.Compilation
+                .GetTypeByMetadataName(FacetConstants.ProjectionMapConfigurationInterfaceFullName);
+            if (projectionConfigInterface != null)
+            {
+                hasProjectionMapConfiguration = configTypeSymbol.AllInterfaces.Any(i =>
+                    SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, projectionConfigInterface));
+            }
+        }
+
         // Extract CollectionTargetType parameter
         var collectionTargetType = AttributeParser.ExtractCollectionTargetType(attribute);
 
@@ -231,7 +245,8 @@ internal static class ModelBuilder
             generateCopyConstructor,
             generateEquality,
             toSourceConfigurationTypeName,
-            baseHidesFacetMembers);
+            baseHidesFacetMembers,
+            hasProjectionMapConfiguration);
     }
 
     #region Private Helper Methods
