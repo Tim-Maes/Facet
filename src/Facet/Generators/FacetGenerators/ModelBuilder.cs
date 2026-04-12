@@ -247,7 +247,7 @@ internal static class ModelBuilder
         bool nullableProperties,
         bool copyAttributes,
         Dictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings,
-        Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName, string? asCollection)> mapFromMappings,
+        Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName, string? asCollection, bool isTargetRequired)> mapFromMappings,
         Dictionary<string, (List<string> conditions, string? defaultValue, bool includeInProjection)> mapWhenMappings,
         string? convertEnumsTo,
         ImmutableArray<string> baseClassMemberNames,
@@ -326,7 +326,7 @@ internal static class ModelBuilder
         bool nullableProperties,
         bool copyAttributes,
         Dictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings,
-        Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName, string? asCollection)> mapFromMappings,
+        Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName, string? asCollection, bool isTargetRequired)> mapFromMappings,
         Dictionary<string, (List<string> conditions, string? defaultValue, bool includeInProjection)> mapWhenMappings,
         string? convertEnumsTo,
         string? collectionTargetType,
@@ -358,7 +358,8 @@ internal static class ModelBuilder
         }
 
         var shouldPreserveInitOnly = preserveInitOnly && isInitOnly;
-        var shouldPreserveRequired = preserveRequired && isRequired;
+        // Honor the target property's own 'required' modifier when it maps from a non-required source property.
+        var shouldPreserveRequired = (preserveRequired && isRequired) || (hasMapFrom && mapFromInfo.isTargetRequired);
 
         var typeName = GeneratorUtilities.GetTypeNameWithNullability(property.Type);
         var propertyTypeName = property.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -738,12 +739,12 @@ internal static class ModelBuilder
     /// Walks the full base-class chain so that [MapFrom] mappings declared in a base DTO class
     /// are inherited by derived DTO classes.
     /// </summary>
-private static Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName, string? asCollection)> ExtractMapFromMappings(
+private static Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName, string? asCollection, bool isTargetRequired)> ExtractMapFromMappings(
     INamedTypeSymbol targetSymbol,
     List<FacetMember> expressionMembers,
     bool nullableProperties)
 {
-    var mappings = new Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName, string? asCollection)>();
+    var mappings = new Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName, string? asCollection, bool isTargetRequired)>();
 
     // Build the type chain from the most-base class up to (and including) the direct target.
     // Processing in this order means derived-class declarations overwrite base-class ones.
@@ -875,7 +876,7 @@ private static Dictionary<string, (string targetName, string source, bool revers
                     // Simple property rename - map to source property.
                     // Derived-class declaration overwrites base-class (last write wins since
                     // typeChain is ordered most-base first, direct target last).
-                    mappings[source] = (property.Name, source, reversible, includeInProjection, typeName, asCollection);
+                    mappings[source] = (property.Name, source, reversible, includeInProjection, typeName, asCollection, property.IsRequired);
                 }
             }
         }
