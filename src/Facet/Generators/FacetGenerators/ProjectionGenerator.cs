@@ -25,6 +25,11 @@ internal static class ProjectionGenerator
         {
             GenerateProjectionNotSupportedComment(sb, model, memberIndent);
         }
+        else if (model.HasProjectionMapConfiguration)
+        {
+            GenerateProjectionDocumentation(sb, model, memberIndent);
+            GenerateLazyProjection(sb, model, memberIndent, facetLookup);
+        }
         else
         {
             GenerateProjectionDocumentation(sb, model, memberIndent);
@@ -33,6 +38,112 @@ internal static class ProjectionGenerator
             // Generate object initializer projection for EF Core compatibility
             GenerateProjectionExpression(sb, model, memberIndent, facetLookup);
         }
+    }
+
+    /// <summary>
+    /// Generates a lazily-built projection that inlines ConfigureProjection bindings so that
+    /// EF Core can translate the result to SQL without encountering any Invoke nodes.
+    /// Emits: a backing field, a Projection property delegating to LazyInitializer, and a
+    /// BuildProjection() method that assembles a MemberInitExpression at runtime.
+    /// </summary>
+    private static void GenerateLazyProjection(
+        StringBuilder sb,
+        FacetTargetModel model,
+        string memberIndent,
+        Dictionary<string, FacetTargetModel> _)
+    {
+        var newModifier = model.BaseHidesFacetMembers ? "new " : "";
+        var src = model.SourceTypeName;
+        var tgt = model.Name;
+
+        // Backing field
+        sb.AppendLine($"{memberIndent}private static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>>? _projection;");
+        sb.AppendLine();
+
+        // Projection property
+        sb.AppendLine($"{memberIndent}public static {newModifier}global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> Projection");
+        sb.AppendLine($"{memberIndent}    => global::System.Threading.LazyInitializer.EnsureInitialized(ref _projection, BuildProjection);");
+        sb.AppendLine();
+
+        // BuildProjection() method
+        sb.AppendLine($"{memberIndent}private static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> BuildProjection()");
+        sb.AppendLine($"{memberIndent}{{");
+
+        var bodyIndent = memberIndent + "    ";
+
+        // Source parameter
+        sb.AppendLine($"{bodyIndent}var __p = global::System.Linq.Expressions.Expression.Parameter(typeof({src}), \"source\");");
+        sb.AppendLine();
+
+        // Auto-generated bindings list
+        sb.AppendLine($"{bodyIndent}var __bindings = new global::System.Collections.Generic.List<global::System.Linq.Expressions.MemberBinding>");
+        sb.AppendLine($"{bodyIndent}{{");
+
+        var includedMembers = model.Members
+            .Where(m => m.MapFromIncludeInProjection && !m.IsNestedFacet)
+            .ToArray();
+
+        for (int i = 0; i < includedMembers.Length; i++)
+        {
+            var member = includedMembers[i];
+            var bindingExpr = GetMemberBindingExpression(member, "__p", tgt);
+            if (bindingExpr == null) continue;
+
+            var comma = i < includedMembers.Length - 1 ? "," : "";
+            sb.AppendLine($"{bodyIndent}    {bindingExpr}{comma}");
+        }
+
+        sb.AppendLine($"{bodyIndent}}};");
+        sb.AppendLine();
+
+        // Apply ConfigureProjection overrides
+        sb.AppendLine($"{bodyIndent}var __builder = new global::Facet.Mapping.FacetProjectionBuilder<{src}, {tgt}>();");
+        sb.AppendLine($"{bodyIndent}global::{model.ConfigurationTypeName}.ConfigureProjection(__builder);");
+        sb.AppendLine($"{bodyIndent}foreach (var (__member, __expr) in __builder.Mappings)");
+        sb.AppendLine($"{bodyIndent}{{");
+        sb.AppendLine($"{bodyIndent}    var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __p);");
+        sb.AppendLine($"{bodyIndent}    __bindings.RemoveAll(b => ((global::System.Linq.Expressions.MemberAssignment)b).Member.Name == __member.Name);");
+        sb.AppendLine($"{bodyIndent}    __bindings.Add(global::System.Linq.Expressions.Expression.Bind(__member, __body));");
+        sb.AppendLine($"{bodyIndent}}}");
+        sb.AppendLine();
+
+        // Build and return the final lambda
+        sb.AppendLine($"{bodyIndent}return global::System.Linq.Expressions.Expression.Lambda<global::System.Func<{src}, {tgt}>>(");
+        sb.AppendLine($"{bodyIndent}    global::System.Linq.Expressions.Expression.MemberInit(");
+        sb.AppendLine($"{bodyIndent}        global::System.Linq.Expressions.Expression.New(typeof({tgt})),");
+        sb.AppendLine($"{bodyIndent}        __bindings),");
+        sb.AppendLine($"{bodyIndent}    __p);");
+        sb.AppendLine($"{memberIndent}}}");
+    }
+
+    /// <summary>
+    /// Returns a <c>Expression.Bind(...)</c> call string for the given scalar member,
+    /// or null if the member cannot be expressed as a simple property access.
+    /// </summary>
+    private static string? GetMemberBindingExpression(
+        FacetMember member,
+        string paramName,
+        string targetTypeName)
+    {
+        // Skip members with computed expressions — user must declare them in ConfigureProjection
+        if (member.MapFromSource != null && ExpressionHelper.IsExpression(member.MapFromSource))
+            return null;
+
+        string valueExpr;
+        if (member.MapFromSource != null)
+        {
+            // Build chained Expression.Property calls for dotted paths like "Company.Name"
+            var parts = member.MapFromSource.Split('.');
+            valueExpr = $"global::System.Linq.Expressions.Expression.Property({paramName}, \"{parts[0]}\")";
+            for (int i = 1; i < parts.Length; i++)
+                valueExpr = $"global::System.Linq.Expressions.Expression.Property({valueExpr}, \"{parts[i]}\")";
+        }
+        else
+        {
+            valueExpr = $"global::System.Linq.Expressions.Expression.Property({paramName}, \"{member.SourcePropertyName}\")";
+        }
+
+        return $"global::System.Linq.Expressions.Expression.Bind(typeof({targetTypeName}).GetProperty(\"{member.Name}\")!, {valueExpr})";
     }
 
     private static void GenerateProjectionNotSupportedComment(StringBuilder sb, FacetTargetModel model, string memberIndent)
