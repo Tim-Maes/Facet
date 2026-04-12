@@ -90,6 +90,30 @@ public partial class BaseValidationFacet;
 [Facet(typeof(DerivedValidationEntity), GenerateToSource = true)]
 public partial class DerivedValidationFacet : BaseValidationFacet;
 
+// -----------------------------------------------------------------------
+// GitHub issue #325: two facets on the same domain model, derived facet
+// inheriting from base facet. Without 'new', CS0108 is raised.
+// -----------------------------------------------------------------------
+public class ApplicationUser325
+{
+    public virtual string Id { get; set; } = default!;
+    public virtual string? UserName { get; set; }
+}
+
+[Facet(typeof(ApplicationUser325), Include = [], GenerateToSource = true, PreserveRequiredProperties = true)]
+public partial class UserCreateModel325
+{
+    [MapFrom(nameof(ApplicationUser325.UserName), Reversible = true)]
+    public string? UserName { get; set; }
+}
+
+[Facet(typeof(ApplicationUser325), Include = [], GenerateToSource = true, PreserveRequiredProperties = true)]
+public partial class UserEditModel325 : UserCreateModel325
+{
+    [MapFrom(nameof(ApplicationUser325.Id), Reversible = true)]
+    public required string Id { get; set; }
+}
+
 // Source entity used for the MapFrom-on-derived-class tests
 public class UserEntityForMapFromInheritance
 {
@@ -381,5 +405,47 @@ public class InheritedMemberTests
         results[0].Email.Should().Be("x@y.com");
         results[1].Active.Should().BeFalse();
         results[1].Email.Should().Be("y@z.com");
+    }
+
+    // -----------------------------------------------------------------------
+    // GitHub issue #325: two facets for the SAME domain model, derived facet
+    // inheriting from base facet — 'new' keyword must be emitted.
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void Issue325_DerivedFacet_SameDomainModel_FromSource_ShouldReturnDerivedInstance()
+    {
+        var user = new ApplicationUser325 { Id = "u-1", UserName = "alice" };
+
+        var facet = UserEditModel325.FromSource(user);
+
+        facet.Should().BeOfType<UserEditModel325>();
+        facet.Id.Should().Be("u-1");
+        facet.UserName.Should().Be("alice");
+    }
+
+    [Fact]
+    public void Issue325_DerivedFacet_SameDomainModel_ToSource_ShouldRoundTrip()
+    {
+        var facet = new UserEditModel325 { Id = "u-2", UserName = "bob" };
+
+        var result = facet.ToSource();
+
+        result.Id.Should().Be("u-2");
+        result.UserName.Should().Be("bob");
+    }
+
+    [Fact]
+    public void Issue325_DerivedFacet_SameDomainModel_Projection_ShouldMapAllProperties()
+    {
+        var users = new[]
+        {
+            new ApplicationUser325 { Id = "u-3", UserName = "carol" },
+        }.AsQueryable();
+
+        var results = users.Select(UserEditModel325.Projection).ToList();
+
+        results[0].Id.Should().Be("u-3");
+        results[0].UserName.Should().Be("carol");
     }
 }
