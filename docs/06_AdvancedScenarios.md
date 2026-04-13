@@ -308,26 +308,99 @@ var orderDto = new OrderDto(order);
 
 ### Supported Collection Types
 
-Facet automatically handles all common collection types:
+Facet automatically handles all standard .NET collection types through **interface-based detection**. This means any custom collection type implementing standard interfaces is automatically supported!
+
+#### Built-in Collection Support
 
 ```csharp
 public class Project
 {
-    // All of these work with NestedFacets:
+    // Standard mutable collections
     public List<Task> Tasks { get; set; }              // List<T>
     public ICollection<Team> Teams { get; set; }       // ICollection<T>
     public IList<Milestone> Milestones { get; set; }   // IList<T>
     public IEnumerable<Comment> Comments { get; set; } // IEnumerable<T>
     public Employee[] Employees { get; set; }          // T[] (arrays)
+    public Collection<Note> Notes { get; set; }        // Collection<T>
+
+    // Read-only collections
+    public IReadOnlyList<Tag> Tags { get; set; }       // IReadOnlyList<T>
+    public IReadOnlyCollection<Label> Labels { get; set; }  // IReadOnlyCollection<T>
+
+    // System.Collections.Immutable support
+    public ImmutableList<Feature> Features { get; set; }         // ImmutableList<T>
+    public ImmutableArray<Version> Versions { get; set; }        // ImmutableArray<T>
+    public ImmutableHashSet<Category> Categories { get; set; }   // ImmutableHashSet<T>
+    public ImmutableSortedSet<Priority> Priorities { get; set; } // ImmutableSortedSet<T>
+    public ImmutableQueue<Event> EventQueue { get; set; }        // ImmutableQueue<T>
+    public ImmutableStack<Change> ChangeStack { get; set; }      // ImmutableStack<T>
+    public IImmutableList<Requirement> Requirements { get; set; } // IImmutableList<T>
+    public IImmutableSet<Constraint> Constraints { get; set; }   // IImmutableSet<T>
 }
 
 [Facet(typeof(Project), NestedFacets = [typeof(TaskDto), typeof(TeamDto), /* ... */])]
 public partial record ProjectDto;
 // All collections automatically map to their corresponding DTO collection types:
 // - List<Task> → List<TaskDto>
-// - ICollection<Team> → ICollection<TeamDto> (implemented as List)
+// - ICollection<Team> → ICollection<TeamDto>
 // - Employee[] → EmployeeDto[]
+// - IReadOnlyList<Tag> → IReadOnlyList<TagDto>
+// - ImmutableList<Feature> → ImmutableList<FeatureDto>
+// - ImmutableArray<Version> → ImmutableArray<VersionDto>
 ```
+
+#### Custom Collection Support
+
+Facet uses **interface-based detection**, which means any custom collection type that implements standard collection interfaces is automatically supported—no manual configuration needed!
+
+```csharp
+// Define a custom collection type
+public class CustomReadOnlyList<T> : IReadOnlyList<T>
+{
+    private readonly List<T> _items;
+
+    public CustomReadOnlyList(IEnumerable<T> items) => _items = new List<T>(items);
+
+    public T this[int index] => _items[index];
+    public int Count => _items.Count;
+    public IEnumerator<T> GetEnumerator() => _items.GetEnumerator();
+    IEnumerator IEnumerable.GetEnumerator() => _items.GetEnumerator();
+}
+
+// Use it in your entity
+public class Gallery
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    // Custom collection type - automatically supported!
+    public CustomReadOnlyList<Exhibit> Exhibits { get; set; }
+}
+
+[Facet(typeof(Gallery), NestedFacets = [typeof(ExhibitDto)])]
+public partial record GalleryDto;
+
+// Usage - works automatically via interface detection!
+var gallery = new Gallery
+{
+    Exhibits = new CustomReadOnlyList<Exhibit>(exhibitList)
+};
+var dto = new GalleryDto(gallery);
+// dto.Exhibits is IReadOnlyList<ExhibitDto>
+```
+
+**How It Works:**
+1. **Exact Type Preservation**: Known concrete types (List, ImmutableList, etc.) are preserved exactly
+2. **Interface Fallback**: Unknown types are detected via their implemented interfaces
+3. **Automatic Support**: Any type implementing IReadOnlyList<T>, IList<T>, ICollection<T>, or IEnumerable<T> works automatically
+
+**Supported Detection Interfaces:**
+- `IReadOnlyList<T>` (most specific read-only)
+- `IReadOnlyCollection<T>`
+- `IList<T>` (most specific mutable)
+- `ICollection<T>`
+- `IEnumerable<T>` (least specific fallback)
+
+This makes Facet **extensible to any collection library** 
 
 ### Generated Code for Collections
 

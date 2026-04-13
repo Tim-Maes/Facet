@@ -17,7 +17,7 @@ Welcome to the Facet documentation! This index will help you navigate all availa
   - Multiple facets from one source
   - Include/Exclude patterns
   - Nested Facets (single objects & collections)
-  - Collection support (List, Array, ICollection, IEnumerable)
+  - Collection support (List, Array, ICollection, IEnumerable, IReadOnlyList, IReadOnlyCollection, Immutable collections, and custom types)
   - Inheritance and base classes
 - [Generated Files Output Configuration](12_GeneratedFilesOutput.md): Configure where generated files are written and make them visible in Solution Explorer
 - [What is Being Generated?](07_WhatIsBeingGenerated.md): Before/After Examples

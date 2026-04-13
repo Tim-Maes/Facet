@@ -218,7 +218,9 @@ Create focused facets for different scenarios:
       NestedFacets = [typeof(ProjectDto)])]
   public partial record UserWithProjectsDto;
   // List<Project> -> List<ProjectDto> automatically!
-  // Arrays, ICollection<T>, IEnumerable<T>, Collection<T> all supported
+  // All standard collections supported: List, Array, ICollection, IEnumerable, IReadOnlyList, IReadOnlyCollection
+  // System.Collections.Immutable support: ImmutableList, ImmutableArray, ImmutableHashSet, etc.
+  // Custom collections work automatically via interface detection
 
   // 7b. Collection type override - remap Collection<T> (EF Core) to List<T> in DTOs
   [Facet(typeof(User),
