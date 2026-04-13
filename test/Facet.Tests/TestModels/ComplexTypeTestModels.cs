@@ -184,3 +184,31 @@ public partial record MuseumArtifactFacet;
 
 [Facet(typeof(MuseumEntity), NestedFacets = [typeof(MuseumArtifactFacet), typeof(StaffMemberFacet), typeof(LibraryBookFacet)], GenerateToSource = true)]
 public partial record MuseumFacet;
+
+// Custom collection type test
+public class CustomReadOnlyList<T> : System.Collections.Generic.IReadOnlyList<T>
+{
+    private readonly System.Collections.Generic.List<T> _items;
+
+    public CustomReadOnlyList(System.Collections.Generic.IEnumerable<T> items)
+    {
+        _items = new System.Collections.Generic.List<T>(items);
+    }
+
+    public T this[int index] => _items[index];
+    public int Count => _items.Count;
+    public System.Collections.Generic.IEnumerator<T> GetEnumerator() => _items.GetEnumerator();
+    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => _items.GetEnumerator();
+}
+
+public class GalleryEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public CustomReadOnlyList<MuseumArtifactEntity> Exhibits { get; set; } = new CustomReadOnlyList<MuseumArtifactEntity>(System.Array.Empty<MuseumArtifactEntity>());
+}
+
+// Note: We don't use GenerateToSource here because custom collection types may not have
+// a parameterless constructor or may require special initialization logic.
+[Facet(typeof(GalleryEntity), NestedFacets = [typeof(MuseumArtifactFacet)])]
+public partial record GalleryFacet;

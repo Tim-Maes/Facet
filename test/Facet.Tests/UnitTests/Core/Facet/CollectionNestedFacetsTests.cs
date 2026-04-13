@@ -689,4 +689,40 @@ public class CollectionNestedFacetsTests
         dto.ArchiveBooks.Should().BeEmpty();
         dto.ArchiveBooks.Should().BeAssignableTo<System.Collections.Immutable.IImmutableList<LibraryBookFacet>>();
     }
+
+    [Fact]
+    public void ToFacet_ShouldMapCustomCollectionTypes_AutomaticallyViaInterfaceDetection()
+    {
+        // Arrange - Create a gallery with a custom collection type
+        var gallery = new GalleryEntity
+        {
+            Id = 1,
+            Name = "Modern Art Gallery",
+            Exhibits = new CustomReadOnlyList<MuseumArtifactEntity>(new[]
+            {
+                new MuseumArtifactEntity { Id = 1, Name = "Starry Night", Description = "Van Gogh painting", YearAcquired = 1941 },
+                new MuseumArtifactEntity { Id = 2, Name = "The Scream", Description = "Edvard Munch painting", YearAcquired = 1910 }
+            })
+        };
+
+        // Act - Map to facet (this should work automatically via interface detection!)
+        var facet = new GalleryFacet(gallery);
+
+        // Assert
+        facet.Should().NotBeNull();
+        facet.Id.Should().Be(1);
+        facet.Name.Should().Be("Modern Art Gallery");
+
+        // Verify that the custom collection was detected as IReadOnlyList and mapped correctly
+        facet.Exhibits.Should().NotBeNull();
+        facet.Exhibits.Should().HaveCount(2);
+        facet.Exhibits.Should().AllBeOfType<MuseumArtifactFacet>();
+
+        // The custom collection implements IReadOnlyList, so it should be detected as such
+        facet.Exhibits.Should().BeAssignableTo<System.Collections.Generic.IReadOnlyList<MuseumArtifactFacet>>();
+
+        facet.Exhibits[0].Name.Should().Be("Starry Night");
+        facet.Exhibits[1].Name.Should().Be("The Scream");
+    }
+
 }
