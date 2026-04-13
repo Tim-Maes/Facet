@@ -145,11 +145,20 @@ internal static class CodeGenerationHelpers
                 // Remove global:: prefix if present
                 memberTypeName = GeneratorUtilities.StripGlobalPrefix(memberTypeName);
 
-                // Remove generic parameters if present
+                // When the type has generic parameters (e.g., ImmutableList<Ns.FooBar.BarFoo>),
+                // the nested type is the element inside the brackets, not the outer generic type.
+                // IsNestedType is set by checking the collection element type's ContainingType,
+                // so we must extract the element type to find the correct containing type.
                 var genericIndex = memberTypeName.IndexOf('<');
                 if (genericIndex > 0)
                 {
-                    memberTypeName = memberTypeName.Substring(0, genericIndex);
+                    var genericEnd = memberTypeName.LastIndexOf('>');
+                    if (genericEnd > genericIndex)
+                    {
+                        memberTypeName = memberTypeName.Substring(genericIndex + 1, genericEnd - genericIndex - 1);
+                        // Strip global:: again for the element type
+                        memberTypeName = GeneratorUtilities.StripGlobalPrefix(memberTypeName);
+                    }
                 }
 
                 // Remove nullable marker if present
