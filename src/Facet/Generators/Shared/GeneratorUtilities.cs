@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 
 namespace Facet.Generators.Shared;
@@ -306,7 +307,9 @@ internal static class GeneratorUtilities
 
     /// <summary>
     /// Attempts to extract the element type from a collection type.
-    /// Handles List&lt;T&gt;, ICollection&lt;T&gt;, IEnumerable&lt;T&gt;, IList&lt;T&gt;, IReadOnlyList&lt;T&gt;, IReadOnlyCollection&lt;T&gt;, Collection&lt;T&gt;, immutable collections, and T[].
+    /// Uses a hybrid approach: exact type matching for known concrete types (to preserve specific implementations),
+    /// then falls back to interface-based detection (to automatically support custom collection types).
+    /// This makes the generator extensible to any custom collection type implementing standard interfaces.
     /// </summary>
     /// <param name="typeSymbol">The type symbol to analyze.</param>
     /// <param name="elementType">The extracted element type symbol if successful.</param>
@@ -330,23 +333,7 @@ internal static class GeneratorUtilities
         {
             var typeDefinition = namedType.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-            // Check for List<T>
-            if (typeDefinition == "global::System.Collections.Generic.List<T>")
-            {
-                elementType = namedType.TypeArguments[0];
-                collectionWrapper = "List";
-                return true;
-            }
-
-            // Check for ICollection<T>
-            if (typeDefinition == "global::System.Collections.Generic.ICollection<T>")
-            {
-                elementType = namedType.TypeArguments[0];
-                collectionWrapper = "ICollection";
-                return true;
-            }
-
-            // Check for IList<T>
+            // Standard collection interfaces - preserve exact types
             if (typeDefinition == "global::System.Collections.Generic.IList<T>")
             {
                 elementType = namedType.TypeArguments[0];
@@ -354,7 +341,13 @@ internal static class GeneratorUtilities
                 return true;
             }
 
-            // Check for IEnumerable<T>
+            if (typeDefinition == "global::System.Collections.Generic.ICollection<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "ICollection";
+                return true;
+            }
+
             if (typeDefinition == "global::System.Collections.Generic.IEnumerable<T>")
             {
                 elementType = namedType.TypeArguments[0];
@@ -362,7 +355,6 @@ internal static class GeneratorUtilities
                 return true;
             }
 
-            // Check for IReadOnlyList<T>
             if (typeDefinition == "global::System.Collections.Generic.IReadOnlyList<T>")
             {
                 elementType = namedType.TypeArguments[0];
@@ -370,7 +362,6 @@ internal static class GeneratorUtilities
                 return true;
             }
 
-            // Check for IReadOnlyCollection<T>
             if (typeDefinition == "global::System.Collections.Generic.IReadOnlyCollection<T>")
             {
                 elementType = namedType.TypeArguments[0];
@@ -378,63 +369,7 @@ internal static class GeneratorUtilities
                 return true;
             }
 
-            // Check for Collection<T> (System.Collections.ObjectModel)
-            if (typeDefinition == "global::System.Collections.ObjectModel.Collection<T>")
-            {
-                elementType = namedType.TypeArguments[0];
-                collectionWrapper = "Collection";
-                return true;
-            }
-
-            // Check for ImmutableArray<T>
-            if (typeDefinition == "global::System.Collections.Immutable.ImmutableArray<T>")
-            {
-                elementType = namedType.TypeArguments[0];
-                collectionWrapper = "ImmutableArray";
-                return true;
-            }
-
-            // Check for ImmutableList<T>
-            if (typeDefinition == "global::System.Collections.Immutable.ImmutableList<T>")
-            {
-                elementType = namedType.TypeArguments[0];
-                collectionWrapper = "ImmutableList";
-                return true;
-            }
-
-            // Check for ImmutableHashSet<T>
-            if (typeDefinition == "global::System.Collections.Immutable.ImmutableHashSet<T>")
-            {
-                elementType = namedType.TypeArguments[0];
-                collectionWrapper = "ImmutableHashSet";
-                return true;
-            }
-
-            // Check for ImmutableSortedSet<T>
-            if (typeDefinition == "global::System.Collections.Immutable.ImmutableSortedSet<T>")
-            {
-                elementType = namedType.TypeArguments[0];
-                collectionWrapper = "ImmutableSortedSet";
-                return true;
-            }
-
-            // Check for ImmutableQueue<T>
-            if (typeDefinition == "global::System.Collections.Immutable.ImmutableQueue<T>")
-            {
-                elementType = namedType.TypeArguments[0];
-                collectionWrapper = "ImmutableQueue";
-                return true;
-            }
-
-            // Check for ImmutableStack<T>
-            if (typeDefinition == "global::System.Collections.Immutable.ImmutableStack<T>")
-            {
-                elementType = namedType.TypeArguments[0];
-                collectionWrapper = "ImmutableStack";
-                return true;
-            }
-
-            // Check for IImmutableList<T>
+            // Immutable collection interfaces - preserve exact types
             if (typeDefinition == "global::System.Collections.Immutable.IImmutableList<T>")
             {
                 elementType = namedType.TypeArguments[0];
@@ -442,7 +377,6 @@ internal static class GeneratorUtilities
                 return true;
             }
 
-            // Check for IImmutableSet<T>
             if (typeDefinition == "global::System.Collections.Immutable.IImmutableSet<T>")
             {
                 elementType = namedType.TypeArguments[0];
@@ -450,7 +384,6 @@ internal static class GeneratorUtilities
                 return true;
             }
 
-            // Check for IImmutableQueue<T>
             if (typeDefinition == "global::System.Collections.Immutable.IImmutableQueue<T>")
             {
                 elementType = namedType.TypeArguments[0];
@@ -458,16 +391,126 @@ internal static class GeneratorUtilities
                 return true;
             }
 
-            // Check for IImmutableStack<T>
             if (typeDefinition == "global::System.Collections.Immutable.IImmutableStack<T>")
             {
                 elementType = namedType.TypeArguments[0];
                 collectionWrapper = "IImmutableStack";
                 return true;
             }
+
+            if (typeDefinition == "global::System.Collections.Generic.List<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "List";
+                return true;
+            }
+
+            if (typeDefinition == "global::System.Collections.ObjectModel.Collection<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "Collection";
+                return true;
+            }
+
+            if (typeDefinition == "global::System.Collections.Immutable.ImmutableArray<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "ImmutableArray";
+                return true;
+            }
+
+            if (typeDefinition == "global::System.Collections.Immutable.ImmutableList<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "ImmutableList";
+                return true;
+            }
+
+            if (typeDefinition == "global::System.Collections.Immutable.ImmutableHashSet<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "ImmutableHashSet";
+                return true;
+            }
+
+            if (typeDefinition == "global::System.Collections.Immutable.ImmutableSortedSet<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "ImmutableSortedSet";
+                return true;
+            }
+
+            if (typeDefinition == "global::System.Collections.Immutable.ImmutableQueue<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "ImmutableQueue";
+                return true;
+            }
+
+            if (typeDefinition == "global::System.Collections.Immutable.ImmutableStack<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "ImmutableStack";
+                return true;
+            }
+
+            var interfaces = namedType.AllInterfaces;
+
+            // Check for IReadOnlyList<T> (most specific read-only interface)
+            if (ImplementsGenericInterface(interfaces, "System.Collections.Generic.IReadOnlyList<T>"))
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "IReadOnlyList";
+                return true;
+            }
+
+            // Check for IReadOnlyCollection<T>
+            if (ImplementsGenericInterface(interfaces, "System.Collections.Generic.IReadOnlyCollection<T>"))
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "IReadOnlyCollection";
+                return true;
+            }
+
+            // Check for IList<T> (most specific mutable interface)
+            if (ImplementsGenericInterface(interfaces, "System.Collections.Generic.IList<T>"))
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "IList";
+                return true;
+            }
+
+            // Check for ICollection<T>
+            if (ImplementsGenericInterface(interfaces, "System.Collections.Generic.ICollection<T>"))
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "ICollection";
+                return true;
+            }
+
+            // Check for IEnumerable<T> (least specific - fallback for any enumerable)
+            if (ImplementsGenericInterface(interfaces, "System.Collections.Generic.IEnumerable<T>"))
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "IEnumerable";
+                return true;
+            }
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Checks if a type implements a specific generic interface.
+    /// </summary>
+    /// <param name="interfaces">The collection of interfaces implemented by the type.</param>
+    /// <param name="interfaceName">The fully qualified generic interface name (e.g., "System.Collections.Generic.IList&lt;T&gt;").</param>
+    /// <returns>True if the type implements the specified interface; otherwise, false.</returns>
+    private static bool ImplementsGenericInterface(ImmutableArray<INamedTypeSymbol> interfaces, string interfaceName)
+    {
+        return interfaces.Any(i =>
+            i.IsGenericType &&
+            i.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == $"global::{interfaceName}");
     }
 
     /// <summary>
