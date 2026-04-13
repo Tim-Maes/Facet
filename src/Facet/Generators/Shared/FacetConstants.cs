@@ -85,6 +85,16 @@ internal static class FacetConstants
         public const string IReadOnlyCollection = "IReadOnlyCollection";
         public const string Array = "array";
         public const string Collection = "Collection";
+        public const string ImmutableArray = "ImmutableArray";
+        public const string ImmutableList = "ImmutableList";
+        public const string ImmutableHashSet = "ImmutableHashSet";
+        public const string ImmutableSortedSet = "ImmutableSortedSet";
+        public const string ImmutableQueue = "ImmutableQueue";
+        public const string ImmutableStack = "ImmutableStack";
+        public const string IImmutableList = "IImmutableList";
+        public const string IImmutableSet = "IImmutableSet";
+        public const string IImmutableQueue = "IImmutableQueue";
+        public const string IImmutableStack = "IImmutableStack";
     }
 
     /// <summary>

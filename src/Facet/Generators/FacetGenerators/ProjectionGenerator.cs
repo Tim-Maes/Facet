@@ -509,6 +509,16 @@ internal static class ProjectionGenerator
                 FacetConstants.CollectionWrappers.IEnumerable => circularProjection,
                 FacetConstants.CollectionWrappers.Collection =>
                     $"new global::System.Collections.ObjectModel.Collection<{elementFacetTypeName}>({circularProjection}.ToList())",
+                FacetConstants.CollectionWrappers.ImmutableArray => $"{circularProjection}.ToImmutableArray()",
+                FacetConstants.CollectionWrappers.ImmutableList => $"{circularProjection}.ToImmutableList()",
+                FacetConstants.CollectionWrappers.ImmutableHashSet => $"{circularProjection}.ToImmutableHashSet()",
+                FacetConstants.CollectionWrappers.ImmutableSortedSet => $"{circularProjection}.ToImmutableSortedSet()",
+                FacetConstants.CollectionWrappers.ImmutableQueue => $"global::System.Collections.Immutable.ImmutableQueue.CreateRange({circularProjection})",
+                FacetConstants.CollectionWrappers.ImmutableStack => $"global::System.Collections.Immutable.ImmutableStack.CreateRange({circularProjection})",
+                FacetConstants.CollectionWrappers.IImmutableList => $"{circularProjection}.ToImmutableList()",
+                FacetConstants.CollectionWrappers.IImmutableSet => $"{circularProjection}.ToImmutableHashSet()",
+                FacetConstants.CollectionWrappers.IImmutableQueue => $"global::System.Collections.Immutable.ImmutableQueue.CreateRange({circularProjection})",
+                FacetConstants.CollectionWrappers.IImmutableStack => $"global::System.Collections.Immutable.ImmutableStack.CreateRange({circularProjection})",
                 _ => $"{circularProjection}.ToList()"
             };
         }
@@ -546,6 +556,16 @@ internal static class ProjectionGenerator
             FacetConstants.CollectionWrappers.IEnumerable => projection,
             FacetConstants.CollectionWrappers.Collection =>
                 $"new global::System.Collections.ObjectModel.Collection<{elementFacetTypeName}>({projection}.ToList())",
+            FacetConstants.CollectionWrappers.ImmutableArray => $"{projection}.ToImmutableArray()",
+            FacetConstants.CollectionWrappers.ImmutableList => $"{projection}.ToImmutableList()",
+            FacetConstants.CollectionWrappers.ImmutableHashSet => $"{projection}.ToImmutableHashSet()",
+            FacetConstants.CollectionWrappers.ImmutableSortedSet => $"{projection}.ToImmutableSortedSet()",
+            FacetConstants.CollectionWrappers.ImmutableQueue => $"global::System.Collections.Immutable.ImmutableQueue.CreateRange({projection})",
+            FacetConstants.CollectionWrappers.ImmutableStack => $"global::System.Collections.Immutable.ImmutableStack.CreateRange({projection})",
+            FacetConstants.CollectionWrappers.IImmutableList => $"{projection}.ToImmutableList()",
+            FacetConstants.CollectionWrappers.IImmutableSet => $"{projection}.ToImmutableHashSet()",
+            FacetConstants.CollectionWrappers.IImmutableQueue => $"global::System.Collections.Immutable.ImmutableQueue.CreateRange({projection})",
+            FacetConstants.CollectionWrappers.IImmutableStack => $"global::System.Collections.Immutable.ImmutableStack.CreateRange({projection})",
             _ => $"{projection}.ToList()"
         };
     }

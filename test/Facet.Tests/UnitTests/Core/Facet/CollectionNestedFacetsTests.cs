@@ -504,4 +504,189 @@ public class CollectionNestedFacetsTests
         bobModel.Relationships[0].Name.Should().Be("Dave");
         bobModel.Relationships[1].Name.Should().Be("Eve");
     }
+
+    [Fact]
+    public void ToFacet_ShouldMapImmutableCollections_WhenUsingNestedFacets()
+    {
+        // Arrange
+        var museum = new MuseumEntity
+        {
+            Id = 1,
+            Name = "National Museum",
+            Artifacts = System.Collections.Immutable.ImmutableList.Create(
+                new MuseumArtifactEntity { Id = 1, Name = "Ancient Vase", Description = "Greek pottery", YearAcquired = 1950 },
+                new MuseumArtifactEntity { Id = 2, Name = "Medieval Sword", Description = "15th century weapon", YearAcquired = 1975 }
+            ),
+            Curators = System.Collections.Immutable.ImmutableArray.Create(
+                new StaffMember
+                {
+                    Id = 10,
+                    FirstName = "Dr. Sarah",
+                    LastName = "Johnson",
+                    Email = "sarah@museum.com",
+                    PasswordHash = "hash",
+                    Salary = 80000m,
+                    HireDate = new DateTime(2015, 3, 1),
+                    Company = new CompanyEntity { Id = 1, Name = "Museum Corp", Industry = "Culture", HeadquartersAddress = new AddressEntity() },
+                    HomeAddress = new AddressEntity { City = "Boston" }
+                }
+            ),
+            ArchiveBooks = System.Collections.Immutable.ImmutableList.Create(
+                new LibraryBookEntity { Id = 1, Title = "History of Art", Author = "E.H. Gombrich", ISBN = "978-0714832470" }
+            )
+        };
+
+        // Act
+        var dto = new MuseumFacet(museum);
+
+        // Assert
+        dto.Should().NotBeNull();
+        dto.Id.Should().Be(1);
+        dto.Name.Should().Be("National Museum");
+
+        // Verify ImmutableList<T> mapping
+        dto.Artifacts.Should().NotBeNull();
+        dto.Artifacts.Should().HaveCount(2);
+        dto.Artifacts.Should().AllBeOfType<MuseumArtifactFacet>();
+        dto.Artifacts.Should().BeAssignableTo<System.Collections.Immutable.ImmutableList<MuseumArtifactFacet>>();
+
+        dto.Artifacts[0].Id.Should().Be(1);
+        dto.Artifacts[0].Name.Should().Be("Ancient Vase");
+        dto.Artifacts[0].Description.Should().Be("Greek pottery");
+        dto.Artifacts[0].YearAcquired.Should().Be(1950);
+
+        dto.Artifacts[1].Id.Should().Be(2);
+        dto.Artifacts[1].Name.Should().Be("Medieval Sword");
+
+        // Verify ImmutableArray<T> mapping
+        dto.Curators.Should().NotBeNull();
+        dto.Curators.Should().HaveCount(1);
+        dto.Curators.Should().AllBeOfType<StaffMemberFacet>();
+
+        var curator = dto.Curators[0];
+        curator.Id.Should().Be(10);
+        curator.FirstName.Should().Be("Dr. Sarah");
+        curator.LastName.Should().Be("Johnson");
+        curator.Email.Should().Be("sarah@museum.com");
+
+        // Verify excluded properties
+        var curatorType = curator.GetType();
+        curatorType.GetProperty("PasswordHash").Should().BeNull("PasswordHash should be excluded");
+        curatorType.GetProperty("Salary").Should().BeNull("Salary should be excluded");
+
+        // Verify IImmutableList<T> mapping
+        dto.ArchiveBooks.Should().NotBeNull();
+        dto.ArchiveBooks.Should().HaveCount(1);
+        dto.ArchiveBooks.Should().AllBeOfType<LibraryBookFacet>();
+        dto.ArchiveBooks.Should().BeAssignableTo<System.Collections.Immutable.IImmutableList<LibraryBookFacet>>();
+
+        var book = dto.ArchiveBooks[0];
+        book.Id.Should().Be(1);
+        book.Title.Should().Be("History of Art");
+        book.Author.Should().Be("E.H. Gombrich");
+    }
+
+    [Fact]
+    public void ToSource_ShouldMapImmutableCollectionsBackToSource()
+    {
+        // Arrange
+        var museum = new MuseumEntity
+        {
+            Id = 1,
+            Name = "National Museum",
+            Artifacts = System.Collections.Immutable.ImmutableList.Create(
+                new MuseumArtifactEntity { Id = 1, Name = "Ancient Vase", Description = "Greek pottery", YearAcquired = 1950 }
+            ),
+            Curators = System.Collections.Immutable.ImmutableArray.Create(
+                new StaffMember
+                {
+                    Id = 10,
+                    FirstName = "Dr. Sarah",
+                    LastName = "Johnson",
+                    Email = "sarah@museum.com",
+                    PasswordHash = "hash",
+                    Salary = 80000m,
+                    HireDate = new DateTime(2015, 3, 1),
+                    Company = new CompanyEntity { Id = 1, Name = "Museum Corp", Industry = "Culture", HeadquartersAddress = new AddressEntity() },
+                    HomeAddress = new AddressEntity { City = "Boston" }
+                }
+            ),
+            ArchiveBooks = System.Collections.Immutable.ImmutableList.Create(
+                new LibraryBookEntity { Id = 1, Title = "History of Art", Author = "E.H. Gombrich", ISBN = "978-0714832470" }
+            )
+        };
+
+        var dto = new MuseumFacet(museum);
+
+        // Act
+        var mappedMuseum = dto.ToSource();
+
+        // Assert
+        mappedMuseum.Should().NotBeNull();
+        mappedMuseum.Id.Should().Be(1);
+        mappedMuseum.Name.Should().Be("National Museum");
+
+        // Verify ImmutableList mapping back
+        mappedMuseum.Artifacts.Should().NotBeNull();
+        mappedMuseum.Artifacts.Should().HaveCount(1);
+        mappedMuseum.Artifacts.Should().AllBeOfType<MuseumArtifactEntity>();
+        mappedMuseum.Artifacts.Should().BeAssignableTo<System.Collections.Immutable.ImmutableList<MuseumArtifactEntity>>();
+
+        mappedMuseum.Artifacts[0].Id.Should().Be(1);
+        mappedMuseum.Artifacts[0].Name.Should().Be("Ancient Vase");
+        mappedMuseum.Artifacts[0].Description.Should().Be("Greek pottery");
+        mappedMuseum.Artifacts[0].YearAcquired.Should().Be(1950);
+
+        // Verify ImmutableArray mapping back
+        mappedMuseum.Curators.Should().NotBeNull();
+        mappedMuseum.Curators.Should().HaveCount(1);
+        mappedMuseum.Curators.Should().AllBeOfType<StaffMember>();
+
+        var curator = mappedMuseum.Curators[0];
+        curator.Id.Should().Be(10);
+        curator.FirstName.Should().Be("Dr. Sarah");
+        curator.LastName.Should().Be("Johnson");
+
+        // Verify IImmutableList mapping back
+        mappedMuseum.ArchiveBooks.Should().NotBeNull();
+        mappedMuseum.ArchiveBooks.Should().HaveCount(1);
+        mappedMuseum.ArchiveBooks.Should().AllBeOfType<LibraryBookEntity>();
+        mappedMuseum.ArchiveBooks.Should().BeAssignableTo<System.Collections.Immutable.IImmutableList<LibraryBookEntity>>();
+
+        mappedMuseum.ArchiveBooks[0].Id.Should().Be(1);
+        mappedMuseum.ArchiveBooks[0].Title.Should().Be("History of Art");
+    }
+
+    [Fact]
+    public void ToFacet_ShouldHandleEmptyImmutableCollections()
+    {
+        // Arrange
+        var museum = new MuseumEntity
+        {
+            Id = 1,
+            Name = "Empty Museum",
+            Artifacts = System.Collections.Immutable.ImmutableList<MuseumArtifactEntity>.Empty,
+            Curators = System.Collections.Immutable.ImmutableArray<StaffMember>.Empty,
+            ArchiveBooks = System.Collections.Immutable.ImmutableList<LibraryBookEntity>.Empty
+        };
+
+        // Act
+        var dto = new MuseumFacet(museum);
+
+        // Assert
+        dto.Should().NotBeNull();
+        dto.Id.Should().Be(1);
+        dto.Name.Should().Be("Empty Museum");
+
+        dto.Artifacts.Should().NotBeNull();
+        dto.Artifacts.Should().BeEmpty();
+        dto.Artifacts.Should().BeAssignableTo<System.Collections.Immutable.ImmutableList<MuseumArtifactFacet>>();
+
+        dto.Curators.Should().NotBeNull();
+        dto.Curators.Should().BeEmpty();
+
+        dto.ArchiveBooks.Should().NotBeNull();
+        dto.ArchiveBooks.Should().BeEmpty();
+        dto.ArchiveBooks.Should().BeAssignableTo<System.Collections.Immutable.IImmutableList<LibraryBookFacet>>();
+    }
 }

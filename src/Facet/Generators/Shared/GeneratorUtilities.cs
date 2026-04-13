@@ -239,6 +239,22 @@ internal static class GeneratorUtilities
             _ when cleanTypeName.StartsWith("IList<") =>
                 $"new List<{cleanTypeName.Substring("IList<".Length).TrimEnd('>')}>()",
 
+            // Immutable collection types
+            _ when cleanTypeName.StartsWith("System.Collections.Immutable.ImmutableArray<") => $"default({cleanTypeName})",
+            _ when cleanTypeName.StartsWith("System.Collections.Immutable.ImmutableList<") => $"{cleanTypeName}.Empty",
+            _ when cleanTypeName.StartsWith("System.Collections.Immutable.ImmutableHashSet<") => $"{cleanTypeName}.Empty",
+            _ when cleanTypeName.StartsWith("System.Collections.Immutable.ImmutableSortedSet<") => $"{cleanTypeName}.Empty",
+            _ when cleanTypeName.StartsWith("System.Collections.Immutable.ImmutableQueue<") => $"{cleanTypeName}.Empty",
+            _ when cleanTypeName.StartsWith("System.Collections.Immutable.ImmutableStack<") => $"{cleanTypeName}.Empty",
+            _ when cleanTypeName.StartsWith("System.Collections.Immutable.IImmutableList<") =>
+                $"System.Collections.Immutable.ImmutableList<{cleanTypeName.Substring("System.Collections.Immutable.IImmutableList<".Length).TrimEnd('>')}>.Empty",
+            _ when cleanTypeName.StartsWith("System.Collections.Immutable.IImmutableSet<") =>
+                $"System.Collections.Immutable.ImmutableHashSet<{cleanTypeName.Substring("System.Collections.Immutable.IImmutableSet<".Length).TrimEnd('>')}>.Empty",
+            _ when cleanTypeName.StartsWith("System.Collections.Immutable.IImmutableQueue<") =>
+                $"System.Collections.Immutable.ImmutableQueue<{cleanTypeName.Substring("System.Collections.Immutable.IImmutableQueue<".Length).TrimEnd('>')}>.Empty",
+            _ when cleanTypeName.StartsWith("System.Collections.Immutable.IImmutableStack<") =>
+                $"System.Collections.Immutable.ImmutableStack<{cleanTypeName.Substring("System.Collections.Immutable.IImmutableStack<".Length).TrimEnd('>')}>.Empty",
+
             // Default for unknown types
             _ when IsValueType(cleanTypeName) => $"default({cleanTypeName})",
             _ => "null" // Reference types default to null
@@ -290,11 +306,11 @@ internal static class GeneratorUtilities
 
     /// <summary>
     /// Attempts to extract the element type from a collection type.
-    /// Handles List&lt;T&gt;, ICollection&lt;T&gt;, IEnumerable&lt;T&gt;, IList&lt;T&gt;, IReadOnlyList&lt;T&gt;, IReadOnlyCollection&lt;T&gt;, Collection&lt;T&gt;, and T[].
+    /// Handles List&lt;T&gt;, ICollection&lt;T&gt;, IEnumerable&lt;T&gt;, IList&lt;T&gt;, IReadOnlyList&lt;T&gt;, IReadOnlyCollection&lt;T&gt;, Collection&lt;T&gt;, immutable collections, and T[].
     /// </summary>
     /// <param name="typeSymbol">The type symbol to analyze.</param>
     /// <param name="elementType">The extracted element type symbol if successful.</param>
-    /// <param name="collectionWrapper">The collection type wrapper (e.g., "List", "ICollection", "IReadOnlyList", "array").</param>
+    /// <param name="collectionWrapper">The collection type wrapper (e.g., "List", "ICollection", "IReadOnlyList", "ImmutableList", "array").</param>
     /// <returns>True if the type is a collection; otherwise, false.</returns>
     public static bool TryGetCollectionElementType(ITypeSymbol typeSymbol, out ITypeSymbol? elementType, out string? collectionWrapper)
     {
@@ -369,6 +385,86 @@ internal static class GeneratorUtilities
                 collectionWrapper = "Collection";
                 return true;
             }
+
+            // Check for ImmutableArray<T>
+            if (typeDefinition == "global::System.Collections.Immutable.ImmutableArray<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "ImmutableArray";
+                return true;
+            }
+
+            // Check for ImmutableList<T>
+            if (typeDefinition == "global::System.Collections.Immutable.ImmutableList<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "ImmutableList";
+                return true;
+            }
+
+            // Check for ImmutableHashSet<T>
+            if (typeDefinition == "global::System.Collections.Immutable.ImmutableHashSet<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "ImmutableHashSet";
+                return true;
+            }
+
+            // Check for ImmutableSortedSet<T>
+            if (typeDefinition == "global::System.Collections.Immutable.ImmutableSortedSet<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "ImmutableSortedSet";
+                return true;
+            }
+
+            // Check for ImmutableQueue<T>
+            if (typeDefinition == "global::System.Collections.Immutable.ImmutableQueue<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "ImmutableQueue";
+                return true;
+            }
+
+            // Check for ImmutableStack<T>
+            if (typeDefinition == "global::System.Collections.Immutable.ImmutableStack<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "ImmutableStack";
+                return true;
+            }
+
+            // Check for IImmutableList<T>
+            if (typeDefinition == "global::System.Collections.Immutable.IImmutableList<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "IImmutableList";
+                return true;
+            }
+
+            // Check for IImmutableSet<T>
+            if (typeDefinition == "global::System.Collections.Immutable.IImmutableSet<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "IImmutableSet";
+                return true;
+            }
+
+            // Check for IImmutableQueue<T>
+            if (typeDefinition == "global::System.Collections.Immutable.IImmutableQueue<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "IImmutableQueue";
+                return true;
+            }
+
+            // Check for IImmutableStack<T>
+            if (typeDefinition == "global::System.Collections.Immutable.IImmutableStack<T>")
+            {
+                elementType = namedType.TypeArguments[0];
+                collectionWrapper = "IImmutableStack";
+                return true;
+            }
         }
 
         return false;
@@ -403,7 +499,7 @@ internal static class GeneratorUtilities
     /// Wraps an element type name in the appropriate collection type.
     /// </summary>
     /// <param name="elementTypeName">The fully qualified element type name.</param>
-    /// <param name="collectionWrapper">The collection wrapper type ("List", "ICollection", "IList", "IEnumerable", "IReadOnlyList", "IReadOnlyCollection", "Collection", "array").</param>
+    /// <param name="collectionWrapper">The collection wrapper type ("List", "ICollection", "IList", "IEnumerable", "IReadOnlyList", "IReadOnlyCollection", "Collection", "ImmutableArray", "ImmutableList", "IImmutableList", etc., "array").</param>
     /// <returns>The fully qualified collection type name.</returns>
     public static string WrapInCollectionType(string elementTypeName, string collectionWrapper)
     {
@@ -416,6 +512,16 @@ internal static class GeneratorUtilities
             "IReadOnlyList" => $"global::System.Collections.Generic.IReadOnlyList<{elementTypeName}>",
             "IReadOnlyCollection" => $"global::System.Collections.Generic.IReadOnlyCollection<{elementTypeName}>",
             "Collection" => $"global::System.Collections.ObjectModel.Collection<{elementTypeName}>",
+            "ImmutableArray" => $"global::System.Collections.Immutable.ImmutableArray<{elementTypeName}>",
+            "ImmutableList" => $"global::System.Collections.Immutable.ImmutableList<{elementTypeName}>",
+            "ImmutableHashSet" => $"global::System.Collections.Immutable.ImmutableHashSet<{elementTypeName}>",
+            "ImmutableSortedSet" => $"global::System.Collections.Immutable.ImmutableSortedSet<{elementTypeName}>",
+            "ImmutableQueue" => $"global::System.Collections.Immutable.ImmutableQueue<{elementTypeName}>",
+            "ImmutableStack" => $"global::System.Collections.Immutable.ImmutableStack<{elementTypeName}>",
+            "IImmutableList" => $"global::System.Collections.Immutable.IImmutableList<{elementTypeName}>",
+            "IImmutableSet" => $"global::System.Collections.Immutable.IImmutableSet<{elementTypeName}>",
+            "IImmutableQueue" => $"global::System.Collections.Immutable.IImmutableQueue<{elementTypeName}>",
+            "IImmutableStack" => $"global::System.Collections.Immutable.IImmutableStack<{elementTypeName}>",
             "array" => $"{elementTypeName}[]",
             _ => elementTypeName
         };

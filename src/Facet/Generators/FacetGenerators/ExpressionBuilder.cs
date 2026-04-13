@@ -205,8 +205,9 @@ internal static class ExpressionBuilder
             }
 
             // For non-nullable collections, add null check with descriptive exception when within depth,
-            // and use null-forgiving operator when depth is exceeded
-            return $"__depth < {maxDepth} ? ({sourceVariableName}.{sourcePropName} != null ? {collectionExpression} : throw new System.ArgumentNullException(\"{sourcePropName}\", \"Required nested facet collection property '{sourcePropName}' on source type was null. Ensure the source property is populated before mapping.\")) : null!";
+            // and use appropriate default value when depth is exceeded
+            var depthExceededDefault = GetCollectionDefaultValue(member.CollectionWrapper!, member.TypeName);
+            return $"__depth < {maxDepth} ? ({sourceVariableName}.{sourcePropName} != null ? {collectionExpression} : throw new System.ArgumentNullException(\"{sourcePropName}\", \"Required nested facet collection property '{sourcePropName}' on source type was null. Ensure the source property is populated before mapping.\")) : {depthExceededDefault}";
         }
         else
         {
@@ -344,6 +345,16 @@ internal static class ExpressionBuilder
             FacetConstants.CollectionWrappers.Collection when elementTypeName != null =>
                 $"new global::System.Collections.ObjectModel.Collection<{elementTypeName}>({projection}.ToList())",
             FacetConstants.CollectionWrappers.Collection => $"{projection}.ToList()",
+            FacetConstants.CollectionWrappers.ImmutableArray => $"{projection}.ToImmutableArray()",
+            FacetConstants.CollectionWrappers.ImmutableList => $"{projection}.ToImmutableList()",
+            FacetConstants.CollectionWrappers.ImmutableHashSet => $"{projection}.ToImmutableHashSet()",
+            FacetConstants.CollectionWrappers.ImmutableSortedSet => $"{projection}.ToImmutableSortedSet()",
+            FacetConstants.CollectionWrappers.ImmutableQueue => $"global::System.Collections.Immutable.ImmutableQueue.CreateRange({projection})",
+            FacetConstants.CollectionWrappers.ImmutableStack => $"global::System.Collections.Immutable.ImmutableStack.CreateRange({projection})",
+            FacetConstants.CollectionWrappers.IImmutableList => $"{projection}.ToImmutableList()",
+            FacetConstants.CollectionWrappers.IImmutableSet => $"{projection}.ToImmutableHashSet()",
+            FacetConstants.CollectionWrappers.IImmutableQueue => $"global::System.Collections.Immutable.ImmutableQueue.CreateRange({projection})",
+            FacetConstants.CollectionWrappers.IImmutableStack => $"global::System.Collections.Immutable.ImmutableStack.CreateRange({projection})",
             _ => projection
         };
     }
@@ -427,6 +438,20 @@ internal static class ExpressionBuilder
         }
 
         return $"this.{member.Name}";
+    }
+
+    /// <summary>
+    /// Gets the appropriate default value for a collection type when depth is exceeded or null check fails.
+    /// For ImmutableArray (value type), returns default(ImmutableArray&lt;T&gt;).
+    /// For reference type collections, returns null!.
+    /// </summary>
+    private static string GetCollectionDefaultValue(string collectionWrapper, string collectionTypeName)
+    {
+        return collectionWrapper switch
+        {
+            FacetConstants.CollectionWrappers.ImmutableArray => $"default({collectionTypeName})",
+            _ => "null!"
+        };
     }
 
     #endregion

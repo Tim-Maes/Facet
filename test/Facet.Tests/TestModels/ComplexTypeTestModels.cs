@@ -159,3 +159,28 @@ public class MyClass
 
 [Facet(typeof(MyClass), GenerateToSource = true)]
 public partial record MyClassModel;
+
+// Immutable collections test models
+public class MuseumArtifactEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public int YearAcquired { get; set; }
+}
+
+public class MuseumEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public System.Collections.Immutable.ImmutableList<MuseumArtifactEntity> Artifacts { get; set; } = System.Collections.Immutable.ImmutableList<MuseumArtifactEntity>.Empty;
+    public System.Collections.Immutable.ImmutableArray<StaffMember> Curators { get; set; } = System.Collections.Immutable.ImmutableArray<StaffMember>.Empty;
+    public System.Collections.Immutable.IImmutableList<LibraryBookEntity> ArchiveBooks { get; set; } = System.Collections.Immutable.ImmutableList<LibraryBookEntity>.Empty;
+}
+
+// Immutable collections facet DTOs
+[Facet(typeof(MuseumArtifactEntity), GenerateToSource = true)]
+public partial record MuseumArtifactFacet;
+
+[Facet(typeof(MuseumEntity), NestedFacets = [typeof(MuseumArtifactFacet), typeof(StaffMemberFacet), typeof(LibraryBookFacet)], GenerateToSource = true)]
+public partial record MuseumFacet;

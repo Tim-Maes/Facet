@@ -35,6 +35,7 @@ internal static class CodeGenerationHelpers
         }
 
         // Single pass through members to collect namespaces
+        bool hasImmutableCollections = false;
         foreach (var member in model.Members)
         {
             // Collect attribute namespaces from each member
@@ -44,6 +45,12 @@ internal static class CodeGenerationHelpers
                 {
                     namespaces.Add(attrNamespace);
                 }
+            }
+
+            // Check if this member uses an immutable collection
+            if (member.CollectionWrapper != null && IsImmutableCollectionWrapper(member.CollectionWrapper))
+            {
+                hasImmutableCollections = true;
             }
 
             // Skip nested facets and nested types - they will be handled by CollectStaticUsingTypes
@@ -57,6 +64,12 @@ internal static class CodeGenerationHelpers
             {
                 namespaces.Add(memberTypeNamespace!);
             }
+        }
+
+        // Add System.Collections.Immutable if any member uses immutable collections
+        if (hasImmutableCollections)
+        {
+            namespaces.Add("System.Collections.Immutable");
         }
 
         if (!string.IsNullOrWhiteSpace(model.ConfigurationTypeName))
@@ -417,5 +430,26 @@ internal static class CodeGenerationHelpers
     public static string GetIndentation(FacetTargetModel model)
     {
         return new string(' ', 4 * (model.ContainingTypes.Length + 1));
+    }
+
+    /// <summary>
+    /// Determines if a collection wrapper represents an immutable collection type.
+    /// </summary>
+    private static bool IsImmutableCollectionWrapper(string collectionWrapper)
+    {
+        return collectionWrapper switch
+        {
+            FacetConstants.CollectionWrappers.ImmutableArray => true,
+            FacetConstants.CollectionWrappers.ImmutableList => true,
+            FacetConstants.CollectionWrappers.ImmutableHashSet => true,
+            FacetConstants.CollectionWrappers.ImmutableSortedSet => true,
+            FacetConstants.CollectionWrappers.ImmutableQueue => true,
+            FacetConstants.CollectionWrappers.ImmutableStack => true,
+            FacetConstants.CollectionWrappers.IImmutableList => true,
+            FacetConstants.CollectionWrappers.IImmutableSet => true,
+            FacetConstants.CollectionWrappers.IImmutableQueue => true,
+            FacetConstants.CollectionWrappers.IImmutableStack => true,
+            _ => false
+        };
     }
 }
