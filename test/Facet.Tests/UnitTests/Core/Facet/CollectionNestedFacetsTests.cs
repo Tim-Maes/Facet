@@ -693,7 +693,7 @@ public class CollectionNestedFacetsTests
     [Fact]
     public void ToFacet_ShouldMapCustomCollectionTypes_AutomaticallyViaInterfaceDetection()
     {
-        // Arrange - Create a gallery with a custom collection type
+        // Arrange - custom collection type
         var gallery = new GalleryEntity
         {
             Id = 1,
@@ -705,7 +705,7 @@ public class CollectionNestedFacetsTests
             })
         };
 
-        // Act - Map to facet (this should work automatically via interface detection!)
+        // Act (this should work automatically via interface detection)
         var facet = new GalleryFacet(gallery);
 
         // Assert
