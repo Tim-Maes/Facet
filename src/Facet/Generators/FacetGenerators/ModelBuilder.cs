@@ -397,12 +397,11 @@ internal static class ModelBuilder
 
         if (!shouldTreatAsNullable && !property.Type.IsValueType)
         {
-            bool isExplicitlyNonNullable = property.Type.NullableAnnotation == NullableAnnotation.NotAnnotated &&
-                                            property.IsRequired;
-
-            if (!isExplicitlyNonNullable)
+            // NotAnnotated means the property is in a #nullable enable context and the
+            // type is explicitly declared as non-nullable. Respect the author's intent.
+            // None means nullable annotations are not enabled — treat as nullable for safety.
+            if (property.Type.NullableAnnotation != NullableAnnotation.NotAnnotated)
             {
-                // treat as potentially nullable for safety
                 shouldTreatAsNullable = true;
             }
         }

@@ -23,8 +23,8 @@ public class CustomEmployeeSource
     public int Id { get; set; }
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
-    public CustomDepartmentSource Department { get; set; } = null!;
-    public CustomCompanySource Company { get; set; } = null!;
+    public CustomDepartmentSource? Department { get; set; }
+    public CustomCompanySource? Company { get; set; }
     public List<CustomEmployeeSource> DirectReports { get; set; } = new();
 }
 

@@ -44,7 +44,8 @@ public class CircularReferenceTests
         bookFacet.Author.Name.Should().Be("John Doe");
 
         // At depth 2, Books is cut off to prevent going to level 3
-        bookFacet.Author.Books.Should().BeNull();
+        // Non-nullable collection properties get an empty collection instead of null
+        bookFacet.Author.Books.Should().BeEmpty();
     }
 
     [Fact]
@@ -78,7 +79,7 @@ public class CircularReferenceTests
         {
             book.Author.Should().NotBeNull();
             book.Author!.Name.Should().Be("Prolific Author");
-            book.Author.Books.Should().BeNull();
+            book.Author.Books.Should().BeEmpty();
         }
     }
 

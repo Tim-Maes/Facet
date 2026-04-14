@@ -362,7 +362,8 @@ public partial class UserWithRequiredSettingsFacet
     public int ProcessedTicks => Settings.StopTick - Settings.StartTick;
 }
 
-// Test without required - should be nullable for safety
+// Test without required, in a #nullable enable context, the non-annotated property
+// is explicitly non-nullable and should be treated as such in the generated facet
 public class UserModelWithOptionalSettings
 {
     public int Id { get; set; }

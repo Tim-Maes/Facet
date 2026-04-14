@@ -1,19 +1,17 @@
 namespace Facet.Tests.UnitTests.Core.Facet;
 
-// Test entities that mimic EF Core entities with nullable foreign keys but non-nullable navigation properties
-// This is a common pattern where the FK is nullable but the navigation property is not marked with ?
-#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor
-
+// Test entities that mimic EF Core entities with nullable foreign keys
+// When the FK is nullable, the navigation property should also be nullable
 public class DataExampleEntity
 {
     public int Id { get; set; }
     public string Code { get; set; } = string.Empty;
 
     public int? StringResourceId { get; set; }
-    public virtual StringResourceEntity StringResource { get; set; }  // Non-nullable but can be null at runtime
+    public virtual StringResourceEntity? StringResource { get; set; }
 
     public int? ExtendedDataId { get; set; }
-    public virtual ExtendedDataEntity ExtendedData { get; set; }  // Non-nullable but can be null at runtime
+    public virtual ExtendedDataEntity? ExtendedData { get; set; }
 }
 
 public class StringResourceEntity
@@ -27,8 +25,6 @@ public class ExtendedDataEntity
     public int Id { get; set; }
     public string Metadata { get; set; } = string.Empty;
 }
-
-#pragma warning restore CS8618
 
 // Facet DTOs
 [Facet(typeof(StringResourceEntity))]
