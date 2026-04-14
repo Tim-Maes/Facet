@@ -348,13 +348,7 @@ internal static class CodeBuilder
         if (allModels.Count <= 1)
             return "Projection";
 
-        var simpleName = CodeGenerationHelpers.GetSimpleTypeName(model.SourceTypeName);
-        // Strip generic parameter suffix if present (e.g. List<String> → ListString)
-        var angleBracket = simpleName.IndexOf('<');
-        if (angleBracket > 0)
-            simpleName = simpleName.Substring(0, angleBracket);
-
-        return "ProjectionFrom" + simpleName;
+        return "ProjectionFrom" + GetSourceSimpleName(model);
     }
 
     /// <summary>
@@ -369,12 +363,20 @@ internal static class CodeBuilder
         if (allModels.Count <= 1)
             return null; // Use default "ToSource" + BackTo
 
+        return "To" + GetSourceSimpleName(model);
+    }
+
+    /// <summary>
+    /// Extracts the simple (unqualified) type name from a model's fully-qualified
+    /// <see cref="FacetTargetModel.SourceTypeName"/>, stripping everything from the
+    /// first <c>&lt;</c> onwards so that generic types (e.g. <c>List&lt;String&gt;</c>)
+    /// produce a valid C# identifier fragment (<c>List</c>).
+    /// </summary>
+    private static string GetSourceSimpleName(FacetTargetModel model)
+    {
         var simpleName = CodeGenerationHelpers.GetSimpleTypeName(model.SourceTypeName);
         var angleBracket = simpleName.IndexOf('<');
-        if (angleBracket > 0)
-            simpleName = simpleName.Substring(0, angleBracket);
-
-        return "To" + simpleName;
+        return angleBracket > 0 ? simpleName.Substring(0, angleBracket) : simpleName;
     }
 
     private static void GenerateFileHeader(StringBuilder sb)

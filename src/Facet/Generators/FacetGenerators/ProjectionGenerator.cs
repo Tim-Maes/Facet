@@ -65,8 +65,9 @@ internal static class ProjectionGenerator
         var tgt = model.Name;
 
         // Derive a unique backing-field name from the property name to avoid collisions in multi-source scenarios.
-        var backingFieldName = "_" + char.ToLowerInvariant(propertyName[0]) + propertyName.Substring(1);
-        var buildMethodName = "Build" + propertyName;
+        var safeName = string.IsNullOrEmpty(propertyName) ? "Projection" : propertyName;
+        var backingFieldName = "_" + char.ToLowerInvariant(safeName[0]) + safeName.Substring(1);
+        var buildMethodName = "Build" + safeName;
 
         // Backing field
         sb.AppendLine($"{memberIndent}private static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>>? {backingFieldName};");
