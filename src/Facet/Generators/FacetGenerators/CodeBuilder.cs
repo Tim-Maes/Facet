@@ -156,7 +156,226 @@ internal static class CodeBuilder
         return sb.ToString();
     }
 
-    #region Private Helper Methods
+    /// <summary>
+    /// Dispatches to <see cref="Generate"/> for a single-source facet or to
+    /// <see cref="GenerateCombined"/> when the same target type carries multiple
+    /// <c>[Facet]</c> attributes (multi-source scenario).
+    /// </summary>
+    public static string GenerateForGroup(
+        IReadOnlyList<FacetTargetModel> models,
+        Dictionary<string, FacetTargetModel> facetLookup)
+    {
+        if (models.Count == 1)
+            return Generate(models[0], facetLookup);
+
+        return GenerateCombined(models, facetLookup);
+    }
+
+    /// <summary>
+    /// Generates a single partial-class file that combines mappings from multiple source types
+    /// to the same target type.
+    /// <para>
+    /// Properties are the union of all members across every source mapping (deduplicated by name,
+    /// first-definition wins).  Constructor/factory/projection/ToSource artefacts are generated
+    /// once per source.  Projection and ToSource use source-specific names
+    /// (<c>ProjectionFrom{SourceSimpleName}</c> / <c>To{SourceSimpleName}</c>) to avoid conflicts.
+    /// Shared artefacts (parameterless constructor, copy constructor, equality) are generated from
+    /// the primary (first) model only.
+    /// </para>
+    /// </summary>
+    public static string GenerateCombined(
+        IReadOnlyList<FacetTargetModel> models,
+        Dictionary<string, FacetTargetModel> facetLookup)
+    {
+        var primaryModel = models[0];
+        var sb = new StringBuilder();
+        GenerateFileHeader(sb);
+
+        // Collect namespaces and static-using directives from ALL models
+        var namespacesToImport = new HashSet<string>();
+        var staticUsingTypes = new HashSet<string>();
+        foreach (var m in models)
+        {
+            foreach (var ns in CodeGenerationHelpers.CollectNamespaces(m))
+                namespacesToImport.Add(ns);
+            foreach (var su in CodeGenerationHelpers.CollectStaticUsingTypes(m))
+                staticUsingTypes.Add(su);
+        }
+
+        foreach (var ns in namespacesToImport.OrderBy(x => x))
+            sb.AppendLine($"using {ns};");
+
+        foreach (var type in staticUsingTypes.OrderBy(x => x))
+            sb.AppendLine($"using static {type};");
+
+        sb.AppendLine();
+
+        // Enable nullable context if ANY model needs it
+        var needsNullable = models.Any(m =>
+            m.Members.Any(mem => !mem.IsValueType && mem.TypeName.EndsWith("?"))
+            || m.MaxDepth > 0
+            || m.PreserveReferences);
+        if (needsNullable)
+        {
+            sb.AppendLine("#nullable enable");
+            sb.AppendLine();
+        }
+
+        if (!string.IsNullOrWhiteSpace(primaryModel.Namespace))
+            sb.AppendLine($"namespace {primaryModel.Namespace};");
+
+        var containingTypeIndent = GenerateContainingTypeHierarchy(sb, primaryModel);
+
+        if (!string.IsNullOrWhiteSpace(primaryModel.TypeXmlDocumentation))
+        {
+            var indentedDoc = primaryModel.TypeXmlDocumentation!.Replace("\n", $"\n{containingTypeIndent}");
+            sb.AppendLine($"{containingTypeIndent}{indentedDoc}");
+        }
+
+        var keyword = GetTypeKeyword(primaryModel);
+
+        // Build the union of all members across source models, deduplicating by name (first-wins).
+        var seenMemberNames = new HashSet<string>();
+        var unionMembers = new System.Collections.Generic.List<FacetMember>();
+        foreach (var m in models)
+        {
+            foreach (var member in m.Members)
+            {
+                if (seenMemberNames.Add(member.Name))
+                    unionMembers.Add(member);
+            }
+        }
+
+        var hasInitOnlyUnion = unionMembers.Any(m => m.IsInitOnly);
+        var hasRequiredUnion = unionMembers.Any(m => m.IsRequired);
+
+        // Positional record logic uses the primary model's member set for the declaration
+        var isPositional = primaryModel.IsRecord && !primaryModel.HasExistingPrimaryConstructor
+            && !(primaryModel.TypeKind == TypeKind.Class && hasRequiredUnion);
+        var shouldGenerateEquality = primaryModel.GenerateEquality && !primaryModel.IsRecord;
+
+        if (isPositional)
+        {
+            // Use the primary model for positional declaration (shares the primary source's shape)
+            GeneratePositionalDeclaration(sb, primaryModel, keyword, containingTypeIndent);
+        }
+
+        if (shouldGenerateEquality)
+        {
+            sb.AppendLine($"{containingTypeIndent}{primaryModel.Accessibility} partial {keyword} {primaryModel.Name} : {EqualityGenerator.GetEquatableInterface(primaryModel)}");
+        }
+        else
+        {
+            sb.AppendLine($"{containingTypeIndent}{primaryModel.Accessibility} partial {keyword} {primaryModel.Name}");
+        }
+        sb.AppendLine($"{containingTypeIndent}{{");
+
+        var memberIndent = containingTypeIndent + "    ";
+
+        // Generate union of properties once
+        if (!isPositional || primaryModel.HasExistingPrimaryConstructor)
+        {
+            // Build a synthetic model view with union members for MemberGenerator
+            MemberGenerator.GenerateMembers(sb, primaryModel, memberIndent, unionMembers);
+        }
+
+        // Shared: parameterless constructor (from primary model)
+        if (primaryModel.GenerateParameterlessConstructor)
+            ConstructorGenerator.GenerateParameterlessConstructor(sb, primaryModel, isPositional);
+
+        // Per-source: constructors + FromSource factory methods
+        foreach (var model in models)
+        {
+            if (!model.GenerateConstructor) continue;
+
+            var hasCustomMapping = !string.IsNullOrWhiteSpace(model.ConfigurationTypeName);
+            var needsDepthTracking = model.MaxDepth > 0 || model.PreserveReferences;
+            var modelHasInitOnly = model.Members.Any(mem => mem.IsInitOnly);
+            var modelHasRequired = model.Members.Any(mem => mem.IsRequired);
+
+            ConstructorGenerator.GenerateConstructor(
+                sb, model, isPositional, modelHasInitOnly, hasCustomMapping, modelHasRequired);
+        }
+
+        // Shared: copy constructor (from primary model)
+        if (primaryModel.GenerateCopyConstructor)
+            CopyConstructorGenerator.Generate(sb, primaryModel, memberIndent);
+
+        // Per-source: projections (use source-specific names to avoid static property conflicts)
+        foreach (var model in models)
+        {
+            if (!model.GenerateExpressionProjection) continue;
+
+            var projectionName = GetProjectionName(model, models);
+            ProjectionGenerator.GenerateProjectionProperty(sb, model, memberIndent, facetLookup, projectionName);
+        }
+
+        // Per-source: ToSource methods (use source-specific names to avoid method conflicts)
+        foreach (var model in models)
+        {
+            if (!model.GenerateToSource) continue;
+
+            var toSourceName = GetToSourceMethodName(model, models);
+            ToSourceGenerator.Generate(sb, model, toSourceName);
+        }
+
+        // Per-source: FlattenTo
+        foreach (var model in models)
+        {
+            if (model.FlattenToTypes.Length > 0)
+                FlattenToGenerator.Generate(sb, model, memberIndent, facetLookup);
+        }
+
+        // Shared: equality members (from primary model)
+        if (shouldGenerateEquality)
+            EqualityGenerator.Generate(sb, primaryModel, memberIndent);
+
+        sb.AppendLine($"{containingTypeIndent}}}");
+        CloseContainingTypeHierarchy(sb, primaryModel, containingTypeIndent);
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Returns the property name to use for the Projection expression of the given model.
+    /// <list type="bullet">
+    /// <item>Single-source: <c>"Projection"</c> (backward-compatible).</item>
+    /// <item>Multi-source: <c>"ProjectionFrom{SourceSimpleName}"</c>.</item>
+    /// </list>
+    /// </summary>
+    private static string GetProjectionName(FacetTargetModel model, IReadOnlyList<FacetTargetModel> allModels)
+    {
+        if (allModels.Count <= 1)
+            return "Projection";
+
+        var simpleName = CodeGenerationHelpers.GetSimpleTypeName(model.SourceTypeName);
+        // Strip generic parameter suffix if present (e.g. List<String> → ListString)
+        var angleBracket = simpleName.IndexOf('<');
+        if (angleBracket > 0)
+            simpleName = simpleName.Substring(0, angleBracket);
+
+        return "ProjectionFrom" + simpleName;
+    }
+
+    /// <summary>
+    /// Returns the method name to use for the ToSource conversion of the given model.
+    /// <list type="bullet">
+    /// <item>Single-source: <c>null</c> → <c>"ToSource"</c> + deprecated <c>BackTo</c> alias.</item>
+    /// <item>Multi-source: <c>"To{SourceSimpleName}"</c> (no BackTo alias).</item>
+    /// </list>
+    /// </summary>
+    private static string? GetToSourceMethodName(FacetTargetModel model, IReadOnlyList<FacetTargetModel> allModels)
+    {
+        if (allModels.Count <= 1)
+            return null; // Use default "ToSource" + BackTo
+
+        var simpleName = CodeGenerationHelpers.GetSimpleTypeName(model.SourceTypeName);
+        var angleBracket = simpleName.IndexOf('<');
+        if (angleBracket > 0)
+            simpleName = simpleName.Substring(0, angleBracket);
+
+        return "To" + simpleName;
+    }
 
     private static void GenerateFileHeader(StringBuilder sb)
     {
@@ -222,6 +441,4 @@ internal static class CodeBuilder
         sb.AppendLine($"{indent}{model.Accessibility} partial {keyword} {model.Name}({parameters});");
         sb.AppendLine($"{indent}#pragma warning restore CS1591");
     }
-
-    #endregion
 }

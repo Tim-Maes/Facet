@@ -444,3 +444,32 @@ public class JsonStoredEntity
     public string Name { get; set; } = string.Empty;
     public string MetadataJson { get; set; } = "{}";
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Multi-source mapping test entities (GitHub issue: map different source types
+// to the same target type).
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// <summary>Source type A for multi-source facet tests.</summary>
+public class MultiSourceEntityA
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string OnlyInA { get; set; } = string.Empty;
+}
+
+/// <summary>Source type B for multi-source facet tests.</summary>
+public class MultiSourceEntityB
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string OnlyInB { get; set; } = string.Empty;
+}
+
+/// <summary>Source type C (record) for multi-source facet tests.</summary>
+public record MultiSourceEntityC
+{
+    public required int Id { get; init; }
+    public required string Name { get; init; }
+}
+

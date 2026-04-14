@@ -15,7 +15,31 @@ namespace Facet.Generators;
 internal static class ModelBuilder
 {
     /// <summary>
+    /// Builds one <see cref="FacetTargetModel"/> per <c>[Facet]</c> attribute found on the target
+    /// type, allowing multiple source-type mappings to the same target class.
+    /// </summary>
+    public static ImmutableArray<FacetTargetModel?> BuildModels(
+        GeneratorAttributeSyntaxContext context,
+        GlobalConfigurationDefaults globalDefaults,
+        CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        if (context.TargetSymbol is not INamedTypeSymbol) return ImmutableArray<FacetTargetModel?>.Empty;
+        if (context.Attributes.Length == 0) return ImmutableArray<FacetTargetModel?>.Empty;
+
+        var builder = ImmutableArray.CreateBuilder<FacetTargetModel?>(context.Attributes.Length);
+        foreach (var attribute in context.Attributes)
+        {
+            token.ThrowIfCancellationRequested();
+            builder.Add(BuildModelForAttribute(context, attribute, globalDefaults, token));
+        }
+        return builder.ToImmutable();
+    }
+
+    /// <summary>
     /// Builds a FacetTargetModel from the generator attribute syntax context.
+    /// Only processes the first <c>[Facet]</c> attribute found on the type.
+    /// Use <see cref="BuildModels"/> to process all attributes.
     /// </summary>
     public static FacetTargetModel? BuildModel(
         GeneratorAttributeSyntaxContext context,
@@ -23,11 +47,20 @@ internal static class ModelBuilder
         CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        if (context.TargetSymbol is not INamedTypeSymbol targetSymbol) return null;
+        if (context.TargetSymbol is not INamedTypeSymbol) return null;
         if (context.Attributes.Length == 0) return null;
 
-        var attribute = context.Attributes[0];
+        return BuildModelForAttribute(context, context.Attributes[0], globalDefaults, token);
+    }
+
+    private static FacetTargetModel? BuildModelForAttribute(
+        GeneratorAttributeSyntaxContext context,
+        AttributeData attribute,
+        GlobalConfigurationDefaults globalDefaults,
+        CancellationToken token)
+    {
         token.ThrowIfCancellationRequested();
+        if (context.TargetSymbol is not INamedTypeSymbol targetSymbol) return null;
 
         var sourceType = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
         if (sourceType == null) return null;
