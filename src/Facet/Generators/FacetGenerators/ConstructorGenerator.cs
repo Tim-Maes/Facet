@@ -364,7 +364,7 @@ internal static class ConstructorGenerator
         sb.AppendLine("    /// This static factory method provides optimal performance for runtime mapping by allowing");
         sb.AppendLine("    /// direct delegate creation instead of expression compilation.");
         sb.AppendLine("    /// </remarks>");
-        sb.AppendLine($"    public static {(model.BaseHidesFacetMembers ? "new " : "")}{model.Name} FromSource({model.SourceTypeName} source)");
+        sb.AppendLine($"    public static {(model.BaseHidesFromSource ? "new " : "")}{model.Name} FromSource({model.SourceTypeName} source)");
         sb.AppendLine("    {");
 
         if (needsDepthTracking)
@@ -413,7 +413,7 @@ internal static class ConstructorGenerator
         sb.AppendLine($"    /// for the primary constructor parameters when creating instances.");
         sb.AppendLine($"    /// Example: new {model.Name}(primaryConstructorParam) {{ PropA = source.PropA, PropB = source.PropB }}");
         sb.AppendLine($"    /// </summary>");
-        sb.AppendLine($"    public static {(model.BaseHidesFacetMembers ? "new " : "")}{model.Name} FromSource({model.SourceTypeName} source, params object[] primaryConstructorArgs)");
+        sb.AppendLine($"    public static {(model.BaseHidesFromSource ? "new " : "")}{model.Name} FromSource({model.SourceTypeName} source, params object[] primaryConstructorArgs)");
         sb.AppendLine("    {");
 
         if (hasCustomMapping)

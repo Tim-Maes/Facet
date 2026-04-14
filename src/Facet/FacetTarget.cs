@@ -60,10 +60,19 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
 
     /// <summary>
     /// When true, the base class of this facet already declares one or more of the generated
-    /// members (<c>FromSource</c>, <c>ToSource</c>, <c>Projection</c>, <c>BackTo</c>).
+    /// members (<c>ToSource</c>, <c>Projection</c>, <c>BackTo</c>) that are hidden purely by name.
     /// The <c>new</c> modifier will be emitted on those members to suppress CS0108.
     /// </summary>
     public bool BaseHidesFacetMembers { get; }
+
+    /// <summary>
+    /// When true, the base class of this facet already declares a <c>FromSource</c> method
+    /// whose parameter type matches this facet's source type. Only in this case does the
+    /// derived <c>FromSource</c> actually hide the base method and require the <c>new</c> modifier.
+    /// When the parameter types differ (different source entities), the methods are overloads
+    /// and <c>new</c> is not needed (emitting it would produce CS0109).
+    /// </summary>
+    public bool BaseHidesFromSource { get; }
 
     /// <summary>
     /// When true, the <see cref="ConfigurationTypeName"/> type implements
@@ -108,7 +117,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         bool generateEquality = false,
         string? toSourceConfigurationTypeName = null,
         bool baseHidesFacetMembers = false,
-        bool hasProjectionMapConfiguration = false)
+        bool hasProjectionMapConfiguration = false,
+        bool baseHidesFromSource = false)
     {
         Name = name;
         Namespace = @namespace;
@@ -145,6 +155,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         ToSourceConfigurationTypeName = toSourceConfigurationTypeName;
         BaseHidesFacetMembers = baseHidesFacetMembers;
         HasProjectionMapConfiguration = hasProjectionMapConfiguration;
+        BaseHidesFromSource = baseHidesFromSource;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -185,7 +196,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && GenerateEquality == other.GenerateEquality
             && ToSourceConfigurationTypeName == other.ToSourceConfigurationTypeName
             && BaseHidesFacetMembers == other.BaseHidesFacetMembers
-            && HasProjectionMapConfiguration == other.HasProjectionMapConfiguration;
+            && HasProjectionMapConfiguration == other.HasProjectionMapConfiguration
+            && BaseHidesFromSource == other.BaseHidesFromSource;
     }
 
     public override bool Equals(object? obj) => obj is FacetTargetModel other && Equals(other);
@@ -223,6 +235,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + (ToSourceConfigurationTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + BaseHidesFacetMembers.GetHashCode();
             hash = hash * 31 + HasProjectionMapConfiguration.GetHashCode();
+            hash = hash * 31 + BaseHidesFromSource.GetHashCode();
             hash = hash * 31 + Members.Length.GetHashCode();
 
             foreach (var member in Members)
