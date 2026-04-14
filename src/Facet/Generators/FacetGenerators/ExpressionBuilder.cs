@@ -441,16 +441,30 @@ internal static class ExpressionBuilder
     }
 
     /// <summary>
-    /// Gets the appropriate default value for a collection type when depth is exceeded or null check fails.
+    /// Gets the appropriate default value for a collection type when depth is exceeded.
     /// For ImmutableArray (value type), returns default(ImmutableArray&lt;T&gt;).
-    /// For reference type collections, returns null!.
+    /// For other collections, returns an empty collection expression that matches the declared type.
     /// </summary>
     private static string GetCollectionDefaultValue(string collectionWrapper, string collectionTypeName)
     {
+        // Extract the element type from the collection type name for constructing empty collections
+        var elementType = ExtractElementTypeFromCollectionTypeName(collectionTypeName);
+
         return collectionWrapper switch
         {
             FacetConstants.CollectionWrappers.ImmutableArray => $"default({collectionTypeName})",
-            _ => "null!"
+            FacetConstants.CollectionWrappers.ImmutableList => $"global::System.Collections.Immutable.ImmutableList<{elementType}>.Empty",
+            FacetConstants.CollectionWrappers.ImmutableHashSet => $"global::System.Collections.Immutable.ImmutableHashSet<{elementType}>.Empty",
+            FacetConstants.CollectionWrappers.ImmutableSortedSet => $"global::System.Collections.Immutable.ImmutableSortedSet<{elementType}>.Empty",
+            FacetConstants.CollectionWrappers.ImmutableQueue => $"global::System.Collections.Immutable.ImmutableQueue<{elementType}>.Empty",
+            FacetConstants.CollectionWrappers.ImmutableStack => $"global::System.Collections.Immutable.ImmutableStack<{elementType}>.Empty",
+            FacetConstants.CollectionWrappers.IImmutableList => $"global::System.Collections.Immutable.ImmutableList<{elementType}>.Empty",
+            FacetConstants.CollectionWrappers.IImmutableSet => $"global::System.Collections.Immutable.ImmutableHashSet<{elementType}>.Empty",
+            FacetConstants.CollectionWrappers.IImmutableQueue => $"global::System.Collections.Immutable.ImmutableQueue<{elementType}>.Empty",
+            FacetConstants.CollectionWrappers.IImmutableStack => $"global::System.Collections.Immutable.ImmutableStack<{elementType}>.Empty",
+            FacetConstants.CollectionWrappers.Array => $"System.Array.Empty<{elementType}>()",
+            FacetConstants.CollectionWrappers.Collection => $"new global::System.Collections.ObjectModel.Collection<{elementType}>()",
+            _ => $"new global::System.Collections.Generic.List<{elementType}>()"
         };
     }
 
