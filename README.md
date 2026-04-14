@@ -67,6 +67,7 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 - **`GenerateEquality`** - generate value-based `Equals`, `GetHashCode`, `==`, `!=` for class DTOs
 
 ### Advanced Features
+- **Multi-source mapping** — a single target class can carry multiple `[Facet]` attributes, each mapping from a different source type; produces per-source constructors, projections (`ProjectionFrom{Source}`), and reverse-mapping methods (`To{Source}()`)
 - **`[Flatten]`** - collapse nested object graphs into top-level properties
 - **`[Wrapper]`** - reference-based delegation for facades, ViewModels, and decorators
 - **`[GenerateDtos]`** - auto-generate full CRUD DTO sets (Create, Update, Response, Query, Upsert, Patch)

@@ -15,6 +15,7 @@ Welcome to the Facet documentation! This index will help you navigate all availa
 - [Extension Methods](05_Extensions.md): Extension Methods (LINQ, EF Core, etc.)
 - [Advanced Scenarios](06_AdvancedScenarios.md): Advanced Usage Scenarios
   - Multiple facets from one source
+  - **Multiple source types to one target** (multi-source mapping)
   - Include/Exclude patterns
   - Nested Facets (single objects & collections)
   - Collection support (List, Array, ICollection, IEnumerable, IReadOnlyList, IReadOnlyCollection, Immutable collections, and custom types)

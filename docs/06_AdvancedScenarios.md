@@ -36,7 +36,96 @@ public partial class UserSummaryDto { }
 public partial class UserHRDto { }
 ```
 
+---
+
+## Multiple Source Types to One Target
+
+Since Facet v6, a single target class can carry **multiple `[Facet]` attributes**, each pointing to a **different** source type. The generator emits a single partial class containing:
+
+- A **union of all mapped properties** (deduplicated by name; first-occurrence wins).
+- **Per-source constructors** and `FromSource` factory method overloads (naturally overloaded by parameter type — no naming conflict).
+- **Per-source projection expressions** named `ProjectionFrom{SourceTypeName}` to avoid static-property collisions.
+- **Per-source `ToSource` methods** named `To{SourceTypeName}()` to avoid method-signature conflicts; the deprecated `BackTo` alias is **not** generated for multi-source facets.
+- Shared artefacts (parameterless constructor, copy constructor, equality) are generated once from the **primary** (first) attribute.
+
+### Motivation
+
+A common scenario in domain-driven or layered architectures is a "drop-down" or "summary" DTO that can be populated from multiple different source types — an EF Core entity **and** a domain DTO both containing the same logical data:
+
+```csharp
+// Two different source representations of the same concept
+public partial class UnitEntity : ModifiedByBaseEntity { /* Id, Name, ... */ }
+public partial class UnitDto    : FacetsModifiedByBaseDto { /* Id, Name, ... */ }
+
+// One unified "display" target that can accept both
+[Facet(typeof(UnitEntity), Include = [nameof(UnitEntity.Name)])]
+[Facet(typeof(UnitDto),    Include = [nameof(UnitDto.Name)])]
+public partial class UnitDropDownDto;
+```
+
+### Generated API
+
+For the example above Facet generates a single `UnitDropDownDto` class with:
+
+```csharp
+// Constructors (overloaded by source type — no ambiguity)
+var a = new UnitDropDownDto(unitEntity);
+var b = new UnitDropDownDto(unitDto);
+
+// Factory methods (overloaded)
+var c = UnitDropDownDto.FromSource(unitEntity);
+var d = UnitDropDownDto.FromSource(unitDto);
+
+// Per-source LINQ projections
+IQueryable<UnitDropDownDto> q1 = dbContext.Units
+    .Select(UnitDropDownDto.ProjectionFromUnitEntity);
+
+IQueryable<UnitDropDownDto> q2 = unitDtos.AsQueryable()
+    .Select(UnitDropDownDto.ProjectionFromUnitDto);
+```
+
+### Union of Members
+
+When source types share properties (e.g. both have `Id` and `Name`) the property is generated **once** (first-definition wins). Exclusive properties from each source type are also included:
+
+```csharp
+public class EntityA { public int Id { get; set; } public string Name { get; set; } public string EntityAOnly { get; set; } }
+public class EntityB { public int Id { get; set; } public string Name { get; set; } public string EntityBOnly { get; set; } }
+
+[Facet(typeof(EntityA))]
+[Facet(typeof(EntityB))]
+public partial class UnionDto;
+// Generated properties: Id, Name, EntityAOnly, EntityBOnly
+```
+
+### Reverse Mapping (ToSource)
+
+When `GenerateToSource = true` is specified on an attribute, a `To{SourceTypeName}()` method is generated for that source type:
+
+```csharp
+[Facet(typeof(UnitEntity), Include = [nameof(UnitEntity.Name)], GenerateToSource = true)]
+[Facet(typeof(UnitDto),    Include = [nameof(UnitDto.Name)])]
+public partial class UnitDropDownDto;
+
+// Generated:
+// public UnitEntity ToUnitEntity()  { ... }
+// (no ToUnitDto because GenerateToSource was not set on the second attribute)
+```
+
+### Important Notes
+
+| Behaviour | Detail |
+|-----------|--------|
+| **Projection names** | Always `ProjectionFrom{SourceSimpleName}` for multi-source targets |
+| **ToSource names** | Always `To{SourceSimpleName}()` for multi-source targets — no `BackTo()` alias |
+| **Single-source behaviour** | Unchanged: `Projection`, `ToSource()`, and `BackTo()` are still generated with the original names |
+| **Member deduplication** | Properties with the same name across multiple sources are generated once; the type from the first mapping is used |
+| **Configuration** | `Configuration`, `BeforeMap`, `AfterMap`, and `ToSourceConfiguration` are each read independently per attribute |
+
+---
+
 ## Include vs Exclude Patterns
+
 
 ### Include Pattern - Building Focused DTOs
 
