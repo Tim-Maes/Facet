@@ -473,3 +473,27 @@ public record MultiSourceEntityC
     public required string Name { get; init; }
 }
 
+/// <summary>Unit DTO - one of the sources for the multi-source nested facet.</summary>
+public class UnitDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string ValidationResult { get; set; } = string.Empty;
+}
+
+/// <summary>Unit entity - another source for the multi-source nested facet.</summary>
+public class UnitEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string ValidationResult { get; set; } = string.Empty;
+}
+
+/// <summary>Order line entity - contains a UnitEntity as a nested property.</summary>
+public class OrderLineBaseEntity
+{
+    public int Id { get; set; }
+    public string Number { get; set; } = string.Empty;
+    public UnitEntity? AssignedToUnit { get; set; }
+}
+

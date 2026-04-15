@@ -22,7 +22,7 @@ internal static class ProjectionGenerator
         StringBuilder sb,
         FacetTargetModel model,
         string memberIndent,
-        Dictionary<string, FacetTargetModel> facetLookup,
+        Dictionary<string, List<FacetTargetModel>> facetLookup,
         string? projectionPropertyName = null)
     {
         var propertyName = projectionPropertyName ?? "Projection";
@@ -57,7 +57,7 @@ internal static class ProjectionGenerator
         StringBuilder sb,
         FacetTargetModel model,
         string memberIndent,
-        Dictionary<string, FacetTargetModel> _,
+        Dictionary<string, List<FacetTargetModel>> _,
         string propertyName = "Projection")
     {
         var newModifier = model.BaseHidesFacetMembers ? "new " : "";
@@ -195,7 +195,7 @@ internal static class ProjectionGenerator
         StringBuilder sb,
         FacetTargetModel model,
         string baseIndent,
-        Dictionary<string, FacetTargetModel> facetLookup)
+        Dictionary<string, List<FacetTargetModel>> facetLookup)
     {
         var indent = baseIndent + "    ";
         
@@ -224,7 +224,7 @@ internal static class ProjectionGenerator
         StringBuilder sb,
         FacetTargetModel model,
         string indent,
-        Dictionary<string, FacetTargetModel> facetLookup)
+        Dictionary<string, List<FacetTargetModel>> facetLookup)
     {
         var visitedTypes = new HashSet<string> { model.Name };
         var includedMembers = model.Members.Where(m => m.MapFromIncludeInProjection).ToArray();
@@ -251,7 +251,7 @@ internal static class ProjectionGenerator
         StringBuilder sb,
         FacetTargetModel model,
         string indent,
-        Dictionary<string, FacetTargetModel> facetLookup)
+        Dictionary<string, List<FacetTargetModel>> facetLookup)
     {
         sb.AppendLine($"{indent}source => new {model.Name}");
         sb.AppendLine($"{indent}{{");
@@ -291,7 +291,7 @@ internal static class ProjectionGenerator
         FacetMember member,
         string sourceVariableName,
         string indent,
-        Dictionary<string, FacetTargetModel> facetLookup,
+        Dictionary<string, List<FacetTargetModel>> facetLookup,
         HashSet<string> visitedTypes,
         int currentDepth = 0,
         int maxDepth = 0)
@@ -344,7 +344,7 @@ internal static class ProjectionGenerator
         FacetMember member,
         string sourceVariableName,
         bool isNullable,
-        Dictionary<string, FacetTargetModel> facetLookup,
+        Dictionary<string, List<FacetTargetModel>> facetLookup,
         HashSet<string> visitedTypes,
         int currentDepth,
         int maxDepth)
@@ -386,7 +386,7 @@ internal static class ProjectionGenerator
         string sourceVariableName,
         bool isNullable,
         string indent,
-        Dictionary<string, FacetTargetModel> facetLookup,
+        Dictionary<string, List<FacetTargetModel>> facetLookup,
         HashSet<string> visitedTypes,
         int currentDepth,
         int maxDepth)
@@ -470,7 +470,7 @@ internal static class ProjectionGenerator
         string sourceExpression,
         string facetTypeName,
         string indent,
-        Dictionary<string, FacetTargetModel> facetLookup,
+        Dictionary<string, List<FacetTargetModel>> facetLookup,
         HashSet<string> visitedTypes,
         int currentDepth = 0,
         int maxDepth = 0)
@@ -503,7 +503,7 @@ internal static class ProjectionGenerator
         string elementFacetTypeName,
         string elementSourceTypeName,
         string collectionWrapper,
-        Dictionary<string, FacetTargetModel> facetLookup,
+        Dictionary<string, List<FacetTargetModel>> facetLookup,
         HashSet<string> visitedTypes,
         int currentDepth = 0,
         int maxDepth = 0)
@@ -583,7 +583,7 @@ internal static class ProjectionGenerator
         };
     }
 
-    private static FacetTargetModel? FindNestedFacetModel(string typeName, Dictionary<string, FacetTargetModel> facetLookup)
+    private static FacetTargetModel? FindNestedFacetModel(string typeName, Dictionary<string, List<FacetTargetModel>> facetLookup)
     {
         // Strip "global::" prefix and extract simple name
         var lookupName = typeName
@@ -592,19 +592,25 @@ internal static class ProjectionGenerator
             .Last();
 
         // First try exact match with the lookup name
-        if (facetLookup.TryGetValue(lookupName, out var nestedFacetModel))
+        if (facetLookup.TryGetValue(lookupName, out var nestedFacetModels) && nestedFacetModels.Count > 0)
         {
-            return nestedFacetModel;
+            // For projection purposes, the first model is sufficient since all models with the same
+            // FullName share the same structure (union of all members)
+            return nestedFacetModels[0];
         }
 
         // Try matching by simple name or full name
         foreach (var kvp in facetLookup)
         {
-            if (kvp.Key == lookupName ||
-                kvp.Value.Name == lookupName ||
-                kvp.Key.EndsWith("." + lookupName))
+            if (kvp.Value.Count > 0)
             {
-                return kvp.Value;
+                var model = kvp.Value[0];
+                if (kvp.Key == lookupName ||
+                    model.Name == lookupName ||
+                    kvp.Key.EndsWith("." + lookupName))
+                {
+                    return model;
+                }
             }
         }
 

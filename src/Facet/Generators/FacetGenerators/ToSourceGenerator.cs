@@ -13,13 +13,16 @@ internal static class ToSourceGenerator
     /// <summary>
     /// Generates the ToSource and BackTo methods that convert the facet type back to the source type.
     /// </summary>
+    /// <param name="facetLookup">
+    /// Dictionary mapping facet type names to their model lists (for resolving multi-source nested facets).
+    /// </param>
     /// <param name="toSourceMethodName">
     /// The name to use for the generated method.
     /// When <see langword="null"/>, the default names <c>ToSource</c> and <c>BackTo</c> are used.
     /// When provided (for multi-source facets), only the specified method is generated without the
     /// deprecated <c>BackTo</c> alias.
     /// </param>
-    public static void Generate(StringBuilder sb, FacetTargetModel model, string? toSourceMethodName = null)
+    public static void Generate(StringBuilder sb, FacetTargetModel model, Dictionary<string, List<FacetTargetModel>>? facetLookup, string? toSourceMethodName = null)
     {
         var methodName = toSourceMethodName ?? "ToSource";
         var isCustomName = toSourceMethodName != null;
@@ -35,11 +38,11 @@ internal static class ToSourceGenerator
 
         if (model.SourceHasPositionalConstructor)
         {
-            GeneratePositionalToSource(sb, model);
+            GeneratePositionalToSource(sb, model, facetLookup);
         }
         else
         {
-            GenerateObjectInitializerToSource(sb, model);
+            GenerateObjectInitializerToSource(sb, model, facetLookup);
         }
 
         sb.AppendLine("    }");
@@ -57,12 +60,12 @@ internal static class ToSourceGenerator
         }
     }
 
-    private static void GeneratePositionalToSource(StringBuilder sb, FacetTargetModel model)
+    private static void GeneratePositionalToSource(StringBuilder sb, FacetTargetModel model, Dictionary<string, List<FacetTargetModel>>? facetLookup)
     {
         var constructorArgs = string.Join(", ",
             model.Members
                 .Where(m => m.MapFromReversible)
-                .Select(m => ExpressionBuilder.GetToSourceValueExpression(m)));
+                .Select(m => ExpressionBuilder.GetToSourceValueExpression(m, facetLookup, model.SourceTypeName)));
 
         if (model.ToSourceConfigurationTypeName != null)
         {
@@ -76,7 +79,7 @@ internal static class ToSourceGenerator
         }
     }
 
-    private static void GenerateObjectInitializerToSource(StringBuilder sb, FacetTargetModel model)
+    private static void GenerateObjectInitializerToSource(StringBuilder sb, FacetTargetModel model, Dictionary<string, List<FacetTargetModel>>? facetLookup)
     {
         var propertyAssignments = new List<string>();
 
@@ -85,7 +88,7 @@ internal static class ToSourceGenerator
             if (!member.MapFromReversible)
                 continue;
 
-            var toSourceValue = ExpressionBuilder.GetToSourceValueExpression(member);
+            var toSourceValue = ExpressionBuilder.GetToSourceValueExpression(member, facetLookup, model.SourceTypeName);
             propertyAssignments.Add($"            {member.SourcePropertyName} = {toSourceValue}");
         }
 

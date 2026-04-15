@@ -14,7 +14,7 @@ internal static class CodeBuilder
     /// <summary>
     /// Generates the complete source code for a facet type.
     /// </summary>
-    public static string Generate(FacetTargetModel model, Dictionary<string, FacetTargetModel> facetLookup)
+    public static string Generate(FacetTargetModel model, Dictionary<string, List<FacetTargetModel>> facetLookup)
     {
         var sb = new StringBuilder();
         GenerateFileHeader(sb);
@@ -138,7 +138,7 @@ internal static class CodeBuilder
         // Generate reverse mapping method (ToSource)
         if (model.GenerateToSource)
         {
-            ToSourceGenerator.Generate(sb, model);
+            ToSourceGenerator.Generate(sb, model, facetLookup);
         }
 
         // Generate FlattenTo methods
@@ -169,7 +169,7 @@ internal static class CodeBuilder
     /// </summary>
     public static string GenerateForGroup(
         IReadOnlyList<FacetTargetModel> models,
-        Dictionary<string, FacetTargetModel> facetLookup)
+        Dictionary<string, List<FacetTargetModel>> facetLookup)
     {
         if (models.Count == 1)
             return Generate(models[0], facetLookup);
@@ -191,7 +191,7 @@ internal static class CodeBuilder
     /// </summary>
     public static string GenerateCombined(
         IReadOnlyList<FacetTargetModel> models,
-        Dictionary<string, FacetTargetModel> facetLookup)
+        Dictionary<string, List<FacetTargetModel>> facetLookup)
     {
         var primaryModel = models[0];
         var sb = new StringBuilder();
@@ -328,7 +328,7 @@ internal static class CodeBuilder
             if (!model.GenerateToSource) continue;
 
             var toSourceName = GetToSourceMethodName(model, models);
-            ToSourceGenerator.Generate(sb, model, toSourceName);
+            ToSourceGenerator.Generate(sb, model, facetLookup, toSourceName);
         }
 
         // Per-source: FlattenTo
