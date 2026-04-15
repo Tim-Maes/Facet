@@ -117,6 +117,12 @@ internal static class CodeBuilder
             ConstructorGenerator.GenerateConstructor(sb, model, isPositional, hasInitOnlyProperties, hasCustomMapping, hasRequiredProperties);
         }
 
+        // Generate compiled projection-map action when config only provides ConfigureProjection (no Map)
+        if (hasCustomMapping && !model.HasMapConfiguration && model.HasProjectionMapConfiguration)
+        {
+            GenerateProjectionMapAction(sb, model, memberIndent);
+        }
+
         // Generate copy constructor
         if (model.GenerateCopyConstructor)
         {
@@ -295,6 +301,12 @@ internal static class CodeBuilder
 
             ConstructorGenerator.GenerateConstructor(
                 sb, model, isPositional, modelHasInitOnly, hasCustomMapping, modelHasRequired);
+
+            // Generate compiled projection-map action when config only provides ConfigureProjection (no Map)
+            if (hasCustomMapping && !model.HasMapConfiguration && model.HasProjectionMapConfiguration)
+            {
+                GenerateProjectionMapAction(sb, model, memberIndent);
+            }
         }
 
         // Shared: copy constructor (from primary model)
@@ -377,6 +389,54 @@ internal static class CodeBuilder
         var simpleName = CodeGenerationHelpers.GetSimpleTypeName(model.SourceTypeName);
         var angleBracket = simpleName.IndexOf('<');
         return angleBracket > 0 ? simpleName.Substring(0, angleBracket) : simpleName;
+    }
+
+    /// <summary>
+    /// Generates a lazily-compiled <c>Action&lt;TSource, TTarget&gt;</c> from
+    /// <c>ConfigureProjection</c> expressions. Called when the configuration type
+    /// implements <c>IFacetProjectionMapConfiguration</c> but not <c>IFacetMapConfiguration</c>,
+    /// allowing users to write mapping logic once as expressions and reuse it in both
+    /// projections (EF Core) and constructors (in-memory).
+    /// </summary>
+    private static void GenerateProjectionMapAction(StringBuilder sb, FacetTargetModel model, string memberIndent)
+    {
+        var src = model.SourceTypeName;
+        var tgt = model.Name;
+        var bodyIndent = memberIndent + "    ";
+
+        sb.AppendLine();
+        sb.AppendLine($"{memberIndent}private static global::System.Action<{src}, {tgt}>? __projectionMapAction;");
+        sb.AppendLine();
+        sb.AppendLine($"{memberIndent}private static global::System.Action<{src}, {tgt}> __GetProjectionMapAction()");
+        sb.AppendLine($"{memberIndent}{{");
+        sb.AppendLine($"{bodyIndent}return global::System.Threading.LazyInitializer.EnsureInitialized(ref __projectionMapAction, () =>");
+        sb.AppendLine($"{bodyIndent}{{");
+
+        var innerIndent = bodyIndent + "    ";
+
+        sb.AppendLine($"{innerIndent}var __builder = new global::Facet.Mapping.FacetProjectionBuilder<{src}, {tgt}>();");
+        sb.AppendLine($"{innerIndent}global::{model.ConfigurationTypeName}.ConfigureProjection(__builder);");
+        sb.AppendLine();
+        sb.AppendLine($"{innerIndent}var __sourceParam = global::System.Linq.Expressions.Expression.Parameter(typeof({src}), \"source\");");
+        sb.AppendLine($"{innerIndent}var __targetParam = global::System.Linq.Expressions.Expression.Parameter(typeof({tgt}), \"target\");");
+        sb.AppendLine($"{innerIndent}var __assignments = new global::System.Collections.Generic.List<global::System.Linq.Expressions.Expression>();");
+        sb.AppendLine();
+        sb.AppendLine($"{innerIndent}foreach (var (__member, __expr) in __builder.Mappings)");
+        sb.AppendLine($"{innerIndent}{{");
+        sb.AppendLine($"{innerIndent}    var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __sourceParam);");
+        sb.AppendLine($"{innerIndent}    __assignments.Add(global::System.Linq.Expressions.Expression.Assign(");
+        sb.AppendLine($"{innerIndent}        global::System.Linq.Expressions.Expression.MakeMemberAccess(__targetParam, __member), __body));");
+        sb.AppendLine($"{innerIndent}}}");
+        sb.AppendLine();
+        sb.AppendLine($"{innerIndent}if (__assignments.Count == 0)");
+        sb.AppendLine($"{innerIndent}    return (_, _) => {{ }};");
+        sb.AppendLine();
+        sb.AppendLine($"{innerIndent}var __block = global::System.Linq.Expressions.Expression.Block(__assignments);");
+        sb.AppendLine($"{innerIndent}return global::System.Linq.Expressions.Expression.Lambda<global::System.Action<{src}, {tgt}>>(");
+        sb.AppendLine($"{innerIndent}    __block, __sourceParam, __targetParam).Compile();");
+
+        sb.AppendLine($"{bodyIndent}}})!;");
+        sb.AppendLine($"{memberIndent}}}");
     }
 
     private static void GenerateFileHeader(StringBuilder sb)

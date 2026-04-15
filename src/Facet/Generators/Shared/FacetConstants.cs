@@ -32,6 +32,12 @@ internal static class FacetConstants
     public const string FacetAttributeFullName = "Facet.FacetAttribute";
 
     /// <summary>
+    /// The metadata name of the IFacetMapConfiguration open generic interface.
+    /// Used by ModelBuilder to detect whether a configuration type implements imperative Map().
+    /// </summary>
+    public const string MapConfigurationInterfaceFullName = "Facet.Mapping.IFacetMapConfiguration`2";
+
+    /// <summary>
     /// The metadata name of the IFacetProjectionMapConfiguration open generic interface.
     /// Used by ModelBuilder to detect whether a configuration type opts into lazy projection building.
     /// </summary>

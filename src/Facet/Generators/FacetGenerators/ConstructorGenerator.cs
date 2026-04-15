@@ -196,7 +196,7 @@ internal static class ConstructorGenerator
                     var sourceValue = ExpressionBuilder.GetSourceValueExpression(m, "source");
                     sb.AppendLine($"        this.{m.Name} = {sourceValue};");
                 }
-                sb.AppendLine($"        global::{model.ConfigurationTypeName}.Map(source, this);");
+                sb.AppendLine($"        {GetMappingCall(model, "source", "this")};");
             }
             else
             {
@@ -222,7 +222,7 @@ internal static class ConstructorGenerator
             {
                 sb.AppendLine($"        {model.BeforeMapConfigurationTypeName}.BeforeMap(source, this);");
             }
-            sb.AppendLine($"        global::{model.ConfigurationTypeName}.Map(source, this);");
+            sb.AppendLine($"        {GetMappingCall(model, "source", "this")};");
             if (hasAfterMap)
             {
                 sb.AppendLine($"        {model.AfterMapConfigurationTypeName}.AfterMap(source, this);");
@@ -295,7 +295,7 @@ internal static class ConstructorGenerator
         else if (hasCustomMapping && !model.HasExistingPrimaryConstructor)
         {
             // For positional records/record structs with custom mapping
-            sb.AppendLine($"        global::{model.ConfigurationTypeName}.Map(source, this);");
+            sb.AppendLine($"        {GetMappingCall(model, "source", "this")};");
         }
 
         sb.AppendLine("    }");
@@ -332,7 +332,7 @@ internal static class ConstructorGenerator
                 var sourceValue = ExpressionBuilder.GetSourceValueExpression(m, "source", model.MaxDepth, true, model.PreserveReferences);
                 sb.AppendLine($"        this.{m.Name} = {sourceValue};");
             }
-            sb.AppendLine($"        global::{model.ConfigurationTypeName}.Map(source, this);");
+            sb.AppendLine($"        {GetMappingCall(model, "source", "this")};");
         }
         else
         {
@@ -382,7 +382,7 @@ internal static class ConstructorGenerator
         {
             sb.AppendLine($"        // Custom mapper creates and returns the instance");
             sb.AppendLine($"        var instance = new {model.Name}();");
-            sb.AppendLine($"        {model.ConfigurationTypeName}.Map(source, instance);");
+            sb.AppendLine($"        {GetMappingCall(model, "source", "instance")};");
             sb.AppendLine($"        return instance;");
         }
         else
@@ -437,4 +437,18 @@ internal static class ConstructorGenerator
     }
 
     #endregion
+
+    /// <summary>
+    /// Returns the appropriate mapping call for the constructor body.
+    /// When the config only implements IFacetProjectionMapConfiguration (no Map method),
+    /// delegates to the compiled projection action. Otherwise calls Map() directly.
+    /// </summary>
+    private static string GetMappingCall(FacetTargetModel model, string sourceExpr, string targetExpr)
+    {
+        if (!model.HasMapConfiguration && model.HasProjectionMapConfiguration)
+        {
+            return $"__GetProjectionMapAction()({sourceExpr}, {targetExpr})";
+        }
+        return $"global::{model.ConfigurationTypeName}.Map({sourceExpr}, {targetExpr})";
+    }
 }
