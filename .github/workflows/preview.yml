@@ -1,0 +1,159 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: Publish Preview
+run-name: '[Preview] PR #${{ github.event.pull_request.number }} — ${{ github.event.pull_request.title }}'
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+      - master
+      - develop
+
+# Cancel any in-progress publish for the same PR when a new commit is pushed
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: true
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  publish-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Read base version from Directory.Build.props
+        id: base_version
+        shell: bash
+        run: |
+          VERSION=$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props)
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Base version: $VERSION"
+
+      - name: Compute preview version
+        id: preview_version
+        shell: bash
+        run: |
+          PREVIEW_VERSION="${{ steps.base_version.outputs.VERSION }}-preview.pr${{ github.event.pull_request.number }}.${{ github.run_number }}"
+          echo "PREVIEW_VERSION=$PREVIEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Preview version: $PREVIEW_VERSION"
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore -p:Version=${{ steps.preview_version.outputs.PREVIEW_VERSION }}
+
+      - name: Pack NuGet packages
+        run: dotnet pack --configuration Release --no-build -p:Version=${{ steps.preview_version.outputs.PREVIEW_VERSION }} --include-symbols -p:SymbolPackageFormat=snupkg --output ./artifacts
+
+      - name: List generated packages
+        run: Get-ChildItem ./artifacts | Select-Object Name | Format-Table
+
+      - name: Publish preview packages to NuGet
+        run: |
+          foreach ($file in Get-ChildItem "./artifacts" -Recurse -Include *.nupkg,*.snupkg) {
+            Write-Host "Processing package: $($file.Name)"
+
+            $apiKey = $null
+            if ($file.Name -like "Facet.Mapping.Expressions.*") {
+              Write-Host "Publishing Facet.Mapping.Expressions package..."
+              $apiKey = "${{ secrets.NUGET_API_KEY_EXPRESSIONS }}"
+            } elseif ($file.Name -like "Facet.Mapping.*") {
+              Write-Host "Publishing Facet.Mapping package..."
+              $apiKey = "${{ secrets.NUGET_MAP_API_KEY }}"
+            } elseif ($file.Name -like "Facet.Extensions.EFCore.Mapping.*") {
+              Write-Host "Publishing Facet.Extensions.EFCore.Mapping package..."
+              $apiKey = "${{ secrets.NUGET_API_KEY_EXTENSIONS_EF_MAPPING }}"
+            } elseif ($file.Name -like "Facet.Extensions.EFCore.*") {
+              Write-Host "Publishing Facet.Extensions.EFCore package..."
+              $apiKey = "${{ secrets.NUGET_API_KEY_EXTENSIONS_EF }}"
+            } elseif ($file.Name -like "Facet.Extensions.*") {
+              Write-Host "Publishing Facet.Extensions package..."
+              $apiKey = "${{ secrets.NUGET_API_KEY_EXTENSIONS }}"
+            } elseif ($file.Name -like "Facet.Dashboard.*") {
+              Write-Host "Publishing Facet.Dashboard package..."
+              $apiKey = "${{ secrets.NUGET_API_KEY_DASHBOARD }}"
+            } elseif ($file.Name -like "Facet.Attributes.*") {
+              Write-Host "Publishing Facet.Attributes package..."
+              $apiKey = "${{ secrets.NUGET_ATTRIBUTES_API_KEY }}"
+            } elseif ($file.Name -like "Facet.*") {
+              Write-Host "Publishing Facet package..."
+              $apiKey = "${{ secrets.NUGET_API_KEY }}"
+            } else {
+              Write-Host "Skipping unknown package: $($file.Name)"
+              continue
+            }
+
+            dotnet nuget push $file `
+              --api-key $apiKey `
+              --source https://api.nuget.org/v3/index.json `
+              --skip-duplicate
+          }
+
+      - name: Comment preview version on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ steps.preview_version.outputs.PREVIEW_VERSION }}';
+            const body = [
+              '## 📦 Preview packages published',
+              '',
+              `Version: \`${version}\``,
+              '',
+              'Install with:',
+              '```',
+              `dotnet add package Facet --version ${version}`,
+              '```',
+              '',
+              '_This pre-release is published automatically from this PR and will be overwritten on the next push._',
+            ].join('\n');
+
+            // Update existing bot comment if present, otherwise create a new one
+            const { data: comments } = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            const botComment = comments.find(
+              c => c.user.type === 'Bot' && c.body.includes('Preview packages published')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                comment_id: botComment.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body,
+              });
+            }

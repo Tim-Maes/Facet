@@ -13,15 +13,24 @@ internal static class ToSourceGenerator
     /// <summary>
     /// Generates the ToSource and BackTo methods that convert the facet type back to the source type.
     /// </summary>
-    public static void Generate(StringBuilder sb, FacetTargetModel model)
+    /// <param name="toSourceMethodName">
+    /// The name to use for the generated method.
+    /// When <see langword="null"/>, the default names <c>ToSource</c> and <c>BackTo</c> are used.
+    /// When provided (for multi-source facets), only the specified method is generated without the
+    /// deprecated <c>BackTo</c> alias.
+    /// </param>
+    public static void Generate(StringBuilder sb, FacetTargetModel model, string? toSourceMethodName = null)
     {
+        var methodName = toSourceMethodName ?? "ToSource";
+        var isCustomName = toSourceMethodName != null;
+
         // Generate the main ToSource method
         sb.AppendLine();
         sb.AppendLine("    /// <summary>");
-        sb.AppendLine($"    /// Converts this instance of <see cref=\"{model.Name}\"/> to an instance of the source type.");
+        sb.AppendLine($"    /// Converts this instance of <see cref=\"{model.Name}\"/> to an instance of <see cref=\"{CodeGenerationHelpers.GetSimpleTypeName(model.SourceTypeName)}\"/>.");
         sb.AppendLine("    /// </summary>");
-        sb.AppendLine($"    /// <returns>An instance of the source type with properties mapped from this instance.</returns>");
-        sb.AppendLine($"    public {(model.BaseHidesFacetMembers ? "new " : "")}{model.SourceTypeName} ToSource()");
+        sb.AppendLine($"    /// <returns>An instance of <see cref=\"{CodeGenerationHelpers.GetSimpleTypeName(model.SourceTypeName)}\"/> with properties mapped from this instance.</returns>");
+        sb.AppendLine($"    public {(model.BaseHidesFacetMembers ? "new " : "")}{model.SourceTypeName} {methodName}()");
         sb.AppendLine("    {");
 
         if (model.SourceHasPositionalConstructor)
@@ -35,14 +44,17 @@ internal static class ToSourceGenerator
 
         sb.AppendLine("    }");
 
-        // Generate the deprecated BackTo method that calls ToSource
-        sb.AppendLine();
-        sb.AppendLine("    /// <summary>");
-        sb.AppendLine($"    /// Converts this instance of <see cref=\"{model.Name}\"/> to an instance of the source type.");
-        sb.AppendLine("    /// </summary>");
-        sb.AppendLine($"    /// <returns>An instance of the source type with properties mapped from this instance.</returns>");
-        sb.AppendLine("    [global::System.Obsolete(\"Use ToSource() instead. This method will be removed in a future version.\")]");
-        sb.AppendLine($"    public {(model.BaseHidesFacetMembers ? "new " : "")}{model.SourceTypeName} BackTo() => ToSource();");
+        // Generate the deprecated BackTo method only for the default (single-source) naming
+        if (!isCustomName)
+        {
+            sb.AppendLine();
+            sb.AppendLine("    /// <summary>");
+            sb.AppendLine($"    /// Converts this instance of <see cref=\"{model.Name}\"/> to an instance of the source type.");
+            sb.AppendLine("    /// </summary>");
+            sb.AppendLine($"    /// <returns>An instance of the source type with properties mapped from this instance.</returns>");
+            sb.AppendLine("    [global::System.Obsolete(\"Use ToSource() instead. This method will be removed in a future version.\")]");
+            sb.AppendLine($"    public {(model.BaseHidesFacetMembers ? "new " : "")}{model.SourceTypeName} BackTo() => ToSource();");
+        }
     }
 
     private static void GeneratePositionalToSource(StringBuilder sb, FacetTargetModel model)

@@ -11,12 +11,23 @@ internal static class MemberGenerator
     /// <summary>
     /// Generates member declarations (properties and fields) for the target type.
     /// </summary>
-    public static void GenerateMembers(StringBuilder sb, FacetTargetModel model, string memberIndent)
+    /// <param name="membersOverride">
+    /// When non-<see langword="null"/>, generates declarations for this set of members instead of
+    /// <see cref="FacetTargetModel.Members"/>.  Used by the multi-source combined generator to emit
+    /// the union of all source members.
+    /// </param>
+    public static void GenerateMembers(
+        StringBuilder sb,
+        FacetTargetModel model,
+        string memberIndent,
+        System.Collections.Generic.IReadOnlyList<FacetMember>? membersOverride = null)
     {
         // Create a HashSet for efficient lookup of base class member names
         var baseClassMembers = new System.Collections.Generic.HashSet<string>(model.BaseClassMemberNames);
 
-        foreach (var m in model.Members)
+        var members = membersOverride ?? (System.Collections.Generic.IReadOnlyList<FacetMember>)model.Members;
+
+        foreach (var m in members)
         {
             // Skip user-declared properties (those with [MapFrom] or [MapWhen] attribute)
             if (m.IsUserDeclared)

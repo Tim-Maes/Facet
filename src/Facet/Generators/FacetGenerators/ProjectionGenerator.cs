@@ -13,12 +13,19 @@ internal static class ProjectionGenerator
     /// <summary>
     /// Generates the projection property for LINQ/EF Core query optimization.
     /// </summary>
+    /// <param name="projectionPropertyName">
+    /// The name to use for the generated static property.
+    /// Defaults to <c>"Projection"</c> when <see langword="null"/>.
+    /// Pass a custom name (e.g. <c>"ProjectionFromUnitEntity"</c>) for multi-source facets.
+    /// </param>
     public static void GenerateProjectionProperty(
         StringBuilder sb,
         FacetTargetModel model,
         string memberIndent,
-        Dictionary<string, FacetTargetModel> facetLookup)
+        Dictionary<string, FacetTargetModel> facetLookup,
+        string? projectionPropertyName = null)
     {
+        var propertyName = projectionPropertyName ?? "Projection";
         sb.AppendLine();
 
         if (model.HasExistingPrimaryConstructor && model.IsRecord)
@@ -27,13 +34,13 @@ internal static class ProjectionGenerator
         }
         else if (model.HasProjectionMapConfiguration)
         {
-            GenerateProjectionDocumentation(sb, model, memberIndent);
-            GenerateLazyProjection(sb, model, memberIndent, facetLookup);
+            GenerateProjectionDocumentation(sb, model, memberIndent, propertyName);
+            GenerateLazyProjection(sb, model, memberIndent, facetLookup, propertyName);
         }
         else
         {
-            GenerateProjectionDocumentation(sb, model, memberIndent);
-            sb.AppendLine($"{memberIndent}public static {(model.BaseHidesFacetMembers ? "new " : "")}Expression<Func<{model.SourceTypeName}, {model.Name}>> Projection =>");
+            GenerateProjectionDocumentation(sb, model, memberIndent, propertyName);
+            sb.AppendLine($"{memberIndent}public static {(model.BaseHidesFacetMembers ? "new " : "")}Expression<Func<{model.SourceTypeName}, {model.Name}>> {propertyName} =>");
 
             // Generate object initializer projection for EF Core compatibility
             GenerateProjectionExpression(sb, model, memberIndent, facetLookup);
@@ -50,23 +57,29 @@ internal static class ProjectionGenerator
         StringBuilder sb,
         FacetTargetModel model,
         string memberIndent,
-        Dictionary<string, FacetTargetModel> _)
+        Dictionary<string, FacetTargetModel> _,
+        string propertyName = "Projection")
     {
         var newModifier = model.BaseHidesFacetMembers ? "new " : "";
         var src = model.SourceTypeName;
         var tgt = model.Name;
 
+        // Derive a unique backing-field name from the property name to avoid collisions in multi-source scenarios.
+        var safeName = string.IsNullOrEmpty(propertyName) ? "Projection" : propertyName;
+        var backingFieldName = "_" + char.ToLowerInvariant(safeName[0]) + safeName.Substring(1);
+        var buildMethodName = "Build" + safeName;
+
         // Backing field
-        sb.AppendLine($"{memberIndent}private static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>>? _projection;");
+        sb.AppendLine($"{memberIndent}private static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>>? {backingFieldName};");
         sb.AppendLine();
 
         // Projection property
-        sb.AppendLine($"{memberIndent}public static {newModifier}global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> Projection");
-        sb.AppendLine($"{memberIndent}    => global::System.Threading.LazyInitializer.EnsureInitialized(ref _projection, BuildProjection);");
+        sb.AppendLine($"{memberIndent}public static {newModifier}global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> {propertyName}");
+        sb.AppendLine($"{memberIndent}    => global::System.Threading.LazyInitializer.EnsureInitialized(ref {backingFieldName}, {buildMethodName});");
         sb.AppendLine();
 
         // BuildProjection() method
-        sb.AppendLine($"{memberIndent}private static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> BuildProjection()");
+        sb.AppendLine($"{memberIndent}private static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> {buildMethodName}()");
         sb.AppendLine($"{memberIndent}{{");
 
         var bodyIndent = memberIndent + "    ";
@@ -155,7 +168,7 @@ internal static class ProjectionGenerator
     }
 
 
-    private static void GenerateProjectionDocumentation(StringBuilder sb, FacetTargetModel model, string memberIndent)
+    private static void GenerateProjectionDocumentation(StringBuilder sb, FacetTargetModel model, string memberIndent, string propertyName = "Projection")
     {
         // Generate projection XML documentation
         sb.AppendLine($"{memberIndent}/// <summary>");
@@ -167,7 +180,7 @@ internal static class ProjectionGenerator
         sb.AppendLine($"{memberIndent}/// <code>");
         sb.AppendLine($"{memberIndent}/// var dtos = context.{CodeGenerationHelpers.GetSimpleTypeName(model.SourceTypeName)}s");
         sb.AppendLine($"{memberIndent}///     .Where(x => x.IsActive)");
-        sb.AppendLine($"{memberIndent}///     .Select({model.Name}.Projection)");
+        sb.AppendLine($"{memberIndent}///     .Select({model.Name}.{propertyName})");
         sb.AppendLine($"{memberIndent}///     .ToList();");
         sb.AppendLine($"{memberIndent}/// </code>");
         sb.AppendLine($"{memberIndent}/// </example>");

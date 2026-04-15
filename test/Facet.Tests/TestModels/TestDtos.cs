@@ -310,3 +310,32 @@ public partial class OrderDto
 {
     public OrderMetadata? Metadata { get; set; }
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Multi-source mapping test DTOs (GitHub issue: map different source types to the
+// same target type).
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// A DTO that can be constructed from either <see cref="MultiSourceEntityA"/> or
+/// <see cref="MultiSourceEntityB"/> – both share Id and Name.
+/// </summary>
+[Facet(typeof(MultiSourceEntityA), Include = new[] { nameof(MultiSourceEntityA.Id), nameof(MultiSourceEntityA.Name) })]
+[Facet(typeof(MultiSourceEntityB), Include = new[] { nameof(MultiSourceEntityB.Id), nameof(MultiSourceEntityB.Name) })]
+public partial class MultiSourceDto;
+
+/// <summary>
+/// A DTO that maps from A (with ToSource) and from B (without ToSource),
+/// used to verify per-source ToSource method generation.
+/// </summary>
+[Facet(typeof(MultiSourceEntityA), Include = new[] { nameof(MultiSourceEntityA.Id), nameof(MultiSourceEntityA.Name) }, GenerateToSource = true)]
+[Facet(typeof(MultiSourceEntityB), Include = new[] { nameof(MultiSourceEntityB.Id), nameof(MultiSourceEntityB.Name) })]
+public partial class MultiSourceWithToSourceDto;
+
+/// <summary>
+/// A DTO that maps from A and B including their exclusive properties, used to verify
+/// the union-of-members behaviour.
+/// </summary>
+[Facet(typeof(MultiSourceEntityA))]
+[Facet(typeof(MultiSourceEntityB))]
+public partial class MultiSourceUnionDto;
