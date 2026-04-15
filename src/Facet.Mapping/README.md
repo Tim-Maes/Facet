@@ -21,9 +21,10 @@ With **Facet.Mapping**, you can go further and define custom logic like combinin
 3. Point the `[Facet(...)]` attribute to the config class using `Configuration = typeof(...)`.
 
 ### Projection Mapping (EF Core-compatible computed properties)
-1. Implement `IFacetProjectionMapConfiguration<TSource, TTarget>` alongside `IFacetMapConfiguration<TSource, TTarget>`.
+1. Implement `IFacetProjectionMapConfiguration<TSource, TTarget>` — either alongside `IFacetMapConfiguration<TSource, TTarget>`, or on its own.
 2. Define a static `ConfigureProjection` method that registers expression bindings via the builder.
 3. The generator detects the interface and switches `Projection` to a lazily-built `MemberInitExpression` — fully translatable by EF Core.
+4. When used without `IFacetMapConfiguration`, the generator also compiles the expressions into a cached `Action` and invokes it in constructors, no code duplication needed.
 
 ### Reverse Mapping (DTO → Entity)
 1. Implement the `IFacetToSourceConfiguration<TFacet, TSource>` interface.

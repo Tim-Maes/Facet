@@ -198,7 +198,7 @@ public partial class UserDto { }
 
 #### Description
 
-Configuration types must implement `IFacetMapConfiguration<TSource, TTarget>`, `IFacetMapConfigurationAsync<TSource, TTarget>`, or provide a static `Map` method.
+Configuration types must implement `IFacetMapConfiguration<TSource, TTarget>`, `IFacetMapConfigurationAsync<TSource, TTarget>`, `IFacetProjectionMapConfiguration<TSource, TTarget>`, or provide a static `Map` method.
 
 #### Bad Code
 
@@ -215,7 +215,7 @@ public partial class UserDto { }
 #### Good Code
 
 ```csharp
-// Option 1: Implement interface
+// Option 1: Implement IFacetMapConfiguration
 public class UserMapper : IFacetMapConfiguration<User, UserDto>
 {
     public static void Map(User source, UserDto target)
@@ -224,7 +224,16 @@ public class UserMapper : IFacetMapConfiguration<User, UserDto>
     }
 }
 
-// Option 2: Provide static Map method
+// Option 2: Implement IFacetProjectionMapConfiguration (expression-only, reused in constructors)
+public class UserMapper : IFacetProjectionMapConfiguration<User, UserDto>
+{
+    public static void ConfigureProjection(IFacetProjectionBuilder<User, UserDto> builder)
+    {
+        builder.Map(d => d.FullName, s => s.FirstName + " " + s.LastName);
+    }
+}
+
+// Option 3: Provide static Map method
 public class UserMapper
 {
     public static void Map(User source, UserDto target)

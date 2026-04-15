@@ -10,7 +10,7 @@ Facet supports custom mapping logic for advanced scenarios via multiple interfac
 | `IFacetMapConfiguration<TSource, TTarget>` | Synchronous mapping | Fast, in-memory operations |
 | `IFacetMapConfigurationAsync<TSource, TTarget>` | Asynchronous mapping | I/O operations, database calls, API calls |
 | `IFacetMapConfigurationHybrid<TSource, TTarget>` | Combined sync/async | Optimal performance with mixed operations |
-| `IFacetProjectionMapConfiguration<TSource, TTarget>` | Expression-based projection mapping | Computed properties in EF Core `Projection` |
+| `IFacetProjectionMapConfiguration<TSource, TTarget>` | Expression-based projection mapping | Computed properties in EF Core `Projection`; can be used standalone (without `IFacetMapConfiguration`) to reuse expressions in constructors |
 
 ### Instance Mappers (With Dependency Injection Support)
 | Interface | Purpose | Use Case |
@@ -575,6 +575,7 @@ public partial class UnitDto { ... }
 Use `IFacetProjectionMapConfiguration` when:
 - You have a computed property (e.g. `FullName = FirstName + " " + LastName`) that must work in EF Core `Select` queries
 - Your `Map()` method sets some properties that are expressible as SQL and others that are not (DI-dependent); you want the SQL-translatable ones in the `Projection`
+- You want to **write mapping logic once** and reuse it in both projections and constructors (see [Standalone usage](#standalone-usage-without-ifacetmapconfiguration) below)
 
 ### Division of responsibility
 
@@ -583,7 +584,9 @@ Use `IFacetProjectionMapConfiguration` when:
 | `IFacetMapConfiguration` — `Map()` | Constructors, `FromSource()` | Imperative logic, DI-dependent work, anything not SQL-translatable |
 | `IFacetProjectionMapConfiguration` - `ConfigureProjection()` | `Projection` build (once, lazy) | Expression-only mappings that EF Core can translate to SQL |
 
-### Example
+### Example: Combined with IFacetMapConfiguration
+
+When you implement both interfaces, `Map()` runs in constructors and `ConfigureProjection()` builds the projection. This is useful when some mappings are DI-dependent and cannot be expressed as SQL.
 
 ```csharp
 public class UserDto325MapConfig
@@ -612,6 +615,34 @@ public partial class UserDto
     public string AuditNote  { get; set; } = string.Empty;
 }
 ```
+
+### Standalone usage (without IFacetMapConfiguration)
+
+You can implement `IFacetProjectionMapConfiguration` **without** `IFacetMapConfiguration`. The generator will compile the projection expressions into a cached `Action<TSource, TTarget>` and invoke it in constructors and `FromSource()`. This lets you write your mapping logic once and reuse it everywhere — no code duplication.
+
+```csharp
+public class EmployeeDtoMapConfig
+    : IFacetProjectionMapConfiguration<EmployeeEntity, EmployeeDto>
+{
+    public static void ConfigureProjection(IFacetProjectionBuilder<EmployeeEntity, EmployeeDto> builder)
+    {
+        builder.Map(d => d.FullName, s => s.FirstName + " " + s.LastName);
+        builder.Map(d => d.TotalPay, s => s.HourlyRate * s.HoursWorked);
+    }
+}
+
+[Facet(typeof(EmployeeEntity), Configuration = typeof(EmployeeDtoMapConfig), GenerateProjection = true)]
+public partial class EmployeeDto
+{
+    public string FullName { get; set; } = string.Empty;
+    public decimal TotalPay { get; set; }
+}
+```
+
+With this setup:
+- **Constructors** and **`FromSource()`** compile the expressions once (lazy, cached) and apply them after auto-mapped properties are set
+- **`Projection`** inlines the expressions into a `MemberInitExpression` for EF Core SQL translation
+- Both paths share the same `ConfigureProjection()` logic — single source of truth
 
 When the generator detects that the `Configuration` type implements `IFacetProjectionMapConfiguration`, it switches the generated `Projection` property from a static expression literal to a **lazily-built expression tree**:
 
