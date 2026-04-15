@@ -30,19 +30,21 @@ internal static class AttributeParser
                 {
                     if (childValue.Value is INamedTypeSymbol childFacetType)
                     {
-                        // Find the Facet attribute on the child type to get its source type
-                        var childFacetAttr = childFacetType.GetAttributes()
-                            .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == FacetConstants.FacetAttributeFullName);
+                        var childFacetAttrs = childFacetType.GetAttributes()
+                            .Where(a => a.AttributeClass?.ToDisplayString() == FacetConstants.FacetAttributeFullName);
 
-                        if (childFacetAttr != null && childFacetAttr.ConstructorArguments.Length > 0)
+                        foreach (var childFacetAttr in childFacetAttrs)
                         {
-                            if (childFacetAttr.ConstructorArguments[0].Value is INamedTypeSymbol childSourceType)
+                            if (childFacetAttr.ConstructorArguments.Length > 0)
                             {
-                                var sourceTypeName = childSourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                                var childFacetTypeName = childFacetType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                                if (childFacetAttr.ConstructorArguments[0].Value is INamedTypeSymbol childSourceType)
+                                {
+                                    var sourceTypeName = childSourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                                    var childFacetTypeName = childFacetType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-                                // Map the source type to the child facet type
-                                mappings[sourceTypeName] = (childFacetTypeName, sourceTypeName);
+                                    // Map the source type to the child facet type
+                                    mappings[sourceTypeName] = (childFacetTypeName, sourceTypeName);
+                                }
                             }
                         }
                     }
