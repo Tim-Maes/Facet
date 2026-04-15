@@ -339,3 +339,25 @@ public partial class MultiSourceWithToSourceDto;
 [Facet(typeof(MultiSourceEntityA))]
 [Facet(typeof(MultiSourceEntityB))]
 public partial class MultiSourceUnionDto;
+
+/// <summary>
+/// Multi-source nested facet that can map from either UnitDto or UnitEntity.
+/// This is used as a nested property in OrderLineBaseUpsertDto.
+/// </summary>
+[Facet(typeof(UnitDto),
+       GenerateToSource = true,
+       Include = new[] { nameof(UnitDto.Name), nameof(UnitDto.ValidationResult) })]
+[Facet(typeof(UnitEntity),
+       GenerateToSource = true,
+       Include = new[] { nameof(UnitEntity.Name), nameof(UnitEntity.ValidationResult) })]
+public partial class UnitDropDownDto;
+
+/// <summary>
+/// Parent facet that uses UnitDropDownDto (a multi-source facet) as a nested property.
+/// Tests that ToSource() correctly calls the appropriate ToSource method on the nested facet.
+/// </summary>
+[Facet(typeof(OrderLineBaseEntity),
+       GenerateToSource = true,
+       Include = new[] { nameof(OrderLineBaseEntity.AssignedToUnit), nameof(OrderLineBaseEntity.Number) },
+       NestedFacets = new[] { typeof(UnitDropDownDto) })]
+public partial class OrderLineBaseUpsertDto;

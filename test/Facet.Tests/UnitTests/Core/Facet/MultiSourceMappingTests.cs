@@ -139,4 +139,82 @@ public class MultiSourceMappingTests
         dto.Name.Should().Be("Eight");
         dto.OnlyInB.Should().Be("bbb");
     }
+
+    [Fact]
+    public void NestedMultiSourceFacet_ToSource_ShouldCallCorrectSourceSpecificMethod()
+    {
+        // Arrange: Create a parent DTO with a nested multi-source facet
+        var orderLine = new OrderLineBaseEntity
+        {
+            Id = 1,
+            Number = "ORD-001",
+            AssignedToUnit = new UnitEntity
+            {
+                Id = 100,
+                Name = "Production Unit",
+                ValidationResult = "Valid"
+            }
+        };
+
+        var dto = new OrderLineBaseUpsertDto(orderLine);
+
+        // Verify the DTO was constructed correctly
+        dto.Number.Should().Be("ORD-001");
+        dto.AssignedToUnit.Should().NotBeNull();
+        dto.AssignedToUnit!.Name.Should().Be("Production Unit");
+        dto.AssignedToUnit.ValidationResult.Should().Be("Valid");
+
+        // Act: Call ToSource on the parent DTO
+        // This should internally call ToUnitEntity() on the nested multi-source facet
+        var result = dto.ToSource();
+
+        // Assert: Verify the parent entity was reconstructed correctly
+        result.Number.Should().Be("ORD-001");
+        result.AssignedToUnit.Should().NotBeNull();
+        result.AssignedToUnit!.Name.Should().Be("Production Unit");
+        result.AssignedToUnit.ValidationResult.Should().Be("Valid");
+    }
+
+    [Fact]
+    public void NestedMultiSourceFacet_WithNullNestedProperty_ShouldHandleCorrectly()
+    {
+        // Arrange: Create a parent DTO with null nested property
+        var dto = new OrderLineBaseUpsertDto
+        {
+            Number = "ORD-002",
+            AssignedToUnit = null
+        };
+
+        // Act: Call ToSource on the parent DTO with null nested property
+        var result = dto.ToSource();
+
+        // Assert: Verify null is preserved
+        result.Number.Should().Be("ORD-002");
+        result.AssignedToUnit.Should().BeNull();
+    }
+
+    [Fact]
+    public void MultiSourceNestedFacet_ShouldGenerateSourceSpecificToSourceMethods()
+    {
+        // Verify that UnitDropDownDto (multi-source facet) generates source-specific ToSource methods
+        var unitDropDown = new UnitDropDownDto
+        {
+            Name = "Test Unit",
+            ValidationResult = "Passed"
+        };
+
+        // Should have ToUnitDto() method
+        var unitDto = unitDropDown.ToUnitDto();
+        unitDto.Name.Should().Be("Test Unit");
+        unitDto.ValidationResult.Should().Be("Passed");
+
+        // Should have ToUnitEntity() method
+        var unitEntity = unitDropDown.ToUnitEntity();
+        unitEntity.Name.Should().Be("Test Unit");
+        unitEntity.ValidationResult.Should().Be("Passed");
+
+        var methods = typeof(UnitDropDownDto).GetMethods();
+        methods.Should().Contain(m => m.Name == "ToUnitDto");
+        methods.Should().Contain(m => m.Name == "ToUnitEntity");
+    }
 }

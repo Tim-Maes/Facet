@@ -1,4 +1,5 @@
 using Facet.Generators.Shared;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace Facet.Generators;
@@ -73,7 +74,9 @@ internal static class ExpressionBuilder
     /// For collection child facets, returns "this.PropertyName.Select(x => x.ToSource()).ToList()" with null checks if nullable.
     /// For regular members, returns "this.PropertyName" with nullable-to-non-nullable conversion if needed.
     /// </summary>
-    public static string GetToSourceValueExpression(FacetMember member)
+    /// <param name="facetLookup">Dictionary mapping facet type names to their model lists (for resolving multi-source nested facets).</param>
+    /// <param name="parentSourceTypeName">The source type name of the parent facet (used to determine which ToSource method to call for multi-source nested facets).</param>
+    public static string GetToSourceValueExpression(FacetMember member, Dictionary<string, List<FacetTargetModel>>? facetLookup = null, string? parentSourceTypeName = null)
     {
         // Check if the member type is nullable (ends with ?)
         bool facetTypeIsNullable = member.TypeName.Contains("?");
@@ -83,11 +86,11 @@ internal static class ExpressionBuilder
 
         if (member.IsNestedFacet && member.IsCollection)
         {
-            return BuildCollectionToSourceExpression(member, facetTypeIsNullable);
+            return BuildCollectionToSourceExpression(member, facetTypeIsNullable, facetLookup, parentSourceTypeName);
         }
         else if (member.IsNestedFacet)
         {
-            return BuildSingleToSourceExpression(member, facetTypeIsNullable);
+            return BuildSingleToSourceExpression(member, facetTypeIsNullable, facetLookup, parentSourceTypeName);
         }
 
         // Handle enum conversion (reverse: string/int back to enum)
@@ -300,10 +303,13 @@ internal static class ExpressionBuilder
         }
     }
 
-    private static string BuildCollectionToSourceExpression(FacetMember member, bool facetTypeIsNullable)
+    private static string BuildCollectionToSourceExpression(FacetMember member, bool facetTypeIsNullable, Dictionary<string, List<FacetTargetModel>>? facetLookup, string? parentSourceTypeName)
     {
+        // Determine the correct ToSource method name for the nested facet
+        var toSourceMethodName = GetToSourceMethodName(member.TypeName, member.NestedFacetSourceTypeName, facetLookup, parentSourceTypeName);
+
         // Use LINQ Select to map each element back
-        var projection = $"this.{member.Name}.Select(x => x.ToSource())";
+        var projection = $"this.{member.Name}.Select(x => x.{toSourceMethodName}())";
 
         // Use the original source collection wrapper (before any CollectionTargetType override)
         // so that the generated expression produces the correct source type.
@@ -319,16 +325,19 @@ internal static class ExpressionBuilder
         return collectionExpression;
     }
 
-    private static string BuildSingleToSourceExpression(FacetMember member, bool facetTypeIsNullable)
+    private static string BuildSingleToSourceExpression(FacetMember member, bool facetTypeIsNullable, Dictionary<string, List<FacetTargetModel>>? facetLookup, string? parentSourceTypeName)
     {
+        // Determine the correct ToSource method name for the nested facet
+        var toSourceMethodName = GetToSourceMethodName(member.TypeName, member.NestedFacetSourceTypeName, facetLookup, parentSourceTypeName);
+
         // Add null check for nullable nested facets
         if (facetTypeIsNullable)
         {
-            return $"this.{member.Name} != null ? this.{member.Name}.ToSource() : null";
+            return $"this.{member.Name} != null ? this.{member.Name}.{toSourceMethodName}() : null";
         }
 
         // Use the child facet's generated ToSource method
-        return $"this.{member.Name}.ToSource()";
+        return $"this.{member.Name}.{toSourceMethodName}()";
     }
 
     private static string WrapCollectionProjection(string projection, string collectionWrapper, string? elementTypeName = null)
@@ -466,6 +475,89 @@ internal static class ExpressionBuilder
             FacetConstants.CollectionWrappers.Collection => $"new global::System.Collections.ObjectModel.Collection<{elementType}>()",
             _ => $"new global::System.Collections.Generic.List<{elementType}>()"
         };
+    }
+
+    /// <summary>
+    /// Determines the correct ToSource method name for a nested facet, handling multi-source scenarios.
+    /// For single-source facets, returns "ToSource".
+    /// For multi-source facets, returns the source-specific method name like "ToUnitEntity".
+    /// </summary>
+    /// <param name="nestedFacetTypeName">The type name of the nested facet (may include nullable marker and generic arguments).</param>
+    /// <param name="nestedFacetSourceTypeName">The source type that the nested facet maps from.</param>
+    /// <param name="facetLookup">Dictionary mapping facet type names to their model lists.</param>
+    /// <param name="parentSourceTypeName">The source type name of the parent facet.</param>
+    /// <returns>The ToSource method name to call (e.g., "ToSource" or "ToUnitEntity").</returns>
+    private static string GetToSourceMethodName(
+        string nestedFacetTypeName,
+        string? nestedFacetSourceTypeName,
+        Dictionary<string, List<FacetTargetModel>>? facetLookup,
+        string? parentSourceTypeName)
+    {
+        // Default to "ToSource" if we don't have lookup information
+        if (facetLookup == null || nestedFacetSourceTypeName == null)
+            return "ToSource";
+
+        // Find the nested facet models in the lookup
+        var nestedFacetModels = FindNestedFacetModels(nestedFacetTypeName, facetLookup);
+        if (nestedFacetModels == null || nestedFacetModels.Count <= 1)
+        {
+            // Single-source facet: use the default "ToSource" method
+            return "ToSource";
+        }
+
+        // Multi-source facet: determine which ToSource method to call
+        // The method name is "To" + simple source type name
+        var sourceSimpleName = CodeGenerationHelpers.GetSimpleTypeName(nestedFacetSourceTypeName);
+        var angleBracket = sourceSimpleName.IndexOf('<');
+        if (angleBracket > 0)
+            sourceSimpleName = sourceSimpleName.Substring(0, angleBracket);
+
+        return "To" + sourceSimpleName;
+    }
+
+    /// <summary>
+    /// Finds the list of facet models for a given nested facet type name.
+    /// </summary>
+    private static List<FacetTargetModel>? FindNestedFacetModels(string typeName, Dictionary<string, List<FacetTargetModel>> facetLookup)
+    {
+        // Strip nullable marker and extract the non-nullable type name
+        var nonNullableTypeName = typeName.TrimEnd('?');
+
+        // For collection types, extract the element type
+        if (nonNullableTypeName.Contains('<'))
+        {
+            var elementType = ExtractElementTypeFromCollectionTypeName(nonNullableTypeName);
+            nonNullableTypeName = elementType;
+        }
+
+        // Strip "global::" prefix and extract simple name
+        var lookupName = nonNullableTypeName
+            .Replace(Shared.GeneratorUtilities.GlobalPrefix, "")
+            .Split('.', ':')
+            .Last();
+
+        // First try exact match with the lookup name
+        if (facetLookup.TryGetValue(lookupName, out var nestedFacetModels))
+        {
+            return nestedFacetModels;
+        }
+
+        // Try matching by simple name or full name
+        foreach (var kvp in facetLookup)
+        {
+            if (kvp.Value.Count > 0)
+            {
+                var model = kvp.Value[0];
+                if (kvp.Key == lookupName ||
+                    model.Name == lookupName ||
+                    kvp.Key.EndsWith("." + lookupName))
+                {
+                    return kvp.Value;
+                }
+            }
+        }
+
+        return null;
     }
 
     #endregion

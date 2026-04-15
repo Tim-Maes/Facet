@@ -13,7 +13,7 @@ internal static class FlattenToGenerator
     /// <summary>
     /// Generates FlattenTo methods for all configured flatten target types.
     /// </summary>
-    public static void Generate(StringBuilder sb, FacetTargetModel model, string indent, Dictionary<string, FacetTargetModel> facetLookup)
+    public static void Generate(StringBuilder sb, FacetTargetModel model, string indent, Dictionary<string, List<FacetTargetModel>> facetLookup)
     {
         if (model.FlattenToTypes.Length == 0) return;
 
@@ -24,7 +24,7 @@ internal static class FlattenToGenerator
         }
     }
 
-    private static void GenerateFlattenToMethod(StringBuilder sb, FacetTargetModel model, string flattenToType, string indent, Dictionary<string, FacetTargetModel> facetLookup)
+    private static void GenerateFlattenToMethod(StringBuilder sb, FacetTargetModel model, string flattenToType, string indent, Dictionary<string, List<FacetTargetModel>> facetLookup)
     {
         // Extract the simple name from the fully qualified type name
         var flattenToTypeName = ExtractSimpleName(flattenToType);
@@ -121,28 +121,28 @@ internal static class FlattenToGenerator
         sb.AppendLine($"{indent}}}");
     }
 
-    private static FacetTargetModel? FindFacetModel(string typeName, Dictionary<string, FacetTargetModel> facetLookup)
+    private static FacetTargetModel? FindFacetModel(string typeName, Dictionary<string, List<FacetTargetModel>> facetLookup)
     {
         if (string.IsNullOrEmpty(typeName)) return null;
 
         // Try the exact name first
-        if (facetLookup.TryGetValue(typeName, out var facet))
+        if (facetLookup.TryGetValue(typeName, out var facetModels) && facetModels.Count > 0)
         {
-            return facet;
+            return facetModels[0];
         }
 
         // Try just the simple name
         var simpleName = ExtractSimpleName(typeName);
-        if (facetLookup.TryGetValue(simpleName, out facet))
+        if (facetLookup.TryGetValue(simpleName, out facetModels) && facetModels.Count > 0)
         {
-            return facet;
+            return facetModels[0];
         }
 
         // Try without global:: prefix
         var withoutGlobal = typeName.Replace("global::", "");
-        if (facetLookup.TryGetValue(withoutGlobal, out facet))
+        if (facetLookup.TryGetValue(withoutGlobal, out facetModels) && facetModels.Count > 0)
         {
-            return facet;
+            return facetModels[0];
         }
 
         return null;
@@ -150,7 +150,7 @@ internal static class FlattenToGenerator
 
     private static void CollectLeafNames(
         FacetTargetModel facet,
-        Dictionary<string, FacetTargetModel> facetLookup,
+        Dictionary<string, List<FacetTargetModel>> facetLookup,
         List<FacetMember> parentMembers,
         List<string> pathSegments,
         Dictionary<string, int> leafNameCounts,
@@ -215,7 +215,7 @@ internal static class FlattenToGenerator
     private static void CollectNestedProperties(
         StringBuilder sb,
         FacetTargetModel facet,
-        Dictionary<string, FacetTargetModel> facetLookup,
+        Dictionary<string, List<FacetTargetModel>> facetLookup,
         List<FacetMember> parentMembers,
         string navigationPath,
         List<string> pathSegments,
