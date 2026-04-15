@@ -53,11 +53,11 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
     public static readonly DiagnosticDescriptor InvalidConfigurationTypeRule = new DiagnosticDescriptor(
         "FAC006",
         "Configuration type does not implement required interface",
-        "Configuration type '{0}' must implement IFacetMapConfiguration or have a static Map method",
+        "Configuration type '{0}' must implement IFacetMapConfiguration, IFacetProjectionMapConfiguration, or have a static Map method",
         "Usage",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "Configuration types must implement the appropriate IFacetMapConfiguration interface or provide a static Map method.");
+        description: "Configuration types must implement IFacetMapConfiguration, IFacetProjectionMapConfiguration, or provide a static Map method.");
 
     // FAC007: Invalid NestedFacets type
     public static readonly DiagnosticDescriptor InvalidNestedFacetRule = new DiagnosticDescriptor(
@@ -787,7 +787,17 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
                                 SymbolEqualityComparer.Default.Equals(m.Parameters[0].Type, sourceType) &&
                                 SymbolEqualityComparer.Default.Equals(m.Parameters[1].Type, targetType));
 
-        return mapMethod != null;
+        if (mapMethod != null)
+            return true;
+
+        // Check for IFacetProjectionMapConfiguration<TSource, TTarget> (projection-only config)
+        var projectionInterface = configurationType.AllInterfaces.FirstOrDefault(i =>
+            i.IsGenericType &&
+            i.ConstructedFrom.ToDisplayString() == "Facet.Mapping.IFacetProjectionMapConfiguration<TSource, TTarget>" &&
+            SymbolEqualityComparer.Default.Equals(i.TypeArguments[0], sourceType) &&
+            SymbolEqualityComparer.Default.Equals(i.TypeArguments[1], targetType));
+
+        return projectionInterface != null;
     }
 
     private static IEnumerable<ISymbol> GetAllPublicMembers(INamedTypeSymbol type)

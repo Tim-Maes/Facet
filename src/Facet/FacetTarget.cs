@@ -82,6 +82,14 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     /// </summary>
     public bool HasProjectionMapConfiguration { get; }
 
+    /// <summary>
+    /// When true, the <see cref="ConfigurationTypeName"/> type implements
+    /// <c>IFacetMapConfiguration&lt;TSource, TTarget&gt;</c> and provides an imperative <c>Map()</c> method.
+    /// When false but <see cref="HasProjectionMapConfiguration"/> is true, the constructor will
+    /// compile the projection expressions into a cached <c>Action&lt;TSource, TTarget&gt;</c> instead.
+    /// </summary>
+    public bool HasMapConfiguration { get; }
+
     public FacetTargetModel(
         string name,
         string? @namespace,
@@ -118,7 +126,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         string? toSourceConfigurationTypeName = null,
         bool baseHidesFacetMembers = false,
         bool hasProjectionMapConfiguration = false,
-        bool baseHidesFromSource = false)
+        bool baseHidesFromSource = false,
+        bool hasMapConfiguration = false)
     {
         Name = name;
         Namespace = @namespace;
@@ -155,6 +164,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         ToSourceConfigurationTypeName = toSourceConfigurationTypeName;
         BaseHidesFacetMembers = baseHidesFacetMembers;
         HasProjectionMapConfiguration = hasProjectionMapConfiguration;
+        HasMapConfiguration = hasMapConfiguration;
         BaseHidesFromSource = baseHidesFromSource;
     }
 
@@ -197,6 +207,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && ToSourceConfigurationTypeName == other.ToSourceConfigurationTypeName
             && BaseHidesFacetMembers == other.BaseHidesFacetMembers
             && HasProjectionMapConfiguration == other.HasProjectionMapConfiguration
+            && HasMapConfiguration == other.HasMapConfiguration
             && BaseHidesFromSource == other.BaseHidesFromSource;
     }
 
@@ -235,6 +246,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + (ToSourceConfigurationTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + BaseHidesFacetMembers.GetHashCode();
             hash = hash * 31 + HasProjectionMapConfiguration.GetHashCode();
+            hash = hash * 31 + HasMapConfiguration.GetHashCode();
             hash = hash * 31 + BaseHidesFromSource.GetHashCode();
             hash = hash * 31 + Members.Length.GetHashCode();
 
