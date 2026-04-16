@@ -160,6 +160,18 @@ internal static class ModelBuilder
         // Collect base class member names early, needed by ExtractMembers to auto-include
         var baseClassMemberNames = GetBaseClassMemberNames(targetSymbol);
 
+        // Get base Facet info early so we can merge Include properties from the base Facet
+        var baseFacetInfo = GetBaseFacetInfo(targetSymbol, context.SemanticModel.Compilation);
+
+        // If the target inherits from another Facet that has Include properties, merge them
+        if (baseFacetInfo != null && !baseFacetInfo.IncludedMembers.IsDefaultOrEmpty)
+        {
+            foreach (var baseIncludedMember in baseFacetInfo.IncludedMembers)
+            {
+                included.Add(baseIncludedMember);
+            }
+        }
+
         // Build members
         var (members, excludedRequiredMembers) = ExtractMembers(
             sourceType,
@@ -255,7 +267,6 @@ internal static class ModelBuilder
         var sourceTypeFullName = sourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var baseHidesFacetMembers = BaseHidesFacetMembers(targetSymbol);
         var baseHidesFromSource = BaseHidesFromSource(targetSymbol, sourceTypeFullName);
-        var baseFacetInfo = GetBaseFacetInfo(targetSymbol, context.SemanticModel.Compilation);
 
         return new FacetTargetModel(
             targetSymbol.Name,
@@ -1136,7 +1147,10 @@ private static Dictionary<string, (string targetName, string source, bool revers
                             }
                         }
 
-                        return new BaseFacetInfo(baseTypeName, baseSourceTypeName, baseConfigurationTypeName);
+                        // Extract the Include properties from the base Facet's attribute
+                        var (baseIncludedMembers, _) = AttributeParser.ExtractIncludedMembers(facetAttr);
+
+                        return new BaseFacetInfo(baseTypeName, baseSourceTypeName, baseConfigurationTypeName, baseIncludedMembers.ToImmutableArray());
                     }
                 }
             }
