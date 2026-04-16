@@ -109,7 +109,27 @@ internal static class ProjectionGenerator
         sb.AppendLine($"{bodyIndent}}};");
         sb.AppendLine();
 
-        // Apply ConfigureProjection overrides
+        // Apply base Facet ConfigureProjection if present
+        if (model.BaseFacetInfo?.BaseConfigurationTypeName != null)
+        {
+            sb.AppendLine($"{bodyIndent}// Apply base Facet projection mappings");
+            sb.AppendLine($"{bodyIndent}var __baseBuilder = new global::Facet.Mapping.FacetProjectionBuilder<{model.BaseFacetInfo.BaseSourceTypeName}, {model.BaseFacetInfo.BaseTypeName}>();");
+            sb.AppendLine($"{bodyIndent}{model.BaseFacetInfo.BaseConfigurationTypeName}.ConfigureProjection(__baseBuilder);");
+            sb.AppendLine($"{bodyIndent}foreach (var (__member, __expr) in __baseBuilder.Mappings)");
+            sb.AppendLine($"{bodyIndent}{{");
+            sb.AppendLine($"{bodyIndent}    // Get the corresponding member in the derived type");
+            sb.AppendLine($"{bodyIndent}    var __derivedMember = typeof({tgt}).GetProperty(__member.Name);");
+            sb.AppendLine($"{bodyIndent}    if (__derivedMember != null)");
+            sb.AppendLine($"{bodyIndent}    {{");
+            sb.AppendLine($"{bodyIndent}        var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __p);");
+            sb.AppendLine($"{bodyIndent}        __bindings.RemoveAll(b => ((global::System.Linq.Expressions.MemberAssignment)b).Member.Name == __derivedMember.Name);");
+            sb.AppendLine($"{bodyIndent}        __bindings.Add(global::System.Linq.Expressions.Expression.Bind(__derivedMember, __body));");
+            sb.AppendLine($"{bodyIndent}    }}");
+            sb.AppendLine($"{bodyIndent}}}");
+            sb.AppendLine();
+        }
+
+        // Apply ConfigureProjection overrides from derived class
         sb.AppendLine($"{bodyIndent}var __builder = new global::Facet.Mapping.FacetProjectionBuilder<{src}, {tgt}>();");
         sb.AppendLine($"{bodyIndent}global::{model.ConfigurationTypeName}.ConfigureProjection(__builder);");
         sb.AppendLine($"{bodyIndent}foreach (var (__member, __expr) in __builder.Mappings)");
