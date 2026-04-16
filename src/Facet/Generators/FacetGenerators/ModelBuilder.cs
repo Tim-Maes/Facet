@@ -255,6 +255,7 @@ internal static class ModelBuilder
         var sourceTypeFullName = sourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var baseHidesFacetMembers = BaseHidesFacetMembers(targetSymbol);
         var baseHidesFromSource = BaseHidesFromSource(targetSymbol, sourceTypeFullName);
+        var baseFacetInfo = GetBaseFacetInfo(targetSymbol, context.SemanticModel.Compilation);
 
         return new FacetTargetModel(
             targetSymbol.Name,
@@ -293,7 +294,8 @@ internal static class ModelBuilder
             baseHidesFacetMembers,
             hasProjectionMapConfiguration,
             baseHidesFromSource,
-            hasMapConfiguration);
+            hasMapConfiguration,
+            baseFacetInfo);
     }
 
     #region Private Helper Methods
@@ -1083,6 +1085,66 @@ private static Dictionary<string, (string targetName, string source, bool revers
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Gets information about the base Facet class if the target inherits from another Facet.
+    /// Returns null if the base class is not a Facet.
+    /// </summary>
+    private static BaseFacetInfo? GetBaseFacetInfo(INamedTypeSymbol targetSymbol, Compilation compilation)
+    {
+        var baseType = targetSymbol.BaseType;
+        while (baseType != null && baseType.SpecialType != SpecialType.System_Object)
+        {
+            // Check if the base class has the [Facet] attribute
+            var facetAttr = baseType.GetAttributes().FirstOrDefault(a =>
+                a.AttributeClass?.ToDisplayString() == FacetConstants.FacetAttributeFullName);
+
+            if (facetAttr != null)
+            {
+                // Extract the source type from the [Facet] attribute
+                if (facetAttr.ConstructorArguments.Length > 0)
+                {
+                    var baseSourceType = facetAttr.ConstructorArguments[0].Value as INamedTypeSymbol;
+                    if (baseSourceType != null)
+                    {
+                        var baseTypeName = baseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                        var baseSourceTypeName = baseSourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+                        // Extract the Configuration type if specified
+                        string? baseConfigurationTypeName = null;
+                        var configArg = facetAttr.NamedArguments.FirstOrDefault(arg => arg.Key == "Configuration");
+                        if (!configArg.Equals(default(KeyValuePair<string, TypedConstant>)))
+                        {
+                            var configType = configArg.Value.Value as INamedTypeSymbol;
+                            if (configType != null)
+                            {
+                                // Check if it implements IFacetProjectionMapConfiguration
+                                var projectionMapConfigInterface = compilation.GetTypeByMetadataName(
+                                    "Facet.Mapping.IFacetProjectionMapConfiguration`2");
+
+                                if (projectionMapConfigInterface != null)
+                                {
+                                    var implementsProjectionConfig = configType.AllInterfaces.Any(i =>
+                                        SymbolEqualityComparer.Default.Equals(i.ConstructedFrom, projectionMapConfigInterface));
+
+                                    if (implementsProjectionConfig)
+                                    {
+                                        baseConfigurationTypeName = configType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                                    }
+                                }
+                            }
+                        }
+
+                        return new BaseFacetInfo(baseTypeName, baseSourceTypeName, baseConfigurationTypeName);
+                    }
+                }
+            }
+
+            baseType = baseType.BaseType;
+        }
+
+        return null;
     }
 
     /// <summary>

@@ -414,13 +414,33 @@ internal static class CodeBuilder
 
         var innerIndent = bodyIndent + "    ";
 
-        sb.AppendLine($"{innerIndent}var __builder = new global::Facet.Mapping.FacetProjectionBuilder<{src}, {tgt}>();");
-        sb.AppendLine($"{innerIndent}global::{model.ConfigurationTypeName}.ConfigureProjection(__builder);");
-        sb.AppendLine();
         sb.AppendLine($"{innerIndent}var __sourceParam = global::System.Linq.Expressions.Expression.Parameter(typeof({src}), \"source\");");
         sb.AppendLine($"{innerIndent}var __targetParam = global::System.Linq.Expressions.Expression.Parameter(typeof({tgt}), \"target\");");
         sb.AppendLine($"{innerIndent}var __assignments = new global::System.Collections.Generic.List<global::System.Linq.Expressions.Expression>();");
         sb.AppendLine();
+
+        // Apply base Facet ConfigureProjection if present
+        if (model.BaseFacetInfo?.BaseConfigurationTypeName != null)
+        {
+            sb.AppendLine($"{innerIndent}// Apply base Facet projection mappings");
+            sb.AppendLine($"{innerIndent}var __baseBuilder = new global::Facet.Mapping.FacetProjectionBuilder<{model.BaseFacetInfo.BaseSourceTypeName}, {model.BaseFacetInfo.BaseTypeName}>();");
+            sb.AppendLine($"{innerIndent}{model.BaseFacetInfo.BaseConfigurationTypeName}.ConfigureProjection(__baseBuilder);");
+            sb.AppendLine($"{innerIndent}foreach (var (__member, __expr) in __baseBuilder.Mappings)");
+            sb.AppendLine($"{innerIndent}{{");
+            sb.AppendLine($"{innerIndent}    var __derivedMember = typeof({tgt}).GetProperty(__member.Name);");
+            sb.AppendLine($"{innerIndent}    if (__derivedMember != null)");
+            sb.AppendLine($"{innerIndent}    {{");
+            sb.AppendLine($"{innerIndent}        var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __sourceParam);");
+            sb.AppendLine($"{innerIndent}        __assignments.Add(global::System.Linq.Expressions.Expression.Assign(");
+            sb.AppendLine($"{innerIndent}            global::System.Linq.Expressions.Expression.MakeMemberAccess(__targetParam, __derivedMember), __body));");
+            sb.AppendLine($"{innerIndent}    }}");
+            sb.AppendLine($"{innerIndent}}}");
+            sb.AppendLine();
+        }
+
+        // Apply derived ConfigureProjection
+        sb.AppendLine($"{innerIndent}var __builder = new global::Facet.Mapping.FacetProjectionBuilder<{src}, {tgt}>();");
+        sb.AppendLine($"{innerIndent}global::{model.ConfigurationTypeName}.ConfigureProjection(__builder);");
         sb.AppendLine($"{innerIndent}foreach (var (__member, __expr) in __builder.Mappings)");
         sb.AppendLine($"{innerIndent}{{");
         sb.AppendLine($"{innerIndent}    var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __sourceParam);");

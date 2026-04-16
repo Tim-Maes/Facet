@@ -6,6 +6,34 @@ using System.Linq;
 
 namespace Facet;
 
+/// <summary>
+/// Information about a base Facet class that the current Facet inherits from.
+/// </summary>
+internal sealed class BaseFacetInfo
+{
+    /// <summary>
+    /// The fully qualified name of the base Facet class.
+    /// </summary>
+    public string BaseTypeName { get; }
+
+    /// <summary>
+    /// The fully qualified name of the base Facet's source type.
+    /// </summary>
+    public string BaseSourceTypeName { get; }
+
+    /// <summary>
+    /// The configuration type name for the base Facet (if it has ConfigureProjection).
+    /// </summary>
+    public string? BaseConfigurationTypeName { get; }
+
+    public BaseFacetInfo(string baseTypeName, string baseSourceTypeName, string? baseConfigurationTypeName)
+    {
+        BaseTypeName = baseTypeName;
+        BaseSourceTypeName = baseSourceTypeName;
+        BaseConfigurationTypeName = baseConfigurationTypeName;
+    }
+}
+
 internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
 {
     public string Name { get; }
@@ -90,6 +118,11 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     /// </summary>
     public bool HasMapConfiguration { get; }
 
+    /// <summary>
+    /// Information about the base Facet class, if the target inherits from another Facet.
+    /// </summary>
+    public BaseFacetInfo? BaseFacetInfo { get; }
+
     public FacetTargetModel(
         string name,
         string? @namespace,
@@ -127,7 +160,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         bool baseHidesFacetMembers = false,
         bool hasProjectionMapConfiguration = false,
         bool baseHidesFromSource = false,
-        bool hasMapConfiguration = false)
+        bool hasMapConfiguration = false,
+        BaseFacetInfo? baseFacetInfo = null)
     {
         Name = name;
         Namespace = @namespace;
@@ -166,6 +200,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         HasProjectionMapConfiguration = hasProjectionMapConfiguration;
         HasMapConfiguration = hasMapConfiguration;
         BaseHidesFromSource = baseHidesFromSource;
+        BaseFacetInfo = baseFacetInfo;
     }
 
     public bool Equals(FacetTargetModel? other)
