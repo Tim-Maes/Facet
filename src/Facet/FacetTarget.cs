@@ -26,11 +26,17 @@ internal sealed class BaseFacetInfo
     /// </summary>
     public string? BaseConfigurationTypeName { get; }
 
-    public BaseFacetInfo(string baseTypeName, string baseSourceTypeName, string? baseConfigurationTypeName)
+    /// <summary>
+    /// The Include properties specified in the base Facet's [Facet] attribute.
+    /// </summary>
+    public ImmutableArray<string> IncludedMembers { get; }
+
+    public BaseFacetInfo(string baseTypeName, string baseSourceTypeName, string? baseConfigurationTypeName, ImmutableArray<string> includedMembers)
     {
         BaseTypeName = baseTypeName;
         BaseSourceTypeName = baseSourceTypeName;
         BaseConfigurationTypeName = baseConfigurationTypeName;
+        IncludedMembers = includedMembers;
     }
 }
 
