@@ -172,6 +172,19 @@ internal static class ModelBuilder
             }
         }
 
+        // If the target inherits from another Facet that has NestedFacets, merge them
+        if (baseFacetInfo != null && !baseFacetInfo.NestedFacetMappings.IsEmpty)
+        {
+            foreach (var baseNestedMapping in baseFacetInfo.NestedFacetMappings)
+            {
+                // Only add if not already defined in derived Facet (derived takes precedence)
+                if (!nestedFacetMappings.ContainsKey(baseNestedMapping.Key))
+                {
+                    nestedFacetMappings[baseNestedMapping.Key] = baseNestedMapping.Value;
+                }
+            }
+        }
+
         // Build members
         var (members, excludedRequiredMembers) = ExtractMembers(
             sourceType,
@@ -1150,7 +1163,10 @@ private static Dictionary<string, (string targetName, string source, bool revers
                         // Extract the Include properties from the base Facet's attribute
                         var (baseIncludedMembers, _) = AttributeParser.ExtractIncludedMembers(facetAttr);
 
-                        return new BaseFacetInfo(baseTypeName, baseSourceTypeName, baseConfigurationTypeName, baseIncludedMembers.ToImmutableArray());
+                        // Extract the NestedFacets mappings from the base Facet's attribute
+                        var baseNestedFacetMappings = AttributeParser.ExtractNestedFacetMappings(facetAttr, compilation);
+
+                        return new BaseFacetInfo(baseTypeName, baseSourceTypeName, baseConfigurationTypeName, baseIncludedMembers.ToImmutableArray(), baseNestedFacetMappings.ToImmutableDictionary());
                     }
                 }
             }
