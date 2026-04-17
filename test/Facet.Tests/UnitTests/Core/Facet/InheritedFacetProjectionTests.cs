@@ -185,6 +185,43 @@ public class InheritedFacetProjectionTests
         dto.DeliveryTime.Should().Be(baseTime.AddDays(1));
         dto.ShipmentTime.Should().Be(baseTime.AddDays(2));
     }
+
+    [Fact]
+    public void InheritedFacet_WithBaseNestedMultiSourceFacet_ToSource_ShouldCallCorrectMethod()
+    {
+        // Arrange -> Test issue #340: inherited Facet with nested multi-source facet
+        var entity = new OrderLineDispatchEntity340
+        {
+            Id = 1,
+            Number = "ORD-001",
+            DeliveryTime = new DateTime(2024, 1, 1),
+            AssignedToUnit = new UnitEntity340
+            {
+                Id = 100,
+                Name = "Production Unit",
+                ValidationResult = "Valid"
+            }
+        };
+
+        var dto = new OrderLineDispatchDto340(entity);
+
+        // Verify the DTO was constructed correctly
+        dto.Number.Should().Be("ORD-001");
+        dto.AssignedToUnit.Should().NotBeNull();
+        dto.AssignedToUnit.Should().BeOfType<UnitDropDownDto340>();
+        dto.AssignedToUnit!.Name.Should().Be("Production Unit");
+        dto.AssignedToUnit.ValidationResult.Should().Be("Valid");
+
+        // Act - Call ToSource on the derived Facet
+        // This should correctly call ToUnitEntity340() on the nested multi-source facet
+        var result = dto.ToSource();
+
+        // Assert - Verify the entity was reconstructed correctly
+        result.Number.Should().Be("ORD-001");
+        result.AssignedToUnit.Should().NotBeNull();
+        result.AssignedToUnit!.Name.Should().Be("Production Unit");
+        result.AssignedToUnit.ValidationResult.Should().Be("Valid");
+    }
 }
 
 public class UnitEntity338
@@ -248,5 +285,72 @@ public class OrderLineDispatchEntity338Nested : OrderLineBaseEntity338Nested
            nameof(OrderLineDispatchEntity338Nested.ShipmentTime)
        })]
 public partial class OrderLineDispatchDto338Nested : OrderLineBaseDto338Nested
+{
+}
+
+// --- Test models for inherited Facets with nested multi-source facets and ToSource (issue #340) ---
+
+public class UnitEntity340
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string ValidationResult { get; set; } = string.Empty;
+}
+
+public class UnitDto340
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string ValidationResult { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Multi-source facet that can map from either UnitDto340 or UnitEntity340.
+/// </summary>
+[Facet(typeof(UnitDto340),
+       GenerateToSource = true,
+       Include = new[] { nameof(UnitDto340.Name), nameof(UnitDto340.ValidationResult) })]
+[Facet(typeof(UnitEntity340),
+       GenerateToSource = true,
+       Include = new[] { nameof(UnitEntity340.Name), nameof(UnitEntity340.ValidationResult) })]
+public partial class UnitDropDownDto340
+{
+}
+
+public class OrderLineBaseEntity340
+{
+    public int Id { get; set; }
+    public string Number { get; set; } = string.Empty;
+    public UnitEntity340? AssignedToUnit { get; set; }
+}
+
+/// <summary>
+/// Base Facet with nested multi-source facet.
+/// </summary>
+[Facet(typeof(OrderLineBaseEntity340),
+       GenerateToSource = true,
+       Include = new[]
+       {
+           nameof(OrderLineBaseEntity340.Number),
+           nameof(OrderLineBaseEntity340.AssignedToUnit)
+       },
+       NestedFacets = new[] { typeof(UnitDropDownDto340) })]
+public partial class OrderLineBaseDto340
+{
+}
+
+public class OrderLineDispatchEntity340 : OrderLineBaseEntity340
+{
+    public DateTime DeliveryTime { get; set; }
+}
+
+/// <summary>
+/// Derived Facet that inherits from base Facet with nested multi-source facet.
+/// This tests issue #340 - ensuring ToSource correctly calls ToUnitEntity340() instead of ToSource().
+/// </summary>
+[Facet(typeof(OrderLineDispatchEntity340),
+       GenerateToSource = true,
+       Include = new[] { nameof(OrderLineDispatchEntity340.DeliveryTime) })]
+public partial class OrderLineDispatchDto340 : OrderLineBaseDto340
 {
 }
