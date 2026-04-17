@@ -31,12 +31,19 @@ internal sealed class BaseFacetInfo
     /// </summary>
     public ImmutableArray<string> IncludedMembers { get; }
 
-    public BaseFacetInfo(string baseTypeName, string baseSourceTypeName, string? baseConfigurationTypeName, ImmutableArray<string> includedMembers)
+    /// <summary>
+    /// The nested facet mappings from the base Facet's NestedFacets parameter.
+    /// Maps source type full names to nested facet type information.
+    /// </summary>
+    public ImmutableDictionary<string, (string childFacetTypeName, string sourceTypeName)> NestedFacetMappings { get; }
+
+    public BaseFacetInfo(string baseTypeName, string baseSourceTypeName, string? baseConfigurationTypeName, ImmutableArray<string> includedMembers, ImmutableDictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings)
     {
         BaseTypeName = baseTypeName;
         BaseSourceTypeName = baseSourceTypeName;
         BaseConfigurationTypeName = baseConfigurationTypeName;
         IncludedMembers = includedMembers;
+        NestedFacetMappings = nestedFacetMappings;
     }
 }
 

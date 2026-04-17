@@ -150,4 +150,103 @@ public class InheritedFacetProjectionTests
         dto.Number.Should().Be("ORD-789");
         dto.ExpectedStartTime.Should().Be(baseTime.AddHours(1));
     }
+
+    [Fact]
+    public void InheritedFacet_WithBaseNestedFacets_ShouldMapNestedPropertiesCorrectly()
+    {
+        // Arrange
+        var baseTime = new DateTime(2024, 1, 1, 10, 0, 0);
+        var entity = new OrderLineDispatchEntity338Nested
+        {
+            Id = 1,
+            Number = "ORD-001",
+            ExpectedStartTime = baseTime,
+            DeliveryTime = baseTime.AddDays(1),
+            ShipmentTime = baseTime.AddDays(2),
+            AssignedToUnit = new UnitEntity338 { Id = 100, Name = "Unit A" },
+            OrderHeader = new OrderHeaderEntity338 { Id = 200, OrderNumber = "HDR-001" }
+        };
+
+        // Act
+        var dto = new OrderLineDispatchDto338Nested(entity);
+
+        // Assert - Verify nested facets from base are mapped as DTOs, not entities
+        dto.AssignedToUnit.Should().NotBeNull("AssignedToUnit should be mapped from base Facet");
+        dto.AssignedToUnit.Should().BeOfType<UnitDto338>("AssignedToUnit should be mapped as UnitDto338, not UnitEntity338");
+        dto.AssignedToUnit!.Name.Should().Be("Unit A");
+
+        dto.OrderHeader.Should().NotBeNull("OrderHeader should be mapped from base Facet");
+        dto.OrderHeader.Should().BeOfType<OrderHeaderDto338>("OrderHeader should be mapped as OrderHeaderDto338, not OrderHeaderEntity338");
+        dto.OrderHeader.OrderNumber.Should().Be("HDR-001");
+
+        // Verify other properties are also mapped correctly
+        dto.Number.Should().Be("ORD-001");
+        dto.ExpectedStartTime.Should().Be(baseTime);
+        dto.DeliveryTime.Should().Be(baseTime.AddDays(1));
+        dto.ShipmentTime.Should().Be(baseTime.AddDays(2));
+    }
+}
+
+public class UnitEntity338
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+[Facet(typeof(UnitEntity338))]
+public partial class UnitDto338
+{
+}
+
+public class OrderHeaderEntity338
+{
+    public int Id { get; set; }
+    public string OrderNumber { get; set; } = string.Empty;
+}
+
+[Facet(typeof(OrderHeaderEntity338))]
+public partial class OrderHeaderDto338
+{
+}
+
+public class OrderLineBaseEntity338Nested
+{
+    public int Id { get; set; }
+    public string Number { get; set; } = string.Empty;
+    public DateTime ExpectedStartTime { get; set; }
+    public UnitEntity338? AssignedToUnit { get; set; }
+    public OrderHeaderEntity338 OrderHeader { get; set; } = null!;
+}
+
+[Facet(typeof(OrderLineBaseEntity338Nested),
+       Include = new[]
+       {
+           nameof(OrderLineBaseEntity338Nested.Number),
+           nameof(OrderLineBaseEntity338Nested.ExpectedStartTime),
+           nameof(OrderLineBaseEntity338Nested.AssignedToUnit),
+           nameof(OrderLineBaseEntity338Nested.OrderHeader)
+       },
+       NestedFacets = new[]
+       {
+           typeof(UnitDto338),
+           typeof(OrderHeaderDto338)
+       })]
+public partial class OrderLineBaseDto338Nested
+{
+}
+
+public class OrderLineDispatchEntity338Nested : OrderLineBaseEntity338Nested
+{
+    public DateTime DeliveryTime { get; set; }
+    public DateTime ShipmentTime { get; set; }
+}
+
+[Facet(typeof(OrderLineDispatchEntity338Nested),
+       Include = new[]
+       {
+           nameof(OrderLineDispatchEntity338Nested.DeliveryTime),
+           nameof(OrderLineDispatchEntity338Nested.ShipmentTime)
+       })]
+public partial class OrderLineDispatchDto338Nested : OrderLineBaseDto338Nested
+{
 }
