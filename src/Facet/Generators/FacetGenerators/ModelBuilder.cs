@@ -164,11 +164,24 @@ internal static class ModelBuilder
         var baseFacetInfo = GetBaseFacetInfo(targetSymbol, sourceType, context.SemanticModel.Compilation);
 
         // If the target inherits from another Facet that has Include properties, merge them
+        // into the derived included set (so they appear in projections/constructors) and also
+        // add them to baseClassMemberNames so MemberGenerator won't re-declare properties that
+        // the base Facet already generates (source generators can't see their own output, so
+        // GetBaseClassMemberNames misses these generated properties, causing CS0108 warnings).
         if (baseFacetInfo != null && !baseFacetInfo.IncludedMembers.IsDefaultOrEmpty)
         {
+            var extraBaseNames = new List<string>();
             foreach (var baseIncludedMember in baseFacetInfo.IncludedMembers)
             {
                 included.Add(baseIncludedMember);
+                if (!baseClassMemberNames.Contains(baseIncludedMember))
+                {
+                    extraBaseNames.Add(baseIncludedMember);
+                }
+            }
+            if (extraBaseNames.Count > 0)
+            {
+                baseClassMemberNames = baseClassMemberNames.AddRange(extraBaseNames);
             }
         }
 
@@ -995,6 +1008,8 @@ private static Dictionary<string, (string targetName, string source, bool revers
     /// <summary>
     /// Gets all member names from the target type's base classes.
     /// This is used to avoid generating properties that already exist in base classes.
+    /// Also detects base Facet types and includes the properties they would generate
+    /// (source generators can't see their own output, so these are invisible to Roslyn).
     /// </summary>
     private static ImmutableArray<string> GetBaseClassMemberNames(INamedTypeSymbol targetSymbol)
     {
@@ -1015,6 +1030,40 @@ private static Dictionary<string, (string targetName, string source, bool revers
                     memberNames.Add(field.Name);
                 }
             }
+
+            // If this base type is itself a Facet, infer the property names it will generate.
+            // Source generators can't see generated output from sibling invocations, so these
+            // properties are invisible to GetMembers() but will exist at compile time.
+            var facetAttrs = baseType.GetAttributes()
+                .Where(a => a.AttributeClass?.ToDisplayString() == FacetConstants.FacetAttributeFullName)
+                .ToList();
+
+            foreach (var facetAttr in facetAttrs)
+            {
+                if (facetAttr.ConstructorArguments.Length == 0 ||
+                    facetAttr.ConstructorArguments[0].Value is not INamedTypeSymbol baseSourceType)
+                    continue;
+
+                var (baseIncluded, baseIsIncludeMode) = AttributeParser.ExtractIncludedMembers(facetAttr);
+                var baseExcluded = AttributeParser.ExtractExcludedMembers(facetAttr);
+
+                foreach (var (sourceMember, _, _) in GeneratorUtilities.GetAllMembersWithModifiers(baseSourceType))
+                {
+                    if (sourceMember is not IPropertySymbol sourceProp ||
+                        sourceProp.DeclaredAccessibility != Accessibility.Public)
+                        continue;
+
+                    bool shouldInclude = baseIsIncludeMode
+                        ? baseIncluded.Contains(sourceProp.Name)
+                        : !baseExcluded.Contains(sourceProp.Name);
+
+                    if (shouldInclude && !memberNames.Contains(sourceProp.Name))
+                    {
+                        memberNames.Add(sourceProp.Name);
+                    }
+                }
+            }
+
             baseType = baseType.BaseType;
         }
 
