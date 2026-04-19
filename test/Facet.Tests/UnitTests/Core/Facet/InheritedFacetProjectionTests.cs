@@ -105,6 +105,38 @@ public class InheritedFacetProjectionTests
     }
 
     [Fact]
+    public void Projection_WithInheritedFacetBase_ThroughQueryable_ShouldMapAllProperties()
+    {
+        // Arrange
+        var baseTime = new DateTime(2024, 1, 1, 10, 0, 0);
+        var entities = new[]
+        {
+            new OrderLineDispatchEntity338
+            {
+                Id = 11,
+                Number = "321",
+                ExpectedStartTime = baseTime,
+                DeliveryTime = baseTime.AddDays(1),
+                ShipmentTime = baseTime.AddDays(2)
+            }
+        }.AsQueryable();
+
+        // Act - Use projection through IQueryable.Select (real projection path)
+        var dto = entities.Select(OrderLineDispatchDto338.Projection).Single();
+
+        // Assert - Derived Facet mappings
+        dto.DeliveryTime.Should().Be(baseTime.AddDays(1).AddHours(2));
+        dto.ShipmentTime.Should().Be(baseTime.AddDays(2).AddHours(3));
+
+        // Assert - Base Facet mappings
+        dto.Number.Should().Be("ORD-321");
+        dto.ExpectedStartTime.Should().Be(baseTime.AddHours(1));
+
+        // Assert - Non-Facet base mapping
+        dto.Id.Should().Be(11);
+    }
+
+    [Fact]
     public void Constructor_WithInheritedFacetBase_ShouldMapAllProperties()
     {
         // Arrange
