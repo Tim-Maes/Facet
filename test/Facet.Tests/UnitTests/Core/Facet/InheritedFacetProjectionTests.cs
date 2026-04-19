@@ -254,6 +254,31 @@ public class InheritedFacetProjectionTests
         result.AssignedToUnit!.Name.Should().Be("Production Unit");
         result.AssignedToUnit.ValidationResult.Should().Be("Valid");
     }
+
+    [Fact]
+    public void Projection_WithInheritedFacetBase_WhenBaseFacetHasMultipleSources_ShouldApplyMatchingBaseConfiguration()
+    {
+        // Arrange
+        var baseTime = new DateTime(2024, 2, 1, 9, 0, 0);
+        var entity = new OrderLineDispatchEntity341
+        {
+            Id = 42,
+            Number = "ABC",
+            ExpectedStartTime = baseTime,
+            DeliveryTime = baseTime.AddDays(1)
+        };
+
+        // Act
+        var dto = OrderLineDispatchDto341.Projection.Compile()(entity);
+
+        // Assert - derived mapping
+        dto.DeliveryTime.Should().Be(baseTime.AddDays(1).AddHours(2));
+
+        // Assert - matching base Facet source mapping should be applied
+        dto.Number.Should().Be("ORD-ABC");
+        dto.ExpectedStartTime.Should().Be(baseTime.AddHours(1));
+        dto.Id.Should().Be(42);
+    }
 }
 
 public class UnitEntity338
@@ -385,4 +410,69 @@ public class OrderLineDispatchEntity340 : OrderLineBaseEntity340
        Include = new[] { nameof(OrderLineDispatchEntity340.DeliveryTime) })]
 public partial class OrderLineDispatchDto340 : OrderLineBaseDto340
 {
+}
+
+public class OtherSourceEntity341
+{
+    public int Id { get; set; }
+    public string OtherCode { get; set; } = string.Empty;
+}
+
+public class OrderLineBaseEntity341
+{
+    public int Id { get; set; }
+    public string Number { get; set; } = string.Empty;
+    public DateTime ExpectedStartTime { get; set; }
+}
+
+public class OrderLineDispatchEntity341 : OrderLineBaseEntity341
+{
+    public DateTime DeliveryTime { get; set; }
+}
+
+[Facet(typeof(OtherSourceEntity341),
+       Include = new[]
+       {
+            nameof(OtherSourceEntity341.OtherCode)
+       })]
+[Facet(typeof(OrderLineBaseEntity341),
+       Configuration = typeof(OrderLineBaseDto341MapConfig),
+       Include = new[]
+       {
+            nameof(OrderLineBaseEntity341.Number),
+            nameof(OrderLineBaseEntity341.ExpectedStartTime)
+       })]
+public partial class OrderLineBaseDto341 : ModifiedByBaseDto338
+{
+}
+
+public class OrderLineBaseDto341MapConfig
+    : IFacetProjectionMapConfiguration<OrderLineBaseEntity341, OrderLineBaseDto341>
+{
+    public static void ConfigureProjection(
+        IFacetProjectionBuilder<OrderLineBaseEntity341, OrderLineBaseDto341> builder)
+    {
+        builder.Map(d => d.Number, s => "ORD-" + s.Number);
+        builder.Map(d => d.ExpectedStartTime, s => s.ExpectedStartTime.AddHours(1));
+    }
+}
+
+[Facet(typeof(OrderLineDispatchEntity341),
+       Configuration = typeof(OrderLineDispatchDto341MapConfig),
+       Include = new[]
+       {
+            nameof(OrderLineDispatchEntity341.DeliveryTime)
+       })]
+public partial class OrderLineDispatchDto341 : OrderLineBaseDto341
+{
+}
+
+public class OrderLineDispatchDto341MapConfig
+    : IFacetProjectionMapConfiguration<OrderLineDispatchEntity341, OrderLineDispatchDto341>
+{
+    public static void ConfigureProjection(
+        IFacetProjectionBuilder<OrderLineDispatchEntity341, OrderLineDispatchDto341> builder)
+    {
+        builder.Map(d => d.DeliveryTime, s => s.DeliveryTime.AddHours(2));
+    }
 }

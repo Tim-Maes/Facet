@@ -161,7 +161,7 @@ internal static class ModelBuilder
         var baseClassMemberNames = GetBaseClassMemberNames(targetSymbol);
 
         // Get base Facet info early so we can merge Include properties from the base Facet
-        var baseFacetInfo = GetBaseFacetInfo(targetSymbol, context.SemanticModel.Compilation);
+        var baseFacetInfo = GetBaseFacetInfo(targetSymbol, sourceType, context.SemanticModel.Compilation);
 
         // If the target inherits from another Facet that has Include properties, merge them
         if (baseFacetInfo != null && !baseFacetInfo.IncludedMembers.IsDefaultOrEmpty)
@@ -1115,63 +1115,107 @@ private static Dictionary<string, (string targetName, string source, bool revers
     /// Gets information about the base Facet class if the target inherits from another Facet.
     /// Returns null if the base class is not a Facet.
     /// </summary>
-    private static BaseFacetInfo? GetBaseFacetInfo(INamedTypeSymbol targetSymbol, Compilation compilation)
+    private static BaseFacetInfo? GetBaseFacetInfo(INamedTypeSymbol targetSymbol, INamedTypeSymbol derivedSourceType, Compilation compilation)
     {
         var baseType = targetSymbol.BaseType;
         while (baseType != null && baseType.SpecialType != SpecialType.System_Object)
         {
-            // Check if the base class has the [Facet] attribute
-            var facetAttr = baseType.GetAttributes().FirstOrDefault(a =>
-                a.AttributeClass?.ToDisplayString() == FacetConstants.FacetAttributeFullName);
+            // A base Facet can have multiple [Facet] attributes (multi-source).
+            // Select the attribute whose source type best matches the current derived source type.
+            var facetAttrs = baseType.GetAttributes()
+                .Where(a => a.AttributeClass?.ToDisplayString() == FacetConstants.FacetAttributeFullName)
+                .ToList();
 
-            if (facetAttr != null)
+            if (facetAttrs.Count > 0)
             {
-                // Extract the source type from the [Facet] attribute
-                if (facetAttr.ConstructorArguments.Length > 0)
+                AttributeData? bestFacetAttr = null;
+                INamedTypeSymbol? bestBaseSourceType = null;
+                int bestDistance = int.MaxValue;
+
+                foreach (var facetAttr in facetAttrs)
                 {
-                    var baseSourceType = facetAttr.ConstructorArguments[0].Value as INamedTypeSymbol;
-                    if (baseSourceType != null)
+                    if (facetAttr.ConstructorArguments.Length == 0 ||
+                        facetAttr.ConstructorArguments[0].Value is not INamedTypeSymbol baseSourceType)
                     {
-                        var baseTypeName = baseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                        var baseSourceTypeName = baseSourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                        continue;
+                    }
 
-                        // Extract the Configuration type if specified
-                        string? baseConfigurationTypeName = null;
-                        var configArg = facetAttr.NamedArguments.FirstOrDefault(arg => arg.Key == "Configuration");
-                        if (!configArg.Equals(default(KeyValuePair<string, TypedConstant>)))
+                    var distance = GetInheritanceDistance(derivedSourceType, baseSourceType);
+                    if (distance == null || distance.Value >= bestDistance)
+                        continue;
+
+                    bestDistance = distance.Value;
+                    bestFacetAttr = facetAttr;
+                    bestBaseSourceType = baseSourceType;
+                }
+
+                if (bestFacetAttr != null && bestBaseSourceType != null)
+                {
+                    var baseTypeName = baseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    var baseSourceTypeName = bestBaseSourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+                    // Extract the Configuration type if specified and compatible with the selected base source/target pair
+                    string? baseConfigurationTypeName = null;
+                    var configArg = bestFacetAttr.NamedArguments.FirstOrDefault(arg => arg.Key == "Configuration");
+                    if (!configArg.Equals(default(KeyValuePair<string, TypedConstant>)))
+                    {
+                        var configType = configArg.Value.Value as INamedTypeSymbol;
+                        if (configType != null)
                         {
-                            var configType = configArg.Value.Value as INamedTypeSymbol;
-                            if (configType != null)
+                            var projectionMapConfigInterface = compilation.GetTypeByMetadataName(
+                                FacetConstants.ProjectionMapConfigurationInterfaceFullName);
+
+                            if (projectionMapConfigInterface != null)
                             {
-                                // Check if it implements IFacetProjectionMapConfiguration
-                                var projectionMapConfigInterface = compilation.GetTypeByMetadataName(
-                                    "Facet.Mapping.IFacetProjectionMapConfiguration`2");
+                                var implementsProjectionConfig = configType.AllInterfaces.Any(i =>
+                                    SymbolEqualityComparer.Default.Equals(i.ConstructedFrom, projectionMapConfigInterface) &&
+                                    i.TypeArguments.Length == 2 &&
+                                    SymbolEqualityComparer.Default.Equals(i.TypeArguments[0], bestBaseSourceType) &&
+                                    SymbolEqualityComparer.Default.Equals(i.TypeArguments[1], baseType));
 
-                                if (projectionMapConfigInterface != null)
+                                if (implementsProjectionConfig)
                                 {
-                                    var implementsProjectionConfig = configType.AllInterfaces.Any(i =>
-                                        SymbolEqualityComparer.Default.Equals(i.ConstructedFrom, projectionMapConfigInterface));
-
-                                    if (implementsProjectionConfig)
-                                    {
-                                        baseConfigurationTypeName = configType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                                    }
+                                    baseConfigurationTypeName = configType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                                 }
                             }
                         }
-
-                        // Extract the Include properties from the base Facet's attribute
-                        var (baseIncludedMembers, _) = AttributeParser.ExtractIncludedMembers(facetAttr);
-
-                        // Extract the NestedFacets mappings from the base Facet's attribute
-                        var baseNestedFacetMappings = AttributeParser.ExtractNestedFacetMappings(facetAttr, compilation);
-
-                        return new BaseFacetInfo(baseTypeName, baseSourceTypeName, baseConfigurationTypeName, baseIncludedMembers.ToImmutableArray(), baseNestedFacetMappings.ToImmutableDictionary());
                     }
+
+                    // Extract Include/NestedFacets from the selected matching [Facet] attribute
+                    var (baseIncludedMembers, _) = AttributeParser.ExtractIncludedMembers(bestFacetAttr);
+                    var baseNestedFacetMappings = AttributeParser.ExtractNestedFacetMappings(bestFacetAttr, compilation);
+
+                    return new BaseFacetInfo(
+                        baseTypeName,
+                        baseSourceTypeName,
+                        baseConfigurationTypeName,
+                        baseIncludedMembers.ToImmutableArray(),
+                        baseNestedFacetMappings.ToImmutableDictionary());
                 }
             }
 
             baseType = baseType.BaseType;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Returns the inheritance distance from <paramref name="derivedType"/> to <paramref name="candidateBaseType"/>.
+    /// 0 means exact match, 1 means direct base type, etc. Returns null when not assignable.
+    /// </summary>
+    private static int? GetInheritanceDistance(INamedTypeSymbol derivedType, INamedTypeSymbol candidateBaseType)
+    {
+        var current = derivedType;
+        var distance = 0;
+
+        while (current != null)
+        {
+            if (SymbolEqualityComparer.Default.Equals(current, candidateBaseType))
+                return distance;
+
+            current = current.BaseType;
+            distance++;
         }
 
         return null;
