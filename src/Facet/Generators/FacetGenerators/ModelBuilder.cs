@@ -1141,12 +1141,27 @@ private static Dictionary<string, (string targetName, string source, bool revers
                     }
 
                     var distance = GetInheritanceDistance(derivedSourceType, baseSourceType);
-                    if (distance == null || distance.Value >= bestDistance)
+                    if (distance == null)
                         continue;
 
-                    bestDistance = distance.Value;
-                    bestFacetAttr = facetAttr;
-                    bestBaseSourceType = baseSourceType;
+                    if (distance.Value < bestDistance)
+                    {
+                        bestDistance = distance.Value;
+                        bestFacetAttr = facetAttr;
+                        bestBaseSourceType = baseSourceType;
+                        continue;
+                    }
+
+                    // Tie-breaker for same source-distance:
+                    // prefer the attribute with an explicit Configuration when the current best does not have one.
+                    if (distance.Value == bestDistance &&
+                        bestFacetAttr != null &&
+                        !bestFacetAttr.NamedArguments.Any(arg => arg.Key == "Configuration") &&
+                        facetAttr.NamedArguments.Any(arg => arg.Key == "Configuration"))
+                    {
+                        bestFacetAttr = facetAttr;
+                        bestBaseSourceType = baseSourceType;
+                    }
                 }
 
                 if (bestFacetAttr != null && bestBaseSourceType != null)
