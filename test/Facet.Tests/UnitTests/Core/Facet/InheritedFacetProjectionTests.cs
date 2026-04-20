@@ -279,6 +279,104 @@ public class InheritedFacetProjectionTests
         dto.ExpectedStartTime.Should().Be(baseTime.AddHours(1));
         dto.Id.Should().Be(42);
     }
+
+    [Fact]
+    public void Projection_WithInheritedNestedFacets_ShouldProjectAllNestedTypesCorrectly()
+    {
+        // Arrange - Regression test for issue #338: derived DTO inheriting base DTO with NestedFacets
+        var entity = new OrderLineWithPackingEntity345
+        {
+            Id = 1,
+            Number = "ORD-001",
+            ExpectedStartTime = new DateTime(2024, 1, 1),
+            Description = "Test",
+            AssignedToUnit = new UnitEntity345 { Id = 100, Name = "Unit A" },
+            OrderHeader = new OrderHeaderEntity345 { Id = 200, OrderNumber = "HDR-001" },
+            InventoryItems = new List<InventoryItemEntity345>
+            {
+                new() { Id = 300, Identifier = "INV-001" }
+            }
+        };
+
+        // Act - Use projection (EF Core path)
+        var dto = OrderLineWithPackingDto345.Projection.Compile()(entity);
+
+        // Assert - Properties from derived DTO's own NestedFacets should be projected
+        dto.InventoryItems.Should().HaveCount(1);
+        dto.InventoryItems[0].Should().BeOfType<InventoryItemDto345>();
+        dto.InventoryItems[0].Identifier.Should().Be("INV-001");
+        dto.Description.Should().Be("Test");
+
+        // Assert - Properties from BASE DTO's NestedFacets should ALSO be projected
+        dto.AssignedToUnit.Should().NotBeNull();
+        dto.AssignedToUnit.Should().BeOfType<UnitDto345>("AssignedToUnit should be projected as UnitDto345, not UnitEntity345");
+        dto.AssignedToUnit!.Name.Should().Be("Unit A");
+
+        dto.OrderHeader.Should().NotBeNull();
+        dto.OrderHeader.Should().BeOfType<OrderHeaderDto345>("OrderHeader should be projected as OrderHeaderDto345, not OrderHeaderEntity345");
+        dto.OrderHeader.OrderNumber.Should().Be("HDR-001");
+
+        // Assert - Simple properties from base
+        dto.Number.Should().Be("ORD-001");
+    }
+
+    [Fact]
+    public void Projection_WithMultiSourceBase_NestedFacets_ShouldProjectCorrectly()
+    {
+        // Arrange - Multi-source base Facet where the matching attribute has NestedFacets
+        // but another (non-matching) attribute also includes properties.
+        // This tests the scenario where GetBaseClassMemberNames sees ALL attributes
+        // but GetBaseFacetInfo only selects the best-matching one.
+        var entity = new DerivedMultiSrcEntity345
+        {
+            Id = 1,
+            Number = "ORD-001",
+            AssignedToUnit = new UnitEntity345 { Id = 100, Name = "Unit A" },
+            ExtraInfo = "extra"
+        };
+
+        // Act - Use projection
+        var dto = DerivedMultiSrcDto345.Projection.Compile()(entity);
+
+        // Assert - NestedFacets from the matching base [Facet] attribute should be projected
+        dto.AssignedToUnit.Should().NotBeNull();
+        dto.AssignedToUnit.Should().BeOfType<UnitDto345>("AssignedToUnit should be projected as UnitDto345");
+        dto.AssignedToUnit!.Name.Should().Be("Unit A");
+
+        // Assert - Simple properties
+        dto.Number.Should().Be("ORD-001");
+        dto.ExtraInfo.Should().Be("extra");
+    }
+
+    [Fact]
+    public void Projection_WithConfiguredDerivedFacet_InheritedNestedFacets_ShouldProjectCorrectly()
+    {
+        // Arrange - Derived Facet has IFacetProjectionMapConfiguration (triggers GenerateLazyProjection)
+        // Base Facet has NestedFacets.
+        // This tests that GenerateLazyProjection includes nested facet bindings.
+        var entity = new DerivedConfiguredEntity345
+        {
+            Id = 1,
+            Number = "ORD-001",
+            AssignedToUnit = new UnitEntity345 { Id = 100, Name = "Unit A" },
+            ExtraTime = new DateTime(2024, 6, 15, 10, 0, 0)
+        };
+
+        // Act
+        var dto = DerivedConfiguredDto345.Projection.Compile()(entity);
+
+        // Assert - Derived Configuration mapping
+        dto.ExtraTime.Should().Be(new DateTime(2024, 6, 15, 10, 0, 0).AddHours(5),
+            "ExtraTime should be mapped with +5 hours from ConfigureProjection");
+
+        // Assert - NestedFacets from base should be projected correctly
+        dto.AssignedToUnit.Should().NotBeNull();
+        dto.AssignedToUnit.Should().BeOfType<UnitDto345>("AssignedToUnit should be UnitDto345, not UnitEntity345");
+        dto.AssignedToUnit!.Name.Should().Be("Unit A");
+
+        // Assert - Simple properties from base
+        dto.Number.Should().Be("ORD-001");
+    }
 }
 
 public class UnitEntity338
@@ -474,5 +572,192 @@ public class OrderLineDispatchDto341MapConfig
         IFacetProjectionBuilder<OrderLineDispatchEntity341, OrderLineDispatchDto341> builder)
     {
         builder.Map(d => d.DeliveryTime, s => s.DeliveryTime.AddHours(2));
+    }
+}
+
+public class UnitEntity345
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+[Facet(typeof(UnitEntity345))]
+public partial class UnitDto345
+{
+}
+
+public class OrderHeaderEntity345
+{
+    public int Id { get; set; }
+    public string OrderNumber { get; set; } = string.Empty;
+}
+
+[Facet(typeof(OrderHeaderEntity345))]
+public partial class OrderHeaderDto345
+{
+}
+
+public class InventoryItemEntity345
+{
+    public int Id { get; set; }
+    public string Identifier { get; set; } = string.Empty;
+}
+
+[Facet(typeof(InventoryItemEntity345))]
+public partial class InventoryItemDto345
+{
+}
+
+/// <summary>Base entity with navigation properties.</summary>
+public class OrderLineBaseEntity345
+{
+    public int Id { get; set; }
+    public string Number { get; set; } = string.Empty;
+    public DateTime ExpectedStartTime { get; set; }
+    public UnitEntity345? AssignedToUnit { get; set; }
+    public OrderHeaderEntity345 OrderHeader { get; set; } = null!;
+}
+
+/// <summary>Derived entity with additional navigation properties.</summary>
+public class OrderLineWithPackingEntity345 : OrderLineBaseEntity345
+{
+    public List<InventoryItemEntity345> InventoryItems { get; set; } = new();
+    public string Description { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Base DTO with NestedFacets for navigation properties.
+/// </summary>
+[Facet(typeof(OrderLineBaseEntity345),
+       Include = new[]
+       {
+           nameof(OrderLineBaseEntity345.Number),
+           nameof(OrderLineBaseEntity345.ExpectedStartTime),
+           nameof(OrderLineBaseEntity345.AssignedToUnit),
+           nameof(OrderLineBaseEntity345.OrderHeader)
+       },
+       NestedFacets = new[]
+       {
+           typeof(UnitDto345),
+           typeof(OrderHeaderDto345)
+       })]
+public partial class OrderLineBaseDto345
+{
+}
+
+/// <summary>
+/// Derived DTO with its own NestedFacets, inheriting from base DTO.
+/// This tests issue #338 regression: inherited NestedFacets should be projected correctly.
+/// </summary>
+[Facet(typeof(OrderLineWithPackingEntity345),
+       Include = new[]
+       {
+           nameof(OrderLineWithPackingEntity345.InventoryItems),
+           nameof(OrderLineWithPackingEntity345.Description)
+       },
+       NestedFacets = new[]
+       {
+           typeof(InventoryItemDto345)
+       })]
+public partial class OrderLineWithPackingDto345 : OrderLineBaseDto345
+{
+}
+
+// --- Test models for multi-source base Facet with NestedFacets (issue #338 regression) ---
+
+/// <summary>Unrelated source entity for the second [Facet] attribute.</summary>
+public class OtherSourceEntity345
+{
+    public int Id { get; set; }
+    public string OtherCode { get; set; } = string.Empty;
+}
+
+/// <summary>Base entity with a navigation property.</summary>
+public class BaseMultiSrcEntity345
+{
+    public int Id { get; set; }
+    public string Number { get; set; } = string.Empty;
+    public UnitEntity345? AssignedToUnit { get; set; }
+}
+
+/// <summary>Derived entity.</summary>
+public class DerivedMultiSrcEntity345 : BaseMultiSrcEntity345
+{
+    public string ExtraInfo { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Multi-source base Facet. The matching source (BaseMultiSrcEntity345) has NestedFacets.
+/// The non-matching source (OtherSourceEntity345) also includes properties.
+/// GetBaseClassMemberNames iterates ALL attributes, GetBaseFacetInfo selects only the matching one.
+/// </summary>
+[Facet(typeof(OtherSourceEntity345),
+       Include = new[] { nameof(OtherSourceEntity345.OtherCode) })]
+[Facet(typeof(BaseMultiSrcEntity345),
+       Include = new[]
+       {
+           nameof(BaseMultiSrcEntity345.Number),
+           nameof(BaseMultiSrcEntity345.AssignedToUnit)
+       },
+       NestedFacets = new[] { typeof(UnitDto345) })]
+public partial class BaseMultiSrcDto345
+{
+}
+
+/// <summary>Derived Facet inheriting from multi-source base.</summary>
+[Facet(typeof(DerivedMultiSrcEntity345),
+       Include = new[] { nameof(DerivedMultiSrcEntity345.ExtraInfo) })]
+public partial class DerivedMultiSrcDto345 : BaseMultiSrcDto345
+{
+}
+
+// --- Test models for IFacetProjectionMapConfiguration + inherited NestedFacets ---
+
+/// <summary>Base entity with navigation property for configured projection test.</summary>
+public class BaseConfiguredEntity345
+{
+    public int Id { get; set; }
+    public string Number { get; set; } = string.Empty;
+    public UnitEntity345? AssignedToUnit { get; set; }
+}
+
+/// <summary>Derived entity with extra properties.</summary>
+public class DerivedConfiguredEntity345 : BaseConfiguredEntity345
+{
+    public DateTime ExtraTime { get; set; }
+}
+
+/// <summary>
+/// Base Facet with NestedFacets (no Configuration).
+/// </summary>
+[Facet(typeof(BaseConfiguredEntity345),
+       Include = new[]
+       {
+           nameof(BaseConfiguredEntity345.Number),
+           nameof(BaseConfiguredEntity345.AssignedToUnit)
+       },
+       NestedFacets = new[] { typeof(UnitDto345) })]
+public partial class BaseConfiguredDto345
+{
+}
+
+/// <summary>
+/// Derived Facet WITH IFacetProjectionMapConfiguration.
+/// This triggers GenerateLazyProjection which must handle inherited NestedFacets.
+/// </summary>
+[Facet(typeof(DerivedConfiguredEntity345),
+       Configuration = typeof(DerivedConfiguredDto345MapConfig),
+       Include = new[] { nameof(DerivedConfiguredEntity345.ExtraTime) })]
+public partial class DerivedConfiguredDto345 : BaseConfiguredDto345
+{
+}
+
+public class DerivedConfiguredDto345MapConfig
+    : IFacetProjectionMapConfiguration<DerivedConfiguredEntity345, DerivedConfiguredDto345>
+{
+    public static void ConfigureProjection(
+        IFacetProjectionBuilder<DerivedConfiguredEntity345, DerivedConfiguredDto345> builder)
+    {
+        builder.Map(d => d.ExtraTime, s => s.ExtraTime.AddHours(5));
     }
 }
