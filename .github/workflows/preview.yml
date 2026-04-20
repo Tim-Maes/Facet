@@ -114,7 +114,7 @@ jobs:
           }
 
       - name: Comment preview version on PR
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const version = '${{ steps.preview_version.outputs.PREVIEW_VERSION }}';
