@@ -69,17 +69,64 @@ internal static class ProjectionGenerator
         var backingFieldName = "_" + char.ToLowerInvariant(safeName[0]) + safeName.Substring(1);
         var buildMethodName = "Build" + safeName;
 
+        // Check whether this model has nested facet members that could trigger circular references
+        var nestedFacetMembers = model.Members
+            .Where(m => m.MapFromIncludeInProjection && m.IsNestedFacet)
+            .ToArray();
+        bool hasNestedFacets = nestedFacetMembers.Length > 0;
+
         // Backing field
         sb.AppendLine($"{memberIndent}private static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>>? {backingFieldName};");
         sb.AppendLine();
 
-        // Projection property
-        sb.AppendLine($"{memberIndent}public static {newModifier}global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> {propertyName}");
-        sb.AppendLine($"{memberIndent}    => global::System.Threading.LazyInitializer.EnsureInitialized(ref {backingFieldName}, {buildMethodName});");
+        if (hasNestedFacets)
+        {
+            // Thread-static build stack to detect circular references at runtime.
+            // When BuildProjection for type A accesses NestedDto.Projection and that
+            // eventually cycles back to A, the re-entrant call detects A is already on
+            // the stack and builds a shallow projection (scalar + ConfigureProjection
+            // only, no nested facets) to break the cycle.
+            sb.AppendLine($"{memberIndent}[global::System.ThreadStatic]");
+            sb.AppendLine($"{memberIndent}private static global::System.Collections.Generic.HashSet<string>? __projectionBuildStack;");
+            sb.AppendLine();
+
+            // Projection property with re-entrance guard
+            sb.AppendLine($"{memberIndent}public static {newModifier}global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> {propertyName}");
+            sb.AppendLine($"{memberIndent}{{");
+            sb.AppendLine($"{memberIndent}    get");
+            sb.AppendLine($"{memberIndent}    {{");
+            sb.AppendLine($"{memberIndent}        var __cached = global::System.Threading.Volatile.Read(ref {backingFieldName});");
+            sb.AppendLine($"{memberIndent}        if (__cached != null) return __cached;");
+            sb.AppendLine();
+            sb.AppendLine($"{memberIndent}        __projectionBuildStack ??= new global::System.Collections.Generic.HashSet<string>();");
+            sb.AppendLine($"{memberIndent}        var __key = \"{tgt}:{safeName}\";");
+            sb.AppendLine($"{memberIndent}        bool __isReentrant = !__projectionBuildStack.Add(__key);");
+            sb.AppendLine($"{memberIndent}        try");
+            sb.AppendLine($"{memberIndent}        {{");
+            sb.AppendLine($"{memberIndent}            var __result = {buildMethodName}(!__isReentrant);");
+            sb.AppendLine($"{memberIndent}            if (!__isReentrant)");
+            sb.AppendLine($"{memberIndent}            {{");
+            sb.AppendLine($"{memberIndent}                global::System.Threading.Volatile.Write(ref {backingFieldName}, __result);");
+            sb.AppendLine($"{memberIndent}            }}");
+            sb.AppendLine($"{memberIndent}            return __result;");
+            sb.AppendLine($"{memberIndent}        }}");
+            sb.AppendLine($"{memberIndent}        finally");
+            sb.AppendLine($"{memberIndent}        {{");
+            sb.AppendLine($"{memberIndent}            if (!__isReentrant) __projectionBuildStack.Remove(__key);");
+            sb.AppendLine($"{memberIndent}        }}");
+            sb.AppendLine($"{memberIndent}    }}");
+            sb.AppendLine($"{memberIndent}}}");
+        }
+        else
+        {
+            // No nested facets — no risk of circular references; use simple lazy init
+            sb.AppendLine($"{memberIndent}public static {newModifier}global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> {propertyName}");
+            sb.AppendLine($"{memberIndent}    => global::System.Threading.LazyInitializer.EnsureInitialized(ref {backingFieldName}, () => {buildMethodName}(true));");
+        }
         sb.AppendLine();
 
-        // BuildProjection() method
-        sb.AppendLine($"{memberIndent}private static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> {buildMethodName}()");
+        // BuildProjection() method — accepts includeNestedFacets flag
+        sb.AppendLine($"{memberIndent}private static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> {buildMethodName}(bool __includeNestedFacets)");
         sb.AppendLine($"{memberIndent}{{");
 
         var bodyIndent = memberIndent + "    ";
@@ -109,14 +156,20 @@ internal static class ProjectionGenerator
         sb.AppendLine($"{bodyIndent}}};");
         sb.AppendLine();
 
-        // Generate bindings for nested facet members (single and collection)
-        var nestedFacetMembers = model.Members
-            .Where(m => m.MapFromIncludeInProjection && m.IsNestedFacet)
-            .ToArray();
-
-        foreach (var member in nestedFacetMembers)
+        // Generate bindings for nested facet members (guarded by __includeNestedFacets)
+        if (hasNestedFacets)
         {
-            GenerateNestedFacetBindingForLazyProjection(sb, member, tgt, bodyIndent, facetLookup);
+            sb.AppendLine($"{bodyIndent}if (__includeNestedFacets)");
+            sb.AppendLine($"{bodyIndent}{{");
+
+            var nestedIndent = bodyIndent + "    ";
+            foreach (var member in nestedFacetMembers)
+            {
+                GenerateNestedFacetBindingForLazyProjection(sb, member, tgt, nestedIndent, facetLookup);
+            }
+
+            sb.AppendLine($"{bodyIndent}}}");
+            sb.AppendLine();
         }
 
         // Apply base Facet ConfigureProjection if present
