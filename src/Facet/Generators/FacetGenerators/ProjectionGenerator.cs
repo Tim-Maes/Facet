@@ -40,7 +40,8 @@ internal static class ProjectionGenerator
         else
         {
             GenerateProjectionDocumentation(sb, model, memberIndent, propertyName);
-            sb.AppendLine($"{memberIndent}public static {(model.BaseHidesFacetMembers ? "new " : "")}Expression<Func<{model.SourceTypeName}, {model.Name}>> {propertyName} =>");
+            var newMod = model.BaseHidesFacetMembers && propertyName == "Projection" ? "new " : "";
+            sb.AppendLine($"{memberIndent}public static {newMod}Expression<Func<{model.SourceTypeName}, {model.Name}>> {propertyName} =>");
 
             // Generate object initializer projection for EF Core compatibility
             GenerateProjectionExpression(sb, model, memberIndent, facetLookup);
@@ -57,10 +58,10 @@ internal static class ProjectionGenerator
         StringBuilder sb,
         FacetTargetModel model,
         string memberIndent,
-        Dictionary<string, List<FacetTargetModel>> _,
+        Dictionary<string, List<FacetTargetModel>> facetLookup,
         string propertyName = "Projection")
     {
-        var newModifier = model.BaseHidesFacetMembers ? "new " : "";
+        var newModifier = model.BaseHidesFacetMembers && propertyName == "Projection" ? "new " : "";
         var src = model.SourceTypeName;
         var tgt = model.Name;
 
@@ -69,17 +70,64 @@ internal static class ProjectionGenerator
         var backingFieldName = "_" + char.ToLowerInvariant(safeName[0]) + safeName.Substring(1);
         var buildMethodName = "Build" + safeName;
 
+        // Check whether this model has nested facet members that could trigger circular references
+        var nestedFacetMembers = model.Members
+            .Where(m => m.MapFromIncludeInProjection && m.IsNestedFacet)
+            .ToArray();
+        bool hasNestedFacets = nestedFacetMembers.Length > 0;
+
         // Backing field
         sb.AppendLine($"{memberIndent}private static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>>? {backingFieldName};");
         sb.AppendLine();
 
-        // Projection property
-        sb.AppendLine($"{memberIndent}public static {newModifier}global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> {propertyName}");
-        sb.AppendLine($"{memberIndent}    => global::System.Threading.LazyInitializer.EnsureInitialized(ref {backingFieldName}, {buildMethodName});");
+        if (hasNestedFacets)
+        {
+            // Thread-static build stack to detect circular references at runtime.
+            // When BuildProjection for type A accesses NestedDto.Projection and that
+            // eventually cycles back to A, the re-entrant call detects A is already on
+            // the stack and builds a shallow projection (scalar + ConfigureProjection
+            // only, no nested facets) to break the cycle.
+            sb.AppendLine($"{memberIndent}[global::System.ThreadStatic]");
+            sb.AppendLine($"{memberIndent}private static global::System.Collections.Generic.HashSet<string>? __projectionBuildStack;");
+            sb.AppendLine();
+
+            // Projection property with re-entrance guard
+            sb.AppendLine($"{memberIndent}public static {newModifier}global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> {propertyName}");
+            sb.AppendLine($"{memberIndent}{{");
+            sb.AppendLine($"{memberIndent}    get");
+            sb.AppendLine($"{memberIndent}    {{");
+            sb.AppendLine($"{memberIndent}        var __cached = global::System.Threading.Volatile.Read(ref {backingFieldName});");
+            sb.AppendLine($"{memberIndent}        if (__cached != null) return __cached;");
+            sb.AppendLine();
+            sb.AppendLine($"{memberIndent}        __projectionBuildStack ??= new global::System.Collections.Generic.HashSet<string>();");
+            sb.AppendLine($"{memberIndent}        var __key = \"{tgt}:{safeName}\";");
+            sb.AppendLine($"{memberIndent}        bool __isReentrant = !__projectionBuildStack.Add(__key);");
+            sb.AppendLine($"{memberIndent}        try");
+            sb.AppendLine($"{memberIndent}        {{");
+            sb.AppendLine($"{memberIndent}            var __result = {buildMethodName}(!__isReentrant);");
+            sb.AppendLine($"{memberIndent}            if (!__isReentrant)");
+            sb.AppendLine($"{memberIndent}            {{");
+            sb.AppendLine($"{memberIndent}                global::System.Threading.Volatile.Write(ref {backingFieldName}, __result);");
+            sb.AppendLine($"{memberIndent}            }}");
+            sb.AppendLine($"{memberIndent}            return __result;");
+            sb.AppendLine($"{memberIndent}        }}");
+            sb.AppendLine($"{memberIndent}        finally");
+            sb.AppendLine($"{memberIndent}        {{");
+            sb.AppendLine($"{memberIndent}            if (!__isReentrant) __projectionBuildStack.Remove(__key);");
+            sb.AppendLine($"{memberIndent}        }}");
+            sb.AppendLine($"{memberIndent}    }}");
+            sb.AppendLine($"{memberIndent}}}");
+        }
+        else
+        {
+            // No nested facets — no risk of circular references; use simple lazy init
+            sb.AppendLine($"{memberIndent}public static {newModifier}global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> {propertyName}");
+            sb.AppendLine($"{memberIndent}    => global::System.Threading.LazyInitializer.EnsureInitialized(ref {backingFieldName}, () => {buildMethodName}(true));");
+        }
         sb.AppendLine();
 
-        // BuildProjection() method
-        sb.AppendLine($"{memberIndent}private static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> {buildMethodName}()");
+        // BuildProjection() method — accepts includeNestedFacets flag
+        sb.AppendLine($"{memberIndent}private static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> {buildMethodName}(bool __includeNestedFacets)");
         sb.AppendLine($"{memberIndent}{{");
 
         var bodyIndent = memberIndent + "    ";
@@ -108,6 +156,22 @@ internal static class ProjectionGenerator
 
         sb.AppendLine($"{bodyIndent}}};");
         sb.AppendLine();
+
+        // Generate bindings for nested facet members (guarded by __includeNestedFacets)
+        if (hasNestedFacets)
+        {
+            sb.AppendLine($"{bodyIndent}if (__includeNestedFacets)");
+            sb.AppendLine($"{bodyIndent}{{");
+
+            var nestedIndent = bodyIndent + "    ";
+            foreach (var member in nestedFacetMembers)
+            {
+                GenerateNestedFacetBindingForLazyProjection(sb, member, tgt, nestedIndent, facetLookup);
+            }
+
+            sb.AppendLine($"{bodyIndent}}}");
+            sb.AppendLine();
+        }
 
         // Apply base Facet ConfigureProjection if present
         if (model.BaseFacetInfo?.BaseConfigurationTypeName != null)
@@ -147,6 +211,254 @@ internal static class ProjectionGenerator
         sb.AppendLine($"{bodyIndent}        __bindings),");
         sb.AppendLine($"{bodyIndent}    __p);");
         sb.AppendLine($"{memberIndent}}}");
+    }
+
+    /// <summary>
+    /// Generates an <c>Expression.Bind</c> call for a nested facet member inside the lazy projection builder.
+    /// Inlines the nested Facet's <c>Projection</c> expression using <c>ParameterReplacer.ReplaceParameter</c>.
+    /// Handles single (nullable and non-nullable) and collection nested facets.
+    /// </summary>
+    private static void GenerateNestedFacetBindingForLazyProjection(
+        StringBuilder sb,
+        FacetMember member,
+        string targetTypeName,
+        string indent,
+        Dictionary<string, List<FacetTargetModel>> facetLookup)
+    {
+        var sourcePropName = member.SourcePropertyName;
+
+        if (member.IsCollection)
+        {
+            GenerateCollectionNestedFacetLazyBinding(sb, member, targetTypeName, indent, facetLookup);
+        }
+        else
+        {
+            GenerateSingleNestedFacetLazyBinding(sb, member, targetTypeName, indent, facetLookup);
+        }
+    }
+
+    /// <summary>
+    /// Generates runtime expression-tree code for a single (non-collection) nested facet binding.
+    /// </summary>
+    private static void GenerateSingleNestedFacetLazyBinding(
+        StringBuilder sb,
+        FacetMember member,
+        string targetTypeName,
+        string indent,
+        Dictionary<string, List<FacetTargetModel>> facetLookup)
+    {
+        var sourcePropName = member.SourcePropertyName;
+        var nonNullableTypeName = member.TypeName.TrimEnd('?');
+        bool isNullable = member.TypeName.EndsWith("?");
+
+        // Resolve the Projection property name on the nested DTO
+        var projectionPropertyAccess = ResolveNestedProjectionPropertyAccess(
+            nonNullableTypeName, member.NestedFacetSourceTypeName, facetLookup);
+
+        sb.AppendLine($"{indent}// Nested facet binding: {member.Name}");
+        sb.AppendLine($"{indent}{{");
+
+        var innerIndent = indent + "    ";
+
+        sb.AppendLine($"{innerIndent}var __nfProp = global::System.Linq.Expressions.Expression.Property(__p, \"{sourcePropName}\");");
+        sb.AppendLine($"{innerIndent}var __nfLambda = (global::System.Linq.Expressions.LambdaExpression){projectionPropertyAccess};");
+        sb.AppendLine($"{innerIndent}var __nfBody = (global::System.Linq.Expressions.Expression)global::Facet.Mapping.ParameterReplacer.ReplaceParameter(__nfLambda, __nfProp);");
+
+        if (isNullable)
+        {
+            // Wrap with null check: source.Prop != null ? projected : default
+            sb.AppendLine($"{innerIndent}__nfBody = global::System.Linq.Expressions.Expression.Condition(");
+            sb.AppendLine($"{innerIndent}    global::System.Linq.Expressions.Expression.NotEqual(__nfProp, global::System.Linq.Expressions.Expression.Constant(null, __nfProp.Type)),");
+            sb.AppendLine($"{innerIndent}    __nfBody,");
+            sb.AppendLine($"{innerIndent}    global::System.Linq.Expressions.Expression.Default(typeof({nonNullableTypeName})));");
+        }
+
+        sb.AppendLine($"{innerIndent}__bindings.Add(global::System.Linq.Expressions.Expression.Bind(");
+        sb.AppendLine($"{innerIndent}    typeof({targetTypeName}).GetProperty(\"{member.Name}\")!,");
+        sb.AppendLine($"{innerIndent}    __nfBody));");
+        sb.AppendLine($"{indent}}}");
+        sb.AppendLine();
+    }
+
+    /// <summary>
+    /// Generates runtime expression-tree code for a collection nested facet binding.
+    /// Builds: source.Collection.Select(nestedProjection).ToList()  (or appropriate wrapper)
+    /// </summary>
+    private static void GenerateCollectionNestedFacetLazyBinding(
+        StringBuilder sb,
+        FacetMember member,
+        string targetTypeName,
+        string indent,
+        Dictionary<string, List<FacetTargetModel>> facetLookup)
+    {
+        var sourcePropName = member.SourcePropertyName;
+        var elementTypeName = ExpressionBuilder.ExtractElementTypeFromCollectionTypeName(member.TypeName);
+        var nonNullableElementType = elementTypeName.TrimEnd('?');
+        bool isNullableCollection = member.TypeName.EndsWith("?");
+
+        // Determine source element type
+        var sourceElementType = member.NestedFacetSourceTypeName ??
+            (member.SourceMemberTypeName != null
+                ? ExpressionBuilder.ExtractElementTypeFromCollectionTypeName(member.SourceMemberTypeName)
+                : elementTypeName);
+
+        // Resolve the Projection property name on the nested DTO element type
+        var projectionPropertyAccess = ResolveNestedProjectionPropertyAccess(
+            nonNullableElementType, sourceElementType, facetLookup);
+
+        // Determine the ToList/ToArray wrapper method
+        var collectionWrapper = member.CollectionWrapper ?? "List";
+        var wrapperMethodCall = GetCollectionWrapperMethodCall(collectionWrapper, nonNullableElementType);
+
+        sb.AppendLine($"{indent}// Collection nested facet binding: {member.Name}");
+        sb.AppendLine($"{indent}{{");
+
+        var innerIndent = indent + "    ";
+
+        sb.AppendLine($"{innerIndent}var __nfCollectionProp = global::System.Linq.Expressions.Expression.Property(__p, \"{sourcePropName}\");");
+        sb.AppendLine($"{innerIndent}var __nfProjection = (global::System.Linq.Expressions.LambdaExpression){projectionPropertyAccess};");
+        sb.AppendLine();
+
+        // Build Enumerable.Select call expression
+        sb.AppendLine($"{innerIndent}// Build: source.{sourcePropName}.Select(projection){wrapperMethodCall}");
+        sb.AppendLine($"{innerIndent}var __nfSelectMethod = typeof(global::System.Linq.Enumerable)");
+        sb.AppendLine($"{innerIndent}    .GetMethods(global::System.Reflection.BindingFlags.Static | global::System.Reflection.BindingFlags.Public)");
+        sb.AppendLine($"{innerIndent}    .First(m => m.Name == \"Select\" && m.GetParameters().Length == 2");
+        sb.AppendLine($"{innerIndent}        && m.GetParameters()[1].ParameterType.IsGenericType");
+        sb.AppendLine($"{innerIndent}        && m.GetParameters()[1].ParameterType.GetGenericTypeDefinition() == typeof(global::System.Func<,>))");
+        sb.AppendLine($"{innerIndent}    .MakeGenericMethod(typeof({sourceElementType}), typeof({nonNullableElementType}));");
+        sb.AppendLine();
+        sb.AppendLine($"{innerIndent}var __nfSelectCall = global::System.Linq.Expressions.Expression.Call(null, __nfSelectMethod, __nfCollectionProp, __nfProjection);");
+        sb.AppendLine();
+
+        // Build the wrapper call (ToList, ToArray, etc.)
+        GenerateCollectionWrapperExpression(sb, innerIndent, collectionWrapper, nonNullableElementType);
+
+        if (isNullableCollection)
+        {
+            sb.AppendLine($"{innerIndent}var __nfFinal = global::System.Linq.Expressions.Expression.Condition(");
+            sb.AppendLine($"{innerIndent}    global::System.Linq.Expressions.Expression.NotEqual(__nfCollectionProp, global::System.Linq.Expressions.Expression.Constant(null, __nfCollectionProp.Type)),");
+            sb.AppendLine($"{innerIndent}    __nfWrapped,");
+            sb.AppendLine($"{innerIndent}    global::System.Linq.Expressions.Expression.Default(typeof({member.TypeName.TrimEnd('?')})));");
+            sb.AppendLine();
+            sb.AppendLine($"{innerIndent}__bindings.Add(global::System.Linq.Expressions.Expression.Bind(");
+            sb.AppendLine($"{innerIndent}    typeof({targetTypeName}).GetProperty(\"{member.Name}\")!,");
+            sb.AppendLine($"{innerIndent}    __nfFinal));");
+        }
+        else
+        {
+            sb.AppendLine($"{innerIndent}__bindings.Add(global::System.Linq.Expressions.Expression.Bind(");
+            sb.AppendLine($"{innerIndent}    typeof({targetTypeName}).GetProperty(\"{member.Name}\")!,");
+            sb.AppendLine($"{innerIndent}    __nfWrapped));");
+        }
+
+        sb.AppendLine($"{indent}}}");
+        sb.AppendLine();
+    }
+
+    /// <summary>
+    /// Generates the Expression.Call for the appropriate collection wrapper (ToList, ToArray, etc.)
+    /// and assigns it to __nfWrapped.
+    /// </summary>
+    private static void GenerateCollectionWrapperExpression(
+        StringBuilder sb,
+        string indent,
+        string collectionWrapper,
+        string elementTypeName)
+    {
+        switch (collectionWrapper)
+        {
+            case FacetConstants.CollectionWrappers.Array:
+                sb.AppendLine($"{indent}var __nfWrapMethod = typeof(global::System.Linq.Enumerable).GetMethod(\"ToArray\")!.MakeGenericMethod(typeof({elementTypeName}));");
+                sb.AppendLine($"{indent}var __nfWrapped = global::System.Linq.Expressions.Expression.Call(null, __nfWrapMethod, __nfSelectCall);");
+                break;
+            case FacetConstants.CollectionWrappers.IEnumerable:
+                // No wrapper needed - Select already returns IEnumerable
+                sb.AppendLine($"{indent}var __nfWrapped = (global::System.Linq.Expressions.Expression)__nfSelectCall;");
+                break;
+            default:
+                // Default to ToList() for List, IList, ICollection, etc.
+                sb.AppendLine($"{indent}var __nfWrapMethod = typeof(global::System.Linq.Enumerable).GetMethod(\"ToList\")!.MakeGenericMethod(typeof({elementTypeName}));");
+                sb.AppendLine($"{indent}var __nfWrapped = global::System.Linq.Expressions.Expression.Call(null, __nfWrapMethod, __nfSelectCall);");
+                break;
+        }
+        sb.AppendLine();
+    }
+
+    /// <summary>
+    /// Resolves the fully qualified access to a nested Facet's Projection property.
+    /// Determines whether to use <c>Projection</c> or <c>ProjectionFrom{Source}</c> based on
+    /// whether the nested DTO is multi-source.
+    /// </summary>
+    private static string ResolveNestedProjectionPropertyAccess(
+        string nestedDtoTypeName,
+        string? nestedSourceTypeName,
+        Dictionary<string, List<FacetTargetModel>> facetLookup)
+    {
+        // Strip "global::" prefix and extract simple name for lookup
+        var lookupName = nestedDtoTypeName
+            .Replace(Shared.GeneratorUtilities.GlobalPrefix, "")
+            .Split('.', ':')
+            .Last();
+
+        List<FacetTargetModel>? models = null;
+
+        // Try exact match
+        if (!facetLookup.TryGetValue(lookupName, out models) || models == null || models.Count == 0)
+        {
+            // Try matching by simple name in values
+            foreach (var kvp in facetLookup)
+            {
+                if (kvp.Value.Count > 0)
+                {
+                    var m = kvp.Value[0];
+                    if (kvp.Key == lookupName || m.Name == nestedDtoTypeName ||
+                        kvp.Key.EndsWith("." + lookupName))
+                    {
+                        models = kvp.Value;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (models == null || models.Count <= 1)
+        {
+            // Single-source: use "Projection"
+            return $"{nestedDtoTypeName}.Projection";
+        }
+
+        // Multi-source: find the matching model and use "ProjectionFrom{SourceSimpleName}"
+        if (nestedSourceTypeName != null)
+        {
+            foreach (var model in models)
+            {
+                if (model.SourceTypeName == nestedSourceTypeName)
+                {
+                    var sourceSimpleName = CodeGenerationHelpers.GetSimpleTypeName(model.SourceTypeName);
+                    var angleBracket = sourceSimpleName.IndexOf('<');
+                    if (angleBracket > 0) sourceSimpleName = sourceSimpleName.Substring(0, angleBracket);
+                    return $"{nestedDtoTypeName}.ProjectionFrom{sourceSimpleName}";
+                }
+            }
+        }
+
+        // Fallback to "Projection"
+        return $"{nestedDtoTypeName}.Projection";
+    }
+
+    /// <summary>
+    /// Gets the wrapper method call suffix for a collection type (e.g., ".ToList()", ".ToArray()").
+    /// Used only for code comments.
+    /// </summary>
+    private static string GetCollectionWrapperMethodCall(string collectionWrapper, string elementTypeName)
+    {
+        return collectionWrapper switch
+        {
+            FacetConstants.CollectionWrappers.Array => ".ToArray()",
+            FacetConstants.CollectionWrappers.IEnumerable => "",
+            _ => ".ToList()"
+        };
     }
 
     /// <summary>

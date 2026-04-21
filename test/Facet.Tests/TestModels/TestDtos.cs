@@ -361,3 +361,32 @@ public partial class UnitDropDownDto;
        Include = new[] { nameof(OrderLineBaseEntity.AssignedToUnit), nameof(OrderLineBaseEntity.Number) },
        NestedFacets = new[] { typeof(UnitDropDownDto) })]
 public partial class OrderLineBaseUpsertDto;
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Multi-source inherited facet test — verifies that custom-named members
+// (ProjectionFromX, ToX) do NOT get the 'new' keyword when the base class
+// has a single-source [Facet] attribute (regression test for CS0109).
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Base class with a single-source Facet.
+/// Generates standard members: Projection, ToSource, BackTo.
+/// </summary>
+[Facet(typeof(UnitDto),
+       GenerateToSource = true,
+       Include = new[] { nameof(UnitDto.Name) })]
+public partial class UnitBaseFacet;
+
+/// <summary>
+/// Derived class with multiple [Facet] attributes.
+/// Generates custom-named members: ProjectionFromUnitDto, ProjectionFromUnitEntity,
+/// ToUnitDto, ToUnitEntity. These must NOT have 'new' since they don't hide
+/// the base class's Projection/ToSource/BackTo.
+/// </summary>
+[Facet(typeof(UnitDto),
+       GenerateToSource = true,
+       Include = new[] { nameof(UnitDto.Name), nameof(UnitDto.ValidationResult) })]
+[Facet(typeof(UnitEntity),
+       GenerateToSource = true,
+       Include = new[] { nameof(UnitEntity.Name), nameof(UnitEntity.ValidationResult) })]
+public partial class UnitMultiSourceInheritedFacet : UnitBaseFacet;
