@@ -1166,6 +1166,16 @@ private static Dictionary<string, (string targetName, string source, bool revers
     /// </summary>
     private static BaseFacetInfo? GetBaseFacetInfo(INamedTypeSymbol targetSymbol, INamedTypeSymbol derivedSourceType, Compilation compilation)
     {
+        // Walk the full ancestor chain to accumulate IncludedMembers and NestedFacetMappings
+        // from ALL ancestor facets. The nearest ancestor provides BaseTypeName, BaseSourceTypeName,
+        // and BaseConfigurationTypeName.
+        string? nearestBaseTypeName = null;
+        string? nearestBaseSourceTypeName = null;
+        string? nearestBaseConfigurationTypeName = null;
+        var allIncludedMembers = new List<string>();
+        var allNestedFacetMappings = new Dictionary<string, (string childFacetTypeName, string sourceTypeName)>();
+        bool foundAny = false;
+
         var baseType = targetSymbol.BaseType;
         while (baseType != null && baseType.SpecialType != SpecialType.System_Object)
         {
@@ -1215,53 +1225,78 @@ private static Dictionary<string, (string targetName, string source, bool revers
 
                 if (bestFacetAttr != null && bestBaseSourceType != null)
                 {
-                    var baseTypeName = baseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    var baseSourceTypeName = bestBaseSourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-
-                    // Extract the Configuration type if specified and compatible with the selected base source/target pair
-                    string? baseConfigurationTypeName = null;
-                    var configArg = bestFacetAttr.NamedArguments.FirstOrDefault(arg => arg.Key == "Configuration");
-                    if (!configArg.Equals(default(KeyValuePair<string, TypedConstant>)))
+                    // Use the nearest ancestor for type name and configuration
+                    if (!foundAny)
                     {
-                        var configType = configArg.Value.Value as INamedTypeSymbol;
-                        if (configType != null)
+                        nearestBaseTypeName = baseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                        nearestBaseSourceTypeName = bestBaseSourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+                        // Extract the Configuration type if specified and compatible with the selected base source/target pair
+                        var configArg = bestFacetAttr.NamedArguments.FirstOrDefault(arg => arg.Key == "Configuration");
+                        if (!configArg.Equals(default(KeyValuePair<string, TypedConstant>)))
                         {
-                            var projectionMapConfigInterface = compilation.GetTypeByMetadataName(
-                                FacetConstants.ProjectionMapConfigurationInterfaceFullName);
-
-                            if (projectionMapConfigInterface != null)
+                            var configType = configArg.Value.Value as INamedTypeSymbol;
+                            if (configType != null)
                             {
-                                var implementsProjectionConfig = configType.AllInterfaces.Any(i =>
-                                    SymbolEqualityComparer.Default.Equals(i.ConstructedFrom, projectionMapConfigInterface) &&
-                                    i.TypeArguments.Length == 2 &&
-                                    SymbolEqualityComparer.Default.Equals(i.TypeArguments[0], bestBaseSourceType) &&
-                                    SymbolEqualityComparer.Default.Equals(i.TypeArguments[1], baseType));
+                                var projectionMapConfigInterface = compilation.GetTypeByMetadataName(
+                                    FacetConstants.ProjectionMapConfigurationInterfaceFullName);
 
-                                if (implementsProjectionConfig)
+                                if (projectionMapConfigInterface != null)
                                 {
-                                    baseConfigurationTypeName = configType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                                    var implementsProjectionConfig = configType.AllInterfaces.Any(i =>
+                                        SymbolEqualityComparer.Default.Equals(i.ConstructedFrom, projectionMapConfigInterface) &&
+                                        i.TypeArguments.Length == 2 &&
+                                        SymbolEqualityComparer.Default.Equals(i.TypeArguments[0], bestBaseSourceType) &&
+                                        SymbolEqualityComparer.Default.Equals(i.TypeArguments[1], baseType));
+
+                                    if (implementsProjectionConfig)
+                                    {
+                                        nearestBaseConfigurationTypeName = configType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                                    }
                                 }
+                            }
+                        }
+
+                        foundAny = true;
+                    }
+
+                    // Accumulate Include members from all ancestor facets
+                    var (baseIncludedMembers, _) = AttributeParser.ExtractIncludedMembers(bestFacetAttr);
+                    if (baseIncludedMembers.Count > 0)
+                    {
+                        foreach (var member in baseIncludedMembers)
+                        {
+                            if (!allIncludedMembers.Contains(member))
+                            {
+                                allIncludedMembers.Add(member);
                             }
                         }
                     }
 
-                    // Extract Include/NestedFacets from the selected matching [Facet] attribute
-                    var (baseIncludedMembers, _) = AttributeParser.ExtractIncludedMembers(bestFacetAttr);
+                    // Accumulate NestedFacetMappings from all ancestor facets (nearer ancestors take precedence)
                     var baseNestedFacetMappings = AttributeParser.ExtractNestedFacetMappings(bestFacetAttr, compilation);
-
-                    return new BaseFacetInfo(
-                        baseTypeName,
-                        baseSourceTypeName,
-                        baseConfigurationTypeName,
-                        baseIncludedMembers.ToImmutableArray(),
-                        baseNestedFacetMappings.ToImmutableDictionary());
+                    foreach (var mapping in baseNestedFacetMappings)
+                    {
+                        if (!allNestedFacetMappings.ContainsKey(mapping.Key))
+                        {
+                            allNestedFacetMappings[mapping.Key] = mapping.Value;
+                        }
+                    }
                 }
             }
 
             baseType = baseType.BaseType;
         }
 
-        return null;
+        if (!foundAny)
+            return null;
+
+        return new BaseFacetInfo(
+            nearestBaseTypeName!,
+            nearestBaseSourceTypeName!,
+            nearestBaseConfigurationTypeName,
+            allIncludedMembers.ToImmutableArray(),
+            allNestedFacetMappings.ToImmutableDictionary());
     }
 
     /// <summary>

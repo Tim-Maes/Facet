@@ -761,3 +761,85 @@ public class DerivedConfiguredDto345MapConfig
         builder.Map(d => d.ExtraTime, s => s.ExtraTime.AddHours(5));
     }
 }
+
+// Below tests are reproduction of the actual issue:
+
+public class UnitEntity345_18
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+[Facet(typeof(UnitEntity345_18))]
+public partial class UnitDto345_18;
+
+/// <summary>Base entity.</summary>
+public class ModifiedByBaseEntity345_18
+{
+    public UnitEntity345_18 AssignedToUnit { get; set; }
+}
+
+/// <summary>Base entity.</summary>
+public class OrderLineBaseEntity345_18 : ModifiedByBaseEntity345_18
+{
+    public int Id { get; set; }
+    public string Number { get; set; } = string.Empty;
+    public DateTime ExpectedStartTime { get; set; }
+}
+
+/// <summary>Derived entity that adds dispatch-specific properties.</summary>
+public class OrderLineDispatchEntity345_18 : OrderLineBaseEntity345_18
+{
+    public DateTime DeliveryTime { get; set; }
+    public DateTime ShipmentTime { get; set; }
+}
+
+[Facet(typeof(ModifiedByBaseEntity345_18),
+       Include =
+       [
+           nameof(ModifiedByBaseEntity345_18.AssignedToUnit)
+       ],
+       NestedFacets = [
+           typeof(UnitDto345_18)
+       ])]
+public partial class ModifiedByBaseDto345_18;
+
+[Facet(typeof(OrderLineBaseEntity345_18),
+       Configuration = typeof(OrderLineBaseDto345_18MapConfig),
+       Include =
+       [
+           nameof(OrderLineBaseEntity345_18.Number),
+           nameof(OrderLineBaseEntity345_18.ExpectedStartTime)
+       ])]
+public partial class OrderLineBaseDto345_18 : ModifiedByBaseDto345_18;
+public class OrderLineBaseDto345_18MapConfig
+    : IFacetProjectionMapConfiguration<OrderLineBaseEntity345_18, OrderLineBaseDto345_18>
+{
+    public static void ConfigureProjection(
+        IFacetProjectionBuilder<OrderLineBaseEntity345_18, OrderLineBaseDto345_18> builder)
+    {
+        // Map base properties (these should appear in derived projection too)
+        builder.Map(d => d.Number, s => "ORD-" + s.Number);
+        builder.Map(d => d.ExpectedStartTime, s => s.ExpectedStartTime.AddHours(1));
+    }
+}
+
+[Facet(typeof(OrderLineDispatchEntity345_18),
+       Configuration = typeof(OrderLineDispatchDto345_18MapConfig),
+       Include =
+       [
+           nameof(OrderLineDispatchEntity345_18.DeliveryTime),
+           nameof(OrderLineDispatchEntity345_18.ShipmentTime)
+       ])]
+public partial class OrderLineDispatchDto345_18 : OrderLineBaseDto345_18;
+public class OrderLineDispatchDto345_18MapConfig
+    : IFacetProjectionMapConfiguration<OrderLineDispatchEntity345_18, OrderLineDispatchDto345_18>
+{
+    public static void ConfigureProjection(
+        IFacetProjectionBuilder<OrderLineDispatchEntity345_18, OrderLineDispatchDto345_18> builder)
+    {
+        // Map dispatch-specific properties
+        builder.Map(d => d.DeliveryTime, s => s.DeliveryTime.AddHours(2));
+        builder.Map(d => d.ShipmentTime, s => s.ShipmentTime.AddHours(3));
+    }
+}
