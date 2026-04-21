@@ -849,6 +849,75 @@ public class CircularReferenceTests
         facet.Name.Should().Be("Entity A");
         facet.BReferences.Should().NotBeNull();
     }
+
+    [Fact]
+    public void DefaultMaxDepth_Should_Handle_CircularReferences_Without_Explicit_MaxDepth()
+    {
+        // Arrange - Create circular reference: Author -> Book -> Author (same instance)
+        var author = new Author
+        {
+            Id = 1,
+            Name = "Default Depth Author",
+            Books = new List<Book>()
+        };
+        var book = new Book { Id = 1, Title = "Default Book", Author = author };
+        author.Books.Add(book);
+
+        // Act — no explicit MaxDepth or PreserveReferences set on AuthorFacetDefault
+        // Default: MaxDepth=10, PreserveReferences=true
+        var facet = new AuthorFacetDefault(author);
+
+        // Assert — should not stack overflow and should map first level
+        facet.Should().NotBeNull();
+        facet.Id.Should().Be(1);
+        facet.Name.Should().Be("Default Depth Author");
+        facet.Books.Should().NotBeNull();
+        facet.Books.Should().HaveCount(1);
+        facet.Books![0].Title.Should().Be("Default Book");
+
+        // With PreserveReferences=true (default), the same Author object instance
+        // is detected as already processed, so Book.Author is null.
+        // This is correct circular reference prevention behavior.
+        facet.Books[0].Author.Should().BeNull(
+            "same Author instance is already being processed; PreserveReferences prevents re-entry");
+    }
+
+    [Fact]
+    public void DefaultMaxDepth_Should_Allow_Deep_NonCircular_Nesting_Beyond_Three()
+    {
+        // Arrange — 5-level deep non-circular chain; proves default MaxDepth > 3
+        var source = new Level0
+        {
+            Name = "L0",
+            Child = new Level1
+            {
+                Name = "L1",
+                Child = new Level2
+                {
+                    Name = "L2",
+                    Child = new Level3
+                    {
+                        Name = "L3",
+                        Child = new Level4 { Name = "L4" }
+                    }
+                }
+            }
+        };
+
+        // Act — no explicit MaxDepth set; code default is 10
+        var facet = new Level0Facet(source);
+
+        // Assert — all 5 levels should be populated (wouldn't work if default was 3)
+        facet.Name.Should().Be("L0");
+        facet.Child.Should().NotBeNull();
+        facet.Child!.Name.Should().Be("L1");
+        facet.Child.Child.Should().NotBeNull();
+        facet.Child.Child!.Name.Should().Be("L2");
+        facet.Child.Child.Child.Should().NotBeNull();
+        facet.Child.Child.Child!.Name.Should().Be("L3");
+        facet.Child.Child.Child.Child.Should().NotBeNull();
+        facet.Child.Child.Child.Child!.Name.Should().Be("L4");
+    }
 }
 
 #region Additional Test Models for New Tests

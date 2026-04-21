@@ -37,7 +37,7 @@ public partial class MyFacet { }
 | `NullableProperties`           | `bool`    | Make all properties nullable in the generated facet (default: false). |
 | `CopyAttributes`               | `bool`    | Copy attributes from source type members to generated facet members (default: false). See [Attribute Copying](#attribute-copying) below. |
 | `UseFullName`                  | `bool`    | Use full type name in generated file names to avoid collisions (default: false). |
-| `MaxDepth`                     | `int`     | Maximum depth for nested facet recursion to prevent stack overflow (default: 3). Set to 0 for unlimited (not recommended). See [Circular Reference Protection](#circular-reference-protection) below. |
+| `MaxDepth`                     | `int`     | Maximum depth for nested facet recursion to prevent stack overflow (default: 10). Set to 0 for unlimited (not recommended). See [Circular Reference Protection](#circular-reference-protection) below. |
 | `PreserveReferences`           | `bool`    | Enable runtime circular reference detection using object tracking (default: true). See [Circular Reference Protection](#circular-reference-protection) below. |
 | `SourceSignature`              | `string?` | Hash signature to track source entity changes. Emits FAC022 warning when source structure changes. See [Source Signature Change Tracking](16_SourceSignature.md). |
 | `ConvertEnumsTo`               | `Type?`   | When set, all enum properties are converted to the specified type (`typeof(string)` or `typeof(int)`) in the generated facet. Default is null (enums retain their original types). See [Enum Conversion](20_ConvertEnumsTo.md). |
@@ -381,7 +381,7 @@ When working with nested facets, circular references in your object graph can ca
 
 Controls how many levels deep nested facets can be instantiated. This prevents infinite recursion during both code generation and runtime.
 
-**Default:** `3` (recommended for most scenarios)
+**Default:** `10` (handles most real-world scenarios including deep non-circular nesting)
 
 ```csharp
 // Handles: Order -> LineItems -> Product -> Category
@@ -401,8 +401,8 @@ public partial record SimpleTypeDto;
 - **Level 0**: Root object (e.g., Order)
 - **Level 1**: First level nested objects (e.g., LineItems)
 - **Level 2**: Second level nested objects (e.g., Product)
-- **Level 3**: Third level nested objects (e.g., Category) - stops here with default MaxDepth = 3
-- Properties that would exceed MaxDepth are set to `null`
+- **Level 3**: Third level nested objects (e.g., Category)
+- Properties that would exceed MaxDepth are set to `null` (with default MaxDepth = 10, this covers most real-world scenarios)
 
 ### PreserveReferences
 

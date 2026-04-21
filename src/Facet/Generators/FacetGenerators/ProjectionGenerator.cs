@@ -40,7 +40,8 @@ internal static class ProjectionGenerator
         else
         {
             GenerateProjectionDocumentation(sb, model, memberIndent, propertyName);
-            sb.AppendLine($"{memberIndent}public static {(model.BaseHidesFacetMembers ? "new " : "")}Expression<Func<{model.SourceTypeName}, {model.Name}>> {propertyName} =>");
+            var newMod = model.BaseHidesFacetMembers && propertyName == "Projection" ? "new " : "";
+            sb.AppendLine($"{memberIndent}public static {newMod}Expression<Func<{model.SourceTypeName}, {model.Name}>> {propertyName} =>");
 
             // Generate object initializer projection for EF Core compatibility
             GenerateProjectionExpression(sb, model, memberIndent, facetLookup);
@@ -60,7 +61,7 @@ internal static class ProjectionGenerator
         Dictionary<string, List<FacetTargetModel>> facetLookup,
         string propertyName = "Projection")
     {
-        var newModifier = model.BaseHidesFacetMembers ? "new " : "";
+        var newModifier = model.BaseHidesFacetMembers && propertyName == "Projection" ? "new " : "";
         var src = model.SourceTypeName;
         var tgt = model.Name;
 

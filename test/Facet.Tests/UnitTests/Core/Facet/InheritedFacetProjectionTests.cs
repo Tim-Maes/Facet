@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using Facet.Tests.TestModels;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
 
@@ -376,6 +377,37 @@ public class InheritedFacetProjectionTests
 
         // Assert - Simple properties from base
         dto.Number.Should().Be("ORD-001");
+    }
+
+    [Fact]
+    public void MultiSource_InheritedFacet_ShouldNotRequireNewKeyword_And_MembersWork()
+    {
+        // Arrange - UnitMultiSourceInheritedFacet inherits from UnitBaseFacet (single source)
+        // and has two [Facet] attributes (multi source).
+        // Generated members should be ProjectionFromUnitDto, ProjectionFromUnitEntity,
+        // ToUnitDto, ToUnitEntity — none of which hide base members.
+        var unitDto = new UnitDto { Id = 1, Name = "TestUnit", ValidationResult = "Valid" };
+        var unitEntity = new UnitEntity { Id = 2, Name = "EntityUnit", ValidationResult = "OK" };
+
+        // Act — constructor from both sources
+        var fromDto = new UnitMultiSourceInheritedFacet(unitDto);
+        var fromEntity = new UnitMultiSourceInheritedFacet(unitEntity);
+
+        // Assert — values mapped correctly from both sources
+        fromDto.Name.Should().Be("TestUnit");
+        fromDto.ValidationResult.Should().Be("Valid");
+
+        fromEntity.Name.Should().Be("EntityUnit");
+        fromEntity.ValidationResult.Should().Be("OK");
+
+        // Assert — ToSource methods work (multi-source names)
+        var backToDto = fromDto.ToUnitDto();
+        backToDto.Should().NotBeNull();
+        backToDto.Name.Should().Be("TestUnit");
+
+        var backToEntity = fromEntity.ToUnitEntity();
+        backToEntity.Should().NotBeNull();
+        backToEntity.Name.Should().Be("EntityUnit");
     }
 }
 
