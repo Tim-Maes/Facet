@@ -32,7 +32,7 @@ internal static class ProjectionGenerator
         {
             GenerateProjectionNotSupportedComment(sb, model, memberIndent);
         }
-        else if (model.HasProjectionMapConfiguration)
+        else if (model.HasProjectionMapConfiguration || RequiresLazyProjection(model, facetLookup))
         {
             GenerateProjectionDocumentation(sb, model, memberIndent, propertyName);
             GenerateLazyProjection(sb, model, memberIndent, facetLookup, propertyName);
@@ -193,16 +193,19 @@ internal static class ProjectionGenerator
             sb.AppendLine();
         }
 
-        // Apply ConfigureProjection overrides from derived class
-        sb.AppendLine($"{bodyIndent}var __builder = new global::Facet.Mapping.FacetProjectionBuilder<{src}, {tgt}>();");
-        sb.AppendLine($"{bodyIndent}global::{model.ConfigurationTypeName}.ConfigureProjection(__builder);");
-        sb.AppendLine($"{bodyIndent}foreach (var (__member, __expr) in __builder.Mappings)");
-        sb.AppendLine($"{bodyIndent}{{");
-        sb.AppendLine($"{bodyIndent}    var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __p);");
-        sb.AppendLine($"{bodyIndent}    __bindings.RemoveAll(b => ((global::System.Linq.Expressions.MemberAssignment)b).Member.Name == __member.Name);");
-        sb.AppendLine($"{bodyIndent}    __bindings.Add(global::System.Linq.Expressions.Expression.Bind(__member, __body));");
-        sb.AppendLine($"{bodyIndent}}}");
-        sb.AppendLine();
+        // Apply ConfigureProjection overrides from derived class (only if this model has its own configuration)
+        if (model.ConfigurationTypeName != null)
+        {
+            sb.AppendLine($"{bodyIndent}var __builder = new global::Facet.Mapping.FacetProjectionBuilder<{src}, {tgt}>();");
+            sb.AppendLine($"{bodyIndent}global::{model.ConfigurationTypeName}.ConfigureProjection(__builder);");
+            sb.AppendLine($"{bodyIndent}foreach (var (__member, __expr) in __builder.Mappings)");
+            sb.AppendLine($"{bodyIndent}{{");
+            sb.AppendLine($"{bodyIndent}    var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __p);");
+            sb.AppendLine($"{bodyIndent}    __bindings.RemoveAll(b => ((global::System.Linq.Expressions.MemberAssignment)b).Member.Name == __member.Name);");
+            sb.AppendLine($"{bodyIndent}    __bindings.Add(global::System.Linq.Expressions.Expression.Bind(__member, __body));");
+            sb.AppendLine($"{bodyIndent}}}");
+            sb.AppendLine();
+        }
 
         // Build and return the final lambda
         sb.AppendLine($"{bodyIndent}return global::System.Linq.Expressions.Expression.Lambda<global::System.Func<{src}, {tgt}>>(");
@@ -913,6 +916,43 @@ internal static class ProjectionGenerator
             FacetConstants.CollectionWrappers.IImmutableStack => $"global::System.Collections.Immutable.ImmutableStack.CreateRange({projection})",
             _ => $"{projection}.ToList()"
         };
+    }
+
+    /// <summary>
+    /// Determines whether a model that doesn't itself have ConfigureProjection should still
+    /// use the lazy projection path because one or more of its transitively nested facets
+    /// requires runtime-composed projection (e.g. has ConfigureProjection or inherited base config).
+    /// </summary>
+    private static bool RequiresLazyProjection(
+        FacetTargetModel model,
+        Dictionary<string, List<FacetTargetModel>> facetLookup,
+        HashSet<string>? visited = null)
+    {
+        visited ??= new HashSet<string>();
+        if (!visited.Add(model.FullName))
+            return false;
+
+        var nestedFacetMembers = model.Members
+            .Where(m => m.MapFromIncludeInProjection && m.IsNestedFacet);
+
+        foreach (var member in nestedFacetMembers)
+        {
+            var nestedModel = FindNestedFacetModel(member.TypeName.TrimEnd('?'), facetLookup);
+            if (nestedModel == null)
+                continue;
+
+            if (nestedModel.HasProjectionMapConfiguration)
+                return true;
+
+            if (nestedModel.BaseFacetInfo?.BaseConfigurationTypeName != null)
+                return true;
+
+            // Recurse into the nested model's own nested facets
+            if (RequiresLazyProjection(nestedModel, facetLookup, visited))
+                return true;
+        }
+
+        return false;
     }
 
     private static FacetTargetModel? FindNestedFacetModel(string typeName, Dictionary<string, List<FacetTargetModel>> facetLookup)
