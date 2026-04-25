@@ -32,7 +32,7 @@ internal static class ProjectionGenerator
         {
             GenerateProjectionNotSupportedComment(sb, model, memberIndent);
         }
-        else if (model.HasProjectionMapConfiguration)
+        else if (model.HasProjectionMapConfiguration || RequiresLazyProjection(model, facetLookup))
         {
             GenerateProjectionDocumentation(sb, model, memberIndent, propertyName);
             GenerateLazyProjection(sb, model, memberIndent, facetLookup, propertyName);
@@ -75,6 +75,13 @@ internal static class ProjectionGenerator
             .Where(m => m.MapFromIncludeInProjection && m.IsNestedFacet)
             .ToArray();
         bool hasNestedFacets = nestedFacetMembers.Length > 0;
+
+        // Single-source: the facet target has exactly one [Facet] attribute.
+        // Only single-source lazy DTOs with nested facets get ProjectionFor/BuildProjectionExcluding,
+        // because multi-source DTOs use ProjectionFromX instead of Projection and don't have a
+        // stable "Projection" property that ProjectionFor can return.
+        bool isSingleSource = !facetLookup.TryGetValue(model.FullName, out var __modelSiblings)
+            || __modelSiblings.Count <= 1;
 
         // Backing field
         sb.AppendLine($"{memberIndent}private static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>>? {backingFieldName};");
@@ -166,7 +173,8 @@ internal static class ProjectionGenerator
             var nestedIndent = bodyIndent + "    ";
             foreach (var member in nestedFacetMembers)
             {
-                GenerateNestedFacetBindingForLazyProjection(sb, member, tgt, nestedIndent, facetLookup);
+                GenerateNestedFacetBindingForLazyProjection(sb, member, tgt, nestedIndent, facetLookup,
+                    isSingleSource ? model.FullName : null);
             }
 
             sb.AppendLine($"{bodyIndent}}}");
@@ -193,16 +201,19 @@ internal static class ProjectionGenerator
             sb.AppendLine();
         }
 
-        // Apply ConfigureProjection overrides from derived class
-        sb.AppendLine($"{bodyIndent}var __builder = new global::Facet.Mapping.FacetProjectionBuilder<{src}, {tgt}>();");
-        sb.AppendLine($"{bodyIndent}global::{model.ConfigurationTypeName}.ConfigureProjection(__builder);");
-        sb.AppendLine($"{bodyIndent}foreach (var (__member, __expr) in __builder.Mappings)");
-        sb.AppendLine($"{bodyIndent}{{");
-        sb.AppendLine($"{bodyIndent}    var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __p);");
-        sb.AppendLine($"{bodyIndent}    __bindings.RemoveAll(b => ((global::System.Linq.Expressions.MemberAssignment)b).Member.Name == __member.Name);");
-        sb.AppendLine($"{bodyIndent}    __bindings.Add(global::System.Linq.Expressions.Expression.Bind(__member, __body));");
-        sb.AppendLine($"{bodyIndent}}}");
-        sb.AppendLine();
+        // Apply ConfigureProjection overrides from derived class (only if this model has its own configuration)
+        if (model.ConfigurationTypeName != null)
+        {
+            sb.AppendLine($"{bodyIndent}var __builder = new global::Facet.Mapping.FacetProjectionBuilder<{src}, {tgt}>();");
+            sb.AppendLine($"{bodyIndent}global::{model.ConfigurationTypeName}.ConfigureProjection(__builder);");
+            sb.AppendLine($"{bodyIndent}foreach (var (__member, __expr) in __builder.Mappings)");
+            sb.AppendLine($"{bodyIndent}{{");
+            sb.AppendLine($"{bodyIndent}    var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __p);");
+            sb.AppendLine($"{bodyIndent}    __bindings.RemoveAll(b => ((global::System.Linq.Expressions.MemberAssignment)b).Member.Name == __member.Name);");
+            sb.AppendLine($"{bodyIndent}    __bindings.Add(global::System.Linq.Expressions.Expression.Bind(__member, __body));");
+            sb.AppendLine($"{bodyIndent}}}");
+            sb.AppendLine();
+        }
 
         // Build and return the final lambda
         sb.AppendLine($"{bodyIndent}return global::System.Linq.Expressions.Expression.Lambda<global::System.Func<{src}, {tgt}>>(");
@@ -211,6 +222,15 @@ internal static class ProjectionGenerator
         sb.AppendLine($"{bodyIndent}        __bindings),");
         sb.AppendLine($"{bodyIndent}    __p);");
         sb.AppendLine($"{memberIndent}}}");
+
+        // For single-source lazy DTOs with nested facets, generate ProjectionFor and BuildProjectionExcluding.
+        // These enable partial (non-fully-shallow) projections when a circular re-entry is detected,
+        // allowing second-level (and deeper) reverse navigation properties to be included.
+        if (hasNestedFacets && isSingleSource)
+        {
+            GenerateProjectionForMethod(sb, src, tgt, safeName, propertyName, memberIndent);
+            GenerateBuildProjectionExcluding(sb, model, memberIndent, facetLookup, nestedFacetMembers, src, tgt);
+        }
     }
 
     /// <summary>
@@ -223,17 +243,18 @@ internal static class ProjectionGenerator
         FacetMember member,
         string targetTypeName,
         string indent,
-        Dictionary<string, List<FacetTargetModel>> facetLookup)
+        Dictionary<string, List<FacetTargetModel>> facetLookup,
+        string? currentModelFullName = null)
     {
         var sourcePropName = member.SourcePropertyName;
 
         if (member.IsCollection)
         {
-            GenerateCollectionNestedFacetLazyBinding(sb, member, targetTypeName, indent, facetLookup);
+            GenerateCollectionNestedFacetLazyBinding(sb, member, targetTypeName, indent, facetLookup, currentModelFullName);
         }
         else
         {
-            GenerateSingleNestedFacetLazyBinding(sb, member, targetTypeName, indent, facetLookup);
+            GenerateSingleNestedFacetLazyBinding(sb, member, targetTypeName, indent, facetLookup, currentModelFullName);
         }
     }
 
@@ -245,7 +266,8 @@ internal static class ProjectionGenerator
         FacetMember member,
         string targetTypeName,
         string indent,
-        Dictionary<string, List<FacetTargetModel>> facetLookup)
+        Dictionary<string, List<FacetTargetModel>> facetLookup,
+        string? currentModelFullName = null)
     {
         var sourcePropName = member.SourcePropertyName;
         var nonNullableTypeName = member.TypeName.TrimEnd('?');
@@ -253,7 +275,7 @@ internal static class ProjectionGenerator
 
         // Resolve the Projection property name on the nested DTO
         var projectionPropertyAccess = ResolveNestedProjectionPropertyAccess(
-            nonNullableTypeName, member.NestedFacetSourceTypeName, facetLookup);
+            nonNullableTypeName, member.NestedFacetSourceTypeName, facetLookup, currentModelFullName);
 
         sb.AppendLine($"{indent}// Nested facet binding: {member.Name}");
         sb.AppendLine($"{indent}{{");
@@ -289,7 +311,8 @@ internal static class ProjectionGenerator
         FacetMember member,
         string targetTypeName,
         string indent,
-        Dictionary<string, List<FacetTargetModel>> facetLookup)
+        Dictionary<string, List<FacetTargetModel>> facetLookup,
+        string? currentModelFullName = null)
     {
         var sourcePropName = member.SourcePropertyName;
         var elementTypeName = ExpressionBuilder.ExtractElementTypeFromCollectionTypeName(member.TypeName);
@@ -304,7 +327,7 @@ internal static class ProjectionGenerator
 
         // Resolve the Projection property name on the nested DTO element type
         var projectionPropertyAccess = ResolveNestedProjectionPropertyAccess(
-            nonNullableElementType, sourceElementType, facetLookup);
+            nonNullableElementType, sourceElementType, facetLookup, currentModelFullName);
 
         // Determine the ToList/ToArray wrapper method
         var collectionWrapper = member.CollectionWrapper ?? "List";
@@ -387,13 +410,15 @@ internal static class ProjectionGenerator
 
     /// <summary>
     /// Resolves the fully qualified access to a nested Facet's Projection property.
-    /// Determines whether to use <c>Projection</c> or <c>ProjectionFrom{Source}</c> based on
-    /// whether the nested DTO is multi-source.
+    /// Determines whether to use <c>Projection</c>, <c>ProjectionFor(requester)</c>, or
+    /// <c>ProjectionFrom{Source}</c> based on whether the nested DTO is multi-source and
+    /// whether it participates in circular reference detection.
     /// </summary>
     private static string ResolveNestedProjectionPropertyAccess(
         string nestedDtoTypeName,
         string? nestedSourceTypeName,
-        Dictionary<string, List<FacetTargetModel>> facetLookup)
+        Dictionary<string, List<FacetTargetModel>> facetLookup,
+        string? currentModelFullName = null)
     {
         // Strip "global::" prefix and extract simple name for lookup
         var lookupName = nestedDtoTypeName
@@ -403,10 +428,9 @@ internal static class ProjectionGenerator
 
         List<FacetTargetModel>? models = null;
 
-        // Try exact match
+        // Try exact match by FullName first, then by simple name
         if (!facetLookup.TryGetValue(lookupName, out models) || models == null || models.Count == 0)
         {
-            // Try matching by simple name in values
             foreach (var kvp in facetLookup)
             {
                 if (kvp.Value.Count > 0)
@@ -424,7 +448,14 @@ internal static class ProjectionGenerator
 
         if (models == null || models.Count <= 1)
         {
-            // Single-source: use "Projection"
+            // Single-source: use ProjectionFor when the nested DTO qualifies (lazy, has nested facets)
+            // so that it can provide a partial projection instead of fully-shallow on circular re-entry.
+            if (currentModelFullName != null && models?.Count >= 1 &&
+                NestedDtoHasProjectionFor(models[0], models, facetLookup))
+            {
+                return $"{nestedDtoTypeName}.ProjectionFor(\"{currentModelFullName}\")";
+            }
+
             return $"{nestedDtoTypeName}.Projection";
         }
 
@@ -915,6 +946,43 @@ internal static class ProjectionGenerator
         };
     }
 
+    /// <summary>
+    /// Determines whether a model that doesn't itself have ConfigureProjection should still
+    /// use the lazy projection path because one or more of its transitively nested facets
+    /// requires runtime-composed projection (e.g. has ConfigureProjection or inherited base config).
+    /// </summary>
+    private static bool RequiresLazyProjection(
+        FacetTargetModel model,
+        Dictionary<string, List<FacetTargetModel>> facetLookup,
+        HashSet<string>? visited = null)
+    {
+        visited ??= new HashSet<string>();
+        if (!visited.Add(model.FullName))
+            return false;
+
+        var nestedFacetMembers = model.Members
+            .Where(m => m.MapFromIncludeInProjection && m.IsNestedFacet);
+
+        foreach (var member in nestedFacetMembers)
+        {
+            var nestedModel = FindNestedFacetModel(member.TypeName.TrimEnd('?'), facetLookup);
+            if (nestedModel == null)
+                continue;
+
+            if (nestedModel.HasProjectionMapConfiguration)
+                return true;
+
+            if (nestedModel.BaseFacetInfo?.BaseConfigurationTypeName != null)
+                return true;
+
+            // Recurse into the nested model's own nested facets
+            if (RequiresLazyProjection(nestedModel, facetLookup, visited))
+                return true;
+        }
+
+        return false;
+    }
+
     private static FacetTargetModel? FindNestedFacetModel(string typeName, Dictionary<string, List<FacetTargetModel>> facetLookup)
     {
         // Strip "global::" prefix and extract simple name
@@ -996,6 +1064,168 @@ internal static class ProjectionGenerator
         var defaultValue = member.MapWhenDefault ?? Shared.GeneratorUtilities.GetDefaultValueForType(member.TypeName);
 
         return $"{combinedCondition} ? {valueExpression} : {defaultValue}";
+    }
+
+    /// <summary>
+    /// Returns true if the given nested DTO model should have a <c>ProjectionFor</c> method generated,
+    /// meaning it is single-source, lazy (uses the lazy projection path), and has nested facets.
+    /// Only such DTOs will have the <c>ProjectionFor</c> method available at runtime.
+    /// </summary>
+    private static bool NestedDtoHasProjectionFor(
+        FacetTargetModel nestedModel,
+        List<FacetTargetModel> modelSiblings,
+        Dictionary<string, List<FacetTargetModel>> facetLookup)
+    {
+        // Must be single-source
+        if (modelSiblings.Count > 1) return false;
+
+        // Must have nested facets (ProjectionFor is only generated when hasNestedFacets == true)
+        if (!nestedModel.Members.Any(m => m.MapFromIncludeInProjection && m.IsNestedFacet))
+            return false;
+
+        // Must be lazy (uses GenerateLazyProjection path)
+        if (nestedModel.HasProjectionMapConfiguration) return true;
+        if (nestedModel.BaseFacetInfo?.BaseConfigurationTypeName != null) return true;
+        return RequiresLazyProjection(nestedModel, facetLookup);
+    }
+
+    /// <summary>
+    /// Generates the <c>ProjectionFor(string __requesterType)</c> method for a lazy single-source DTO.
+    /// When the DTO is currently on the build stack (re-entrant), delegates to
+    /// <c>BuildProjectionExcluding(__requesterType)</c> instead of returning the cached projection.
+    /// This allows second-level reverse navigation properties to be included in circular projections.
+    /// </summary>
+    private static void GenerateProjectionForMethod(
+        StringBuilder sb,
+        string src,
+        string tgt,
+        string safeName,
+        string propertyName,
+        string memberIndent)
+    {
+        sb.AppendLine();
+        sb.AppendLine($"{memberIndent}internal static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> ProjectionFor(string __requesterType)");
+        sb.AppendLine($"{memberIndent}{{");
+        sb.AppendLine($"{memberIndent}    // If this DTO is currently being built (re-entrant), return a partial projection");
+        sb.AppendLine($"{memberIndent}    // that excludes the requester type to break the cycle while including other nested facets.");
+        sb.AppendLine($"{memberIndent}    if (__projectionBuildStack != null && __projectionBuildStack.Contains(\"{tgt}:{safeName}\"))");
+        sb.AppendLine($"{memberIndent}        return BuildProjectionExcluding(__requesterType);");
+        sb.AppendLine($"{memberIndent}    return {propertyName};");
+        sb.AppendLine($"{memberIndent}}}");
+    }
+
+    /// <summary>
+    /// Generates the <c>BuildProjectionExcluding(string __excludeType)</c> method for a lazy single-source DTO.
+    /// This is like <c>BuildProjection(true)</c> but each nested facet binding is guarded with
+    /// <c>if (__excludeType != nestedModel.FullName)</c> so the caller can break a specific cycle
+    /// while still populating all other nested facets.
+    /// The result is NOT cached (no Volatile.Write) since it is cycle-dependent.
+    /// </summary>
+    private static void GenerateBuildProjectionExcluding(
+        StringBuilder sb,
+        FacetTargetModel model,
+        string memberIndent,
+        Dictionary<string, List<FacetTargetModel>> facetLookup,
+        FacetMember[] nestedFacetMembers,
+        string src,
+        string tgt)
+    {
+        sb.AppendLine();
+        sb.AppendLine($"{memberIndent}private static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> BuildProjectionExcluding(string __excludeType)");
+        sb.AppendLine($"{memberIndent}{{");
+
+        var bodyIndent = memberIndent + "    ";
+
+        sb.AppendLine($"{bodyIndent}var __p = global::System.Linq.Expressions.Expression.Parameter(typeof({src}), \"source\");");
+        sb.AppendLine();
+
+        // Scalar bindings (identical to BuildProjection)
+        sb.AppendLine($"{bodyIndent}var __bindings = new global::System.Collections.Generic.List<global::System.Linq.Expressions.MemberBinding>");
+        sb.AppendLine($"{bodyIndent}{{");
+
+        var includedMembers = model.Members
+            .Where(m => m.MapFromIncludeInProjection && !m.IsNestedFacet)
+            .ToArray();
+
+        for (int i = 0; i < includedMembers.Length; i++)
+        {
+            var member = includedMembers[i];
+            var bindingExpr = GetMemberBindingExpression(member, "__p", tgt);
+            if (bindingExpr == null) continue;
+            var comma = i < includedMembers.Length - 1 ? "," : "";
+            sb.AppendLine($"{bodyIndent}    {bindingExpr}{comma}");
+        }
+
+        sb.AppendLine($"{bodyIndent}}};");
+        sb.AppendLine();
+
+        // Nested facet bindings, each guarded by an exclusion check
+        var nestedIndent = bodyIndent + "    ";
+        foreach (var member in nestedFacetMembers)
+        {
+            // Determine the FullName of the nested model to use as the exclusion key
+            string exclusionKey;
+            if (member.IsCollection)
+            {
+                var elementTypeName = ExpressionBuilder.ExtractElementTypeFromCollectionTypeName(member.TypeName);
+                var nestedModel = FindNestedFacetModel(elementTypeName.TrimEnd('?'), facetLookup);
+                exclusionKey = nestedModel?.FullName ?? elementTypeName.TrimEnd('?');
+            }
+            else
+            {
+                var nonNullableTypeName = member.TypeName.TrimEnd('?');
+                var nestedModel = FindNestedFacetModel(nonNullableTypeName, facetLookup);
+                exclusionKey = nestedModel?.FullName ?? nonNullableTypeName;
+            }
+
+            sb.AppendLine($"{bodyIndent}if (__excludeType != \"{exclusionKey}\")");
+            sb.AppendLine($"{bodyIndent}{{");
+            // Pass model.FullName as currentModelFullName so nested bindings also use ProjectionFor
+            GenerateNestedFacetBindingForLazyProjection(sb, member, tgt, nestedIndent, facetLookup, model.FullName);
+            sb.AppendLine($"{bodyIndent}}}");
+            sb.AppendLine();
+        }
+
+        // Apply base Facet ConfigureProjection if present (same as BuildProjection)
+        if (model.BaseFacetInfo?.BaseConfigurationTypeName != null)
+        {
+            sb.AppendLine($"{bodyIndent}// Apply base Facet projection mappings");
+            sb.AppendLine($"{bodyIndent}var __baseBuilder = new global::Facet.Mapping.FacetProjectionBuilder<{model.BaseFacetInfo.BaseSourceTypeName}, {model.BaseFacetInfo.BaseTypeName}>();");
+            sb.AppendLine($"{bodyIndent}{model.BaseFacetInfo.BaseConfigurationTypeName}.ConfigureProjection(__baseBuilder);");
+            sb.AppendLine($"{bodyIndent}foreach (var (__member, __expr) in __baseBuilder.Mappings)");
+            sb.AppendLine($"{bodyIndent}{{");
+            sb.AppendLine($"{bodyIndent}    var __derivedMember = typeof({tgt}).GetProperty(__member.Name);");
+            sb.AppendLine($"{bodyIndent}    if (__derivedMember != null)");
+            sb.AppendLine($"{bodyIndent}    {{");
+            sb.AppendLine($"{bodyIndent}        var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __p);");
+            sb.AppendLine($"{bodyIndent}        __bindings.RemoveAll(b => ((global::System.Linq.Expressions.MemberAssignment)b).Member.Name == __derivedMember.Name);");
+            sb.AppendLine($"{bodyIndent}        __bindings.Add(global::System.Linq.Expressions.Expression.Bind(__derivedMember, __body));");
+            sb.AppendLine($"{bodyIndent}    }}");
+            sb.AppendLine($"{bodyIndent}}}");
+            sb.AppendLine();
+        }
+
+        // Apply own ConfigureProjection if present (same as BuildProjection)
+        if (model.ConfigurationTypeName != null)
+        {
+            sb.AppendLine($"{bodyIndent}var __builder = new global::Facet.Mapping.FacetProjectionBuilder<{src}, {tgt}>();");
+            sb.AppendLine($"{bodyIndent}global::{model.ConfigurationTypeName}.ConfigureProjection(__builder);");
+            sb.AppendLine($"{bodyIndent}foreach (var (__member, __expr) in __builder.Mappings)");
+            sb.AppendLine($"{bodyIndent}{{");
+            sb.AppendLine($"{bodyIndent}    var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __p);");
+            sb.AppendLine($"{bodyIndent}    __bindings.RemoveAll(b => ((global::System.Linq.Expressions.MemberAssignment)b).Member.Name == __member.Name);");
+            sb.AppendLine($"{bodyIndent}    __bindings.Add(global::System.Linq.Expressions.Expression.Bind(__member, __body));");
+            sb.AppendLine($"{bodyIndent}}}");
+            sb.AppendLine();
+        }
+
+        // Return without caching (result is cycle-context-dependent)
+        sb.AppendLine($"{bodyIndent}return global::System.Linq.Expressions.Expression.Lambda<global::System.Func<{src}, {tgt}>>(");
+        sb.AppendLine($"{bodyIndent}    global::System.Linq.Expressions.Expression.MemberInit(");
+        sb.AppendLine($"{bodyIndent}        global::System.Linq.Expressions.Expression.New(typeof({tgt})),");
+        sb.AppendLine($"{bodyIndent}        __bindings),");
+        sb.AppendLine($"{bodyIndent}    __p);");
+        sb.AppendLine($"{memberIndent}}}");
     }
 
 }
