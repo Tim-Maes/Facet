@@ -39,6 +39,7 @@ public class DeepProjectionEfCoreQueryRegressionTests : IDisposable
         dto.Level2.Should().NotBeNull();
         dto.Level2!.Level3.Should().NotBeNull();
         dto.Level2.Level3!.Id.Should().Be(43);
+        dto.Level2.Level3.Level2.Should().NotBeNull();
         dto.Level2.Level3.Level4.Should().NotBeNull();
         dto.Level2.Level3.Level4!.Level5.Should().NotBeNull();
         dto.Level2.Level3.Level4.Level5!.Contact.Should().NotBeNull();
@@ -61,6 +62,7 @@ public class DeepProjectionEfCoreQueryRegressionTests : IDisposable
         dto.Id.Should().Be(1002);
         dto.Level2.Should().NotBeNull();
         dto.Level2!.Level3.Should().NotBeNull();
+        dto.Level2.Level3.Level2.Should().NotBeNull();
         dto.Level2.Level3!.Level4.Should().NotBeNull();
         dto.Level2.Level3.Level4!.Level5.Should().NotBeNull();
         dto.Level2.Level3.Level4.Level5!.Contact.Should().NotBeNull();
@@ -90,6 +92,8 @@ public class DeepProjectionEfCoreQueryRegressionTests : IDisposable
         dto.Code.Should().Be("DER-10");
         dto.Level2.Should().NotBeNull();
         dto.Level2!.Level3.Should().NotBeNull();
+        dto.Level2.Level3.Level2.Should().NotBeNull();
+        dto.Level2.Level3.Level2.Select(x => x.Level1).FirstOrDefault().Should().NotBeNull();
         dto.Level2.Level3!.Level4.Should().NotBeNull();
         dto.Level2.Level3.Level4!.Level5.Should().NotBeNull();
         dto.Level2.Level3.Level4.Level5!.Contact.Should().NotBeNull();
@@ -210,6 +214,8 @@ public class Level4Entity354
 public class Level3Entity354
 {
     public int Id { get; set; }
+    public virtual ICollection<Level2Entity354> Level2 { get; set; } = new List<Level2Entity354>();
+    public int Level2Id { get; set; }
     public int? Level4Id { get; set; }
     public Level4Entity354? Level4 { get; set; }
 }
@@ -217,6 +223,8 @@ public class Level3Entity354
 public class Level2Entity354
 {
     public int Id { get; set; }
+    public virtual ICollection<Level1Entity354> Level1 { get; set; } = new List<Level1Entity354>();
+    public int Level1Id { get; set; }
     public int? Level3Id { get; set; }
     public Level3Entity354? Level3 { get; set; }
 }
@@ -244,8 +252,8 @@ public partial class Level4Dto354
 
 [Facet(typeof(Level3Entity354),
     Configuration = typeof(Level3Dto354Config),
-    Include = new[] { nameof(Level3Entity354.Id), nameof(Level3Entity354.Level4) },
-    NestedFacets = new[] { typeof(Level4Dto354) })]
+    Include = new[] { nameof(Level3Entity354.Id), nameof(Level3Entity354.Level2), nameof(Level3Entity354.Level4) },
+    NestedFacets = new[] { typeof(Level2Dto354), typeof(Level4Dto354) })]
 public partial class Level3Dto354
 {
 }
@@ -260,8 +268,8 @@ public class Level3Dto354Config
 }
 
 [Facet(typeof(Level2Entity354),
-    Include = new[] { nameof(Level2Entity354.Id), nameof(Level2Entity354.Level3) },
-    NestedFacets = new[] { typeof(Level3Dto354) })]
+    Include = new[] { nameof(Level2Entity354.Id), nameof(Level2Entity354.Level1), nameof(Level2Entity354.Level3) },
+    NestedFacets = new[] { typeof(Level1Dto354), typeof(Level3Dto354) })]
 public partial class Level2Dto354
 {
 }
@@ -342,12 +350,12 @@ public class DeepProjectionDbContext354 : DbContext
 
         modelBuilder.Entity<Level1Entity354>()
             .HasOne(x => x.Level2)
-            .WithMany()
+            .WithMany(x => x.Level1)
             .HasForeignKey(x => x.Level2Id);
 
         modelBuilder.Entity<Level2Entity354>()
             .HasOne(x => x.Level3)
-            .WithMany()
+            .WithMany(x => x.Level2)
             .HasForeignKey(x => x.Level3Id);
 
         modelBuilder.Entity<Level3Entity354>()
