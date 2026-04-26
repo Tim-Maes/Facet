@@ -40,6 +40,7 @@ public class DeepProjectionEfCoreQueryRegressionTests : IDisposable
         dto.Level2!.Level3.Should().NotBeNull();
         dto.Level2.Level3!.Id.Should().Be(43);
         dto.Level2.Level3.Level2.Should().NotBeNull();
+        dto.Level2.Level3.Level2.SelectMany(x => x.Level1).FirstOrDefault().Should().NotBeNull();
         dto.Level2.Level3.Level4.Should().NotBeNull();
         dto.Level2.Level3.Level4!.Level5.Should().NotBeNull();
         dto.Level2.Level3.Level4.Level5!.Contact.Should().NotBeNull();
@@ -63,6 +64,7 @@ public class DeepProjectionEfCoreQueryRegressionTests : IDisposable
         dto.Level2.Should().NotBeNull();
         dto.Level2!.Level3.Should().NotBeNull();
         dto.Level2.Level3.Level2.Should().NotBeNull();
+        dto.Level2.Level3.Level2.SelectMany(x => x.Level1).FirstOrDefault().Should().NotBeNull();
         dto.Level2.Level3!.Level4.Should().NotBeNull();
         dto.Level2.Level3.Level4!.Level5.Should().NotBeNull();
         dto.Level2.Level3.Level4.Level5!.Contact.Should().NotBeNull();
@@ -81,6 +83,10 @@ public class DeepProjectionEfCoreQueryRegressionTests : IDisposable
 
         _context.DerivedRootEntities.Add(derived);
         await _context.SaveChangesAsync();
+
+        // Add a Level1Entity354 pointing to the same Level2 so Level2.Level1 is populated
+        _context.Level1Entities.Add(new Level1Entity354 { Id = 99, Level2Id = derived.Level2!.Id });
+        await _context.SaveChangesAsync();
         _context.ChangeTracker.Clear();
 
         var dto = await _context.DerivedRootEntities
@@ -93,7 +99,7 @@ public class DeepProjectionEfCoreQueryRegressionTests : IDisposable
         dto.Level2.Should().NotBeNull();
         dto.Level2!.Level3.Should().NotBeNull();
         dto.Level2.Level3.Level2.Should().NotBeNull();
-        dto.Level2.Level3.Level2.Select(x => x.Level1).FirstOrDefault().Should().NotBeNull();
+        dto.Level2.Level3.Level2.SelectMany(x => x.Level1).FirstOrDefault().Should().NotBeNull();
         dto.Level2.Level3!.Level4.Should().NotBeNull();
         dto.Level2.Level3.Level4!.Level5.Should().NotBeNull();
         dto.Level2.Level3.Level4.Level5!.Contact.Should().NotBeNull();
