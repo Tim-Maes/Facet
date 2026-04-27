@@ -83,7 +83,12 @@ internal static class ProjectionGenerator
         bool isSingleSource = !facetLookup.TryGetValue(model.FullName, out var __modelSiblings)
             || __modelSiblings.Count <= 1;
 
-        // Backing field
+        // Backing fields: unlimited cache and (if MaxDepth > 0) a separate root-scoped depth-limited cache.
+        var rootBackingFieldName = backingFieldName + "Root";
+        if (model.MaxDepth > 0 && hasNestedFacets)
+        {
+            sb.AppendLine($"{memberIndent}private static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>>? {rootBackingFieldName};");
+        }
         sb.AppendLine($"{memberIndent}private static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>>? {backingFieldName};");
         sb.AppendLine();
 
@@ -98,29 +103,66 @@ internal static class ProjectionGenerator
             sb.AppendLine($"{memberIndent}private static global::System.Collections.Generic.HashSet<string>? __projectionBuildStack;");
             sb.AppendLine();
 
-            // Projection property with re-entrance guard
+            // Projection property with re-entrance guard and depth tracking
             sb.AppendLine($"{memberIndent}public static {newModifier}global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> {propertyName}");
             sb.AppendLine($"{memberIndent}{{");
             sb.AppendLine($"{memberIndent}    get");
             sb.AppendLine($"{memberIndent}    {{");
-            sb.AppendLine($"{memberIndent}        var __cached = global::System.Threading.Volatile.Read(ref {backingFieldName});");
-            sb.AppendLine($"{memberIndent}        if (__cached != null) return __cached;");
-            sb.AppendLine();
-            sb.AppendLine($"{memberIndent}        __projectionBuildStack ??= new global::System.Collections.Generic.HashSet<string>();");
-            sb.AppendLine($"{memberIndent}        var __key = \"{tgt}:{safeName}\";");
-            sb.AppendLine($"{memberIndent}        bool __isReentrant = !__projectionBuildStack.Add(__key);");
+            // Outer try/finally tracks ProjectionDepth so every DTO in the chain
+            // knows how deep it is relative to the root, enabling MaxDepth enforcement.
+            sb.AppendLine($"{memberIndent}        global::Facet.Mapping.FacetProjectionContext.ProjectionDepth++;");
             sb.AppendLine($"{memberIndent}        try");
             sb.AppendLine($"{memberIndent}        {{");
-            sb.AppendLine($"{memberIndent}            var __result = {buildMethodName}(!__isReentrant);");
-            sb.AppendLine($"{memberIndent}            if (!__isReentrant)");
+            if (model.MaxDepth > 0)
+            {
+                // When this DTO is the root (first entry, depth == 1), set ActiveMaxDepth
+                // so all nested DTOs in the chain respect it.
+                sb.AppendLine($"{memberIndent}            bool __isRoot = global::Facet.Mapping.FacetProjectionContext.ProjectionDepth == 1;");
+                sb.AppendLine($"{memberIndent}            if (__isRoot)");
+                sb.AppendLine($"{memberIndent}                global::Facet.Mapping.FacetProjectionContext.ActiveMaxDepth = {model.MaxDepth};");
+                sb.AppendLine($"{memberIndent}            if (__isRoot)");
+                sb.AppendLine($"{memberIndent}            {{");
+                sb.AppendLine($"{memberIndent}                var __cachedRoot = global::System.Threading.Volatile.Read(ref {rootBackingFieldName});");
+                sb.AppendLine($"{memberIndent}                if (__cachedRoot != null) return __cachedRoot;");
+                sb.AppendLine($"{memberIndent}            }}");
+                sb.AppendLine();
+            }
+            // Bypass the unlimited cache when an active MaxDepth constraint is in play;
+            // only write to it when there is no depth limit active.
+            sb.AppendLine($"{memberIndent}            if (global::Facet.Mapping.FacetProjectionContext.ActiveMaxDepth == 0)");
             sb.AppendLine($"{memberIndent}            {{");
-            sb.AppendLine($"{memberIndent}                global::System.Threading.Volatile.Write(ref {backingFieldName}, __result);");
+            sb.AppendLine($"{memberIndent}                var __cached = global::System.Threading.Volatile.Read(ref {backingFieldName});");
+            sb.AppendLine($"{memberIndent}                if (__cached != null) return __cached;");
             sb.AppendLine($"{memberIndent}            }}");
-            sb.AppendLine($"{memberIndent}            return __result;");
+            sb.AppendLine();
+            sb.AppendLine($"{memberIndent}            __projectionBuildStack ??= new global::System.Collections.Generic.HashSet<string>();");
+            sb.AppendLine($"{memberIndent}            var __key = \"{tgt}:{safeName}\";");
+            sb.AppendLine($"{memberIndent}            bool __isReentrant = !__projectionBuildStack.Add(__key);");
+            sb.AppendLine($"{memberIndent}            try");
+            sb.AppendLine($"{memberIndent}            {{");
+            sb.AppendLine($"{memberIndent}                var __result = {buildMethodName}(!__isReentrant);");
+            sb.AppendLine($"{memberIndent}                if (!__isReentrant)");
+            sb.AppendLine($"{memberIndent}                {{");
+            if (model.MaxDepth > 0)
+            {
+                sb.AppendLine($"{memberIndent}                    if (__isRoot)");
+                sb.AppendLine($"{memberIndent}                        global::System.Threading.Volatile.Write(ref {rootBackingFieldName}, __result);");
+            }
+            sb.AppendLine($"{memberIndent}                    if (global::Facet.Mapping.FacetProjectionContext.ActiveMaxDepth == 0)");
+            sb.AppendLine($"{memberIndent}                        global::System.Threading.Volatile.Write(ref {backingFieldName}, __result);");
+            sb.AppendLine($"{memberIndent}                }}");
+            sb.AppendLine($"{memberIndent}                return __result;");
+            sb.AppendLine($"{memberIndent}            }}");
+            sb.AppendLine($"{memberIndent}            finally");
+            sb.AppendLine($"{memberIndent}            {{");
+            sb.AppendLine($"{memberIndent}                if (!__isReentrant) __projectionBuildStack.Remove(__key);");
+            sb.AppendLine($"{memberIndent}            }}");
             sb.AppendLine($"{memberIndent}        }}");
             sb.AppendLine($"{memberIndent}        finally");
             sb.AppendLine($"{memberIndent}        {{");
-            sb.AppendLine($"{memberIndent}            if (!__isReentrant) __projectionBuildStack.Remove(__key);");
+            sb.AppendLine($"{memberIndent}            global::Facet.Mapping.FacetProjectionContext.ProjectionDepth--;");
+            sb.AppendLine($"{memberIndent}            if (global::Facet.Mapping.FacetProjectionContext.ProjectionDepth == 0)");
+            sb.AppendLine($"{memberIndent}                global::Facet.Mapping.FacetProjectionContext.ActiveMaxDepth = 0;");
             sb.AppendLine($"{memberIndent}        }}");
             sb.AppendLine($"{memberIndent}    }}");
             sb.AppendLine($"{memberIndent}}}");
@@ -164,10 +206,12 @@ internal static class ProjectionGenerator
         sb.AppendLine($"{bodyIndent}}};");
         sb.AppendLine();
 
-        // Generate bindings for nested facet members (guarded by __includeNestedFacets)
+        // Generate bindings for nested facet members (guarded by __includeNestedFacets and depth limit)
         if (hasNestedFacets)
         {
-            sb.AppendLine($"{bodyIndent}if (__includeNestedFacets)");
+            // Also check the active MaxDepth limit: skip nested facets if the current
+            // ProjectionDepth exceeds ActiveMaxDepth (0 means unlimited).
+            sb.AppendLine($"{bodyIndent}if (__includeNestedFacets && (global::Facet.Mapping.FacetProjectionContext.ActiveMaxDepth == 0 || global::Facet.Mapping.FacetProjectionContext.ProjectionDepth <= global::Facet.Mapping.FacetProjectionContext.ActiveMaxDepth))");
             sb.AppendLine($"{bodyIndent}{{");
 
             var nestedIndent = bodyIndent + "    ";
@@ -1178,7 +1222,7 @@ internal static class ProjectionGenerator
                 exclusionKey = nestedModel?.FullName ?? nonNullableTypeName;
             }
 
-            sb.AppendLine($"{bodyIndent}if (__excludeType != \"{exclusionKey}\")");
+            sb.AppendLine($"{bodyIndent}if (__excludeType != \"{exclusionKey}\" && (global::Facet.Mapping.FacetProjectionContext.ActiveMaxDepth == 0 || global::Facet.Mapping.FacetProjectionContext.ProjectionDepth <= global::Facet.Mapping.FacetProjectionContext.ActiveMaxDepth))");
             sb.AppendLine($"{bodyIndent}{{");
             // Pass model.FullName as currentModelFullName so nested bindings also use ProjectionFor
             GenerateNestedFacetBindingForLazyProjection(sb, member, tgt, nestedIndent, facetLookup, model.FullName);

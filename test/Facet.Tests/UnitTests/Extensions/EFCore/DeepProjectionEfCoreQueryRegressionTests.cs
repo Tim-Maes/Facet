@@ -138,6 +138,30 @@ public class DeepProjectionEfCoreQueryRegressionTests : IDisposable
         dto.Level2.Level3.Level4.Should().BeNull();
     }
 
+    [Fact]
+    public async Task QueryProjection_LazyProjection_MaxDepth2_ShouldStopAtDepth2()
+    {
+        // Level1 = depth 1, Level2 = depth 2, Level3 = depth 3 > MaxDepth → no nested
+        var root = CreateInlineRoot(30, "MaxDepth");
+        _context.Level1Entities.Add(root);
+        await _context.SaveChangesAsync();
+        _context.ChangeTracker.Clear();
+
+        var dto = await _context.Level1Entities
+            .Where(x => x.Id == 30)
+            .Select(Level1Dto354MaxDepth2.Projection)
+            .SingleAsync();
+
+        dto.Id.Should().Be(30);
+        dto.Level2.Should().NotBeNull("Level2 is at depth 2 which is <= MaxDepth=2");
+        dto.Level2!.Level3.Should().NotBeNull("Level3 is projected (depth 3 reached), just without its nested members");
+        // Level3 is at depth 3 which exceeds MaxDepth=2, so its nested members are NOT projected
+        dto.Level2.Level3!.Level4.Should().BeNull("MaxDepth=2 stops nested projection at depth 3");
+        dto.Level2.Level3.Level2.Should().BeNull("MaxDepth=2 stops nested projection at depth 3");
+        // Scalar and custom-configured members on Level3 are still projected
+        dto.Level2.Level3.Id.Should().Be(root.Level2!.Level3!.Id + 30, "Level3Dto354Config adds 30 to Id");
+    }
+
     private static Level1Entity354 CreateInlineRoot(int id, string contactName) =>
         new()
         {
@@ -302,6 +326,16 @@ public class Level1Dto354LazyConfig
     {
         builder.Map(d => d.Id, s => s.Id + 1000);
     }
+}
+
+// MaxDepth=2: Level1 (depth 1) and Level2 (depth 2) are projected with nested;
+// Level3 (depth 3 > 2) gets scalar members only — its Level4 and Level2 reverse nav are null.
+[Facet(typeof(Level1Entity354),
+    MaxDepth = 2,
+    Include = new[] { nameof(Level1Entity354.Id), nameof(Level1Entity354.Level2) },
+    NestedFacets = new[] { typeof(Level2Dto354) })]
+public partial class Level1Dto354MaxDepth2
+{
 }
 
 public class BaseRootEntity354
