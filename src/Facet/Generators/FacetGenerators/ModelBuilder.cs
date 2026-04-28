@@ -492,6 +492,10 @@ internal static class ModelBuilder
         // Check if this property's type is a collection
         if (GeneratorUtilities.TryGetCollectionElementType(property.Type, out var elementType, out var wrapper))
         {
+            // Mark as collection regardless of whether it's a nested facet or not
+            isCollection = true;
+            collectionWrapper = wrapper;
+
             // Check if the collection element type matches a child facet source type
             var elementTypeName = elementType!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             if (nestedFacetMappings.TryGetValue(elementTypeName, out var nestedMapping))
@@ -505,7 +509,6 @@ internal static class ModelBuilder
                 // Preserve nullability if the collection itself was nullable
                 typeName = shouldTreatAsNullable ? wrappedType + "?" : wrappedType;
                 isNestedFacet = true;
-                isCollection = true;
                 collectionWrapper = effectiveWrapper;
                 sourceCollectionWrapper = sourceWrapper;
                 nestedFacetSourceTypeName = nestedMapping.sourceTypeName;
@@ -603,45 +606,99 @@ internal static class ModelBuilder
                 sourceCollectionWrapper = originalWrapper;
         }
 
-        // Enum conversion: if ConvertEnumsTo is set and this property is an enum type, convert it
+        // Enum conversion: if ConvertEnumsTo is set and this property is an enum type (or collection of enums), convert it
         bool isEnumConversion = false;
         string? originalEnumTypeName = null;
-        if (convertEnumsTo != null && !isNestedFacet && !isCollection && !isUserDeclared)
+        if (convertEnumsTo != null && !isNestedFacet && !isUserDeclared)
         {
-            // Get the underlying type (strip nullable wrapper if present)
-            var underlyingType = property.Type;
-            bool isNullableEnum = false;
-            if (underlyingType is INamedTypeSymbol namedType && namedType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+            // Check if this is a collection of enums
+            if (isCollection && elementType != null)
             {
-                underlyingType = namedType.TypeArguments[0];
-                isNullableEnum = true;
+                // Get the underlying element type (strip nullable wrapper if present)
+                var underlyingElementType = elementType;
+                bool isNullableEnumElement = false;
+                if (underlyingElementType is INamedTypeSymbol namedElementType &&
+                    namedElementType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+                {
+                    underlyingElementType = namedElementType.TypeArguments[0];
+                    isNullableEnumElement = true;
+                }
+
+                if (underlyingElementType.TypeKind == TypeKind.Enum)
+                {
+                    isEnumConversion = true;
+                    originalEnumTypeName = underlyingElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+                    string convertedElementType;
+                    if (convertEnumsTo == "string")
+                    {
+                        convertedElementType = isNullableEnumElement ? "string?" : "string";
+                    }
+                    else if (convertEnumsTo == "int")
+                    {
+                        convertedElementType = isNullableEnumElement ? "int?" : "int";
+                    }
+                    else
+                    {
+                        convertedElementType = isNullableEnumElement ? "string?" : "string";
+                    }
+
+                    // Wrap the converted element type in the collection type
+                    var wrappedType = GeneratorUtilities.WrapInCollectionType(convertedElementType, collectionWrapper!);
+                    // Preserve nullability if the collection itself was nullable
+                    typeName = shouldTreatAsNullable ? wrappedType + "?" : wrappedType;
+
+                    // Update sourceMemberTypeName to reflect the original type before conversion
+                    sourceMemberTypeName = GeneratorUtilities.GetTypeNameWithNullability(property.Type);
+
+                    // Apply NullableProperties if needed
+                    if (nullableProperties)
+                    {
+                        typeName = GeneratorUtilities.MakeNullable(typeName);
+                    }
+
+                    // Clear default value since it's an enum initializer and won't match the new type
+                    defaultValue = null;
+                }
             }
-
-            if (underlyingType.TypeKind == TypeKind.Enum)
+            else if (!isCollection)
             {
-                isEnumConversion = true;
-                originalEnumTypeName = underlyingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-
-                if (convertEnumsTo == "string")
+                // Original logic for non-collection enum properties
+                // Get the underlying type (strip nullable wrapper if present)
+                var underlyingType = property.Type;
+                bool isNullableEnum = false;
+                if (underlyingType is INamedTypeSymbol namedType && namedType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
                 {
-                    typeName = isNullableEnum ? "string?" : "string";
-                }
-                else if (convertEnumsTo == "int")
-                {
-                    typeName = isNullableEnum ? "int?" : "int";
+                    underlyingType = namedType.TypeArguments[0];
+                    isNullableEnum = true;
                 }
 
-                // Update sourceMemberTypeName to reflect the original type before conversion
-                sourceMemberTypeName = GeneratorUtilities.GetTypeNameWithNullability(property.Type);
-
-                // Apply NullableProperties if needed
-                if (nullableProperties)
+                if (underlyingType.TypeKind == TypeKind.Enum)
                 {
-                    typeName = GeneratorUtilities.MakeNullable(typeName);
-                }
+                    isEnumConversion = true;
+                    originalEnumTypeName = underlyingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-                // Clear default value since it's an enum initializer and won't match the new type
-                defaultValue = null;
+                    if (convertEnumsTo == "string")
+                    {
+                        typeName = isNullableEnum ? "string?" : "string";
+                    }
+                    else if (convertEnumsTo == "int")
+                    {
+                        typeName = isNullableEnum ? "int?" : "int";
+                    }
+
+                    // Update sourceMemberTypeName to reflect the original type before conversion
+                    sourceMemberTypeName = GeneratorUtilities.GetTypeNameWithNullability(property.Type);
+
+                    // Apply NullableProperties if needed
+                    if (nullableProperties)
+                    {
+                        typeName = GeneratorUtilities.MakeNullable(typeName);
+                    }
+
+                    // Clear default value since it's an enum initializer and won't match the new type
+                    defaultValue = null;
+                }
             }
         }
 

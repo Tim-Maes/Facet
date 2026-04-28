@@ -255,6 +255,20 @@ public partial class NullableEnumToIntDto;
 [Facet(typeof(UserWithEnum), ConvertEnumsTo = typeof(string), NullableProperties = true)]
 public partial class UserWithEnumToStringNullableDto;
 
+// Test with collection of enums
+public class EntityWithEnumCollection
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public List<UserStatus> Statuses { get; set; } = new();
+}
+
+[Facet(typeof(EntityWithEnumCollection), ConvertEnumsTo = typeof(string), GenerateToSource = true)]
+public partial class EntityWithEnumCollectionToStringDto;
+
+[Facet(typeof(EntityWithEnumCollection), ConvertEnumsTo = typeof(int), GenerateToSource = true)]
+public partial class EntityWithEnumCollectionToIntDto;
+
 // ToSourceConfiguration tests
 
 /// <summary>

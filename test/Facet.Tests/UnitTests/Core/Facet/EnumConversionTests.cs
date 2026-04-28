@@ -386,4 +386,127 @@ public class EnumConversionTests
         // Assert
         result.Status.Should().Be(status);
     }
+
+    [Fact]
+    public void ConvertEnumsTo_String_EnumCollection_ShouldConvertToStringCollection()
+    {
+        // Arrange
+        var entity = new EntityWithEnumCollection
+        {
+            Id = 1,
+            Name = "Test",
+            Statuses = new List<UserStatus> { UserStatus.Active, UserStatus.Pending, UserStatus.Inactive }
+        };
+
+        // Act
+        var dto = new EntityWithEnumCollectionToStringDto(entity);
+
+        // Assert
+        dto.Id.Should().Be(1);
+        dto.Name.Should().Be("Test");
+        dto.Statuses.Should().NotBeNull();
+        dto.Statuses.Should().HaveCount(3);
+        dto.Statuses.Should().Equal("Active", "Pending", "Inactive");
+    }
+
+    [Fact]
+    public void ConvertEnumsTo_String_EnumCollection_PropertyType_ShouldBeStringCollection()
+    {
+        // Assert that the generated property type is List<string>, not List<UserStatus>
+        var statusesProperty = typeof(EntityWithEnumCollectionToStringDto).GetProperty("Statuses");
+        statusesProperty.Should().NotBeNull();
+        statusesProperty!.PropertyType.Should().Be(typeof(List<string>));
+    }
+
+    [Fact]
+    public void ConvertEnumsTo_Int_EnumCollection_ShouldConvertToIntCollection()
+    {
+        // Arrange
+        var entity = new EntityWithEnumCollection
+        {
+            Id = 1,
+            Name = "Test",
+            Statuses = new List<UserStatus> { UserStatus.Active, UserStatus.Suspended, UserStatus.Pending }
+        };
+
+        // Act
+        var dto = new EntityWithEnumCollectionToIntDto(entity);
+
+        // Assert
+        dto.Id.Should().Be(1);
+        dto.Name.Should().Be("Test");
+        dto.Statuses.Should().NotBeNull();
+        dto.Statuses.Should().HaveCount(3);
+        dto.Statuses.Should().Equal(0, 3, 2); // Active=0, Suspended=3, Pending=2
+    }
+
+    [Fact]
+    public void ConvertEnumsTo_Int_EnumCollection_PropertyType_ShouldBeIntCollection()
+    {
+        // Assert that the generated property type is List<int>, not List<UserStatus>
+        var statusesProperty = typeof(EntityWithEnumCollectionToIntDto).GetProperty("Statuses");
+        statusesProperty.Should().NotBeNull();
+        statusesProperty!.PropertyType.Should().Be(typeof(List<int>));
+    }
+
+    [Fact]
+    public void ConvertEnumsTo_String_EnumCollection_ToSource_ShouldConvertBack()
+    {
+        // Arrange
+        var dto = new EntityWithEnumCollectionToStringDto
+        {
+            Id = 1,
+            Name = "Test",
+            Statuses = new List<string> { "Active", "Pending", "Inactive" }
+        };
+
+        // Act
+        var entity = dto.ToSource();
+
+        // Assert
+        entity.Statuses.Should().NotBeNull();
+        entity.Statuses.Should().HaveCount(3);
+        entity.Statuses.Should().Equal(UserStatus.Active, UserStatus.Pending, UserStatus.Inactive);
+    }
+
+    [Fact]
+    public void ConvertEnumsTo_Int_EnumCollection_ToSource_ShouldConvertBack()
+    {
+        // Arrange
+        var dto = new EntityWithEnumCollectionToIntDto
+        {
+            Id = 1,
+            Name = "Test",
+            Statuses = new List<int> { 0, 3, 2 } // Active=0, Suspended=3, Pending=2
+        };
+
+        // Act
+        var entity = dto.ToSource();
+
+        // Assert
+        entity.Statuses.Should().NotBeNull();
+        entity.Statuses.Should().HaveCount(3);
+        entity.Statuses.Should().Equal(UserStatus.Active, UserStatus.Suspended, UserStatus.Pending);
+    }
+
+    [Fact]
+    public void ConvertEnumsTo_String_EnumCollection_Projection_ShouldMapCorrectly()
+    {
+        // Arrange
+        var entities = new List<EntityWithEnumCollection>
+        {
+            new() { Id = 1, Name = "Test1", Statuses = new List<UserStatus> { UserStatus.Active, UserStatus.Pending } },
+            new() { Id = 2, Name = "Test2", Statuses = new List<UserStatus> { UserStatus.Inactive } }
+        };
+
+        // Act
+        var dtos = entities.AsQueryable()
+            .Select(EntityWithEnumCollectionToStringDto.Projection)
+            .ToList();
+
+        // Assert
+        dtos.Should().HaveCount(2);
+        dtos[0].Statuses.Should().Equal("Active", "Pending");
+        dtos[1].Statuses.Should().Equal("Inactive");
+    }
 }

@@ -1071,6 +1071,12 @@ internal static class ProjectionGenerator
     /// </summary>
     private static string ApplyEnumProjectionConversion(string valueExpression, FacetMember member)
     {
+        // Check if this is a collection of enums
+        if (member.IsCollection && member.CollectionWrapper != null)
+        {
+            return ApplyEnumCollectionProjectionConversion(valueExpression, member);
+        }
+
         bool isNullableEnum = member.SourceMemberTypeName?.Contains("?") ?? false;
 
         if (member.TypeName.TrimEnd('?') == "string")
@@ -1093,6 +1099,67 @@ internal static class ProjectionGenerator
         }
 
         return valueExpression;
+    }
+
+    /// <summary>
+    /// Applies enum collection to target collection conversion for projection expressions (EF Core compatible).
+    /// </summary>
+    private static string ApplyEnumCollectionProjectionConversion(string valueExpression, FacetMember member)
+    {
+        // Check if the collection itself is nullable
+        bool isCollectionNullable = member.TypeName.Contains("?");
+        string targetElementType = member.TypeName.TrimEnd('?');
+
+        // Extract just the element type name from List<string> or List<int>
+        if (targetElementType.Contains("<") && targetElementType.Contains(">"))
+        {
+            int startIdx = targetElementType.IndexOf('<') + 1;
+            int endIdx = targetElementType.LastIndexOf('>');
+            targetElementType = targetElementType.Substring(startIdx, endIdx - startIdx).Trim();
+        }
+
+        string conversionExpression;
+        if (targetElementType.TrimEnd('?') == "string")
+        {
+            // Convert each enum to string using ToString() - EF Core compatible
+            conversionExpression = $"{valueExpression}.Select(x => x.ToString())";
+        }
+        else if (targetElementType.TrimEnd('?') == "int")
+        {
+            // Convert each enum to int using cast - EF Core compatible
+            conversionExpression = $"{valueExpression}.Select(x => (int)x)";
+        }
+        else
+        {
+            return valueExpression;
+        }
+
+        // Wrap in the appropriate collection type using the same pattern as GenerateNestedCollectionProjection
+        var finalExpression = member.CollectionWrapper switch
+        {
+            FacetConstants.CollectionWrappers.Array => $"{conversionExpression}.ToArray()",
+            FacetConstants.CollectionWrappers.IEnumerable => conversionExpression,
+            FacetConstants.CollectionWrappers.Collection => $"new global::System.Collections.ObjectModel.Collection<{targetElementType}>({conversionExpression}.ToList())",
+            FacetConstants.CollectionWrappers.ImmutableArray => $"{conversionExpression}.ToImmutableArray()",
+            FacetConstants.CollectionWrappers.ImmutableList => $"{conversionExpression}.ToImmutableList()",
+            FacetConstants.CollectionWrappers.ImmutableHashSet => $"{conversionExpression}.ToImmutableHashSet()",
+            FacetConstants.CollectionWrappers.ImmutableSortedSet => $"{conversionExpression}.ToImmutableSortedSet()",
+            FacetConstants.CollectionWrappers.ImmutableQueue => $"global::System.Collections.Immutable.ImmutableQueue.CreateRange({conversionExpression})",
+            FacetConstants.CollectionWrappers.ImmutableStack => $"global::System.Collections.Immutable.ImmutableStack.CreateRange({conversionExpression})",
+            FacetConstants.CollectionWrappers.IImmutableList => $"{conversionExpression}.ToImmutableList()",
+            FacetConstants.CollectionWrappers.IImmutableSet => $"{conversionExpression}.ToImmutableHashSet()",
+            FacetConstants.CollectionWrappers.IImmutableQueue => $"global::System.Collections.Immutable.ImmutableQueue.CreateRange({conversionExpression})",
+            FacetConstants.CollectionWrappers.IImmutableStack => $"global::System.Collections.Immutable.ImmutableStack.CreateRange({conversionExpression})",
+            _ => $"{conversionExpression}.ToList()"
+        };
+
+        // Apply null check if collection is nullable
+        if (isCollectionNullable)
+        {
+            return $"{valueExpression} != null ? {finalExpression} : null";
+        }
+
+        return finalExpression;
     }
 
     /// <summary>
