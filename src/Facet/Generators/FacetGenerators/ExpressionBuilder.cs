@@ -377,6 +377,12 @@ internal static class ExpressionBuilder
     /// </summary>
     private static string ApplyEnumToTargetConversion(string valueExpression, FacetMember member)
     {
+        // Check if this is a collection of enums
+        if (member.IsCollection && member.CollectionWrapper != null)
+        {
+            return ApplyEnumCollectionToTargetConversion(valueExpression, member);
+        }
+
         // Determine if the source enum property is nullable
         bool isNullableEnum = member.SourceMemberTypeName?.Contains("?") ?? false;
 
@@ -403,10 +409,61 @@ internal static class ExpressionBuilder
     }
 
     /// <summary>
+    /// Applies enum collection to target collection conversion (source List&lt;enum&gt; ? facet List&lt;string/int&gt;).
+    /// </summary>
+    private static string ApplyEnumCollectionToTargetConversion(string valueExpression, FacetMember member)
+    {
+        // Check if the collection itself is nullable
+        bool isCollectionNullable = member.TypeName.Contains("?");
+        string targetElementType = member.TypeName.TrimEnd('?');
+
+        // Extract just the element type name from List<string> or List<int>
+        if (targetElementType.Contains("<") && targetElementType.Contains(">"))
+        {
+            int startIdx = targetElementType.IndexOf('<') + 1;
+            int endIdx = targetElementType.LastIndexOf('>');
+            targetElementType = targetElementType.Substring(startIdx, endIdx - startIdx).Trim();
+        }
+
+        string conversionExpression;
+        if (targetElementType.TrimEnd('?') == "string")
+        {
+            // Convert each enum to string using ToString()
+            conversionExpression = $"{valueExpression}.Select(x => x.ToString())";
+        }
+        else if (targetElementType.TrimEnd('?') == "int")
+        {
+            // Convert each enum to int using cast
+            conversionExpression = $"{valueExpression}.Select(x => (int)x)";
+        }
+        else
+        {
+            return valueExpression;
+        }
+
+        // Wrap in the appropriate collection type
+        var finalExpression = WrapCollectionProjection(conversionExpression, member.CollectionWrapper);
+
+        // Apply null check if collection is nullable
+        if (isCollectionNullable)
+        {
+            return $"{valueExpression} != null ? {finalExpression} : null";
+        }
+
+        return finalExpression;
+    }
+
+    /// <summary>
     /// Applies target-type-to-enum conversion (facet string/int ? source enum) for ToSource mapping.
     /// </summary>
     private static string ApplyTargetToEnumConversion(FacetMember member)
     {
+        // Check if this is a collection of enums
+        if (member.IsCollection && member.CollectionWrapper != null)
+        {
+            return ApplyTargetCollectionToEnumConversion(member);
+        }
+
         var enumTypeName = member.OriginalEnumTypeName!;
         bool facetTypeIsNullable = member.TypeName.Contains("?");
         bool sourceTypeIsNullable = member.SourceMemberTypeName?.Contains("?") ?? false;
@@ -447,6 +504,61 @@ internal static class ExpressionBuilder
         }
 
         return $"this.{member.Name}";
+    }
+
+    /// <summary>
+    /// Applies target collection to enum collection conversion (facet List&lt;string/int&gt; ? source List&lt;enum&gt;) for ToSource mapping.
+    /// </summary>
+    private static string ApplyTargetCollectionToEnumConversion(FacetMember member)
+    {
+        var enumTypeName = member.OriginalEnumTypeName!;
+        bool facetCollectionIsNullable = member.TypeName.Contains("?");
+        bool sourceCollectionIsNullable = member.SourceMemberTypeName?.Contains("?") ?? false;
+
+        string targetElementType = member.TypeName.TrimEnd('?');
+
+        // Extract just the element type name from List<string> or List<int>
+        if (targetElementType.Contains("<") && targetElementType.Contains(">"))
+        {
+            int startIdx = targetElementType.IndexOf('<') + 1;
+            int endIdx = targetElementType.LastIndexOf('>');
+            targetElementType = targetElementType.Substring(startIdx, endIdx - startIdx).Trim();
+        }
+
+        string conversionExpression;
+        if (targetElementType.TrimEnd('?') == "string")
+        {
+            // Convert each string to enum using Enum.Parse
+            conversionExpression = $"this.{member.Name}.Select(x => System.Enum.Parse<{enumTypeName}>(x))";
+        }
+        else if (targetElementType.TrimEnd('?') == "int")
+        {
+            // Convert each int to enum using cast
+            conversionExpression = $"this.{member.Name}.Select(x => ({enumTypeName})x)";
+        }
+        else
+        {
+            return $"this.{member.Name}";
+        }
+
+        // Get the source collection wrapper (from SourceMemberTypeName or use CollectionWrapper)
+        string sourceWrapper = member.SourceCollectionWrapper ?? member.CollectionWrapper!;
+
+        // Wrap in the appropriate collection type
+        var finalExpression = WrapCollectionProjection(conversionExpression, sourceWrapper);
+
+        // Apply null check if collection is nullable
+        if (facetCollectionIsNullable && sourceCollectionIsNullable)
+        {
+            return $"this.{member.Name} != null ? {finalExpression} : null";
+        }
+        else if (facetCollectionIsNullable)
+        {
+            // Facet is nullable but source expects non-nullable - use null-forgiving
+            return $"{finalExpression}!";
+        }
+
+        return finalExpression;
     }
 
     /// <summary>
