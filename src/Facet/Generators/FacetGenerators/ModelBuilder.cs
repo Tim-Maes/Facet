@@ -104,6 +104,7 @@ internal static class ModelBuilder
         var preserveRequired = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.PreserveRequiredProperties, preserveRequiredDefault);
         var nullableProperties = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.NullableProperties, globalDefaults.NullableProperties);
         var copyAttributes = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.CopyAttributes, globalDefaults.CopyAttributes);
+        var copyDocs = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.CopyDocs, globalDefaults.CopyDocs);
         var maxDepth = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.MaxDepth, globalDefaults.MaxDepth);
         var preserveReferences = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.PreserveReferences, globalDefaults.PreserveReferences);
 
@@ -209,6 +210,7 @@ internal static class ModelBuilder
             preserveRequired,
             nullableProperties,
             copyAttributes,
+            copyDocs,
             nestedFacetMappings,
             mapFromMappings,
             mapWhenMappings,
@@ -347,6 +349,7 @@ internal static class ModelBuilder
         bool preserveRequired,
         bool nullableProperties,
         bool copyAttributes,
+        bool copyDocs,
         Dictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings,
         Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName, string? asCollection, bool isTargetRequired)> mapFromMappings,
         Dictionary<string, (List<string> conditions, string? defaultValue, bool includeInProjection)> mapWhenMappings,
@@ -390,6 +393,7 @@ internal static class ModelBuilder
                     preserveRequired,
                     nullableProperties,
                     copyAttributes,
+                    copyDocs,
                     nestedFacetMappings,
                     mapFromMappings,
                     mapWhenMappings,
@@ -408,6 +412,7 @@ internal static class ModelBuilder
                     preserveRequired,
                     nullableProperties,
                     copyAttributes,
+                    copyDocs,
                     members,
                     excludedRequiredMembers,
                     addedMembers);
@@ -426,6 +431,7 @@ internal static class ModelBuilder
         bool preserveRequired,
         bool nullableProperties,
         bool copyAttributes,
+        bool copyDocs,
         Dictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings,
         Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName, string? asCollection, bool isTargetRequired)> mapFromMappings,
         Dictionary<string, (List<string> conditions, string? defaultValue, bool includeInProjection)> mapWhenMappings,
@@ -435,7 +441,7 @@ internal static class ModelBuilder
         List<FacetMember> excludedRequiredMembers,
         HashSet<string> addedMembers)
     {
-        var memberXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(property);
+        var memberXmlDocumentation = copyDocs ? CodeGenerationHelpers.ExtractXmlDocumentation(property) : null;
 
         // Check if this source property has a MapFrom attribute pointing to it
         var hasMapFrom = mapFromMappings.TryGetValue(property.Name, out var mapFromInfo);
@@ -785,11 +791,12 @@ internal static class ModelBuilder
         bool preserveRequired,
         bool nullableProperties,
         bool copyAttributes,
+        bool copyDocs,
         List<FacetMember> members,
         List<FacetMember> excludedRequiredMembers,
         HashSet<string> addedMembers)
     {
-        var memberXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(field);
+        var memberXmlDocumentation = copyDocs ? CodeGenerationHelpers.ExtractXmlDocumentation(field) : null;
 
         if (!shouldIncludeMember)
         {

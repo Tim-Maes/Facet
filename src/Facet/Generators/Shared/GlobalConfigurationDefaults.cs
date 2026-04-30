@@ -58,6 +58,12 @@ internal sealed class GlobalConfigurationDefaults
     public bool CopyAttributes { get; }
 
     /// <summary>
+    /// Default value for CopyDocs (default: false).
+    /// Can be overridden by setting the Facet_CopyDocs MSBuild property.
+    /// </summary>
+    public bool CopyDocs { get; }
+
+    /// <summary>
     /// Default value for UseFullName (default: false).
     /// Can be overridden by setting the Facet_UseFullName MSBuild property.
     /// </summary>
@@ -96,6 +102,7 @@ internal sealed class GlobalConfigurationDefaults
         bool chainToParameterlessConstructor,
         bool nullableProperties,
         bool copyAttributes,
+        bool copyDocs,
         bool useFullName,
         bool generateCopyConstructor,
         bool generateEquality,
@@ -110,6 +117,7 @@ internal sealed class GlobalConfigurationDefaults
         ChainToParameterlessConstructor = chainToParameterlessConstructor;
         NullableProperties = nullableProperties;
         CopyAttributes = copyAttributes;
+        CopyDocs = copyDocs;
         UseFullName = useFullName;
         GenerateCopyConstructor = generateCopyConstructor;
         GenerateEquality = generateEquality;
@@ -132,6 +140,7 @@ internal sealed class GlobalConfigurationDefaults
             chainToParameterlessConstructor: GetBoolOption(globalOptions, "build_property.Facet_ChainToParameterlessConstructor", defaultValue: false),
             nullableProperties: GetBoolOption(globalOptions, "build_property.Facet_NullableProperties", defaultValue: false),
             copyAttributes: GetBoolOption(globalOptions, "build_property.Facet_CopyAttributes", defaultValue: false),
+            copyDocs: GetBoolOption(globalOptions, "build_property.Facet_CopyDocs", defaultValue: false),
             useFullName: GetBoolOption(globalOptions, "build_property.Facet_UseFullName", defaultValue: false),
             generateCopyConstructor: GetBoolOption(globalOptions, "build_property.Facet_GenerateCopyConstructor", defaultValue: false),
             generateEquality: GetBoolOption(globalOptions, "build_property.Facet_GenerateEquality", defaultValue: false),

@@ -36,6 +36,7 @@ public partial class MyFacet { }
 | `PreserveRequiredProperties`   | `bool`    | Preserve required modifiers from source properties (default: true for records). |
 | `NullableProperties`           | `bool`    | Make all properties nullable in the generated facet (default: false). |
 | `CopyAttributes`               | `bool`    | Copy attributes from source type members to generated facet members (default: false). See [Attribute Copying](#attribute-copying) below. |
+| `CopyDocs`                     | `bool`    | Copy XML documentation comments from source type members to generated facet members (default: false). See [XML Documentation Copying](#xml-documentation-copying) below. |
 | `UseFullName`                  | `bool`    | Use full type name in generated file names to avoid collisions (default: false). |
 | `MaxDepth`                     | `int`     | Maximum depth for nested facet recursion to prevent stack overflow (default: 10). Set to 0 for unlimited (not recommended). See [Circular Reference Protection](#circular-reference-protection) below. |
 | `PreserveReferences`           | `bool`    | Enable runtime circular reference detection using object tracking (default: true). See [Circular Reference Protection](#circular-reference-protection) below. |
@@ -372,6 +373,104 @@ Both the parent and nested facets will have their attributes copied from their r
 ### Default Behavior
 
 By default, `CopyAttributes = false`, meaning no attributes are copied. This maintains backward compatibility and gives you explicit control over when attributes should be copied.
+
+## XML Documentation Copying
+
+The `CopyDocs` parameter allows you to copy XML documentation comments from the source type's members to the generated facet members. This is particularly useful when creating DTOs for API models that use tools like OpenAPI/Swagger, which can extract documentation from XML comments.
+
+### Usage
+
+```csharp
+public class User
+{
+    public int Id { get; set; }
+
+    /// <summary>
+    /// The user's first name.
+    /// </summary>
+    [Required]
+    [StringLength(50)]
+    public string FirstName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The user's email address. Must be a valid email format.
+    /// </summary>
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The user's age in years.
+    /// </summary>
+    [Range(0, 150)]
+    public int Age { get; set; }
+
+    public string Password { get; set; } = string.Empty;
+}
+
+[Facet(typeof(User), nameof(User.Password), CopyDocs = true)]
+public partial class UserDto;
+```
+
+The generated `UserDto` will include all the XML documentation comments:
+
+```csharp
+public partial class UserDto
+{
+    public int Id { get; set; }
+
+    /// <summary>
+    /// The user's first name.
+    /// </summary>
+    public string FirstName { get; set; }
+
+    /// <summary>
+    /// The user's email address. Must be a valid email format.
+    /// </summary>
+    public string Email { get; set; }
+
+    /// <summary>
+    /// The user's age in years.
+    /// </summary>
+    public int Age { get; set; }
+}
+```
+
+### Combining CopyDocs and CopyAttributes
+
+`CopyDocs` and `CopyAttributes` are independent options that can be used together:
+
+```csharp
+// Copy both attributes and XML documentation
+[Facet(typeof(User), nameof(User.Password), CopyAttributes = true, CopyDocs = true)]
+public partial class UserDto;
+
+// Copy only attributes
+[Facet(typeof(User), nameof(User.Password), CopyAttributes = true)]
+public partial class UserDto;
+
+// Copy only documentation
+[Facet(typeof(User), nameof(User.Password), CopyDocs = true)]
+public partial class UserDto;
+```
+
+### When to Use CopyDocs
+
+**Use `CopyDocs = true` when:**
+- Creating API DTOs for OpenAPI/Swagger documentation
+- Building DTOs that expose the same semantics as the domain models
+- Maintaining consistent documentation across layers
+- Generating client SDKs from your API that need inline documentation
+- Using XML documentation for UI tooltips or help text
+
+**Don't use it when:**
+- You want different documentation for your DTOs
+- Source model documentation includes internal implementation details
+- You prefer to define DTO-specific documentation
+
+### Default Behavior
+
+By default, `CopyDocs = false`, meaning no XML documentation is copied. This maintains backward compatibility and gives you explicit control over when documentation should be copied.
 
 ## Circular Reference Protection
 

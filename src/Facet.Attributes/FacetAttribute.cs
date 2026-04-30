@@ -152,6 +152,13 @@ public sealed class FacetAttribute : Attribute
     public bool CopyAttributes { get; set; } = false;
 
     /// <summary>
+    /// When true, copies XML documentation comments from the source type members to the generated facet members.
+    /// This is useful for maintaining documentation in DTOs that are exposed through APIs like OpenAPI/Swagger.
+    /// Default is false.
+    /// </summary>
+    public bool CopyDocs { get; set; } = false;
+
+    /// <summary>
     /// The maximum depth for nested facet recursion. When set to a positive value, the generator will
     /// limit how deep nested facets can be instantiated to prevent stack overflow with circular references.
     /// A value of 0 means unlimited depth (not recommended - can cause stack overflow).
