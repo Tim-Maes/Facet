@@ -58,7 +58,7 @@ internal sealed class GlobalConfigurationDefaults
     public bool CopyAttributes { get; }
 
     /// <summary>
-    /// Default value for CopyDocs (default: false).
+    /// Default value for CopyDocs (default: true).
     /// Can be overridden by setting the Facet_CopyDocs MSBuild property.
     /// </summary>
     public bool CopyDocs { get; }
@@ -140,7 +140,7 @@ internal sealed class GlobalConfigurationDefaults
             chainToParameterlessConstructor: GetBoolOption(globalOptions, "build_property.Facet_ChainToParameterlessConstructor", defaultValue: false),
             nullableProperties: GetBoolOption(globalOptions, "build_property.Facet_NullableProperties", defaultValue: false),
             copyAttributes: GetBoolOption(globalOptions, "build_property.Facet_CopyAttributes", defaultValue: false),
-            copyDocs: GetBoolOption(globalOptions, "build_property.Facet_CopyDocs", defaultValue: false),
+            copyDocs: GetBoolOption(globalOptions, "build_property.Facet_CopyDocs", defaultValue: true),
             useFullName: GetBoolOption(globalOptions, "build_property.Facet_UseFullName", defaultValue: false),
             generateCopyConstructor: GetBoolOption(globalOptions, "build_property.Facet_GenerateCopyConstructor", defaultValue: false),
             generateEquality: GetBoolOption(globalOptions, "build_property.Facet_GenerateEquality", defaultValue: false),

@@ -36,7 +36,7 @@ public partial class MyFacet { }
 | `PreserveRequiredProperties`   | `bool`    | Preserve required modifiers from source properties (default: true for records). |
 | `NullableProperties`           | `bool`    | Make all properties nullable in the generated facet (default: false). |
 | `CopyAttributes`               | `bool`    | Copy attributes from source type members to generated facet members (default: false). See [Attribute Copying](#attribute-copying) below. |
-| `CopyDocs`                     | `bool`    | Copy XML documentation comments from source type members to generated facet members (default: false). See [XML Documentation Copying](#xml-documentation-copying) below. |
+| `CopyDocs`                     | `bool`    | Copy XML documentation comments from source type members to generated facet members (default: true). See [XML Documentation Copying](#xml-documentation-copying) below. |
 | `UseFullName`                  | `bool`    | Use full type name in generated file names to avoid collisions (default: false). |
 | `MaxDepth`                     | `int`     | Maximum depth for nested facet recursion to prevent stack overflow (default: 10). Set to 0 for unlimited (not recommended). See [Circular Reference Protection](#circular-reference-protection) below. |
 | `PreserveReferences`           | `bool`    | Enable runtime circular reference detection using object tracking (default: true). See [Circular Reference Protection](#circular-reference-protection) below. |
@@ -470,7 +470,7 @@ public partial class UserDto;
 
 ### Default Behavior
 
-By default, `CopyDocs = false`, meaning no XML documentation is copied. This maintains backward compatibility and gives you explicit control over when documentation should be copied.
+By default, `CopyDocs = true`, meaning XML documentation is automatically copied from source types to DTOs. This is the most useful default for API DTOs and OpenAPI/Swagger scenarios. Set `CopyDocs = false` to disable copying if you want different documentation on your DTOs.
 
 ## Circular Reference Protection
 

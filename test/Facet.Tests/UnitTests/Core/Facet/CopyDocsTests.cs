@@ -121,8 +121,8 @@ public partial class UserWithDocsDto
 {
 }
 
-// DTO with CopyDocs = false (default)
-[Facet(typeof(UserWithDocs), nameof(UserWithDocs.Password), nameof(UserWithDocs.Age))]
+// DTO with CopyDocs = false (opt-out)
+[Facet(typeof(UserWithDocs), nameof(UserWithDocs.Password), nameof(UserWithDocs.Age), CopyDocs = false)]
 public partial class UserWithDocsNoCopyDto
 {
 }
