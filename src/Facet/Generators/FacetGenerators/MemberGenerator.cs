@@ -16,11 +16,17 @@ internal static class MemberGenerator
     /// <see cref="FacetTargetModel.Members"/>.  Used by the multi-source combined generator to emit
     /// the union of all source members.
     /// </param>
+    /// <param name="usePropertyNameAsInitializer">
+    /// When <see langword="true"/>, each generated property is initialized with <c>= PropertyName;</c>
+    /// instead of a type default. Required for positional record body overrides, where the initializer
+    /// reads from the matching positional parameter and satisfies CS8907 ("Parameter 'X' is unread").
+    /// </param>
     public static void GenerateMembers(
         StringBuilder sb,
         FacetTargetModel model,
         string memberIndent,
-        System.Collections.Generic.IReadOnlyList<FacetMember>? membersOverride = null)
+        System.Collections.Generic.IReadOnlyList<FacetMember>? membersOverride = null,
+        bool usePropertyNameAsInitializer = false)
     {
         // Create a HashSet for efficient lookup of base class member names
         var baseClassMembers = new System.Collections.Generic.HashSet<string>(model.BaseClassMemberNames);
@@ -52,7 +58,7 @@ internal static class MemberGenerator
 
             if (m.Kind == FacetMemberKind.Property)
             {
-                GenerateProperty(sb, m, memberIndent);
+                GenerateProperty(sb, m, memberIndent, usePropertyNameAsInitializer);
             }
             else
             {
@@ -61,7 +67,7 @@ internal static class MemberGenerator
         }
     }
 
-    private static void GenerateProperty(StringBuilder sb, FacetMember member, string indent)
+    private static void GenerateProperty(StringBuilder sb, FacetMember member, string indent, bool usePropertyNameAsInitializer = false)
     {
         var propDef = $"public {member.TypeName} {member.Name}";
 
@@ -75,7 +81,11 @@ internal static class MemberGenerator
         }
 
         // Add a default value or the "= default!" null-suppression for non-nullable reference types.
-        if (!string.IsNullOrEmpty(member.DefaultValue))
+        if (usePropertyNameAsInitializer)
+        {
+            propDef += $" = {member.Name};";
+        }
+        else if (!string.IsNullOrEmpty(member.DefaultValue))
         {
             propDef += $" = {member.DefaultValue};";
         }
