@@ -410,14 +410,57 @@ internal static class CodeGenerationHelpers
 
     /// <summary>
     /// Extracts and formats XML documentation from a symbol.
+    /// When <paramref name="inheritDocs"/> is true and the symbol has no documentation,
+    /// falls back to base classes and then interfaces to find inherited documentation.
     /// </summary>
-    public static string? ExtractXmlDocumentation(ISymbol symbol)
+    public static string? ExtractXmlDocumentation(ISymbol symbol, bool inheritDocs = false)
     {
         var documentationComment = symbol.GetDocumentationCommentXml();
-        if (string.IsNullOrWhiteSpace(documentationComment))
+        if (!string.IsNullOrWhiteSpace(documentationComment))
+            return FormatXmlDocumentation(documentationComment!);
+
+        if (!inheritDocs)
             return null;
 
-        return FormatXmlDocumentation(documentationComment!);
+        return ExtractXmlDocumentationFromHierarchy(symbol);
+    }
+
+    private static string? ExtractXmlDocumentationFromHierarchy(ISymbol symbol)
+    {
+        if (symbol is not (IPropertySymbol or IFieldSymbol))
+            return null;
+
+        var containingType = symbol.ContainingType;
+        if (containingType is null)
+            return null;
+
+        var baseType = containingType.BaseType;
+        while (baseType is not null)
+        {
+            if (baseType.SpecialType == SpecialType.System_Object)
+                break;
+            var match = baseType.GetMembers(symbol.Name).FirstOrDefault(m => m.Kind == symbol.Kind);
+            if (match is not null)
+            {
+                var doc = match.GetDocumentationCommentXml();
+                if (!string.IsNullOrWhiteSpace(doc))
+                    return FormatXmlDocumentation(doc!);
+            }
+            baseType = baseType.BaseType;
+        }
+
+        foreach (var iface in containingType.AllInterfaces)
+        {
+            var match = iface.GetMembers(symbol.Name).FirstOrDefault(m => m.Kind == symbol.Kind);
+            if (match is not null)
+            {
+                var doc = match.GetDocumentationCommentXml();
+                if (!string.IsNullOrWhiteSpace(doc))
+                    return FormatXmlDocumentation(doc!);
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

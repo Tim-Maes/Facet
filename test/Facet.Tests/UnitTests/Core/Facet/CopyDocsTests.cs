@@ -84,6 +84,144 @@ public class CopyDocsTests
     }
 }
 
+public class InheritDocsTests
+{
+    // Reads the generator-emitted .g.cs file for a DTO type so tests can assert on doc content.
+    private static string LoadGeneratedSource(string typeFullName)
+    {
+        var projectRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", ".."));
+        var path = Path.Combine(projectRoot, "obj", "Generated", "Facet", "Facet.Generators.FacetGenerator", $"{typeFullName}.g.cs");
+        try { return File.ReadAllText(path); }
+        catch (FileNotFoundException) { return string.Empty; }
+    }
+
+    [Fact]
+    public void Facet_ShouldInheritDocsFromInterface_WhenInheritDocsIsTrue()
+    {
+        var source = LoadGeneratedSource(typeof(DocumentedServiceDto).FullName!);
+        source.Should().NotBeEmpty("generated file should exist");
+        source.Should().Contain("The service title.");
+        source.Should().Contain("A description of the service.");
+    }
+
+    [Fact]
+    public void Facet_ShouldInheritDocsFromBaseClass_WhenOverridingPropertyHasNoDocs()
+    {
+        // ConcreteProduct.Name is an override with no doc comment; the doc lives on ProductBase.Name.
+        var source = LoadGeneratedSource(typeof(ConcreteProductDto).FullName!);
+        source.Should().NotBeEmpty("generated file should exist");
+        source.Should().Contain("The product name.");
+    }
+
+    [Fact]
+    public void Facet_ShouldNotInheritDocs_WhenInheritDocsIsFalse()
+    {
+        // Same override scenario but InheritDocs=false: Name should have no doc comment.
+        var source = LoadGeneratedSource(typeof(ConcreteProductNoInheritDto).FullName!);
+        source.Should().NotBeEmpty("generated file should exist");
+        source.Should().NotContain("The product name.");
+    }
+
+    [Fact]
+    public void Facet_ShouldUseOwnDocs_WhenMemberHasDirectDocComment()
+    {
+        // ConcreteProduct.Price has its own summary; it must appear in both DTOs
+        // regardless of InheritDocs, confirming direct docs are never suppressed.
+        var inheritSource = LoadGeneratedSource(typeof(ConcreteProductDto).FullName!);
+        var noInheritSource = LoadGeneratedSource(typeof(ConcreteProductNoInheritDto).FullName!);
+        inheritSource.Should().Contain("The selling price.");
+        noInheritSource.Should().Contain("The selling price.");
+    }
+
+    [Fact]
+    public void Facet_ShouldEmitDocCommentsOnPositionalRecordProperties_WhenDocsAreInherited()
+    {
+        // Positional records require property body overrides to carry doc comments.
+        // Without the usePropertyNameAsInitializer path in CodeBuilder, docs are silently dropped.
+        var source = LoadGeneratedSource(typeof(DocumentedPositionalDto).FullName!);
+        source.Should().NotBeEmpty("generated file should exist");
+        source.Should().Contain("The entity identifier.");
+        source.Should().Contain("The entity name.");
+    }
+}
+
+// Base class whose virtual property has documentation
+public class ProductBase
+{
+    /// <summary>
+    /// The product name.
+    /// </summary>
+    public virtual string Name { get; set; } = string.Empty;
+
+    public string Sku { get; set; } = string.Empty;
+}
+
+// Derived class that overrides Name without adding docs, and adds a documented Price property.
+// This is the key model for InheritDocs base-class tests: Name is re-declared (override) but
+// has no doc comment, so inheritance is required to surface the base-class summary.
+public class ConcreteProduct : ProductBase
+{
+    public override string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The selling price.
+    /// </summary>
+    public decimal Price { get; set; }
+}
+
+[Facet(typeof(ConcreteProduct), CopyDocs = true, InheritDocs = true)]
+public partial class ConcreteProductDto { }
+
+[Facet(typeof(ConcreteProduct), CopyDocs = true, InheritDocs = false)]
+public partial class ConcreteProductNoInheritDto { }
+
+// Interface whose members carry documentation
+public interface IDocumentedService
+{
+    /// <summary>
+    /// The service title.
+    /// </summary>
+    string Title { get; set; }
+
+    /// <summary>
+    /// A description of the service.
+    /// </summary>
+    string Description { get; set; }
+}
+
+// Concrete implementation with no doc comments on the properties
+public class DocumentedService : IDocumentedService
+{
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+}
+
+[Facet(typeof(DocumentedService), CopyDocs = true, InheritDocs = true)]
+public partial class DocumentedServiceDto { }
+
+// Interface + concrete class for the positional record test
+public interface IDocumentedEntity
+{
+    /// <summary>
+    /// The entity identifier.
+    /// </summary>
+    int Id { get; }
+
+    /// <summary>
+    /// The entity name.
+    /// </summary>
+    string Name { get; }
+}
+
+public class DocumentedEntity : IDocumentedEntity
+{
+    public int Id { get; init; }
+    public string Name { get; init; } = string.Empty;
+}
+
+[Facet(typeof(DocumentedEntity), CopyDocs = true)]
+public partial record DocumentedPositionalDto;
+
 // Source model with XML documentation
 public class UserWithDocs
 {
