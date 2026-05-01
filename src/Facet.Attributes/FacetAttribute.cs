@@ -159,6 +159,13 @@ public sealed class FacetAttribute : Attribute
     public bool CopyDocs { get; set; } = true;
 
     /// <summary>
+    /// When true and <see cref="CopyDocs"/> is also true, documentation is inherited from base classes
+    /// and interfaces when the member has no documentation of its own.
+    /// Default is true.
+    /// </summary>
+    public bool InheritDocs { get; set; } = true;
+
+    /// <summary>
     /// The maximum depth for nested facet recursion. When set to a positive value, the generator will
     /// limit how deep nested facets can be instantiated to prevent stack overflow with circular references.
     /// A value of 0 means unlimited depth (not recommended - can cause stack overflow).

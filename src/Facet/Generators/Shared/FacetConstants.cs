@@ -126,6 +126,7 @@ internal static class FacetConstants
         public const string NullableProperties = "NullableProperties";
         public const string CopyAttributes = "CopyAttributes";
         public const string CopyDocs = "CopyDocs";
+        public const string InheritDocs = "InheritDocs";
         public const string MaxDepth = "MaxDepth";
         public const string PreserveReferences = "PreserveReferences";
         public const string UseFullName = "UseFullName";

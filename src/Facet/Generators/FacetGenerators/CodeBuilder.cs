@@ -103,6 +103,14 @@ internal static class CodeBuilder
         {
             MemberGenerator.GenerateMembers(sb, model, memberIndent);
         }
+        else
+        {
+            // Positional parameters can't carry doc comments; emit property body overrides for documented members.
+            var membersWithDocs = model.Members
+                .Where(static m => !string.IsNullOrWhiteSpace(m.XmlDocumentation) && !m.IsUserDeclared)
+                .ToList();
+            MemberGenerator.GenerateMembers(sb, model, memberIndent, membersWithDocs, usePropertyNameAsInitializer: true);
+        }
 
         // Generate parameterless constructor first if requested
         // This ensures third-party code that picks the first constructor will use the parameterless one

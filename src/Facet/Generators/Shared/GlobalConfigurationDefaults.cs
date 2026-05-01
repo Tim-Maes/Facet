@@ -64,6 +64,12 @@ internal sealed class GlobalConfigurationDefaults
     public bool CopyDocs { get; }
 
     /// <summary>
+    /// Default value for InheritDocs (default: true).
+    /// Can be overridden by setting the Facet_InheritDocs MSBuild property.
+    /// </summary>
+    public bool InheritDocs { get; }
+
+    /// <summary>
     /// Default value for UseFullName (default: false).
     /// Can be overridden by setting the Facet_UseFullName MSBuild property.
     /// </summary>
@@ -103,6 +109,7 @@ internal sealed class GlobalConfigurationDefaults
         bool nullableProperties,
         bool copyAttributes,
         bool copyDocs,
+        bool inheritDocs,
         bool useFullName,
         bool generateCopyConstructor,
         bool generateEquality,
@@ -118,6 +125,7 @@ internal sealed class GlobalConfigurationDefaults
         NullableProperties = nullableProperties;
         CopyAttributes = copyAttributes;
         CopyDocs = copyDocs;
+        InheritDocs = inheritDocs;
         UseFullName = useFullName;
         GenerateCopyConstructor = generateCopyConstructor;
         GenerateEquality = generateEquality;
@@ -141,6 +149,7 @@ internal sealed class GlobalConfigurationDefaults
             nullableProperties: GetBoolOption(globalOptions, "build_property.Facet_NullableProperties", defaultValue: false),
             copyAttributes: GetBoolOption(globalOptions, "build_property.Facet_CopyAttributes", defaultValue: false),
             copyDocs: GetBoolOption(globalOptions, "build_property.Facet_CopyDocs", defaultValue: true),
+            inheritDocs: GetBoolOption(globalOptions, "build_property.Facet_InheritDocs", defaultValue: true),
             useFullName: GetBoolOption(globalOptions, "build_property.Facet_UseFullName", defaultValue: false),
             generateCopyConstructor: GetBoolOption(globalOptions, "build_property.Facet_GenerateCopyConstructor", defaultValue: false),
             generateEquality: GetBoolOption(globalOptions, "build_property.Facet_GenerateEquality", defaultValue: false),
