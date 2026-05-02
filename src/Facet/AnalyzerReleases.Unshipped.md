@@ -6,3 +6,4 @@
 Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
 FAC023 | Usage | Warning | GenerateToSource is set to true, but ToSource cannot be generated
+FAC025 | Performance | Warning | MaxDepthToSource value is unusual

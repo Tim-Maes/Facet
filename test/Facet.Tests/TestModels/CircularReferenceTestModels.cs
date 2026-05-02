@@ -31,6 +31,13 @@ public partial record AuthorFacetWithDepth;
 [Facet(typeof(Book), MaxDepth = 2, PreserveReferences = false, NestedFacets = [typeof(AuthorFacetWithDepth)], GenerateToSource = true)]
 public partial record BookFacetWithDepth;
 
+// Facets with MaxDepth = 1 to test ToSource null-guard fix
+[Facet(typeof(Author), MaxDepth = 1, PreserveReferences = false, NestedFacets = [typeof(BookFacetMaxDepth1)], GenerateToSource = true)]
+public partial record AuthorFacetMaxDepth1;
+
+[Facet(typeof(Book), MaxDepth = 1, PreserveReferences = false, NestedFacets = [typeof(AuthorFacetMaxDepth1)], GenerateToSource = true)]
+public partial record BookFacetMaxDepth1;
+
 // Facets with PreserveReferences for runtime tracking (also needs MaxDepth to prevent generator SO)
 [Facet(typeof(Author), MaxDepth = 3, PreserveReferences = true, NestedFacets = [typeof(BookFacetWithTracking)])]
 public partial record AuthorFacetWithTracking;
@@ -67,3 +74,25 @@ public partial record Level2Facet;
 public partial record Level3Facet;
 [Facet(typeof(Level4))]
 public partial record Level4Facet;
+
+// ---------------------------------------------------------------------------
+// MaxDepthToSource test models
+// Scenario: MaxDepth = 5 (full ToFacet nesting allowed) but MaxDepthToSource = 1
+// (only the top-level object is reverse-mapped; nested children are dropped).
+// ---------------------------------------------------------------------------
+
+[Facet(typeof(Author),
+    MaxDepth = 5,
+    PreserveReferences = false,
+    GenerateToSource = true,
+    MaxDepthToSource = 1,
+    NestedFacets = [typeof(BookFacetDepthToSource)])]
+public partial record AuthorFacetDepthToSource;
+
+[Facet(typeof(Book),
+    MaxDepth = 5,
+    PreserveReferences = false,
+    GenerateToSource = true,
+    MaxDepthToSource = 1,
+    NestedFacets = [typeof(AuthorFacetDepthToSource)])]
+public partial record BookFacetDepthToSource;

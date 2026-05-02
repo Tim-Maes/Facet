@@ -500,6 +500,54 @@ public class CircularReferenceTests
     }
 
     [Fact]
+    public void ToSource_OnAuthorFacetMaxDepth1_ShouldNotThrow()
+    {
+        // Arrange
+        var author = new Author
+        {
+            Id = 1,
+            Name = "Test Author",
+            Books = new List<Book>()
+        };
+        var book = new Book { Id = 1, Title = "Some Book", Author = author };
+        author.Books.Add(book);
+
+        var facet = new AuthorFacetMaxDepth1(author);
+
+        // Act
+        var mappedAuthor = facet.ToSource();
+
+        // Assert
+        mappedAuthor.Should().NotBeNull();
+        mappedAuthor.Id.Should().Be(1);
+        mappedAuthor.Name.Should().Be("Test Author");
+    }
+
+    [Fact]
+    public void ToSource_OnBookFacetMaxDepth1_ShouldNotThrow()
+    {
+        // Arrange
+        var author = new Author
+        {
+            Id = 3,
+            Name = "Some Author",
+            Books = new List<Book>()
+        };
+        var book = new Book { Id = 2, Title = "Deep Dive", Author = author };
+        author.Books.Add(book);
+
+        var facet = new BookFacetMaxDepth1(book);
+
+        // Act
+        var mappedBook = facet.ToSource();
+
+        // Assert
+        mappedBook.Should().NotBeNull();
+        mappedBook.Id.Should().Be(2);
+        mappedBook.Title.Should().Be("Deep Dive");
+    }
+
+    [Fact]
     public void BackTo_Should_Handle_Circular_References_Without_Error()
     {
         // Arrange

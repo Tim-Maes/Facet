@@ -108,6 +108,7 @@ internal static class ModelBuilder
         var inheritDocs = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.InheritDocs, globalDefaults.InheritDocs);
         var maxDepth = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.MaxDepth, globalDefaults.MaxDepth);
         var preserveReferences = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.PreserveReferences, globalDefaults.PreserveReferences);
+        var maxDepthToSource = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.MaxDepthToSource, globalDefaults.MaxDepthToSource);
 
         // Extract ConvertEnumsTo parameter
         var convertEnumsTo = AttributeParser.ExtractConvertEnumsTo(attribute);
@@ -336,7 +337,8 @@ internal static class ModelBuilder
             hasProjectionMapConfiguration,
             baseHidesFromSource,
             hasMapConfiguration,
-            baseFacetInfo);
+            baseFacetInfo,
+            maxDepthToSource);
     }
 
     #region Private Helper Methods

@@ -76,7 +76,14 @@ internal static class ExpressionBuilder
     /// </summary>
     /// <param name="facetLookup">Dictionary mapping facet type names to their model lists (for resolving multi-source nested facets).</param>
     /// <param name="parentSourceTypeName">The source type name of the parent facet (used to determine which ToSource method to call for multi-source nested facets).</param>
-    public static string GetToSourceValueExpression(FacetMember member, Dictionary<string, List<FacetTargetModel>>? facetLookup = null, string? parentSourceTypeName = null)
+    /// <param name="maxDepthToSource">When &gt; 0, depth-aware expressions are emitted that guard nested calls with a depth check.</param>
+    /// <param name="useDepthParameter">When true the expression is being emitted inside a depth-aware <c>ToSource(int __depth)</c> overload.</param>
+    public static string GetToSourceValueExpression(
+        FacetMember member,
+        Dictionary<string, List<FacetTargetModel>>? facetLookup = null,
+        string? parentSourceTypeName = null,
+        int maxDepthToSource = 0,
+        bool useDepthParameter = false)
     {
         // Check if the member type is nullable (ends with ?)
         bool facetTypeIsNullable = member.TypeName.Contains("?");
@@ -86,11 +93,11 @@ internal static class ExpressionBuilder
 
         if (member.IsNestedFacet && member.IsCollection)
         {
-            return BuildCollectionToSourceExpression(member, facetTypeIsNullable, facetLookup, parentSourceTypeName);
+            return BuildCollectionToSourceExpression(member, facetTypeIsNullable, facetLookup, parentSourceTypeName, maxDepthToSource, useDepthParameter);
         }
         else if (member.IsNestedFacet)
         {
-            return BuildSingleToSourceExpression(member, facetTypeIsNullable, facetLookup, parentSourceTypeName);
+            return BuildSingleToSourceExpression(member, facetTypeIsNullable, facetLookup, parentSourceTypeName, maxDepthToSource, useDepthParameter);
         }
 
         // Handle enum conversion (reverse: string/int back to enum)
@@ -303,18 +310,37 @@ internal static class ExpressionBuilder
         }
     }
 
-    private static string BuildCollectionToSourceExpression(FacetMember member, bool facetTypeIsNullable, Dictionary<string, List<FacetTargetModel>>? facetLookup, string? parentSourceTypeName)
+    private static string BuildCollectionToSourceExpression(FacetMember member, bool facetTypeIsNullable, Dictionary<string, List<FacetTargetModel>>? facetLookup, string? parentSourceTypeName, int maxDepthToSource = 0, bool useDepthParameter = false)
     {
         // Determine the correct ToSource method name for the nested facet
         var toSourceMethodName = GetToSourceMethodName(member.TypeName, member.NestedFacetSourceTypeName, facetLookup, parentSourceTypeName);
 
+        // When inside a depth-aware method, pass __depth + 1 only if the child facet has a depth-aware overload.
+        // Use FindNestedFacetModels (via the 2-param overload) because member.TypeName includes the "global::"
+        // prefix which does not match the FullName-keyed facetLookup directly.
+        var childToSourceCall = useDepthParameter && ChildHasDepthAwareToSource(member.TypeName, facetLookup)
+            ? $"x.{toSourceMethodName}(__depth + 1)"
+            : $"x.{toSourceMethodName}()";
+
         // Use LINQ Select to map each element back
-        var projection = $"this.{member.Name}.Select(x => x.{toSourceMethodName}())";
+        var projection = $"this.{member.Name}.Select(x => {childToSourceCall})";
 
         // Use the original source collection wrapper (before any CollectionTargetType override)
         // so that the generated expression produces the correct source type.
         var toSourceWrapper = member.SourceCollectionWrapper ?? member.CollectionWrapper!;
         var collectionExpression = WrapCollectionProjection(projection, toSourceWrapper, member.NestedFacetSourceTypeName);
+
+        // When depth-limiting is active, guard nested calls with a depth check
+        if (useDepthParameter && maxDepthToSource > 0)
+        {
+            if (facetTypeIsNullable)
+            {
+                return $"__depth < {maxDepthToSource} ? (this.{member.Name} != null ? {collectionExpression} : null) : null";
+            }
+
+            var depthExceededDefault = GetToSourceCollectionDefault(toSourceWrapper, member.NestedFacetSourceTypeName);
+            return $"__depth < {maxDepthToSource} ? (this.{member.Name} != null ? {collectionExpression} : {depthExceededDefault}) : {depthExceededDefault}";
+        }
 
         // Add null check for nullable collections
         if (facetTypeIsNullable)
@@ -322,13 +348,29 @@ internal static class ExpressionBuilder
             return $"this.{member.Name} != null ? {collectionExpression} : null";
         }
 
-        return collectionExpression;
+        return $"this.{member.Name} != null ? {collectionExpression} : default!";
     }
 
-    private static string BuildSingleToSourceExpression(FacetMember member, bool facetTypeIsNullable, Dictionary<string, List<FacetTargetModel>>? facetLookup, string? parentSourceTypeName)
+    private static string BuildSingleToSourceExpression(FacetMember member, bool facetTypeIsNullable, Dictionary<string, List<FacetTargetModel>>? facetLookup, string? parentSourceTypeName, int maxDepthToSource = 0, bool useDepthParameter = false)
     {
         // Determine the correct ToSource method name for the nested facet
         var toSourceMethodName = GetToSourceMethodName(member.TypeName, member.NestedFacetSourceTypeName, facetLookup, parentSourceTypeName);
+
+        // When inside a depth-aware method, pass __depth + 1 if the child also has a depth-aware overload
+        var childToSourceCall = useDepthParameter && ChildHasDepthAwareToSource(member.TypeName, facetLookup)
+            ? $"this.{member.Name}.{toSourceMethodName}(__depth + 1)"
+            : $"this.{member.Name}.{toSourceMethodName}()";
+
+        // When depth-limiting is active, guard the nested call with a depth check
+        if (useDepthParameter && maxDepthToSource > 0)
+        {
+            if (facetTypeIsNullable)
+            {
+                return $"__depth < {maxDepthToSource} ? (this.{member.Name} != null ? {childToSourceCall} : null) : null";
+            }
+
+            return $"__depth < {maxDepthToSource} ? (this.{member.Name} != null ? {childToSourceCall} : null!) : null!";
+        }
 
         // Add null check for nullable nested facets
         if (facetTypeIsNullable)
@@ -337,7 +379,43 @@ internal static class ExpressionBuilder
         }
 
         // Use the child facet's generated ToSource method
-        return $"this.{member.Name}.{toSourceMethodName}()";
+        return $"this.{member.Name} != null ? this.{member.Name}.{toSourceMethodName}() : default!";
+    }
+
+    /// <summary>
+    /// Returns true if any model for the given facet type name has <c>MaxDepthToSource &gt; 0</c>
+    /// (meaning it has a depth-aware <c>ToSource(int __depth)</c> overload).
+    /// </summary>
+    private static bool ChildHasDepthAwareToSource(string facetTypeName, Dictionary<string, List<FacetTargetModel>>? facetLookup)
+    {
+        if (facetLookup == null) return false;
+
+        var models = FindNestedFacetModels(facetTypeName, facetLookup);
+        return models != null && models.Any(m => m.MaxDepthToSource > 0);
+    }
+
+    /// <summary>
+    /// Returns a safe default expression for a collection property when the depth limit is exceeded
+    /// during <c>ToSource()</c> — always an empty (non-null) collection so the source type remains valid.
+    /// </summary>
+    private static string GetToSourceCollectionDefault(string collectionWrapper, string? elementTypeName)
+    {
+        var et = elementTypeName ?? "object";
+        return collectionWrapper switch
+        {
+            FacetConstants.CollectionWrappers.Array => $"global::System.Array.Empty<{et}>()",
+            FacetConstants.CollectionWrappers.ImmutableArray => $"global::System.Collections.Immutable.ImmutableArray<{et}>.Empty",
+            FacetConstants.CollectionWrappers.ImmutableList => $"global::System.Collections.Immutable.ImmutableList<{et}>.Empty",
+            FacetConstants.CollectionWrappers.ImmutableHashSet => $"global::System.Collections.Immutable.ImmutableHashSet<{et}>.Empty",
+            FacetConstants.CollectionWrappers.ImmutableSortedSet => $"global::System.Collections.Immutable.ImmutableSortedSet<{et}>.Empty",
+            FacetConstants.CollectionWrappers.ImmutableQueue => $"global::System.Collections.Immutable.ImmutableQueue<{et}>.Empty",
+            FacetConstants.CollectionWrappers.ImmutableStack => $"global::System.Collections.Immutable.ImmutableStack<{et}>.Empty",
+            FacetConstants.CollectionWrappers.IImmutableList => $"global::System.Collections.Immutable.ImmutableList<{et}>.Empty",
+            FacetConstants.CollectionWrappers.IImmutableSet => $"global::System.Collections.Immutable.ImmutableHashSet<{et}>.Empty",
+            FacetConstants.CollectionWrappers.IImmutableQueue => $"global::System.Collections.Immutable.ImmutableQueue<{et}>.Empty",
+            FacetConstants.CollectionWrappers.IImmutableStack => $"global::System.Collections.Immutable.ImmutableStack<{et}>.Empty",
+            _ => $"new global::System.Collections.Generic.List<{et}>()"
+        };
     }
 
     private static string WrapCollectionProjection(string projection, string collectionWrapper, string? elementTypeName = null)

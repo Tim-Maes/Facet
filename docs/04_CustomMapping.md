@@ -661,7 +661,17 @@ The `BuildProjection()` method assembles a `MemberInitExpression`, inlines the `
 - Expressions in `ConfigureProjection` must be EF Core-translatable (property access, arithmetic, string concatenation, ternaries). Facet cannot validate this at compile time; EF Core will throw at runtime if they are not.
 - `ConfigureProjection` is called **once** during lazy initialisation, do not reference instance state or external services.
 - Properties omitted from `ConfigureProjection` but present in `Map()` will **not** appear in `Projection`. This is intentional.
-- Nested facet bindings in the lazy projection are not auto-generated; add them in `ConfigureProjection` if needed.
+- Nested facet bindings in the lazy projection are not auto-generated; add them in `ConfigureProjection` if needed. When mapping a child facet that shares the same source entity, pass the child's static `Projection` property directly instead of calling `source.ToFacet<T>()`. `ToFacet<T>()` is a runtime method call that EF Core cannot translate; the `Projection` expression is what gets inlined and translated:
+
+```csharp
+// WRONG - source.ToFacet<T>() is not EF Core-translatable and will produce null properties
+builder.Map(t => t.OrderLineDto, s => s.ToFacet<OrderLineDto>());
+
+// CORRECT - pass the child Projection directly; Facet inlines it as an expression
+builder.Map(t => t.OrderLineDto, OrderLineDto.Projection);
+```
+
+For in-memory (non-EF Core) use, add a partial constructor that calls `new ChildFacet(source)` for each property.
 - Thread safety is provided by `LazyInitializer.EnsureInitialized`.
 
 ---

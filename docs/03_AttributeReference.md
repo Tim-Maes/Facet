@@ -39,6 +39,7 @@ public partial class MyFacet { }
 | `CopyDocs`                     | `bool`    | Copy XML documentation comments from source type members to generated facet members (default: true). See [XML Documentation Copying](#xml-documentation-copying) below. |
 | `UseFullName`                  | `bool`    | Use full type name in generated file names to avoid collisions (default: false). |
 | `MaxDepth`                     | `int`     | Maximum depth for nested facet recursion to prevent stack overflow (default: 10). Set to 0 for unlimited (not recommended). See [Circular Reference Protection](#circular-reference-protection) below. |
+| `MaxDepthToSource`             | `int`     | Maximum depth for `ToSource()` reverse mapping, independent of `MaxDepth`. Default is 0 (no limit, same as existing behavior). Set to a positive value to limit how many levels `ToSource()` maps back. See [MaxDepthToSource](#maxdepthtosource) below. |
 | `PreserveReferences`           | `bool`    | Enable runtime circular reference detection using object tracking (default: true). See [Circular Reference Protection](#circular-reference-protection) below. |
 | `SourceSignature`              | `string?` | Hash signature to track source entity changes. Emits FAC022 warning when source structure changes. See [Source Signature Change Tracking](16_SourceSignature.md). |
 | `ConvertEnumsTo`               | `Type?`   | When set, all enum properties are converted to the specified type (`typeof(string)` or `typeof(int)`) in the generated facet. Default is null (enums retain their original types). See [Enum Conversion](20_ConvertEnumsTo.md). |
@@ -502,6 +503,52 @@ public partial record SimpleTypeDto;
 - **Level 2**: Second level nested objects (e.g., Product)
 - **Level 3**: Third level nested objects (e.g., Category)
 - Properties that would exceed MaxDepth are set to `null` (with default MaxDepth = 10, this covers most real-world scenarios)
+
+### MaxDepthToSource
+
+Controls how many levels deep `ToSource()` maps nested objects back to the source entity. This is independent of `MaxDepth`, which only controls the forward source-to-DTO direction.
+
+**Default:** `0` (no limit - preserves existing behavior)
+
+**Use case:** Backends with separation of duties often only want the top-level entity updated via `ToSource()`, without cascading saves into child entities. Setting `MaxDepthToSource = 1` maps only the root object and leaves all nested entity references as `null` (or empty collections).
+
+```csharp
+// ToFacet (source -> DTO) goes up to 5 levels deep.
+// ToSource (DTO -> entity) only maps the top-level object.
+[Facet(typeof(Order), GenerateToSource = true,
+       MaxDepth = 5, MaxDepthToSource = 1,
+       NestedFacets = [typeof(LineItemDto)])]
+public partial class OrderDto;
+```
+
+**How MaxDepthToSource Works:**
+
+When `MaxDepthToSource > 0`, Facet generates two overloads of `ToSource()`:
+
+- `public ToSource()` - the public entry point, calls `ToSource(0)`
+- `internal ToSource(int __depth)` - carries the depth counter through nested calls
+
+At the root level `__depth = 0`, so children at depth 0 are still mapped (the guard is `__depth < MaxDepthToSource`). Once the limit is reached, nested entity references become `null` and collections become empty.
+
+```csharp
+// Only the root Order entity properties are set; LineItems is empty.
+[Facet(typeof(Order), GenerateToSource = true,
+       MaxDepthToSource = 1,
+       NestedFacets = [typeof(LineItemDto)])]
+public partial class OrderDto;
+
+var entity = dto.ToSource(); // entity.LineItems is []
+```
+
+```csharp
+// Both Order and its LineItems are mapped; LineItem.Product is null.
+[Facet(typeof(Order), GenerateToSource = true,
+       MaxDepthToSource = 2,
+       NestedFacets = [typeof(LineItemDto)])]
+public partial class OrderDto;
+```
+
+`MaxDepthToSource` only applies to facets that have `GenerateToSource = true`. Child facets that do not set `MaxDepthToSource` are called via their normal `ToSource()` and are not depth-limited.
 
 ### PreserveReferences
 

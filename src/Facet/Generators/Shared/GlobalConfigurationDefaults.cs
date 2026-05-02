@@ -94,6 +94,12 @@ internal sealed class GlobalConfigurationDefaults
     public int MaxDepth { get; }
 
     /// <summary>
+    /// Default value for MaxDepthToSource (default: 0 = no limiting).
+    /// Can be overridden by setting the Facet_MaxDepthToSource MSBuild property.
+    /// </summary>
+    public int MaxDepthToSource { get; }
+
+    /// <summary>
     /// Default value for PreserveReferences (default: true).
     /// Can be overridden by setting the Facet_PreserveReferences MSBuild property.
     /// </summary>
@@ -114,7 +120,8 @@ internal sealed class GlobalConfigurationDefaults
         bool generateCopyConstructor,
         bool generateEquality,
         int maxDepth,
-        bool preserveReferences)
+        bool preserveReferences,
+        int maxDepthToSource)
     {
         GenerateConstructor = generateConstructor;
         GenerateParameterlessConstructor = generateParameterlessConstructor;
@@ -131,6 +138,7 @@ internal sealed class GlobalConfigurationDefaults
         GenerateEquality = generateEquality;
         MaxDepth = maxDepth;
         PreserveReferences = preserveReferences;
+        MaxDepthToSource = maxDepthToSource;
     }
 
     /// <summary>
@@ -154,7 +162,8 @@ internal sealed class GlobalConfigurationDefaults
             generateCopyConstructor: GetBoolOption(globalOptions, "build_property.Facet_GenerateCopyConstructor", defaultValue: false),
             generateEquality: GetBoolOption(globalOptions, "build_property.Facet_GenerateEquality", defaultValue: false),
             maxDepth: GetIntOption(globalOptions, "build_property.Facet_MaxDepth", defaultValue: FacetConstants.DefaultMaxDepth),
-            preserveReferences: GetBoolOption(globalOptions, "build_property.Facet_PreserveReferences", defaultValue: FacetConstants.DefaultPreserveReferences));
+            preserveReferences: GetBoolOption(globalOptions, "build_property.Facet_PreserveReferences", defaultValue: FacetConstants.DefaultPreserveReferences),
+            maxDepthToSource: GetIntOption(globalOptions, "build_property.Facet_MaxDepthToSource", defaultValue: 0));
     }
 
     private static bool GetBoolOption(AnalyzerConfigOptions? options, string key, bool defaultValue)

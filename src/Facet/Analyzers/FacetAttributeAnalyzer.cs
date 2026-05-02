@@ -99,6 +99,16 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "MaxDepth values should typically be between 1 and 10 for most scenarios.");
 
+    // FAC025: MaxDepthToSource warning
+    public static readonly DiagnosticDescriptor MaxDepthToSourceWarningRule = new DiagnosticDescriptor(
+        "FAC025",
+        "MaxDepthToSource value is unusual",
+        "MaxDepthToSource is set to {0}: {1}",
+        "Performance",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "MaxDepthToSource values should typically be between 1 and 10 for most scenarios.");
+
     // FAC024: MapFrom references a non-existing source property
     public static readonly DiagnosticDescriptor InvalidMapFromPropertyRule = new DiagnosticDescriptor(
         "FAC024",
@@ -138,6 +148,7 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         CircularReferenceWarningRule,
         IncludeAndExcludeBothSpecifiedRule,
         MaxDepthWarningRule,
+        MaxDepthToSourceWarningRule,
         GenerateToSourceNotPossibleRule,
         SourceSignatureMismatchRule,
         InvalidMapFromPropertyRule);
@@ -210,6 +221,7 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         public KeyValuePair<string, TypedConstant> Configuration { get; }
         public KeyValuePair<string, TypedConstant> NestedFacets { get; }
         public KeyValuePair<string, TypedConstant> MaxDepth { get; }
+        public KeyValuePair<string, TypedConstant> MaxDepthToSource { get; }
         public KeyValuePair<string, TypedConstant> PreserveReferences { get; }
         public KeyValuePair<string, TypedConstant> SourceSignature { get; }
         public KeyValuePair<string, TypedConstant> IncludeFields { get; }
@@ -221,6 +233,7 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
             Configuration = namedArguments.FirstOrDefault(a => a.Key == "Configuration");
             NestedFacets = namedArguments.FirstOrDefault(a => a.Key == "NestedFacets");
             MaxDepth = namedArguments.FirstOrDefault(a => a.Key == "MaxDepth");
+            MaxDepthToSource = namedArguments.FirstOrDefault(a => a.Key == "MaxDepthToSource");
             PreserveReferences = namedArguments.FirstOrDefault(a => a.Key == "PreserveReferences");
             SourceSignature = namedArguments.FirstOrDefault(a => a.Key == "SourceSignature");
             IncludeFields = namedArguments.FirstOrDefault(a => a.Key == "IncludeFields");
@@ -366,6 +379,27 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         if (!namedArgs.PreserveReferences.Equals(default) && namedArgs.PreserveReferences.Value.Value is bool preserveReferencesValue)
         {
             preserveReferences = preserveReferencesValue;
+        }
+
+        // Validate MaxDepthToSource range
+        if (!namedArgs.MaxDepthToSource.Equals(default) && namedArgs.MaxDepthToSource.Value.Value is int maxDepthToSourceValue)
+        {
+            if (maxDepthToSourceValue < 0)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    MaxDepthToSourceWarningRule,
+                    facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
+                    maxDepthToSourceValue,
+                    "MaxDepthToSource cannot be negative"));
+            }
+            else if (maxDepthToSourceValue > 100)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    MaxDepthToSourceWarningRule,
+                    facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
+                    maxDepthToSourceValue,
+                    "MaxDepthToSource is unusually large and may indicate a configuration error. Consider using a value between 1 and 10"));
+            }
         }
 
         // Check for circular reference risk
