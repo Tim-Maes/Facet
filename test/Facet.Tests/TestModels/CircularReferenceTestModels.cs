@@ -31,6 +31,13 @@ public partial record AuthorFacetWithDepth;
 [Facet(typeof(Book), MaxDepth = 2, PreserveReferences = false, NestedFacets = [typeof(AuthorFacetWithDepth)], GenerateToSource = true)]
 public partial record BookFacetWithDepth;
 
+// Facets with MaxDepth = 1 to test ToSource null-guard fix
+[Facet(typeof(Author), MaxDepth = 1, PreserveReferences = false, NestedFacets = [typeof(BookFacetMaxDepth1)], GenerateToSource = true)]
+public partial record AuthorFacetMaxDepth1;
+
+[Facet(typeof(Book), MaxDepth = 1, PreserveReferences = false, NestedFacets = [typeof(AuthorFacetMaxDepth1)], GenerateToSource = true)]
+public partial record BookFacetMaxDepth1;
+
 // Facets with PreserveReferences for runtime tracking (also needs MaxDepth to prevent generator SO)
 [Facet(typeof(Author), MaxDepth = 3, PreserveReferences = true, NestedFacets = [typeof(BookFacetWithTracking)])]
 public partial record AuthorFacetWithTracking;

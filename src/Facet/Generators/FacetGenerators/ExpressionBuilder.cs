@@ -322,7 +322,7 @@ internal static class ExpressionBuilder
             return $"this.{member.Name} != null ? {collectionExpression} : null";
         }
 
-        return collectionExpression;
+        return $"this.{member.Name} != null ? {collectionExpression} : default!";
     }
 
     private static string BuildSingleToSourceExpression(FacetMember member, bool facetTypeIsNullable, Dictionary<string, List<FacetTargetModel>>? facetLookup, string? parentSourceTypeName)
@@ -337,7 +337,7 @@ internal static class ExpressionBuilder
         }
 
         // Use the child facet's generated ToSource method
-        return $"this.{member.Name}.{toSourceMethodName}()";
+        return $"this.{member.Name} != null ? this.{member.Name}.{toSourceMethodName}() : default!";
     }
 
     private static string WrapCollectionProjection(string projection, string collectionWrapper, string? elementTypeName = null)
