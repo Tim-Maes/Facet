@@ -515,11 +515,10 @@ public class CircularReferenceTests
         var facet = new AuthorFacetMaxDepth1(author);
 
         // Act
-        var act = () => facet.ToSource();
+        var mappedAuthor = facet.ToSource();
 
         // Assert
-        act.Should().NotThrow();
-        var mappedAuthor = act();
+        mappedAuthor.Should().NotBeNull();
         mappedAuthor.Id.Should().Be(1);
         mappedAuthor.Name.Should().Be("Test Author");
     }
@@ -540,11 +539,10 @@ public class CircularReferenceTests
         var facet = new BookFacetMaxDepth1(book);
 
         // Act
-        var act = () => facet.ToSource();
+        var mappedBook = facet.ToSource();
 
         // Assert
-        act.Should().NotThrow();
-        var mappedBook = act();
+        mappedBook.Should().NotBeNull();
         mappedBook.Id.Should().Be(2);
         mappedBook.Title.Should().Be("Deep Dive");
     }
