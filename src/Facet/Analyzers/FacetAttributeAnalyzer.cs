@@ -99,6 +99,16 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "MaxDepth values should typically be between 1 and 10 for most scenarios.");
 
+    // FAC025: MaxDepthToSource warning
+    public static readonly DiagnosticDescriptor MaxDepthToSourceWarningRule = new DiagnosticDescriptor(
+        "FAC025",
+        "MaxDepthToSource value is unusual",
+        "MaxDepthToSource is set to {0}: {1}",
+        "Performance",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "MaxDepthToSource values should typically be between 1 and 10 for most scenarios.");
+
     // FAC024: MapFrom references a non-existing source property
     public static readonly DiagnosticDescriptor InvalidMapFromPropertyRule = new DiagnosticDescriptor(
         "FAC024",
@@ -138,6 +148,7 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         CircularReferenceWarningRule,
         IncludeAndExcludeBothSpecifiedRule,
         MaxDepthWarningRule,
+        MaxDepthToSourceWarningRule,
         GenerateToSourceNotPossibleRule,
         SourceSignatureMismatchRule,
         InvalidMapFromPropertyRule);
@@ -376,7 +387,7 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
             if (maxDepthToSourceValue < 0)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
-                    MaxDepthWarningRule,
+                    MaxDepthToSourceWarningRule,
                     facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
                     maxDepthToSourceValue,
                     "MaxDepthToSource cannot be negative"));
@@ -384,7 +395,7 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
             else if (maxDepthToSourceValue > 100)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
-                    MaxDepthWarningRule,
+                    MaxDepthToSourceWarningRule,
                     facetAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
                     maxDepthToSourceValue,
                     "MaxDepthToSource is unusually large and may indicate a configuration error. Consider using a value between 1 and 10"));
