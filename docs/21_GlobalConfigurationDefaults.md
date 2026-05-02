@@ -26,6 +26,7 @@ The following properties can be configured globally for the `[Facet]` attribute:
 | `GenerateCopyConstructor` | `false` | `Facet_GenerateCopyConstructor` |
 | `GenerateEquality` | `false` | `Facet_GenerateEquality` |
 | `MaxDepth` | `10` | `Facet_MaxDepth` |
+| `MaxDepthToSource` | `0` | `Facet_MaxDepthToSource` |
 | `PreserveReferences` | `true` | `Facet_PreserveReferences` |
 
 ## How to Configure
