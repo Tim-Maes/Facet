@@ -72,7 +72,7 @@ internal static class ToSourceGenerator
         {
             sb.AppendLine();
             sb.AppendLine($"    /// <summary>Depth-aware overload used for <c>MaxDepthToSource</c> enforcement. Do not call directly.</summary>");
-            sb.AppendLine($"    internal {model.SourceTypeName} {methodName}(int __depth)");
+            sb.AppendLine($"    internal {newMod}{model.SourceTypeName} {methodName}(int __depth)");
             sb.AppendLine("    {");
 
             if (model.SourceHasPositionalConstructor)
