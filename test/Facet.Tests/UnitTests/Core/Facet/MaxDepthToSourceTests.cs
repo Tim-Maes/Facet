@@ -84,7 +84,7 @@ public class MaxDepthToSourceTests
     }
 
     [Fact]
-    public void ToSource_From_Book_Should_Map_Only_TopLevel_When_MaxDepthToSource_Is_1()
+    public void ToSource_From_Book_Should_Map_Direct_Author_But_Not_AuthorsBooks_When_MaxDepthToSource_Is_1()
     {
         // Arrange
         var author = BuildAuthorWithBooks(1);
@@ -96,9 +96,13 @@ public class MaxDepthToSourceTests
         // Assert - Book's scalar properties are mapped
         entity.Title.Should().Be("Book 1");
 
-        // At MaxDepthToSource = 1: from Book (depth 0), Author is at depth 1 == limit,
-        // so Author is null
-        entity.Author.Should().BeNull();
+        // MaxDepthToSource = 1 means "allow 1 level of nesting":
+        //   Book (depth 0):  0 < 1 → true  → Author IS mapped
+        //   Author (depth 1): 1 < 1 → false → Author's Books are NOT mapped
+        entity.Author.Should().NotBeNull();
+        entity.Author!.Id.Should().Be(1);
+        entity.Author.Name.Should().Be("Allan Michaelsen");
+        entity.Author.Books.Should().BeEmpty();
     }
 
     [Fact]
