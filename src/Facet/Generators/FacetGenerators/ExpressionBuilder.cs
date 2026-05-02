@@ -310,27 +310,15 @@ internal static class ExpressionBuilder
         }
     }
 
-    private static bool ChildHasDepthAwareToSource(string nestedFacetTypeName, string? nestedFacetSourceTypeName, Dictionary<string, List<FacetTargetModel>>? facetLookup)
-    {
-        if (facetLookup == null || !facetLookup.TryGetValue(nestedFacetTypeName, out var childModels) || childModels.Count == 0)
-        {
-            return false;
-        }
-
-        var matchingChildModels = string.IsNullOrEmpty(nestedFacetSourceTypeName)
-            ? childModels
-            : childModels.Where(x => x.SourceTypeName == nestedFacetSourceTypeName);
-
-        return matchingChildModels.Any(x => x.MaxDepthToSource > 0);
-    }
-
     private static string BuildCollectionToSourceExpression(FacetMember member, bool facetTypeIsNullable, Dictionary<string, List<FacetTargetModel>>? facetLookup, string? parentSourceTypeName, int maxDepthToSource = 0, bool useDepthParameter = false)
     {
         // Determine the correct ToSource method name for the nested facet
         var toSourceMethodName = GetToSourceMethodName(member.TypeName, member.NestedFacetSourceTypeName, facetLookup, parentSourceTypeName);
 
-        // When inside a depth-aware method, pass __depth + 1 only if the selected child source mapping has a depth-aware overload
-        var childToSourceCall = useDepthParameter && ChildHasDepthAwareToSource(member.TypeName, member.NestedFacetSourceTypeName, facetLookup)
+        // When inside a depth-aware method, pass __depth + 1 only if the child facet has a depth-aware overload.
+        // Use FindNestedFacetModels (via the 2-param overload) because member.TypeName includes the "global::"
+        // prefix which does not match the FullName-keyed facetLookup directly.
+        var childToSourceCall = useDepthParameter && ChildHasDepthAwareToSource(member.TypeName, facetLookup)
             ? $"x.{toSourceMethodName}(__depth + 1)"
             : $"x.{toSourceMethodName}()";
 
