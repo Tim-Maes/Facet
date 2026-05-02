@@ -76,6 +76,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public bool CopyAttributes { get; }
     public int MaxDepth { get; }
     public bool PreserveReferences { get; }
+    public int MaxDepthToSource { get; }
     public ImmutableArray<string> BaseClassMemberNames { get; }
     public ImmutableArray<string> FlattenToTypes { get; }
 
@@ -174,7 +175,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         bool hasProjectionMapConfiguration = false,
         bool baseHidesFromSource = false,
         bool hasMapConfiguration = false,
-        BaseFacetInfo? baseFacetInfo = null)
+        BaseFacetInfo? baseFacetInfo = null,
+        int maxDepthToSource = 0)
     {
         Name = name;
         Namespace = @namespace;
@@ -203,6 +205,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         CopyAttributes = copyAttributes;
         MaxDepth = maxDepth;
         PreserveReferences = preserveReferences;
+        MaxDepthToSource = maxDepthToSource;
         BaseClassMemberNames = baseClassMemberNames.IsDefault ? ImmutableArray<string>.Empty : baseClassMemberNames;
         FlattenToTypes = flattenToTypes.IsDefault ? ImmutableArray<string>.Empty : flattenToTypes;
         ConvertEnumsTo = convertEnumsTo;
@@ -247,6 +250,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && CopyAttributes == other.CopyAttributes
             && MaxDepth == other.MaxDepth
             && PreserveReferences == other.PreserveReferences
+            && MaxDepthToSource == other.MaxDepthToSource
             && BaseClassMemberNames.SequenceEqual(other.BaseClassMemberNames)
             && FlattenToTypes.SequenceEqual(other.FlattenToTypes)
             && ConvertEnumsTo == other.ConvertEnumsTo
@@ -288,6 +292,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + CopyAttributes.GetHashCode();
             hash = hash * 31 + MaxDepth.GetHashCode();
             hash = hash * 31 + PreserveReferences.GetHashCode();
+            hash = hash * 31 + MaxDepthToSource.GetHashCode();
             hash = hash * 31 + (ConvertEnumsTo?.GetHashCode() ?? 0);
             hash = hash * 31 + GenerateCopyConstructor.GetHashCode();
             hash = hash * 31 + GenerateEquality.GetHashCode();

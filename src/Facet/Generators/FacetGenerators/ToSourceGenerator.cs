@@ -26,27 +26,34 @@ internal static class ToSourceGenerator
     {
         var methodName = toSourceMethodName ?? "ToSource";
         var isCustomName = toSourceMethodName != null;
+        var newMod = model.BaseHidesFacetMembers && !isCustomName ? "new " : "";
 
-        // Generate the main ToSource method
+        bool hasDepthLimit = model.MaxDepthToSource > 0;
+
+        // Generate the main public ToSource method
         sb.AppendLine();
         sb.AppendLine("    /// <summary>");
         sb.AppendLine($"    /// Converts this instance of <see cref=\"{model.Name}\"/> to an instance of <see cref=\"{CodeGenerationHelpers.GetSimpleTypeName(model.SourceTypeName)}\"/>.");
         sb.AppendLine("    /// </summary>");
         sb.AppendLine($"    /// <returns>An instance of <see cref=\"{CodeGenerationHelpers.GetSimpleTypeName(model.SourceTypeName)}\"/> with properties mapped from this instance.</returns>");
-        var newMod = model.BaseHidesFacetMembers && !isCustomName ? "new " : "";
-        sb.AppendLine($"    public {newMod}{model.SourceTypeName} {methodName}()");
-        sb.AppendLine("    {");
 
-        if (model.SourceHasPositionalConstructor)
+        if (hasDepthLimit)
         {
-            GeneratePositionalToSource(sb, model, facetLookup);
+            // Public entry-point delegates to the depth-aware overload, starting at depth 0
+            sb.AppendLine($"    public {newMod}{model.SourceTypeName} {methodName}() => {methodName}(0);");
         }
         else
         {
-            GenerateObjectInitializerToSource(sb, model, facetLookup);
-        }
+            sb.AppendLine($"    public {newMod}{model.SourceTypeName} {methodName}()");
+            sb.AppendLine("    {");
 
-        sb.AppendLine("    }");
+            if (model.SourceHasPositionalConstructor)
+                GeneratePositionalToSource(sb, model, facetLookup);
+            else
+                GenerateObjectInitializerToSource(sb, model, facetLookup);
+
+            sb.AppendLine("    }");
+        }
 
         // Generate the deprecated BackTo method only for the default (single-source) naming
         if (!isCustomName)
@@ -57,16 +64,32 @@ internal static class ToSourceGenerator
             sb.AppendLine("    /// </summary>");
             sb.AppendLine($"    /// <returns>An instance of the source type with properties mapped from this instance.</returns>");
             sb.AppendLine("    [global::System.Obsolete(\"Use ToSource() instead. This method will be removed in a future version.\")]");
-            sb.AppendLine($"    public {newMod}{model.SourceTypeName} BackTo() => ToSource();");
+            sb.AppendLine($"    public {newMod}{model.SourceTypeName} BackTo() => {methodName}();");
+        }
+
+        // Generate the internal depth-aware overload when MaxDepthToSource > 0
+        if (hasDepthLimit)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"    /// <summary>Depth-aware overload used for <c>MaxDepthToSource</c> enforcement. Do not call directly.</summary>");
+            sb.AppendLine($"    internal {model.SourceTypeName} {methodName}(int __depth)");
+            sb.AppendLine("    {");
+
+            if (model.SourceHasPositionalConstructor)
+                GeneratePositionalToSource(sb, model, facetLookup, useDepthParameter: true);
+            else
+                GenerateObjectInitializerToSource(sb, model, facetLookup, useDepthParameter: true);
+
+            sb.AppendLine("    }");
         }
     }
 
-    private static void GeneratePositionalToSource(StringBuilder sb, FacetTargetModel model, Dictionary<string, List<FacetTargetModel>>? facetLookup)
+    private static void GeneratePositionalToSource(StringBuilder sb, FacetTargetModel model, Dictionary<string, List<FacetTargetModel>>? facetLookup, bool useDepthParameter = false)
     {
         var constructorArgs = string.Join(", ",
             model.Members
                 .Where(m => m.MapFromReversible)
-                .Select(m => ExpressionBuilder.GetToSourceValueExpression(m, facetLookup, model.SourceTypeName)));
+                .Select(m => ExpressionBuilder.GetToSourceValueExpression(m, facetLookup, model.SourceTypeName, model.MaxDepthToSource, useDepthParameter)));
 
         if (model.ToSourceConfigurationTypeName != null)
         {
@@ -80,7 +103,7 @@ internal static class ToSourceGenerator
         }
     }
 
-    private static void GenerateObjectInitializerToSource(StringBuilder sb, FacetTargetModel model, Dictionary<string, List<FacetTargetModel>>? facetLookup)
+    private static void GenerateObjectInitializerToSource(StringBuilder sb, FacetTargetModel model, Dictionary<string, List<FacetTargetModel>>? facetLookup, bool useDepthParameter = false)
     {
         var propertyAssignments = new List<string>();
 
@@ -89,7 +112,7 @@ internal static class ToSourceGenerator
             if (!member.MapFromReversible)
                 continue;
 
-            var toSourceValue = ExpressionBuilder.GetToSourceValueExpression(member, facetLookup, model.SourceTypeName);
+            var toSourceValue = ExpressionBuilder.GetToSourceValueExpression(member, facetLookup, model.SourceTypeName, model.MaxDepthToSource, useDepthParameter);
             propertyAssignments.Add($"            {member.SourcePropertyName} = {toSourceValue}");
         }
 

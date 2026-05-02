@@ -172,8 +172,47 @@ public sealed class FacetAttribute : Attribute
     /// A value of 1 allows one level of nesting, 2 allows two levels, etc.
     /// Default is 10, which handles most real-world scenarios including deep non-circular nesting.
     /// Set to 0 to disable (use with caution), or increase if you need deeper nesting.
+    /// <para>
+    /// This setting affects the constructor (source-to-DTO) and EF Core projection directions.
+    /// To independently control the DTO-to-source direction, use <see cref="MaxDepthToSource"/>.
+    /// </para>
     /// </summary>
     public int MaxDepth { get; set; } = 10;
+
+    /// <summary>
+    /// Controls the maximum depth for nested facet recursion in the DTO-to-source direction
+    /// (the generated <c>ToSource()</c> method). When set to a positive value, depth-limited
+    /// <c>ToSource()</c> overloads are generated that stop recursing into nested child objects
+    /// once the depth limit is reached.
+    /// A value of 0 (default) means no depth limiting for <c>ToSource()</c>, preserving the
+    /// existing behaviour.
+    /// A value of 1 maps this object and its immediate children, but not grandchildren.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is useful when your backend has separation of duties and you don't want
+    /// <c>ToSource()</c> to cascade-save multiple entity layers in one call.
+    /// </para>
+    /// <para>
+    /// When set on a parent facet, the depth counter is passed to child facets that also have
+    /// <c>MaxDepthToSource &gt; 0</c>, enabling consistent depth enforcement across the graph.
+    /// Child facets that do <em>not</em> set <c>MaxDepthToSource</c> are always called via
+    /// their regular (unlimited) <c>ToSource()</c>.
+    /// </para>
+    /// <para>Example:
+    /// <code>
+    /// // Allow deep DTO nesting but prevent deep reverse mapping
+    /// [Facet(typeof(OrderEntity), MaxDepth = 5, MaxDepthToSource = 1,
+    ///        GenerateToSource = true, NestedFacets = [typeof(OrderLineDto)])]
+    /// public partial class OrderDto;
+    ///
+    /// // This call only maps OrderEntity-level properties;
+    /// // nested OrderLine entities are set to null / empty.
+    /// var entity = orderDto.ToSource();
+    /// </code>
+    /// </para>
+    /// </remarks>
+    public int MaxDepthToSource { get; set; } = 0;
 
     /// <summary>
     /// When true, the generator will track object references during facet construction to prevent

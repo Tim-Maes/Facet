@@ -74,3 +74,25 @@ public partial record Level2Facet;
 public partial record Level3Facet;
 [Facet(typeof(Level4))]
 public partial record Level4Facet;
+
+// ---------------------------------------------------------------------------
+// MaxDepthToSource test models
+// Scenario: MaxDepth = 5 (full ToFacet nesting allowed) but MaxDepthToSource = 1
+// (only the top-level object is reverse-mapped; nested children are dropped).
+// ---------------------------------------------------------------------------
+
+[Facet(typeof(Author),
+    MaxDepth = 5,
+    PreserveReferences = false,
+    GenerateToSource = true,
+    MaxDepthToSource = 1,
+    NestedFacets = [typeof(BookFacetDepthToSource)])]
+public partial record AuthorFacetDepthToSource;
+
+[Facet(typeof(Book),
+    MaxDepth = 5,
+    PreserveReferences = false,
+    GenerateToSource = true,
+    MaxDepthToSource = 1,
+    NestedFacets = [typeof(AuthorFacetDepthToSource)])]
+public partial record BookFacetDepthToSource;
