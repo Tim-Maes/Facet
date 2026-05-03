@@ -34,20 +34,14 @@ public sealed class FacetGenerator : IIncrementalGenerator
         {
             spc.CancellationToken.ThrowIfCancellationRequested();
 
-            // Build a lookup dictionary for nested facet resolution.
-            // Group all models by FullName to support multi-source facets (multiple [Facet] attributes on the same target).
-            // This allows nested facet resolution to determine the correct ToSource method name for multi-source scenarios.
-            var facetLookup = models
-                .Where(m => m is not null)
-                .GroupBy(m => m!.FullName)
-                .ToDictionary(g => g.Key, g => g.Select(m => m!).ToList());
-
-            // Group models by target type FullName. Multiple models for the same target arise when
-            // the target class carries more than one [Facet] attribute (different source types).
             var modelsByTarget = models
                 .Where(m => m is not null)
                 .GroupBy(m => m!.FullName)
                 .ToList();
+
+            // Build a lookup dictionary for nested facet resolution.
+            // Groups all models by FullName to support multi-source facets (multiple [Facet] attributes on the same target).
+            var facetLookup = modelsByTarget.ToDictionary(g => g.Key, g => g.Select(m => m!).ToList());
 
             foreach (var group in modelsByTarget)
             {

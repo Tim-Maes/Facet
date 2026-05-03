@@ -38,7 +38,7 @@ internal static class WrapperModelBuilder
         var readOnly = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.ReadOnly, false);
 
         // Extract nested wrapper mappings
-        var nestedWrapperMappings = AttributeParser.ExtractNestedWrapperMappings(attribute, context.SemanticModel.Compilation);
+        var nestedWrapperMappings = AttributeParser.ExtractNestedWrapperMappings(attribute);
 
         // Infer the type kind and whether it's a record from the target type declaration
         var (typeKind, isRecord) = TypeAnalyzer.InferTypeKind(targetSymbol);

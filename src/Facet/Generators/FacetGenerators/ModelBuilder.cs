@@ -145,13 +145,9 @@ internal static class ModelBuilder
             }
         }
 
-        // Extract CollectionTargetType parameter
         var collectionTargetType = AttributeParser.ExtractCollectionTargetType(attribute);
+        var nestedFacetMappings = AttributeParser.ExtractNestedFacetMappings(attribute);
 
-        // Extract nested facets parameter and build mapping from source type to child facet type
-        var nestedFacetMappings = AttributeParser.ExtractNestedFacetMappings(attribute, context.SemanticModel.Compilation);
-
-        // Extract MapFrom attribute mappings from target type properties
         var expressionMembers = new List<FacetMember>();
         var mapFromMappings = ExtractMapFromMappings(targetSymbol, expressionMembers, nullableProperties);
 
@@ -1361,7 +1357,7 @@ private static Dictionary<string, (string targetName, string source, bool revers
                     }
 
                     // Accumulate NestedFacetMappings from all ancestor facets (nearer ancestors take precedence)
-                    var baseNestedFacetMappings = AttributeParser.ExtractNestedFacetMappings(bestFacetAttr, compilation);
+                    var baseNestedFacetMappings = AttributeParser.ExtractNestedFacetMappings(bestFacetAttr);
                     foreach (var mapping in baseNestedFacetMappings)
                     {
                         if (!allNestedFacetMappings.ContainsKey(mapping.Key))

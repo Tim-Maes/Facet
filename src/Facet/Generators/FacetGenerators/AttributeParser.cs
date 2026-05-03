@@ -16,8 +16,7 @@ internal static class AttributeParser
     /// Returns a dictionary mapping source type full names to nested facet type information.
     /// </summary>
     public static Dictionary<string, (string childFacetTypeName, string sourceTypeName)> ExtractNestedFacetMappings(
-        AttributeData attribute,
-        Compilation compilation)
+        AttributeData attribute)
     {
         var mappings = new Dictionary<string, (string, string)>();
 
@@ -42,7 +41,6 @@ internal static class AttributeParser
                                     var sourceTypeName = childSourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                                     var childFacetTypeName = childFacetType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-                                    // Map the source type to the child facet type
                                     mappings[sourceTypeName] = (childFacetTypeName, sourceTypeName);
                                 }
                             }
@@ -60,8 +58,7 @@ internal static class AttributeParser
     /// Returns a dictionary mapping source type full names to nested wrapper type information.
     /// </summary>
     public static Dictionary<string, (string childWrapperTypeName, string sourceTypeName)> ExtractNestedWrapperMappings(
-        AttributeData attribute,
-        Compilation compilation)
+        AttributeData attribute)
     {
         var mappings = new Dictionary<string, (string, string)>();
 
@@ -85,7 +82,6 @@ internal static class AttributeParser
                                 var sourceTypeName = childSourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                                 var childWrapperTypeName = childWrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-                                // Map the source type to the child wrapper type
                                 mappings[sourceTypeName] = (childWrapperTypeName, sourceTypeName);
                             }
                         }

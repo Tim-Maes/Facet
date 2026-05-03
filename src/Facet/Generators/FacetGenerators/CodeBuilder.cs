@@ -19,19 +19,14 @@ internal static class CodeBuilder
         var sb = new StringBuilder();
         GenerateFileHeader(sb);
 
-        // Collect all namespaces from referenced types
         var namespacesToImport = CodeGenerationHelpers.CollectNamespaces(model);
-
-        // Collect types that need 'using static' directives
         var staticUsingTypes = CodeGenerationHelpers.CollectStaticUsingTypes(model);
 
-        // Generate using statements for all required namespaces
         foreach (var ns in namespacesToImport.OrderBy(x => x))
         {
             sb.AppendLine($"using {ns};");
         }
 
-        // Generate using static statements for types nested in other types
         foreach (var type in staticUsingTypes.OrderBy(x => x))
         {
             sb.AppendLine($"using static {type};");
@@ -41,8 +36,7 @@ internal static class CodeBuilder
 
         // Nullable must be enabled in generated code with a directive
         var hasNullableRefTypeMembers = model.Members.Any(m => !m.IsValueType && m.TypeName.EndsWith("?"));
-        // Also enable nullable context when depth tracking is needed, as the internal constructor
-        // uses System.Collections.Generic.HashSet<object>? __processed (nullable parameter)
+        // Enable nullable context when depth tracking is needed: the internal constructor uses HashSet<object>? __processed.
         var needsDepthTracking = model.MaxDepth > 0 || model.PreserveReferences;
         if (hasNullableRefTypeMembers || needsDepthTracking)
         {
@@ -55,10 +49,8 @@ internal static class CodeBuilder
             sb.AppendLine($"namespace {model.Namespace};");
         }
 
-        // Generate containing type hierarchy for nested classes
         var containingTypeIndent = GenerateContainingTypeHierarchy(sb, model);
 
-        // Generate type-level XML documentation if available
         if (!string.IsNullOrWhiteSpace(model.TypeXmlDocumentation))
         {
             var indentedDocumentation = model.TypeXmlDocumentation!.Replace("\n", $"\n{containingTypeIndent}");
@@ -69,23 +61,19 @@ internal static class CodeBuilder
         var hasInitOnlyProperties = model.Members.Any(m => m.IsInitOnly);
         var hasRequiredProperties = model.Members.Any(m => m.IsRequired);
 
-        // For record classes, avoid positional declarations when there are required members,
-        // because C# doesn't support the 'required' modifier on positional parameters of record classes.
-        // Record structs DO support 'required' on positional parameters, so they can stay positional.
+        // Record classes can't use positional parameters when there are required members
+        // (C# doesn't allow 'required' on positional parameters of record classes).
+        // Record structs DO support it, so they can stay positional.
         var isPositional = model.IsRecord && !model.HasExistingPrimaryConstructor
             && !(model.TypeKind == TypeKind.Class && hasRequiredProperties);
         var hasCustomMapping = !string.IsNullOrWhiteSpace(model.ConfigurationTypeName);
-
-        // Determine if we need to generate equality (skip for records which already have value equality)
         var shouldGenerateEquality = model.GenerateEquality && !model.IsRecord;
 
-        // Only generate positional declaration if there's no existing primary constructor
         if (isPositional)
         {
             GeneratePositionalDeclaration(sb, model, keyword, containingTypeIndent);
         }
 
-        // Generate the type declaration, including IEquatable<T> if equality is requested
         if (shouldGenerateEquality)
         {
             sb.AppendLine($"{containingTypeIndent}{model.Accessibility} partial {keyword} {model.Name} : {EqualityGenerator.GetEquatableInterface(model)}");
@@ -98,7 +86,6 @@ internal static class CodeBuilder
 
         var memberIndent = containingTypeIndent + "    ";
 
-        // Generate properties if not positional OR if there's an existing primary constructor
         if (!isPositional || model.HasExistingPrimaryConstructor)
         {
             MemberGenerator.GenerateMembers(sb, model, memberIndent);
@@ -112,57 +99,48 @@ internal static class CodeBuilder
             MemberGenerator.GenerateMembers(sb, model, memberIndent, membersWithDocs, usePropertyNameAsInitializer: true);
         }
 
-        // Generate parameterless constructor first if requested
-        // This ensures third-party code that picks the first constructor will use the parameterless one
+        // Parameterless constructor first so third-party code that picks the first constructor gets it.
         if (model.GenerateParameterlessConstructor)
         {
             ConstructorGenerator.GenerateParameterlessConstructor(sb, model, isPositional);
         }
 
-        // Generate constructor from source
         if (model.GenerateConstructor)
         {
             ConstructorGenerator.GenerateConstructor(sb, model, isPositional, hasInitOnlyProperties, hasCustomMapping, hasRequiredProperties);
         }
 
-        // Generate compiled projection-map action when config only provides ConfigureProjection (no Map)
+        // Compiled projection-map action when config only provides ConfigureProjection (no Map).
         if (hasCustomMapping && !model.HasMapConfiguration && model.HasProjectionMapConfiguration)
         {
             GenerateProjectionMapAction(sb, model, memberIndent);
         }
 
-        // Generate copy constructor
         if (model.GenerateCopyConstructor)
         {
             CopyConstructorGenerator.Generate(sb, model, memberIndent);
         }
 
-        // Generate projection
         if (model.GenerateExpressionProjection)
         {
             ProjectionGenerator.GenerateProjectionProperty(sb, model, memberIndent, facetLookup);
         }
 
-        // Generate reverse mapping method (ToSource)
         if (model.GenerateToSource)
         {
             ToSourceGenerator.Generate(sb, model, facetLookup);
         }
 
-        // Generate ApplyToSource method (mutates an existing source instance)
         if (model.GenerateToSource && !model.SourceHasPositionalConstructor)
         {
             ToSourceGenerator.GenerateApplyToSource(sb, model, facetLookup);
         }
 
-        // Generate FlattenTo methods
         if (model.FlattenToTypes.Length > 0)
         {
             FlattenToGenerator.Generate(sb, model, memberIndent, facetLookup);
         }
 
-        // Generate equality members (Equals, GetHashCode, ==, !=)
-        // Skip for records which already have value-based equality
         if (shouldGenerateEquality)
         {
             EqualityGenerator.Generate(sb, model, memberIndent);
@@ -170,7 +148,6 @@ internal static class CodeBuilder
 
         sb.AppendLine($"{containingTypeIndent}}}");
 
-        // Close containing type braces
         CloseContainingTypeHierarchy(sb, model, containingTypeIndent);
 
         return sb.ToString();

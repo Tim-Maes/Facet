@@ -711,8 +711,7 @@ internal static class ProjectionGenerator
         int maxDepth = 0,
         HashSet<string>? sourcePropertyNames = null)
     {
-        // Check if the member type is nullable
-        bool isNullable = member.TypeName.Contains("?");
+        bool isNullable = member.TypeName.EndsWith("?");
 
         if (member.IsNestedFacet && member.IsCollection)
         {
@@ -1088,7 +1087,7 @@ internal static class ProjectionGenerator
             return ApplyEnumCollectionProjectionConversion(valueExpression, member);
         }
 
-        bool isNullableEnum = member.SourceMemberTypeName?.Contains("?") ?? false;
+        bool isNullableEnum = member.SourceMemberTypeName?.EndsWith("?") ?? false;
 
         if (member.TypeName.TrimEnd('?') == "string")
         {
@@ -1117,8 +1116,7 @@ internal static class ProjectionGenerator
     /// </summary>
     private static string ApplyEnumCollectionProjectionConversion(string valueExpression, FacetMember member)
     {
-        // Check if the collection itself is nullable
-        bool isCollectionNullable = member.TypeName.Contains("?");
+        bool isCollectionNullable = member.TypeName.EndsWith("?");
         string targetElementType = member.TypeName.TrimEnd('?');
 
         // Extract just the element type name from List<string> or List<int>

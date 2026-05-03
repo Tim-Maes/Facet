@@ -24,7 +24,7 @@ internal static class ExpressionBuilder
         bool preserveReferences = false,
         HashSet<string>? sourcePropertyNames = null)
     {
-        bool isNullable = member.TypeName.Contains("?");
+        bool isNullable = member.TypeName.EndsWith("?");
 
         if (member.IsNestedFacet && member.IsCollection)
         {
@@ -87,10 +87,9 @@ internal static class ExpressionBuilder
         bool useDepthParameter = false)
     {
         // Check if the member type is nullable (ends with ?)
-        bool facetTypeIsNullable = member.TypeName.Contains("?");
+        bool facetTypeIsNullable = member.TypeName.EndsWith("?");
 
-        // Check if the source type is nullable
-        bool sourceTypeIsNullable = member.SourceMemberTypeName?.Contains("?") ?? facetTypeIsNullable;
+        bool sourceTypeIsNullable = member.SourceMemberTypeName?.EndsWith("?") ?? facetTypeIsNullable;
 
         if (member.IsNestedFacet && member.IsCollection)
         {
@@ -463,7 +462,7 @@ internal static class ExpressionBuilder
         }
 
         // Determine if the source enum property is nullable
-        bool isNullableEnum = member.SourceMemberTypeName?.Contains("?") ?? false;
+        bool isNullableEnum = member.SourceMemberTypeName?.EndsWith("?") ?? false;
 
         if (member.TypeName.TrimEnd('?') == "string")
         {
@@ -493,7 +492,7 @@ internal static class ExpressionBuilder
     private static string ApplyEnumCollectionToTargetConversion(string valueExpression, FacetMember member)
     {
         // Check if the collection itself is nullable
-        bool isCollectionNullable = member.TypeName.Contains("?");
+        bool isCollectionNullable = member.TypeName.EndsWith("?");
         string targetElementType = member.TypeName.TrimEnd('?');
 
         // Extract just the element type name from List<string> or List<int>
@@ -544,8 +543,8 @@ internal static class ExpressionBuilder
         }
 
         var enumTypeName = member.OriginalEnumTypeName!;
-        bool facetTypeIsNullable = member.TypeName.Contains("?");
-        bool sourceTypeIsNullable = member.SourceMemberTypeName?.Contains("?") ?? false;
+        bool facetTypeIsNullable = member.TypeName.EndsWith("?");
+        bool sourceTypeIsNullable = member.SourceMemberTypeName?.EndsWith("?") ?? false;
 
         if (member.TypeName.TrimEnd('?') == "string")
         {
@@ -591,8 +590,8 @@ internal static class ExpressionBuilder
     private static string ApplyTargetCollectionToEnumConversion(FacetMember member)
     {
         var enumTypeName = member.OriginalEnumTypeName!;
-        bool facetCollectionIsNullable = member.TypeName.Contains("?");
-        bool sourceCollectionIsNullable = member.SourceMemberTypeName?.Contains("?") ?? false;
+        bool facetCollectionIsNullable = member.TypeName.EndsWith("?");
+        bool sourceCollectionIsNullable = member.SourceMemberTypeName?.EndsWith("?") ?? false;
 
         string targetElementType = member.TypeName.TrimEnd('?');
 

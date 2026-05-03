@@ -27,31 +27,28 @@ internal static class GeneratorUtilities
             : typeName;
     }
 
+    private static readonly SymbolDisplayFormat NullabilityFormat = new SymbolDisplayFormat(
+        globalNamespaceStyle: SymbolDisplayGlobalNamespaceStyle.Included,
+        typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
+        genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters | SymbolDisplayGenericsOptions.IncludeVariance,
+        memberOptions: SymbolDisplayMemberOptions.None,
+        delegateStyle: SymbolDisplayDelegateStyle.NameAndSignature,
+        extensionMethodStyle: SymbolDisplayExtensionMethodStyle.Default,
+        parameterOptions: SymbolDisplayParameterOptions.None,
+        propertyStyle: SymbolDisplayPropertyStyle.NameOnly,
+        localOptions: SymbolDisplayLocalOptions.None,
+        kindOptions: SymbolDisplayKindOptions.None,
+        miscellaneousOptions: SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers |
+                             SymbolDisplayMiscellaneousOptions.UseSpecialTypes |
+                             SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+
     /// <summary>
     /// Gets the type name with proper nullability information preserved.
     /// </summary>
     /// <param name="typeSymbol">The type symbol to get the name from.</param>
     /// <returns>A fully qualified type name with nullability annotations.</returns>
     public static string GetTypeNameWithNullability(ITypeSymbol typeSymbol)
-    {
-        // Create a SymbolDisplayFormat that includes nullability information
-        var format = new SymbolDisplayFormat(
-            globalNamespaceStyle: SymbolDisplayGlobalNamespaceStyle.Included,
-            typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
-            genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters | SymbolDisplayGenericsOptions.IncludeVariance,
-            memberOptions: SymbolDisplayMemberOptions.None,
-            delegateStyle: SymbolDisplayDelegateStyle.NameAndSignature,
-            extensionMethodStyle: SymbolDisplayExtensionMethodStyle.Default,
-            parameterOptions: SymbolDisplayParameterOptions.None,
-            propertyStyle: SymbolDisplayPropertyStyle.NameOnly,
-            localOptions: SymbolDisplayLocalOptions.None,
-            kindOptions: SymbolDisplayKindOptions.None,
-            miscellaneousOptions: SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers |
-                                 SymbolDisplayMiscellaneousOptions.UseSpecialTypes |
-                                 SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
-
-        return typeSymbol.ToDisplayString(format);
-    }
+        => typeSymbol.ToDisplayString(NullabilityFormat);
 
     /// <summary>
     /// Returns true if the property symbol is a partial implementing declaration (C# 13+),
