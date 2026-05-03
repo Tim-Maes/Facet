@@ -149,6 +149,32 @@ public partial class MapFromMultiLevelPathFacet
     public string EmployeeName { get; set; } = string.Empty;
 }
 
+// Navigation property expression test models - reproduces issue with MapFrom expressions
+// referencing navigation properties (e.g. "User.PrimaryGroupId == GroupId")
+public class MapFromGroupMembershipEntity
+{
+    public int Id { get; set; }
+    public int GroupId { get; set; }
+    public MapFromUserEntity? User { get; set; }
+}
+
+public class MapFromUserEntity
+{
+    public string Username { get; set; } = string.Empty;
+    public int PrimaryGroupId { get; set; }
+}
+
+[Facet(typeof(MapFromGroupMembershipEntity),
+    Include = [nameof(MapFromGroupMembershipEntity.Id), nameof(MapFromGroupMembershipEntity.GroupId)])]
+public partial class MapFromNavigationExpressionFacet
+{
+    [MapFrom("User.Username")]
+    public string Username { get; set; } = string.Empty;
+
+    [MapFrom("User.PrimaryGroupId == GroupId")]
+    public bool IsPrimary { get; set; }
+}
+
 public class MapFromTests
 {
     [Fact]
@@ -735,5 +761,63 @@ public class MapFromTests
 
         // Should NOT have the "Company" navigation property (it's mapped to nested paths)
         propertyNames.Should().NotContain("Company");
+    }
+
+    [Fact]
+    public void Constructor_ShouldMapNavigationPropertyExpression()
+    {
+        // Arrange - User.PrimaryGroupId matches GroupId
+        var entity = new MapFromGroupMembershipEntity
+        {
+            Id = 42,
+            GroupId = 7,
+            User = new MapFromUserEntity { Username = "alice", PrimaryGroupId = 7 }
+        };
+
+        // Act
+        var facet = new MapFromNavigationExpressionFacet(entity);
+
+        // Assert
+        facet.Username.Should().Be("alice");
+        facet.IsPrimary.Should().BeTrue("User.PrimaryGroupId (7) == GroupId (7)");
+    }
+
+    [Fact]
+    public void Constructor_ShouldMapNavigationPropertyExpression_WhenNotPrimary()
+    {
+        // Arrange - User.PrimaryGroupId does NOT match GroupId
+        var entity = new MapFromGroupMembershipEntity
+        {
+            Id = 43,
+            GroupId = 7,
+            User = new MapFromUserEntity { Username = "bob", PrimaryGroupId = 99 }
+        };
+
+        // Act
+        var facet = new MapFromNavigationExpressionFacet(entity);
+
+        // Assert
+        facet.Username.Should().Be("bob");
+        facet.IsPrimary.Should().BeFalse("User.PrimaryGroupId (99) != GroupId (7)");
+    }
+
+    [Fact]
+    public void Projection_ShouldMapNavigationPropertyExpression()
+    {
+        // Arrange
+        var entities = new List<MapFromGroupMembershipEntity>
+        {
+            new() { Id = 1, GroupId = 5, User = new MapFromUserEntity { Username = "alice", PrimaryGroupId = 5 } },
+            new() { Id = 2, GroupId = 5, User = new MapFromUserEntity { Username = "bob", PrimaryGroupId = 9 } },
+        };
+
+        // Act
+        var results = entities.AsQueryable().Select(MapFromNavigationExpressionFacet.Projection).ToList();
+
+        // Assert
+        results[0].Username.Should().Be("alice");
+        results[0].IsPrimary.Should().BeTrue();
+        results[1].Username.Should().Be("bob");
+        results[1].IsPrimary.Should().BeFalse();
     }
 }

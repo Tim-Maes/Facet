@@ -2,6 +2,7 @@ using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -299,6 +300,9 @@ internal static class ModelBuilder
         var baseHidesFacetMembers = BaseHidesFacetMembers(targetSymbol);
         var baseHidesFromSource = BaseHidesFromSource(targetSymbol, sourceTypeFullName);
 
+        // Collect source type member names for MapFrom expression disambiguation
+        var sourcePropertyNames = CollectSourcePropertyNames(sourceType);
+
         return new FacetTargetModel(
             targetSymbol.Name,
             ns,
@@ -338,7 +342,8 @@ internal static class ModelBuilder
             baseHidesFromSource,
             hasMapConfiguration,
             baseFacetInfo,
-            maxDepthToSource);
+            maxDepthToSource,
+            sourcePropertyNames);
     }
 
     #region Private Helper Methods
@@ -1496,6 +1501,22 @@ private static Dictionary<string, (string targetName, string source, bool revers
         }
 
         return false;
+    }
+
+    private static ImmutableArray<string> CollectSourcePropertyNames(INamedTypeSymbol sourceType)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        var current = (INamedTypeSymbol?)sourceType;
+        while (current != null && current.SpecialType != SpecialType.System_Object)
+        {
+            foreach (var member in current.GetMembers())
+            {
+                if (member.Kind == SymbolKind.Property || member.Kind == SymbolKind.Field)
+                    names.Add(member.Name);
+            }
+            current = current.BaseType;
+        }
+        return names.ToImmutableArray();
     }
 
     #endregion
