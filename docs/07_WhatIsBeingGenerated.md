@@ -97,6 +97,20 @@ public partial class UserDto
         };
     }
 
+    /// <summary>
+    /// Applies the mapped properties of this UserDto instance onto an existing
+    /// User instance in place.
+    /// Only properties that are part of this facet are written.
+    /// Properties excluded from this facet are left unchanged on the source.
+    /// </summary>
+    public void ApplyToSource(User source)
+    {
+        source.Id = this.Id;
+        source.FirstName = this.FirstName;
+        source.LastName = this.LastName;
+        source.Email = this.Email;
+    }
+
     [Obsolete("Use ToSource() instead. This method will be removed in a future version.")]
     public User BackTo() => ToSource();
 }
@@ -110,6 +124,7 @@ public partial class UserDto
 - Parameterless constructor for deserialization
 - `Projection` expression for LINQ/EF queries
 - `ToSource()` method for reverse mapping (because `GenerateToSource = true`)
+- `ApplyToSource(User source)` method for mutating an existing instance in place
 - Obsolete `BackTo()` method for backward compatibility
 
 ---
@@ -985,6 +1000,7 @@ For a basic facet, Facet generates:
 ### Methods
 - `static Dto FromSource(Source source)` - factory method for optimal runtime performance
 - `Source ToSource()` - reverse mapping (when `GenerateToSource = true`)
+- `void ApplyToSource(Source source)` - mutates an existing source instance in place (when `GenerateToSource = true` and source is not a positional record)
 - `Source BackTo()` - obsolete, calls `ToSource()`
 - `Source Unwrap()` - for Wrapper only
 

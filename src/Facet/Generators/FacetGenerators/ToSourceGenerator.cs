@@ -84,6 +84,60 @@ internal static class ToSourceGenerator
         }
     }
 
+    /// <summary>
+    /// Generates an <c>ApplyToSource</c> method that writes the facet's reversible properties
+    /// back onto an existing source instance (mutation, not construction).
+    /// Not generated for positional-constructor sources because their properties cannot be
+    /// individually assigned after the object is created.
+    /// </summary>
+    /// <param name="methodName">
+    /// Override for the method name.  Pass <see langword="null"/> to use the default <c>ApplyToSource</c>.
+    /// Multi-source scenarios pass a source-specific name such as <c>ApplyToOrder</c>.
+    /// </param>
+    public static void GenerateApplyToSource(StringBuilder sb, FacetTargetModel model, Dictionary<string, List<FacetTargetModel>>? facetLookup, string? methodName = null)
+    {
+        // Positional (record) sources cannot have individual properties set after construction.
+        if (model.SourceHasPositionalConstructor)
+            return;
+
+        var applyMethodName = methodName ?? "ApplyToSource";
+        var newMod = model.BaseHidesFacetMembers && methodName == null ? "new " : "";
+
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine($"    /// Applies the mapped properties of this <see cref=\"{model.Name}\"/> instance onto an existing");
+        sb.AppendLine($"    /// <see cref=\"{CodeGenerationHelpers.GetSimpleTypeName(model.SourceTypeName)}\"/> instance in place.");
+        sb.AppendLine("    /// Only properties that are part of this facet and marked as reversible are written.");
+        sb.AppendLine("    /// Properties excluded from this facet are left unchanged on the source.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine($"    /// <param name=\"source\">The existing <see cref=\"{CodeGenerationHelpers.GetSimpleTypeName(model.SourceTypeName)}\"/> instance to update.</param>");
+        sb.AppendLine($"    public {newMod}void {applyMethodName}({model.SourceTypeName} source)");
+        sb.AppendLine("    {");
+
+        var hasMappable = false;
+        foreach (var member in model.Members)
+        {
+            if (!member.MapFromReversible)
+                continue;
+
+            // Cannot assign to init-only source properties outside of a constructor or object initializer
+            if (member.IsSourceInitOnly)
+                continue;
+
+            var value = ExpressionBuilder.GetToSourceValueExpression(member, facetLookup, model.SourceTypeName, 0, false);
+            sb.AppendLine($"        source.{member.SourcePropertyName} = {value};");
+            hasMappable = true;
+        }
+
+        if (!hasMappable)
+            sb.AppendLine("        // No settable reversible members configured for this facet");
+
+        if (model.ToSourceConfigurationTypeName != null)
+            sb.AppendLine($"        {model.ToSourceConfigurationTypeName}.Map(this, source);");
+
+        sb.AppendLine("    }");
+    }
+
     private static void GeneratePositionalToSource(StringBuilder sb, FacetTargetModel model, Dictionary<string, List<FacetTargetModel>>? facetLookup, bool useDepthParameter = false)
     {
         var constructorArgs = string.Join(", ",

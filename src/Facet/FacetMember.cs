@@ -13,6 +13,13 @@ internal sealed class FacetMember : IEquatable<FacetMember>
     public bool IsInitOnly { get; }
     public bool IsRequired { get; }
     public bool IsReadOnly { get; }
+
+    /// <summary>
+    /// Whether the corresponding SOURCE property has an init-only setter.
+    /// This is the raw source accessor flag, independent of whether the facet preserves it.
+    /// Used by <c>ApplyToSource</c> to skip properties that cannot be assigned after construction.
+    /// </summary>
+    public bool IsSourceInitOnly { get; }
     public string? XmlDocumentation { get; }
     public bool IsNestedFacet { get; }
     public string? NestedFacetSourceTypeName { get; }
@@ -89,7 +96,8 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         bool isEnumConversion = false,
         string? originalEnumTypeName = null,
         bool isNestedType = false,
-        bool isPartial = false)
+        bool isPartial = false,
+        bool isSourceInitOnly = false)
     {
         Name = name;
         TypeName = typeName;
@@ -120,6 +128,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         OriginalEnumTypeName = originalEnumTypeName;
         IsNestedType = isNestedType;
         IsPartial = isPartial;
+        IsSourceInitOnly = isSourceInitOnly;
     }
 
     public bool Equals(FacetMember? other) =>
@@ -149,7 +158,8 @@ internal sealed class FacetMember : IEquatable<FacetMember>
         OriginalEnumTypeName == other.OriginalEnumTypeName &&
         IsNestedType == other.IsNestedType &&
         IsPartial == other.IsPartial &&
-        Attributes.SequenceEqual(other.Attributes) &&
+        IsSourceInitOnly == other.IsSourceInitOnly &&
+        Attributes.SequenceEqual(other.Attributes)&&
         AttributeNamespaces.SequenceEqual(other.AttributeNamespaces) &&
         MapWhenConditions.SequenceEqual(other.MapWhenConditions);
 
@@ -185,6 +195,7 @@ internal sealed class FacetMember : IEquatable<FacetMember>
             hash = hash * 31 + (OriginalEnumTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + IsNestedType.GetHashCode();
             hash = hash * 31 + IsPartial.GetHashCode();
+            hash = hash * 31 + IsSourceInitOnly.GetHashCode();
             hash = hash * 31 + Attributes.Count.GetHashCode();
             foreach (var attr in Attributes)
                 hash = hash * 31 + (attr?.GetHashCode() ?? 0);
