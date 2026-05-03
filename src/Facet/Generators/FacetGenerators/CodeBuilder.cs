@@ -149,6 +149,12 @@ internal static class CodeBuilder
             ToSourceGenerator.Generate(sb, model, facetLookup);
         }
 
+        // Generate ApplyToSource method (mutates an existing source instance)
+        if (model.GenerateToSource && !model.SourceHasPositionalConstructor)
+        {
+            ToSourceGenerator.GenerateApplyToSource(sb, model, facetLookup);
+        }
+
         // Generate FlattenTo methods
         if (model.FlattenToTypes.Length > 0)
         {
@@ -339,6 +345,15 @@ internal static class CodeBuilder
             ToSourceGenerator.Generate(sb, model, facetLookup, toSourceName);
         }
 
+        // Per-source: ApplyToSource methods (mutate an existing source instance)
+        foreach (var model in models)
+        {
+            if (!model.GenerateToSource || model.SourceHasPositionalConstructor) continue;
+
+            var applyMethodName = GetApplyToSourceMethodName(model, models);
+            ToSourceGenerator.GenerateApplyToSource(sb, model, facetLookup, applyMethodName);
+        }
+
         // Per-source: FlattenTo
         foreach (var model in models)
         {
@@ -384,6 +399,21 @@ internal static class CodeBuilder
             return null; // Use default "ToSource" + BackTo
 
         return "To" + GetSourceSimpleName(model);
+    }
+
+    /// <summary>
+    /// Returns the method name to use for the ApplyToSource operation of the given model.
+    /// <list type="bullet">
+    /// <item>Single-source: <c>null</c> → <c>"ApplyToSource"</c>.</item>
+    /// <item>Multi-source: <c>"ApplyTo{SourceSimpleName}"</c>.</item>
+    /// </list>
+    /// </summary>
+    private static string? GetApplyToSourceMethodName(FacetTargetModel model, IReadOnlyList<FacetTargetModel> allModels)
+    {
+        if (allModels.Count <= 1)
+            return null; // Use default "ApplyToSource"
+
+        return "ApplyTo" + GetSourceSimpleName(model);
     }
 
     /// <summary>

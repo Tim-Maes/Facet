@@ -31,7 +31,7 @@ public partial class MyFacet { }
 | `Configuration`                | `Type?`   | Custom mapping config type for forward mapping (Entity > DTO). See [Custom Mapping](04_CustomMapping.md).      |
 | `ToSourceConfiguration`        | `Type?`   | Custom mapping config type for reverse mapping (DTO > Entity), called inside `ToSource()`. Requires `GenerateToSource = true`. See [Reverse Mapping](04_CustomMapping.md#reverse-mapping-tosourceconfiguration). |
 | `GenerateProjection`           | `bool`    | Generate a static LINQ projection (default: true).                          |
-| `GenerateToSource`             | `bool`    | Generate a method to map back from facet to source type (default: false).    |
+| `GenerateToSource`             | `bool`    | Generates `ToSource()` (creates a new source instance) and `ApplyToSource(source)` (mutates an existing source instance) methods. Default: false. `ApplyToSource` is not generated for positional-record source types. |
 | `PreserveInitOnlyProperties`   | `bool`    | Preserve init-only modifiers from source properties (default: true for records). |
 | `PreserveRequiredProperties`   | `bool`    | Preserve required modifiers from source properties (default: true for records). |
 | `NullableProperties`           | `bool`    | Make all properties nullable in the generated facet (default: false). |
@@ -503,6 +503,29 @@ public partial record SimpleTypeDto;
 - **Level 2**: Second level nested objects (e.g., Product)
 - **Level 3**: Third level nested objects (e.g., Category)
 - Properties that would exceed MaxDepth are set to `null` (with default MaxDepth = 10, this covers most real-world scenarios)
+
+### ApplyToSource
+
+When `GenerateToSource = true`, Facet generates both `ToSource()` and `ApplyToSource()`. While `ToSource()` creates a **new** source instance, `ApplyToSource()` writes the mapped properties back onto an **existing** source instance without allocating a new one.
+
+```csharp
+[Facet(typeof(User), "Password", "CreatedAt", GenerateToSource = true)]
+public partial class UserDto { }
+
+// Load an existing entity from the database
+var entity = await dbContext.Users.FindAsync(id);
+
+// Apply DTO changes onto it - EF Core change tracking stays intact
+dto.ApplyToSource(entity);
+
+await dbContext.SaveChangesAsync();
+```
+
+**This is the recommended pattern for update operations** because the original entity reference is retained, which means ORM change tracking and audit hooks continue to work correctly.
+
+**Limitations:**
+- Not generated when the source type uses a positional constructor (e.g. `record User(string Id, string Name)`), because positional record properties are init-only and cannot be set after construction. Use `ToSource()` and re-attach the new instance instead.
+- Only properties included in the facet and marked as reversible are written. All other source properties are left untouched.
 
 ### MaxDepthToSource
 

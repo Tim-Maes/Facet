@@ -750,7 +750,8 @@ internal static class ModelBuilder
             isEnumConversion,
             originalEnumTypeName,
             isNestedType,
-            isPartial: false)); // Never propagate partial from source (GitHub issue #277)
+            isPartial: false, // Never propagate partial from source (GitHub issue #277)
+            isSourceInitOnly: isInitOnly)); // Raw source accessor — needed by ApplyToSource generation
         addedMembers.Add(memberName);
     }
 
