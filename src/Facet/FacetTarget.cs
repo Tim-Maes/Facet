@@ -81,6 +81,12 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public ImmutableArray<string> FlattenToTypes { get; }
 
     /// <summary>
+    /// The top-level property and field names of the source type (including inherited members).
+    /// Used to disambiguate navigation properties from static type names in MapFrom expressions.
+    /// </summary>
+    public ImmutableArray<string> SourcePropertyNames { get; }
+
+    /// <summary>
     /// The target type for enum conversion. "string" or "int", or null if no conversion.
     /// </summary>
     public string? ConvertEnumsTo { get; }
@@ -176,7 +182,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         bool baseHidesFromSource = false,
         bool hasMapConfiguration = false,
         BaseFacetInfo? baseFacetInfo = null,
-        int maxDepthToSource = 0)
+        int maxDepthToSource = 0,
+        ImmutableArray<string> sourcePropertyNames = default)
     {
         Name = name;
         Namespace = @namespace;
@@ -217,6 +224,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         HasMapConfiguration = hasMapConfiguration;
         BaseHidesFromSource = baseHidesFromSource;
         BaseFacetInfo = baseFacetInfo;
+        SourcePropertyNames = sourcePropertyNames.IsDefault ? ImmutableArray<string>.Empty : sourcePropertyNames;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -260,7 +268,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && BaseHidesFacetMembers == other.BaseHidesFacetMembers
             && HasProjectionMapConfiguration == other.HasProjectionMapConfiguration
             && HasMapConfiguration == other.HasMapConfiguration
-            && BaseHidesFromSource == other.BaseHidesFromSource;
+            && BaseHidesFromSource == other.BaseHidesFromSource
+            && SourcePropertyNames.SequenceEqual(other.SourcePropertyNames);
     }
 
     public override bool Equals(object? obj) => obj is FacetTargetModel other && Equals(other);
@@ -301,6 +310,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + HasProjectionMapConfiguration.GetHashCode();
             hash = hash * 31 + HasMapConfiguration.GetHashCode();
             hash = hash * 31 + BaseHidesFromSource.GetHashCode();
+            hash = hash * 31 + SourcePropertyNames.Length.GetHashCode();
             hash = hash * 31 + Members.Length.GetHashCode();
 
             foreach (var member in Members)

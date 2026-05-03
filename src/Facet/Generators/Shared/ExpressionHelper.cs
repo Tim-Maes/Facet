@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text;
 
 namespace Facet.Generators.Shared;
@@ -23,7 +24,7 @@ internal static class ExpressionHelper
     /// Transforms a MapFrom expression by prefixing identifiers with the source variable name.
     /// For example: "FirstName + \" \" + LastName" becomes "source.FirstName + \" \" + source.LastName"
     /// </summary>
-    public static string TransformExpression(string expression, string sourceVariableName)
+    public static string TransformExpression(string expression, string sourceVariableName, HashSet<string>? sourcePropertyNames = null)
     {
         var result = new StringBuilder();
         var identifier = new StringBuilder();
@@ -47,7 +48,7 @@ internal static class ExpressionHelper
                     inString = false;
                 }
 
-                FlushIdentifier(result, identifier, sourceVariableName, expression, i);
+                FlushIdentifier(result, identifier, sourceVariableName, expression, i, sourcePropertyNames);
                 result.Append(c);
                 continue;
             }
@@ -65,19 +66,19 @@ internal static class ExpressionHelper
             }
             else
             {
-                FlushIdentifier(result, identifier, sourceVariableName, expression, i);
+                FlushIdentifier(result, identifier, sourceVariableName, expression, i, sourcePropertyNames);
                 result.Append(c);
             }
         }
 
-        FlushIdentifier(result, identifier, sourceVariableName, expression, expression.Length);
+        FlushIdentifier(result, identifier, sourceVariableName, expression, expression.Length, sourcePropertyNames);
         return result.ToString();
     }
 
     /// <summary>
     /// Flushes an accumulated identifier to the result, prefixing with source variable if needed.
     /// </summary>
-    private static void FlushIdentifier(StringBuilder result, StringBuilder identifier, string sourceVariableName, string expression, int currentIndex)
+    private static void FlushIdentifier(StringBuilder result, StringBuilder identifier, string sourceVariableName, string expression, int currentIndex, HashSet<string>? sourcePropertyNames = null)
     {
         if (identifier.Length > 0)
         {
@@ -86,7 +87,7 @@ internal static class ExpressionHelper
             var identifierStartIndex = currentIndex - identifier.Length;
             var isPrecededByDot = identifierStartIndex > 0 && expression[identifierStartIndex - 1] == '.';
 
-            if (!IsKeyword(id) && !char.IsDigit(id[0]) && !IsLikelyTypeName(id, expression, currentIndex) && !isPrecededByDot)
+            if (!IsKeyword(id) && !char.IsDigit(id[0]) && !IsLikelyTypeName(id, expression, currentIndex, sourcePropertyNames) && !isPrecededByDot)
             {
                 result.Append($"{sourceVariableName}.");
             }
@@ -113,14 +114,18 @@ internal static class ExpressionHelper
     /// <summary>
     /// Checks if an identifier appears to be a type name (starts with uppercase and is followed by '.')
     /// This helps avoid prefixing enum type names like OrderStatus in "OrderStatus.Completed".
+    /// Known source property names take priority: if the identifier is a known source property, it is NOT treated as a type name.
     /// </summary>
-    public static bool IsLikelyTypeName(string identifier, string expression, int identifierEndIndex)
+    public static bool IsLikelyTypeName(string identifier, string expression, int identifierEndIndex, HashSet<string>? sourcePropertyNames = null)
     {
         // If identifier starts with uppercase and is followed by '.', it's likely a type name
         if (identifier.Length > 0 && char.IsUpper(identifier[0]))
         {
             if (identifierEndIndex < expression.Length && expression[identifierEndIndex] == '.')
             {
+                // If the identifier is a known source property, it is NOT a type name
+                if (sourcePropertyNames != null && sourcePropertyNames.Contains(identifier))
+                    return false;
                 return true;
             }
         }

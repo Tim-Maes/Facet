@@ -1,4 +1,5 @@
 using Facet.Generators.Shared;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -635,13 +636,16 @@ internal static class ProjectionGenerator
     {
         var visitedTypes = new HashSet<string> { model.Name };
         var includedMembers = model.Members.Where(m => m.MapFromIncludeInProjection).ToArray();
+        var sourceNames = model.SourcePropertyNames.Length > 0
+            ? new HashSet<string>(model.SourcePropertyNames, StringComparer.Ordinal)
+            : new HashSet<string>(StringComparer.Ordinal);
         
         sb.Append($"{indent}source => new {model.Name}(");
         
         for (int i = 0; i < includedMembers.Length; i++)
         {
             var member = includedMembers[i];
-            var projectionValue = GetProjectionValueExpression(member, "source", indent, facetLookup, visitedTypes, 0, model.MaxDepth);
+            var projectionValue = GetProjectionValueExpression(member, "source", indent, facetLookup, visitedTypes, 0, model.MaxDepth, sourceNames);
             sb.Append(projectionValue);
             
             if (i < includedMembers.Length - 1)
@@ -671,6 +675,9 @@ internal static class ProjectionGenerator
         // Pre-filter included members to avoid O(n²) comma placement check
         var includedMembers = members.Where(m => m.MapFromIncludeInProjection).ToArray();
         var includedCount = includedMembers.Length;
+        var sourceNames = model.SourcePropertyNames.Length > 0
+            ? new HashSet<string>(model.SourcePropertyNames, StringComparer.Ordinal)
+            : new HashSet<string>(StringComparer.Ordinal);
 
         for (int i = 0; i < includedCount; i++)
         {
@@ -678,7 +685,7 @@ internal static class ProjectionGenerator
             var memberIndent = indent + "    ";
 
             // Generate the property assignment
-            var projectionValue = GetProjectionValueExpression(member, "source", memberIndent, facetLookup, visitedTypes, 0, model.MaxDepth);
+            var projectionValue = GetProjectionValueExpression(member, "source", memberIndent, facetLookup, visitedTypes, 0, model.MaxDepth, sourceNames);
             sb.Append($"{memberIndent}{member.Name} = {projectionValue}");
 
             // Add comma if not the last member
@@ -701,7 +708,8 @@ internal static class ProjectionGenerator
         Dictionary<string, List<FacetTargetModel>> facetLookup,
         HashSet<string> visitedTypes,
         int currentDepth = 0,
-        int maxDepth = 0)
+        int maxDepth = 0,
+        HashSet<string>? sourcePropertyNames = null)
     {
         // Check if the member type is nullable
         bool isNullable = member.TypeName.Contains("?");
@@ -719,7 +727,7 @@ internal static class ProjectionGenerator
         string valueExpression;
         if (member.MapFromSource != null && IsExpression(member.MapFromSource))
         {
-            valueExpression = TransformExpression(member.MapFromSource, sourceVariableName);
+            valueExpression = TransformExpression(member.MapFromSource, sourceVariableName, sourcePropertyNames);
         }
         else if (member.MapFromSource != null)
         {
@@ -741,7 +749,7 @@ internal static class ProjectionGenerator
         // Apply MapWhen conditions if present and IncludeInProjection is true
         if (member.MapWhenConditions.Count > 0 && member.MapWhenIncludeInProjection)
         {
-            valueExpression = WrapWithMapWhenCondition(member, valueExpression, sourceVariableName);
+            valueExpression = WrapWithMapWhenCondition(member, valueExpression, sourceVariableName, sourcePropertyNames);
         }
 
         return valueExpression;
@@ -886,10 +894,13 @@ internal static class ProjectionGenerator
         sb.Append($"new {facetTypeName} {{ ");
 
         var members = nestedFacetModel.Members;
+        var sourceNames = nestedFacetModel.SourcePropertyNames.Length > 0
+            ? new HashSet<string>(nestedFacetModel.SourcePropertyNames, StringComparer.Ordinal)
+            : new HashSet<string>(StringComparer.Ordinal);
         for (int i = 0; i < members.Length; i++)
         {
             var member = members[i];
-            var projectionValue = GetProjectionValueExpression(member, sourceExpression, indent, facetLookup, visitedTypes, currentDepth, maxDepth);
+            var projectionValue = GetProjectionValueExpression(member, sourceExpression, indent, facetLookup, visitedTypes, currentDepth, maxDepth, sourceNames);
             sb.Append($"{member.Name} = {projectionValue}");
 
             if (i < members.Length - 1)
@@ -1063,7 +1074,7 @@ internal static class ProjectionGenerator
 
     // Expression parsing methods delegated to shared ExpressionHelper
     private static bool IsExpression(string source) => ExpressionHelper.IsExpression(source);
-    private static string TransformExpression(string expression, string sourceVariableName) => ExpressionHelper.TransformExpression(expression, sourceVariableName);
+    private static string TransformExpression(string expression, string sourceVariableName, HashSet<string>? sourcePropertyNames = null) => ExpressionHelper.TransformExpression(expression, sourceVariableName, sourcePropertyNames);
 
     /// <summary>
     /// Applies enum-to-target-type conversion for projection expressions (EF Core compatible).
@@ -1165,11 +1176,11 @@ internal static class ProjectionGenerator
     /// <summary>
     /// Wraps a value expression with MapWhen condition(s), generating a ternary expression.
     /// </summary>
-    private static string WrapWithMapWhenCondition(FacetMember member, string valueExpression, string sourceVariableName)
+    private static string WrapWithMapWhenCondition(FacetMember member, string valueExpression, string sourceVariableName, HashSet<string>? sourcePropertyNames = null)
     {
         // Combine multiple conditions with &&
         var combinedCondition = string.Join(" && ", member.MapWhenConditions.Select(c =>
-            $"({TransformExpression(c, sourceVariableName)})"));
+            $"({TransformExpression(c, sourceVariableName, sourcePropertyNames)})"));
 
         // Determine the default value
         var defaultValue = member.MapWhenDefault ?? Shared.GeneratorUtilities.GetDefaultValueForType(member.TypeName);

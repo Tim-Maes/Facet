@@ -21,7 +21,8 @@ internal static class ExpressionBuilder
         string sourceVariableName,
         int maxDepth = 0,
         bool useDepthParameter = false,
-        bool preserveReferences = false)
+        bool preserveReferences = false,
+        HashSet<string>? sourcePropertyNames = null)
     {
         bool isNullable = member.TypeName.Contains("?");
 
@@ -40,7 +41,7 @@ internal static class ExpressionBuilder
         string valueExpression;
         if (member.MapFromSource != null && IsExpression(member.MapFromSource))
         {
-            valueExpression = TransformExpression(member.MapFromSource, sourceVariableName);
+            valueExpression = TransformExpression(member.MapFromSource, sourceVariableName, sourcePropertyNames);
         }
         else if (member.MapFromSource != null)
         {
@@ -62,7 +63,7 @@ internal static class ExpressionBuilder
         // Apply MapWhen conditions if present
         if (member.MapWhenConditions.Count > 0)
         {
-            valueExpression = WrapWithMapWhenCondition(member, valueExpression, sourceVariableName);
+            valueExpression = WrapWithMapWhenCondition(member, valueExpression, sourceVariableName, sourcePropertyNames);
         }
 
         return valueExpression;
@@ -161,11 +162,11 @@ internal static class ExpressionBuilder
     /// <summary>
     /// Wraps a value expression with MapWhen condition(s), generating a ternary expression.
     /// </summary>
-    private static string WrapWithMapWhenCondition(FacetMember member, string valueExpression, string sourceVariableName)
+    private static string WrapWithMapWhenCondition(FacetMember member, string valueExpression, string sourceVariableName, HashSet<string>? sourcePropertyNames = null)
     {
         // Combine multiple conditions with &&
         var combinedCondition = string.Join(" && ", member.MapWhenConditions.Select(c =>
-            $"({TransformExpression(c, sourceVariableName)})"));
+            $"({TransformExpression(c, sourceVariableName, sourcePropertyNames)})"));
 
         // Determine the default value
         var defaultValue = member.MapWhenDefault ?? Shared.GeneratorUtilities.GetDefaultValueForType(member.TypeName);
@@ -448,7 +449,7 @@ internal static class ExpressionBuilder
 
     // Expression parsing methods delegated to shared ExpressionHelper
     private static bool IsExpression(string source) => ExpressionHelper.IsExpression(source);
-    private static string TransformExpression(string expression, string sourceVariableName) => ExpressionHelper.TransformExpression(expression, sourceVariableName);
+    private static string TransformExpression(string expression, string sourceVariableName, HashSet<string>? sourcePropertyNames = null) => ExpressionHelper.TransformExpression(expression, sourceVariableName, sourcePropertyNames);
 
     /// <summary>
     /// Applies enum-to-target-type conversion (source enum ? facet string/int).

@@ -1,4 +1,6 @@
 using Facet.Generators.Shared;
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
@@ -135,8 +137,9 @@ internal static class ConstructorGenerator
         else if (isPositional && !model.HasExistingPrimaryConstructor)
         {
             // Traditional positional record - chain to primary constructor
+            var sourceNames = GetSourcePropertySet(model);
             var args = string.Join(", ",
-                model.Members.Select(m => ExpressionBuilder.GetSourceValueExpression(m, "source")));
+                model.Members.Select(m => ExpressionBuilder.GetSourceValueExpression(m, "source", 0, false, false, sourceNames)));
             ctorSig += $" : this({args})";
         }
         else if (model.ChainToParameterlessConstructor && !isPositional)
@@ -191,9 +194,10 @@ internal static class ConstructorGenerator
             {
                 // Regular mutable properties - initialize properly (including nested facets), then apply custom mapping
                 // This ensures nested facets are instantiated before custom mapping logic runs
+                var sourceNames = GetSourcePropertySet(model);
                 foreach (var m in model.Members)
                 {
-                    var sourceValue = ExpressionBuilder.GetSourceValueExpression(m, "source");
+                    var sourceValue = ExpressionBuilder.GetSourceValueExpression(m, "source", 0, false, false, sourceNames);
                     sb.AppendLine($"        this.{m.Name} = {sourceValue};");
                 }
                 sb.AppendLine($"        {GetMappingCall(model, "source", "this")};");
@@ -202,9 +206,10 @@ internal static class ConstructorGenerator
             {
                 // No custom mapping - copy properties directly
                 // Init-only properties are included because constructors can set init accessors
+                var sourceNames = GetSourcePropertySet(model);
                 foreach (var m in model.Members)
                 {
-                    var sourceValue = ExpressionBuilder.GetSourceValueExpression(m, "source");
+                    var sourceValue = ExpressionBuilder.GetSourceValueExpression(m, "source", 0, false, false, sourceNames);
                     sb.AppendLine($"        this.{m.Name} = {sourceValue};");
                 }
             }
@@ -271,8 +276,9 @@ internal static class ConstructorGenerator
         if (isPositional && !model.HasExistingPrimaryConstructor)
         {
             // Traditional positional record - chain to primary constructor
+            var sourceNames = GetSourcePropertySet(model);
             var args = string.Join(", ",
-                model.Members.Select(m => ExpressionBuilder.GetSourceValueExpression(m, "source", model.MaxDepth, true, model.PreserveReferences)));
+                model.Members.Select(m => ExpressionBuilder.GetSourceValueExpression(m, "source", model.MaxDepth, true, model.PreserveReferences, sourceNames)));
             ctorSig += $" : this({args})";
         }
         else if (model.ChainToParameterlessConstructor && !isPositional)
@@ -327,9 +333,10 @@ internal static class ConstructorGenerator
             // Regular mutable properties - initialize with depth tracking, then apply custom mapping
             // This ensures nested facets are properly instantiated with depth parameters
             // before custom mapping logic runs (which can override values if needed)
+            var sourceNames = GetSourcePropertySet(model);
             foreach (var m in model.Members)
             {
-                var sourceValue = ExpressionBuilder.GetSourceValueExpression(m, "source", model.MaxDepth, true, model.PreserveReferences);
+                var sourceValue = ExpressionBuilder.GetSourceValueExpression(m, "source", model.MaxDepth, true, model.PreserveReferences, sourceNames);
                 sb.AppendLine($"        this.{m.Name} = {sourceValue};");
             }
             sb.AppendLine($"        {GetMappingCall(model, "source", "this")};");
@@ -338,9 +345,10 @@ internal static class ConstructorGenerator
         {
             // No custom mapping - copy properties directly with depth tracking
             // Init-only properties are included because constructors can set init accessors
+            var sourceNames = GetSourcePropertySet(model);
             foreach (var m in model.Members)
             {
-                var sourceValue = ExpressionBuilder.GetSourceValueExpression(m, "source", model.MaxDepth, true, model.PreserveReferences);
+                var sourceValue = ExpressionBuilder.GetSourceValueExpression(m, "source", model.MaxDepth, true, model.PreserveReferences, sourceNames);
                 sb.AppendLine($"        this.{m.Name} = {sourceValue};");
             }
         }
@@ -390,10 +398,11 @@ internal static class ConstructorGenerator
             // For simple cases, use object initializer syntax for best performance
             sb.AppendLine($"        return new {model.Name}");
             sb.AppendLine("        {");
+            var sourceNames = GetSourcePropertySet(model);
             foreach (var m in model.Members)
             {
                 var comma = m == model.Members.Last() ? "" : ",";
-                var sourceValue = ExpressionBuilder.GetSourceValueExpression(m, "source");
+                var sourceValue = ExpressionBuilder.GetSourceValueExpression(m, "source", 0, false, false, sourceNames);
                 sb.AppendLine($"            {m.Name} = {sourceValue}{comma}");
             }
             sb.AppendLine("        };");
@@ -437,6 +446,11 @@ internal static class ConstructorGenerator
     }
 
     #endregion
+
+    private static HashSet<string> GetSourcePropertySet(FacetTargetModel model)
+        => model.SourcePropertyNames.Length > 0
+            ? new HashSet<string>(model.SourcePropertyNames, StringComparer.Ordinal)
+            : new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
     /// Returns the appropriate mapping call for the constructor body.
