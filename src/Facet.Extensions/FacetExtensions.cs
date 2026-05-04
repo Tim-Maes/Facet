@@ -357,13 +357,27 @@ public static class FacetExtensions
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
 
+        // First try the standard "Projection" property (single-source facets)
         var prop = typeof(TTarget).GetProperty(
             "Projection",
             BindingFlags.Public | BindingFlags.Static);
 
+        // If no standard Projection, try ProjectionFrom{SourceName} for multi-source facets
         if (prop is null)
-            throw new InvalidOperationException(
-                $"Type {typeof(TTarget).Name} must define a public static Projection property.");
+        {
+            var sourceSimpleName = typeof(TSource).Name;
+            var projectionPropertyName = $"ProjectionFrom{sourceSimpleName}";
+            prop = typeof(TTarget).GetProperty(
+                projectionPropertyName,
+                BindingFlags.Public | BindingFlags.Static);
+
+            if (prop is null)
+            {
+                throw new InvalidOperationException(
+                    $"Type {typeof(TTarget).Name} does not define a public static Projection property or {projectionPropertyName} property. " +
+                    $"Ensure the facet is decorated with [Facet(typeof({typeof(TSource).Name}))].");
+            }
+        }
 
         var expr = (Expression<Func<TSource, TTarget>>)prop.GetValue(null)!;
         return source.Select(expr);
@@ -436,16 +450,26 @@ public static class FacetExtensions
         if (_declaredProjectionByTarget.TryGetValue(targetType, out var cached))
             return cached;
 
-        var prop = targetType.GetProperty("Projection", BindingFlags.Public | BindingFlags.Static)
-                  ?? throw new InvalidOperationException(
-                      $"Type {targetType.Name} must define a public static Projection property.");
+        // First try the standard "Projection" property (single-source facets)
+        var prop = targetType.GetProperty("Projection", BindingFlags.Public | BindingFlags.Static);
+
+        if (prop == null)
+        {
+            // Multi-source facet: no single "Projection" property exists.
+            // The caller must use the two-generic-parameter SelectFacet<TSource, TTarget> instead.
+            throw new InvalidOperationException(
+                $"Type {targetType.Name} does not define a public static Projection property. " +
+                $"This may be a multi-source facet with multiple [Facet] attributes. " +
+                $"For multi-source facets, use SelectFacet<TSource, {targetType.Name}>() instead of SelectFacet<{targetType.Name}>(), " +
+                $"or use the source-specific projection property (e.g., ProjectionFrom{{SourceName}}).");
+        }
 
         var value = prop.GetValue(null)
                    ?? throw new InvalidOperationException($"{targetType.Name}.Projection returned null.");
 
         if (value is not LambdaExpression lambda)
             throw new InvalidOperationException($"{targetType.Name}.Projection must be an Expression<Func<..., {targetType.Name}>>.");
-        
+
         _declaredProjectionByTarget[targetType] = lambda;
         return lambda;
     }
