@@ -143,7 +143,246 @@ public class InheritDocsTests
         source.Should().Contain("The entity identifier.");
         source.Should().Contain("The entity name.");
     }
+
+    [Fact]
+    public void Facet_ShouldInheritDocsThroughMultiLevelInterfaceChain()
+    {
+        // Docs live on IBaseShape; intermediate IDerivedShape and IGrandDerivedShape
+        // do not redeclare. The walk must continue through every interface in
+        // AllInterfaces, not stop at the first one that lacks the member.
+        var source = LoadGeneratedSource(typeof(GrandConcreteShapeDto).FullName!);
+        source.Should().Contain("The shape area.");
+    }
+
+    [Fact]
+    public void Facet_ShouldInheritDocs_WhenInterfaceHidesBaseWithNew()
+    {
+        // IFooDerived redeclares Foo with `new` and no docs; IFooBase has the real docs.
+        var source = LoadGeneratedSource(typeof(FooConcreteDto).FullName!);
+        source.Should().Contain("Original foo doc.");
+    }
+
+    [Fact]
+    public void Facet_ShouldResolveInheritdoc_OnSourceMember()
+    {
+        // BarDerived.Bar has only <inheritdoc/>. The DTO doesn't share the source's
+        // hierarchy, so emitting <inheritdoc/> verbatim would leave nothing to inherit
+        // from. The generator must resolve it to the concrete docs on BarBase.Bar.
+        var source = LoadGeneratedSource(typeof(BarDerivedDto).FullName!);
+        source.Should().Contain("The bar value.");
+        source.Should().NotContain("<inheritdoc/>");
+    }
+
+    [Fact]
+    public void Facet_ShouldInheritDocs_ThroughBaseClassToInterface()
+    {
+        // ChildLeaf.Label has no docs, LeafBase.Label has no docs, the docs live on
+        // ILeafService.Label. The walk must traverse base classes and then reach the
+        // interface implemented by the base class.
+        var source = LoadGeneratedSource(typeof(ChildLeafDto).FullName!);
+        source.Should().Contain("Leaf via base interface.");
+    }
+
+    [Fact]
+    public void Facet_ShouldKeepWalking_WhenFirstInterfaceMatchHasInheritdocOnly()
+    {
+        // IEchoDerived redeclares Echo with <inheritdoc/>; IEchoBase has the real docs.
+        // Without the fix, the walk treats <inheritdoc/> as a non-empty doc and stops
+        // at IEchoDerived, dropping the actual summary on IEchoBase.
+        var source = LoadGeneratedSource(typeof(EchoConcreteDto).FullName!);
+        source.Should().Contain("The echo string.");
+    }
+
+    [Fact]
+    public void Facet_ShouldKeepWalking_WhenBaseClassMemberHasInheritdocOnly()
+    {
+        // EchoBaseClass.Ping uses <inheritdoc/>, EchoChild.Ping has no docs, the real
+        // docs live on IPing.Ping. Walking the base class chain must skip past the
+        // <inheritdoc/>-only entry and continue into the interfaces.
+        var source = LoadGeneratedSource(typeof(EchoChildDto).FullName!);
+        source.Should().Contain("Pinged value.");
+    }
+
+    [Fact]
+    public void Facet_ShouldNotResolveInheritdoc_WhenInheritDocsIsFalse()
+    {
+        // BarDerived.Bar has <inheritdoc/>; with InheritDocs=false the generator must
+        // not walk the hierarchy. The DTO ends up with no docs for Bar (the same
+        // outcome as any other undocumented member when InheritDocs is off).
+        var source = LoadGeneratedSource(typeof(BarDerivedNoInheritDto).FullName!);
+        source.Should().NotBeEmpty();
+        source.Should().NotContain("The bar value.");
+        source.Should().NotContain("<inheritdoc/>");
+    }
+
+    [Fact]
+    public void Facet_ShouldInheritTypeLevelDocs_FromBaseClass_WhenInheritDocsIsTrue()
+    {
+        // DocumentedBase has a class-level summary. InheritedDocChild has no summary,
+        // and InheritDocs=true should pull the summary down from the base class.
+        var source = LoadGeneratedSource(typeof(InheritedDocChildDto).FullName!);
+        source.Should().Contain("Documented base type.");
+    }
+
+    [Fact]
+    public void Facet_ShouldInheritTypeLevelDocs_FromInterface_WhenInheritDocsIsTrue()
+    {
+        // The source class has no type-level docs; the implemented interface does.
+        var source = LoadGeneratedSource(typeof(TypedocServiceDto).FullName!);
+        source.Should().Contain("Service contract docs.");
+    }
+
+    [Fact]
+    public void Facet_ShouldNotInheritTypeLevelDocs_WhenInheritDocsIsFalse()
+    {
+        // Same hierarchy as the base-class test, but InheritDocs=false. No type-level
+        // summary should be emitted on the DTO.
+        var source = LoadGeneratedSource(typeof(InheritedDocChildNoInheritDto).FullName!);
+        source.Should().NotBeEmpty();
+        source.Should().NotContain("Documented base type.");
+    }
 }
+
+// ---- Test models ----
+
+public interface IBaseShape
+{
+    /// <summary>The shape area.</summary>
+    double Area { get; }
+}
+
+public interface IDerivedShape : IBaseShape { }
+
+public interface IGrandDerivedShape : IDerivedShape { }
+
+public class GrandConcreteShape : IGrandDerivedShape
+{
+    public double Area => 0.0;
+}
+
+[Facet(typeof(GrandConcreteShape), CopyDocs = true, InheritDocs = true)]
+public partial class GrandConcreteShapeDto { }
+
+public interface IFooBase
+{
+    /// <summary>Original foo doc.</summary>
+    int Foo { get; }
+}
+
+public interface IFooDerived : IFooBase
+{
+    new int Foo { get; }
+}
+
+public class FooConcrete : IFooDerived
+{
+    public int Foo => 0;
+}
+
+[Facet(typeof(FooConcrete), CopyDocs = true, InheritDocs = true)]
+public partial class FooConcreteDto { }
+
+public class BarBase
+{
+    /// <summary>The bar value.</summary>
+    public virtual int Bar { get; set; }
+}
+
+public class BarDerived : BarBase
+{
+    /// <inheritdoc/>
+    public override int Bar { get; set; }
+}
+
+[Facet(typeof(BarDerived), CopyDocs = true, InheritDocs = true)]
+public partial class BarDerivedDto { }
+
+[Facet(typeof(BarDerived), CopyDocs = true, InheritDocs = false)]
+public partial class BarDerivedNoInheritDto { }
+
+public interface ILeafService
+{
+    /// <summary>Leaf via base interface.</summary>
+    string Label { get; }
+}
+
+public class LeafBase : ILeafService
+{
+    public virtual string Label => string.Empty;
+}
+
+public class ChildLeaf : LeafBase
+{
+    public override string Label => string.Empty;
+}
+
+[Facet(typeof(ChildLeaf), CopyDocs = true, InheritDocs = true)]
+public partial class ChildLeafDto { }
+
+public interface IEchoBase
+{
+    /// <summary>The echo string.</summary>
+    string Echo { get; }
+}
+
+public interface IEchoDerived : IEchoBase
+{
+    /// <inheritdoc/>
+    new string Echo { get; }
+}
+
+public class EchoConcrete : IEchoDerived
+{
+    public string Echo => string.Empty;
+}
+
+[Facet(typeof(EchoConcrete), CopyDocs = true, InheritDocs = true)]
+public partial class EchoConcreteDto { }
+
+public interface IPing
+{
+    /// <summary>Pinged value.</summary>
+    string Ping { get; }
+}
+
+public class EchoBaseClass : IPing
+{
+    /// <inheritdoc/>
+    public virtual string Ping => string.Empty;
+}
+
+public class EchoChild : EchoBaseClass
+{
+    public override string Ping => string.Empty;
+}
+
+[Facet(typeof(EchoChild), CopyDocs = true, InheritDocs = true)]
+public partial class EchoChildDto { }
+
+/// <summary>Documented base type.</summary>
+public class DocumentedBase { }
+
+public class InheritedDocChild : DocumentedBase { }
+
+[Facet(typeof(InheritedDocChild), CopyDocs = true, InheritDocs = true)]
+public partial class InheritedDocChildDto { }
+
+[Facet(typeof(InheritedDocChild), CopyDocs = true, InheritDocs = false)]
+public partial class InheritedDocChildNoInheritDto { }
+
+/// <summary>Service contract docs.</summary>
+public interface ITypedocService
+{
+    string Run();
+}
+
+public class TypedocService : ITypedocService
+{
+    public string Run() => string.Empty;
+}
+
+[Facet(typeof(TypedocService), CopyDocs = true, InheritDocs = true)]
+public partial class TypedocServiceDto { }
 
 // Base class whose virtual property has documentation
 public class ProductBase
