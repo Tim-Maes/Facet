@@ -260,6 +260,29 @@ internal static class GeneratorUtilities
     }
 
     /// <summary>
+    /// Gets the default value expression for a given type, using semantic type information
+    /// to correctly handle custom value types (structs) that aren't in the known type list.
+    /// </summary>
+    /// <param name="typeName">The fully qualified or simple type name.</param>
+    /// <param name="isValueType">Whether the type is a value type (from semantic analysis).</param>
+    /// <returns>A C# expression string representing the default value.</returns>
+    public static string GetDefaultValueForType(string typeName, bool isValueType)
+    {
+        // Try the standard lookup first (handles well-known types with specific defaults)
+        var result = GetDefaultValueForType(typeName);
+
+        // If the standard lookup returned "null" but we know it's a value type,
+        // use default(T) instead since null is not valid for value types.
+        if (result == "null" && isValueType)
+        {
+            var cleanTypeName = StripGlobalPrefix(typeName);
+            return $"default({cleanTypeName})";
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Gets a default value suitable for parameterless constructor initialization.
     /// Similar to GetDefaultValueForType but with slight variations for constructor contexts.
     /// </summary>

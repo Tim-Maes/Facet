@@ -172,7 +172,7 @@ internal static class ToSourceGenerator
 
         foreach (var excludedMember in model.ExcludedRequiredMembers)
         {
-            var defaultValue = GeneratorUtilities.GetDefaultValueForType(excludedMember.TypeName);
+            var defaultValue = GeneratorUtilities.GetDefaultValueForType(excludedMember.TypeName, excludedMember.IsValueType);
             propertyAssignments.Add($"            {excludedMember.Name} = {defaultValue}");
         }
 

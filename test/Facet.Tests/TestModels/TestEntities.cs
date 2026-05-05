@@ -497,3 +497,18 @@ public class OrderLineBaseEntity
     public UnitEntity? AssignedToUnit { get; set; }
 }
 
+/// <summary>A custom struct used to test excluded struct properties in ToSource.</summary>
+public struct GeoLocation
+{
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
+}
+
+/// <summary>Source class with a required struct property for ToSource struct-default testing.</summary>
+public class LocationEntity
+{
+    public required string Name { get; set; }
+    public required GeoLocation Location { get; set; }
+    public required string Description { get; set; }
+}
+

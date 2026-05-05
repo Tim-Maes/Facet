@@ -404,3 +404,8 @@ public partial class UnitBaseFacet;
        GenerateToSource = true,
        Include = new[] { nameof(UnitEntity.Name), nameof(UnitEntity.ValidationResult) })]
 public partial class UnitMultiSourceInheritedFacet : UnitBaseFacet;
+
+/// <summary>Facet that excludes a struct property (Location) from LocationEntity to test ToSource generates default(T) not null.</summary>
+[Facet(typeof(LocationEntity), nameof(LocationEntity.Location), GenerateToSource = true)]
+public partial class LocationDto;
+
