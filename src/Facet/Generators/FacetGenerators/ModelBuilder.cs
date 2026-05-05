@@ -155,7 +155,7 @@ internal static class ModelBuilder
         var mapWhenMappings = ExtractMapWhenMappings(targetSymbol);
 
         // Extract type-level XML documentation from the source type
-        var typeXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(sourceType);
+        var typeXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(sourceType, inheritDocs);
 
         // Collect base class member names early, needed by ExtractMembers to auto-include
         var baseClassMemberNames = GetBaseClassMemberNames(targetSymbol);
