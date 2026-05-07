@@ -1,0 +1,14 @@
+<Project>
+  <!--
+    This targets file is automatically imported by MSBuild when the Facet package is referenced.
+    It ensures that XML documentation files are generated so that CopyDocs can resolve
+    documentation from the current project and its project references.
+  -->
+
+  <!-- Ensure the consuming project generates XML documentation (needed for CopyDocs) -->
+  <PropertyGroup Condition="'$(GenerateDocumentationFile)' == ''">
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Suppress CS1591 (missing XML comment) warnings that come with GenerateDocumentationFile -->
+    <NoWarn>$(NoWarn);1591</NoWarn>
+  </PropertyGroup>
+</Project>

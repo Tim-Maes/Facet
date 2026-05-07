@@ -32,6 +32,7 @@
     <ProjectReference Include="..\..\src\Facet.Extensions.EFCore\Facet.Extensions.EFCore.csproj" />
     <ProjectReference Include="..\..\src\Facet.Extensions.EFCore.Mapping\Facet.Extensions.EFCore.Mapping.csproj" />
     <ProjectReference Include="..\..\src\Facet.Mapping.Expressions\Facet.Mapping.Expressions.csproj" />
+    <ProjectReference Include="..\Facet.Tests.ExternalLib\Facet.Tests.ExternalLib.csproj" />
   </ItemGroup>
 
   <!-- Manually include Facet.Attributes.dll as an analyzer dependency so generators can load it -->

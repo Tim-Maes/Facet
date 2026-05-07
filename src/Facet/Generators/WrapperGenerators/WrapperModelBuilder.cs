@@ -43,8 +43,11 @@ internal static class WrapperModelBuilder
         // Infer the type kind and whether it's a record from the target type declaration
         var (typeKind, isRecord) = TypeAnalyzer.InferTypeKind(targetSymbol);
 
+        // Create external XML doc provider for cross-assembly documentation resolution
+        var externalDocProvider = new ExternalXmlDocProvider(context.SemanticModel.Compilation);
+
         // Extract type-level XML documentation from the source type
-        var typeXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(sourceType);
+        var typeXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(sourceType, false, externalDocProvider);
 
         // Build members
         var members = ExtractMembers(
@@ -55,6 +58,7 @@ internal static class WrapperModelBuilder
             includeFields,
             copyAttributes,
             nestedWrapperMappings,
+            externalDocProvider,
             token);
 
         // Determine full name
@@ -98,6 +102,7 @@ internal static class WrapperModelBuilder
         bool includeFields,
         bool copyAttributes,
         Dictionary<string, (string childWrapperTypeName, string sourceTypeName)> nestedWrapperMappings,
+        ExternalXmlDocProvider? externalDocProvider,
         CancellationToken token)
     {
         var members = new List<FacetMember>();
@@ -119,11 +124,11 @@ internal static class WrapperModelBuilder
 
             if (member is IPropertySymbol property && property.DeclaredAccessibility == Accessibility.Public)
             {
-                ProcessProperty(property, copyAttributes, nestedWrapperMappings, members, addedMembers);
+                ProcessProperty(property, copyAttributes, nestedWrapperMappings, externalDocProvider, members, addedMembers);
             }
             else if (includeFields && member is IFieldSymbol field && field.DeclaredAccessibility == Accessibility.Public)
             {
-                ProcessField(field, copyAttributes, nestedWrapperMappings, members, addedMembers);
+                ProcessField(field, copyAttributes, nestedWrapperMappings, externalDocProvider, members, addedMembers);
             }
         }
 
@@ -134,10 +139,11 @@ internal static class WrapperModelBuilder
         IPropertySymbol property,
         bool copyAttributes,
         Dictionary<string, (string childWrapperTypeName, string sourceTypeName)> nestedWrapperMappings,
+        ExternalXmlDocProvider? externalDocProvider,
         List<FacetMember> members,
         HashSet<string> addedMembers)
     {
-        var memberXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(property);
+        var memberXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(property, false, externalDocProvider);
         var typeName = GeneratorUtilities.GetTypeNameWithNullability(property.Type);
         var propertyTypeName = property.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
@@ -201,10 +207,11 @@ internal static class WrapperModelBuilder
         IFieldSymbol field,
         bool copyAttributes,
         Dictionary<string, (string childWrapperTypeName, string sourceTypeName)> nestedWrapperMappings,
+        ExternalXmlDocProvider? externalDocProvider,
         List<FacetMember> members,
         HashSet<string> addedMembers)
     {
-        var memberXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(field);
+        var memberXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(field, false, externalDocProvider);
         var typeName = GeneratorUtilities.GetTypeNameWithNullability(field.Type);
         var fieldTypeName = field.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
