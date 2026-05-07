@@ -418,15 +418,33 @@ internal static class CodeGenerationHelpers
     /// </summary>
     public static string? ExtractXmlDocumentation(ISymbol symbol, bool inheritDocs = false)
     {
-        return ExtractXmlDocumentationCore(symbol, inheritDocs, visited: null);
+        return ExtractXmlDocumentationCore(symbol, inheritDocs, visited: null, externalDocProvider: null);
     }
 
-    private static string? ExtractXmlDocumentationCore(ISymbol symbol, bool inheritDocs, HashSet<ISymbol>? visited)
+    /// <summary>
+    /// Extracts and formats XML documentation from a symbol, with fallback to external
+    /// assembly XML documentation files when the standard Roslyn API returns empty.
+    /// </summary>
+    public static string? ExtractXmlDocumentation(ISymbol symbol, bool inheritDocs, ExternalXmlDocProvider? externalDocProvider)
+    {
+        return ExtractXmlDocumentationCore(symbol, inheritDocs, visited: null, externalDocProvider);
+    }
+
+    private static string? ExtractXmlDocumentationCore(ISymbol symbol, bool inheritDocs, HashSet<ISymbol>? visited, ExternalXmlDocProvider? externalDocProvider)
     {
         var rawXml = symbol.GetDocumentationCommentXml();
         var formatted = FormatXmlDocumentation(rawXml ?? string.Empty);
         if (!string.IsNullOrWhiteSpace(formatted))
             return formatted;
+
+        // Fallback: try to get documentation from external assembly XML files
+        if (externalDocProvider != null)
+        {
+            var externalXml = externalDocProvider.GetDocumentationForSymbol(symbol);
+            var externalFormatted = FormatXmlDocumentation(externalXml ?? string.Empty);
+            if (!string.IsNullOrWhiteSpace(externalFormatted))
+                return externalFormatted;
+        }
 
         if (!inheritDocs)
             return null;
@@ -437,13 +455,13 @@ internal static class CodeGenerationHelpers
 
         return symbol switch
         {
-            IPropertySymbol or IFieldSymbol => WalkMemberHierarchy(symbol, visited),
-            INamedTypeSymbol type => WalkTypeHierarchy(type, visited),
+            IPropertySymbol or IFieldSymbol => WalkMemberHierarchy(symbol, visited, externalDocProvider),
+            INamedTypeSymbol type => WalkTypeHierarchy(type, visited, externalDocProvider),
             _ => null
         };
     }
 
-    private static string? WalkMemberHierarchy(ISymbol member, HashSet<ISymbol> visited)
+    private static string? WalkMemberHierarchy(ISymbol member, HashSet<ISymbol> visited, ExternalXmlDocProvider? externalDocProvider)
     {
         var containingType = member.ContainingType;
         if (containingType is null)
@@ -455,7 +473,7 @@ internal static class CodeGenerationHelpers
             if (match is null)
                 continue;
 
-            var doc = ExtractXmlDocumentationCore(match, inheritDocs: true, visited);
+            var doc = ExtractXmlDocumentationCore(match, inheritDocs: true, visited, externalDocProvider);
             if (!string.IsNullOrWhiteSpace(doc))
                 return doc;
         }
@@ -463,11 +481,11 @@ internal static class CodeGenerationHelpers
         return null;
     }
 
-    private static string? WalkTypeHierarchy(INamedTypeSymbol type, HashSet<ISymbol> visited)
+    private static string? WalkTypeHierarchy(INamedTypeSymbol type, HashSet<ISymbol> visited, ExternalXmlDocProvider? externalDocProvider)
     {
         foreach (var ancestor in EnumerateBaseTypesThenInterfaces(type))
         {
-            var doc = ExtractXmlDocumentationCore(ancestor, inheritDocs: true, visited);
+            var doc = ExtractXmlDocumentationCore(ancestor, inheritDocs: true, visited, externalDocProvider);
             if (!string.IsNullOrWhiteSpace(doc))
                 return doc;
         }

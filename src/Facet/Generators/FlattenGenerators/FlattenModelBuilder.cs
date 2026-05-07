@@ -46,8 +46,11 @@ internal static class FlattenModelBuilder
         // Infer the type kind from the target type declaration
         var (typeKind, isRecord) = TypeAnalyzer.InferTypeKind(targetSymbol);
 
+        // Create external XML doc provider for cross-assembly documentation resolution
+        var externalDocProvider = new ExternalXmlDocProvider(context.SemanticModel.Compilation);
+
         // Extract type-level XML documentation
-        var typeXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(sourceType);
+        var typeXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(sourceType, false, externalDocProvider);
 
         // Discover flattened properties
         var properties = DiscoverFlattenedProperties(
@@ -59,6 +62,7 @@ internal static class FlattenModelBuilder
             ignoreNestedIds,
             ignoreForeignKeyClashes,
             includeCollections,
+            externalDocProvider,
             token);
 
         // Determine full name
@@ -264,6 +268,7 @@ internal static class FlattenModelBuilder
         bool ignoreNestedIds,
         bool ignoreForeignKeyClashes,
         bool includeCollections,
+        ExternalXmlDocProvider? externalDocProvider,
         CancellationToken token)
     {
         var properties = new List<FlattenProperty>();
@@ -314,6 +319,7 @@ internal static class FlattenModelBuilder
             new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default),
             collectionTypeCache,
             leafTypeCache,
+            externalDocProvider,
             token);
 
         return properties.ToImmutableArray();
@@ -611,6 +617,7 @@ internal static class FlattenModelBuilder
         HashSet<ITypeSymbol> visitedTypes,
         Dictionary<ITypeSymbol, bool> collectionTypeCache,
         Dictionary<ITypeSymbol, bool> leafTypeCache,
+        ExternalXmlDocProvider? externalDocProvider,
         CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -701,7 +708,7 @@ internal static class FlattenModelBuilder
                     seenNames.Add(flattenedName);
 
                     // Get XML documentation
-                    var xmlDoc = CodeGenerationHelpers.ExtractXmlDocumentation(member);
+                    var xmlDoc = CodeGenerationHelpers.ExtractXmlDocumentation(member, false, externalDocProvider);
 
                     // Use the exact type name from the source - collections are included as-is
                     var typeName = GeneratorUtilities.GetTypeNameWithNullability(memberType);
@@ -737,7 +744,7 @@ internal static class FlattenModelBuilder
                 seenNames.Add(flattenedName);
 
                 // Get XML documentation
-                var xmlDoc = CodeGenerationHelpers.ExtractXmlDocumentation(member);
+                var xmlDoc = CodeGenerationHelpers.ExtractXmlDocumentation(member, false, externalDocProvider);
 
                 // Determine the type name - nested value types need to be nullable because of ?. operators
                 string typeName;
@@ -783,6 +790,7 @@ internal static class FlattenModelBuilder
                     visitedTypes,
                     collectionTypeCache,
                     leafTypeCache,
+                    externalDocProvider,
                     token);
             }
         }
