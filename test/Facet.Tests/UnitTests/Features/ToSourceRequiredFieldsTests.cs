@@ -63,4 +63,27 @@ public class ToSourceRequiredFieldsTests
 
         mappedEventLog.Source.Should().Be(string.Empty); // String default value
     }
+
+    [Fact]
+    public void ToSource_ShouldProvideDefaultStruct_ForExcludedRequiredStructFields()
+    {
+        // Arrange
+        var entity = new LocationEntity
+        {
+            Name = "Office",
+            Location = new GeoLocation { Latitude = 51.5, Longitude = -0.1 },
+            Description = "Main office"
+        };
+
+        var dto = entity.ToFacet<LocationEntity, LocationDto>();
+
+        // Act
+        var result = dto.ToSource<LocationEntity>();
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Name.Should().Be("Office");
+        result.Description.Should().Be("Main office");
+        result.Location.Should().Be(default(GeoLocation)); // Struct default, not null
+    }
 }

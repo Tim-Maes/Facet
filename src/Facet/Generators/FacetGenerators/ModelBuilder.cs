@@ -154,8 +154,11 @@ internal static class ModelBuilder
         // Extract MapWhen attribute mappings from target type properties
         var mapWhenMappings = ExtractMapWhenMappings(targetSymbol);
 
+        // Create external XML doc provider for cross-assembly documentation resolution
+        var externalDocProvider = copyDocs ? new ExternalXmlDocProvider(context.SemanticModel.Compilation) : null;
+
         // Extract type-level XML documentation from the source type
-        var typeXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(sourceType);
+        var typeXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(sourceType, inheritDocs, externalDocProvider);
 
         // Collect base class member names early, needed by ExtractMembers to auto-include
         var baseClassMemberNames = GetBaseClassMemberNames(targetSymbol);
@@ -217,6 +220,7 @@ internal static class ModelBuilder
             convertEnumsTo,
             baseClassMemberNames,
             collectionTargetType,
+            externalDocProvider,
             token);
 
         // Add expression-based members (from MapFrom with expressions)
@@ -362,6 +366,7 @@ internal static class ModelBuilder
         string? convertEnumsTo,
         ImmutableArray<string> baseClassMemberNames,
         string? collectionTargetType,
+        ExternalXmlDocProvider? externalDocProvider,
         CancellationToken token)
     {
         var members = new List<FacetMember>();
@@ -406,6 +411,7 @@ internal static class ModelBuilder
                     mapWhenMappings,
                     convertEnumsTo,
                     collectionTargetType,
+                    externalDocProvider,
                     members,
                     excludedRequiredMembers,
                     addedMembers);
@@ -421,6 +427,7 @@ internal static class ModelBuilder
                     copyAttributes,
                     copyDocs,
                     inheritDocs,
+                    externalDocProvider,
                     members,
                     excludedRequiredMembers,
                     addedMembers);
@@ -446,11 +453,12 @@ internal static class ModelBuilder
         Dictionary<string, (List<string> conditions, string? defaultValue, bool includeInProjection)> mapWhenMappings,
         string? convertEnumsTo,
         string? collectionTargetType,
+        ExternalXmlDocProvider? externalDocProvider,
         List<FacetMember> members,
         List<FacetMember> excludedRequiredMembers,
         HashSet<string> addedMembers)
     {
-        var memberXmlDocumentation = copyDocs ? CodeGenerationHelpers.ExtractXmlDocumentation(property, inheritDocs) : null;
+        var memberXmlDocumentation = copyDocs ? CodeGenerationHelpers.ExtractXmlDocumentation(property, inheritDocs, externalDocProvider) : null;
 
         // Check if this source property has a MapFrom attribute pointing to it
         var hasMapFrom = mapFromMappings.TryGetValue(property.Name, out var mapFromInfo);
@@ -803,11 +811,12 @@ internal static class ModelBuilder
         bool copyAttributes,
         bool copyDocs,
         bool inheritDocs,
+        ExternalXmlDocProvider? externalDocProvider,
         List<FacetMember> members,
         List<FacetMember> excludedRequiredMembers,
         HashSet<string> addedMembers)
     {
-        var memberXmlDocumentation = copyDocs ? CodeGenerationHelpers.ExtractXmlDocumentation(field, inheritDocs) : null;
+        var memberXmlDocumentation = copyDocs ? CodeGenerationHelpers.ExtractXmlDocumentation(field, inheritDocs, externalDocProvider) : null;
 
         if (!shouldIncludeMember)
         {

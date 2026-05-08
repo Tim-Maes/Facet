@@ -410,57 +410,100 @@ internal static class CodeGenerationHelpers
 
     /// <summary>
     /// Extracts and formats XML documentation from a symbol.
-    /// When <paramref name="inheritDocs"/> is true and the symbol has no documentation,
-    /// falls back to base classes and then interfaces to find inherited documentation.
+    /// When <paramref name="inheritDocs"/> is true and the symbol has no usable
+    /// documentation (no docs at all, or only <c>&lt;inheritdoc/&gt;</c>), falls back to
+    /// base classes and then interfaces. The walk continues past hierarchy entries that
+    /// themselves only contain <c>&lt;inheritdoc/&gt;</c>. Supported for both member
+    /// symbols (properties and fields) and type symbols.
     /// </summary>
     public static string? ExtractXmlDocumentation(ISymbol symbol, bool inheritDocs = false)
     {
-        var documentationComment = symbol.GetDocumentationCommentXml();
-        if (!string.IsNullOrWhiteSpace(documentationComment))
-            return FormatXmlDocumentation(documentationComment!);
+        return ExtractXmlDocumentationCore(symbol, inheritDocs, visited: null, externalDocProvider: null);
+    }
+
+    /// <summary>
+    /// Extracts and formats XML documentation from a symbol, with fallback to external
+    /// assembly XML documentation files when the standard Roslyn API returns empty.
+    /// </summary>
+    public static string? ExtractXmlDocumentation(ISymbol symbol, bool inheritDocs, ExternalXmlDocProvider? externalDocProvider)
+    {
+        return ExtractXmlDocumentationCore(symbol, inheritDocs, visited: null, externalDocProvider);
+    }
+
+    private static string? ExtractXmlDocumentationCore(ISymbol symbol, bool inheritDocs, HashSet<ISymbol>? visited, ExternalXmlDocProvider? externalDocProvider)
+    {
+        var rawXml = symbol.GetDocumentationCommentXml();
+        var formatted = FormatXmlDocumentation(rawXml ?? string.Empty);
+        if (!string.IsNullOrWhiteSpace(formatted))
+            return formatted;
+
+        // Fallback: try to get documentation from external assembly XML files
+        if (externalDocProvider != null)
+        {
+            var externalXml = externalDocProvider.GetDocumentationForSymbol(symbol);
+            var externalFormatted = FormatXmlDocumentation(externalXml ?? string.Empty);
+            if (!string.IsNullOrWhiteSpace(externalFormatted))
+                return externalFormatted;
+        }
 
         if (!inheritDocs)
             return null;
 
-        return ExtractXmlDocumentationFromHierarchy(symbol);
-    }
-
-    private static string? ExtractXmlDocumentationFromHierarchy(ISymbol symbol)
-    {
-        if (symbol is not (IPropertySymbol or IFieldSymbol))
+        visited ??= new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+        if (!visited.Add(symbol))
             return null;
 
-        var containingType = symbol.ContainingType;
+        return symbol switch
+        {
+            IPropertySymbol or IFieldSymbol => WalkMemberHierarchy(symbol, visited, externalDocProvider),
+            INamedTypeSymbol type => WalkTypeHierarchy(type, visited, externalDocProvider),
+            _ => null
+        };
+    }
+
+    private static string? WalkMemberHierarchy(ISymbol member, HashSet<ISymbol> visited, ExternalXmlDocProvider? externalDocProvider)
+    {
+        var containingType = member.ContainingType;
         if (containingType is null)
             return null;
 
-        var baseType = containingType.BaseType;
-        while (baseType is not null)
+        foreach (var ancestor in EnumerateBaseTypesThenInterfaces(containingType))
         {
-            if (baseType.SpecialType == SpecialType.System_Object)
-                break;
-            var match = baseType.GetMembers(symbol.Name).FirstOrDefault(m => m.Kind == symbol.Kind);
-            if (match is not null)
-            {
-                var doc = match.GetDocumentationCommentXml();
-                if (!string.IsNullOrWhiteSpace(doc))
-                    return FormatXmlDocumentation(doc!);
-            }
-            baseType = baseType.BaseType;
-        }
+            var match = ancestor.GetMembers(member.Name).FirstOrDefault(m => m.Kind == member.Kind);
+            if (match is null)
+                continue;
 
-        foreach (var iface in containingType.AllInterfaces)
-        {
-            var match = iface.GetMembers(symbol.Name).FirstOrDefault(m => m.Kind == symbol.Kind);
-            if (match is not null)
-            {
-                var doc = match.GetDocumentationCommentXml();
-                if (!string.IsNullOrWhiteSpace(doc))
-                    return FormatXmlDocumentation(doc!);
-            }
+            var doc = ExtractXmlDocumentationCore(match, inheritDocs: true, visited, externalDocProvider);
+            if (!string.IsNullOrWhiteSpace(doc))
+                return doc;
         }
 
         return null;
+    }
+
+    private static string? WalkTypeHierarchy(INamedTypeSymbol type, HashSet<ISymbol> visited, ExternalXmlDocProvider? externalDocProvider)
+    {
+        foreach (var ancestor in EnumerateBaseTypesThenInterfaces(type))
+        {
+            var doc = ExtractXmlDocumentationCore(ancestor, inheritDocs: true, visited, externalDocProvider);
+            if (!string.IsNullOrWhiteSpace(doc))
+                return doc;
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<INamedTypeSymbol> EnumerateBaseTypesThenInterfaces(INamedTypeSymbol type)
+    {
+        for (var baseType = type.BaseType;
+             baseType is not null && baseType.SpecialType != SpecialType.System_Object;
+             baseType = baseType.BaseType)
+        {
+            yield return baseType;
+        }
+
+        foreach (var iface in type.AllInterfaces)
+            yield return iface;
     }
 
     /// <summary>
