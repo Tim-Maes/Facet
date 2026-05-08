@@ -576,7 +576,7 @@ internal static class ProjectionGenerator
     }
 
 
-    private static void GenerateProjectionDocumentation(StringBuilder sb, FacetTargetModel model, string memberIndent, string propertyName = "Projection")
+    internal static void GenerateProjectionDocumentation(StringBuilder sb, FacetTargetModel model, string memberIndent, string propertyName = "Projection")
     {
         // Generate projection XML documentation
         sb.AppendLine($"{memberIndent}/// <summary>");

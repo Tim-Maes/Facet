@@ -44,8 +44,9 @@ public static class FacetExtensions
                 return ps.Length == 1;
             });
 
-    // Cached Expression<Func<DeclaredSource, TTarget>> from TTarget.Projection.
-    private static readonly ConcurrentDictionary<Type, LambdaExpression> _declaredProjectionByTarget = new();
+    // Cached Expression<Func<DeclaredSource, TTarget>> from TTarget.Projection or TTarget.ProjectionFromX.
+    // Key is (TargetType, SourceType) to support multi-source facets where different sources yield different projections.
+    private static readonly ConcurrentDictionary<(Type TargetType, Type? SourceType), LambdaExpression> _declaredProjectionByTarget = new();
 
     // Cache of adapted Expression<Func<TElement, TTarget>> shapes per (element, target).
     private static readonly ConcurrentDictionary<(Type ElementType, Type TargetType), LambdaExpression>
@@ -407,7 +408,7 @@ public static class FacetExtensions
 
         var targetType = typeof(TTarget);        
 
-        var declaredProjection = GetDeclaredProjectionLambda(targetType);
+        var declaredProjection = GetDeclaredProjectionLambda(targetType, source.ElementType);
 
         // Adapt the declared projection to the source's actual element type, if needed.
         var adapted = GetOrBuildAdaptedProjection(source.ElementType, targetType, declaredProjection);
@@ -445,17 +446,28 @@ public static class FacetExtensions
         return declared;
     }
 
-    private static LambdaExpression GetDeclaredProjectionLambda([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type targetType)
+    private static LambdaExpression GetDeclaredProjectionLambda(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type targetType,
+        Type? sourceElementType = null)
     {
-        if (_declaredProjectionByTarget.TryGetValue(targetType, out var cached))
+        var cacheKey = (targetType, sourceElementType);
+        if (_declaredProjectionByTarget.TryGetValue(cacheKey, out var cached))
             return cached;
 
         // First try the standard "Projection" property (single-source facets)
         var prop = targetType.GetProperty("Projection", BindingFlags.Public | BindingFlags.Static);
 
+        // If no standard Projection, try ProjectionFrom{SourceName} for multi-source facets
+        if (prop == null && sourceElementType != null)
+        {
+            var sourceSimpleName = sourceElementType.Name;
+            var projectionPropertyName = $"ProjectionFrom{sourceSimpleName}";
+            prop = targetType.GetProperty(projectionPropertyName, BindingFlags.Public | BindingFlags.Static);
+        }
+
         if (prop == null)
         {
-            // Multi-source facet: no single "Projection" property exists.
+            // Multi-source facet: no matching projection found.
             // The caller must use the two-generic-parameter SelectFacet<TSource, TTarget> instead.
             throw new InvalidOperationException(
                 $"Type {targetType.Name} does not define a public static Projection property. " +
@@ -470,7 +482,7 @@ public static class FacetExtensions
         if (value is not LambdaExpression lambda)
             throw new InvalidOperationException($"{targetType.Name}.Projection must be an Expression<Func<..., {targetType.Name}>>.");
 
-        _declaredProjectionByTarget[targetType] = lambda;
+        _declaredProjectionByTarget[cacheKey] = lambda;
         return lambda;
     }
 
