@@ -835,8 +835,9 @@ internal static class ProjectionGenerator
             return nestedProjection;
         }
 
-        // Try to look up the nested facet model
-        var nestedFacetModel = FindNestedFacetModel(nonNullableTypeName, facetLookup);
+        // Try to look up the nested facet model, preferring the model whose source type matches
+        // the member's source type so that multi-source facets use the correct property mappings.
+        var nestedFacetModel = FindNestedFacetModel(nonNullableTypeName, facetLookup, member.NestedFacetSourceTypeName);
 
         string nestedProjectionResult;
         if (nestedFacetModel != null)
@@ -953,8 +954,9 @@ internal static class ProjectionGenerator
             };
         }
 
-        // Try to find the nested facet model to inline expand it
-        var nestedFacetModel = FindNestedFacetModel(elementFacetTypeName, facetLookup);
+        // Try to find the nested facet model, preferring the model whose source type matches
+        // elementSourceTypeName so that multi-source facets use the correct property mappings.
+        var nestedFacetModel = FindNestedFacetModel(elementFacetTypeName, facetLookup, elementSourceTypeName);
 
         string projection;
         if (nestedFacetModel != null)
@@ -1019,7 +1021,7 @@ internal static class ProjectionGenerator
 
         foreach (var member in nestedFacetMembers)
         {
-            var nestedModel = FindNestedFacetModel(member.TypeName.TrimEnd('?'), facetLookup);
+            var nestedModel = FindNestedFacetModel(member.TypeName.TrimEnd('?'), facetLookup, member.NestedFacetSourceTypeName);
             if (nestedModel == null)
                 continue;
 
@@ -1037,7 +1039,17 @@ internal static class ProjectionGenerator
         return false;
     }
 
-    private static FacetTargetModel? FindNestedFacetModel(string typeName, Dictionary<string, List<FacetTargetModel>> facetLookup)
+    /// <summary>
+    /// Finds the <see cref="FacetTargetModel"/> for a nested facet type.
+    /// When <paramref name="preferredSourceTypeName"/> is provided and the type has multiple source
+    /// models (multi-source facet), the model whose source type matches is returned.
+    /// This ensures the correct model is used when inlining a multi-source nested facet so that
+    /// the generated property accessors match the actual source type in the parent projection.
+    /// </summary>
+    private static FacetTargetModel? FindNestedFacetModel(
+        string typeName,
+        Dictionary<string, List<FacetTargetModel>> facetLookup,
+        string? preferredSourceTypeName = null)
     {
         // Strip "global::" prefix and extract simple name
         var lookupName = typeName
@@ -1045,30 +1057,55 @@ internal static class ProjectionGenerator
             .Split('.', ':')
             .Last();
 
-        // First try exact match with the lookup name
-        if (facetLookup.TryGetValue(lookupName, out var nestedFacetModels) && nestedFacetModels.Count > 0)
-        {
-            // For projection purposes, the first model is sufficient since all models with the same
-            // FullName share the same structure (union of all members)
-            return nestedFacetModels[0];
-        }
+        List<FacetTargetModel>? nestedFacetModels = null;
 
-        // Try matching by simple name or full name
-        foreach (var kvp in facetLookup)
+        // First try exact match with the lookup name
+        if (facetLookup.TryGetValue(lookupName, out var matched) && matched.Count > 0)
         {
-            if (kvp.Value.Count > 0)
+            nestedFacetModels = matched;
+        }
+        else
+        {
+            // Try matching by simple name or full name
+            foreach (var kvp in facetLookup)
             {
-                var model = kvp.Value[0];
-                if (kvp.Key == lookupName ||
-                    model.Name == lookupName ||
-                    kvp.Key.EndsWith("." + lookupName))
+                if (kvp.Value.Count > 0)
                 {
-                    return model;
+                    var m = kvp.Value[0];
+                    if (kvp.Key == lookupName ||
+                        m.Name == lookupName ||
+                        kvp.Key.EndsWith("." + lookupName))
+                    {
+                        nestedFacetModels = kvp.Value;
+                        break;
+                    }
                 }
             }
         }
 
-        return null;
+        if (nestedFacetModels == null || nestedFacetModels.Count == 0)
+            return null;
+
+        // For multi-source facets, prefer the model whose source type matches the expected source.
+        // This is critical when the first model has zero members (e.g. its source is itself a
+        // generated facet class whose properties are not visible to the source generator).
+        if (preferredSourceTypeName != null && nestedFacetModels.Count > 1)
+        {
+            var preferredModel = nestedFacetModels.FirstOrDefault(m => m.SourceTypeName == preferredSourceTypeName);
+            if (preferredModel != null)
+                return preferredModel;
+        }
+
+        // Fall back to the first model with projection-eligible members, then to the first overall.
+        if (preferredSourceTypeName != null && nestedFacetModels.Count > 1)
+        {
+            var modelWithMembers = nestedFacetModels.FirstOrDefault(
+                m => m.Members.Any(mem => mem.MapFromIncludeInProjection));
+            if (modelWithMembers != null)
+                return modelWithMembers;
+        }
+
+        return nestedFacetModels[0];
     }
 
     // Expression parsing methods delegated to shared ExpressionHelper
