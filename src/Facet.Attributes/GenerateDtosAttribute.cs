@@ -91,6 +91,13 @@ public class GenerateDtosAttribute : Attribute
     public bool GenerateProjections { get; set; } = true;
 
     /// <summary>
+    /// When set, all enum properties from the source type will be converted to the specified type
+    /// in generated DTOs. Supported values are <see cref="string"/> and <see cref="int"/>.
+    /// When null (default), enum properties retain their original enum types.
+    /// </summary>
+    public Type? ConvertEnumsTo { get; set; }
+
+    /// <summary>
     /// If true, generated files will use the full type name (namespace + containing types)
     /// to avoid collisions. Default is false (shorter file names).
     /// </summary>

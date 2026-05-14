@@ -128,6 +128,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             var generateConstructors = GetNamedArg(attribute.NamedArguments, "GenerateConstructors", true);
             var generateProjections = GetNamedArg(attribute.NamedArguments, "GenerateProjections", true);
             var useFullName = GetNamedArg(attribute.NamedArguments, "UseFullName", false);
+            var convertEnumsTo = ExtractConvertEnumsTo(attribute.NamedArguments);
             
             // New property: ExcludeAuditFields (only on GenerateDtosAttribute, not on obsolete attribute)
             var excludeAuditFields = forceExcludeAuditFields || GetNamedArg(attribute.NamedArguments, "ExcludeAuditFields", false);
@@ -170,29 +171,27 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
                 if (member is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } p)
                 {
-                    members.Add(new FacetMember(
+                    members.Add(CreateGenerateDtoMember(
                         p.Name,
-                        GeneratorUtilities.GetTypeNameWithNullability(p.Type),
+                        p.Type,
                         FacetMemberKind.Property,
-                        p.Type.IsValueType,
                         isInitOnly,
                         isRequired,
-                        false, // Properties are not readonly in the field sense
-                        null)); // No XML documentation for GenerateDtos
+                        false,
+                        convertEnumsTo));
                     addedMembers.Add(p.Name);
                 }
                 else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
                 {
                     bool isReadOnly = f.IsReadOnly;
-                    members.Add(new FacetMember(
+                    members.Add(CreateGenerateDtoMember(
                         f.Name,
-                        GeneratorUtilities.GetTypeNameWithNullability(f.Type),
+                        f.Type,
                         FacetMemberKind.Field,
-                        f.Type.IsValueType,
-                        false, // Fields don't have init-only
+                        false,
                         isRequired,
                         isReadOnly,
-                        null)); // No XML documentation for GenerateDtos
+                        convertEnumsTo));
                     addedMembers.Add(f.Name);
                 }
             }
@@ -212,6 +211,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 includeFields,
                 generateConstructors,
                 generateProjections,
+                convertEnumsTo,
                 excludeProperties.ToImmutableArray(),
                 members.ToImmutableArray(),
                 useFullName);
@@ -273,7 +273,32 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 m.Name,
                 GeneratorUtilities.MakeNullable(m.TypeName),
                 m.Kind,
+                m.IsValueType,
                 m.IsInitOnly,
+                false,
+                m.IsReadOnly,
+                null,
+                false,
+                null,
+                null,
+                m.IsCollection,
+                m.CollectionWrapper,
+                m.SourceCollectionWrapper,
+                m.SourceMemberTypeName,
+                null,
+                false,
+                true,
+                m.SourcePropertyName,
+                false,
+                null,
+                null,
+                true,
+                null,
+                null,
+                m.IsEnumConversion,
+                m.OriginalEnumTypeName,
+                false,
+                false,
                 false)) // Make all properties optional in Query DTOs
                 .ToImmutableArray();
 
@@ -397,6 +422,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     {
         GenerateFileHeader(sb);
         sb.AppendLine("using System;");
+        sb.AppendLine("using System.Linq;");
         sb.AppendLine("using System.Linq.Expressions;");
         sb.AppendLine();
 
@@ -431,7 +457,15 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine($"/// </summary>");
 
         // Add [Facet] attribute to make it work with extension methods
-        sb.AppendLine($"[Facet.Facet(typeof({model.SourceTypeName}))]");
+        if (model.ConvertEnumsTo != null)
+        {
+            var convertType = model.ConvertEnumsTo == "string" ? "string" : "int";
+            sb.AppendLine($"[Facet.Facet(typeof({model.SourceTypeName}), ConvertEnumsTo = typeof({convertType}))]");
+        }
+        else
+        {
+            sb.AppendLine($"[Facet.Facet(typeof({model.SourceTypeName}))]");
+        }
 
         sb.AppendLine($"public {keyword} {dtoName}");
         sb.AppendLine("{");
@@ -536,7 +570,9 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
             foreach (var member in assignableMembers)
             {
-                sb.AppendLine($"        this.{member.Name} = source.{member.Name};");
+                var sourceExpression = $"source.{member.Name}";
+                var mappedExpression = ConvertSourceToDtoExpression(sourceExpression, member, forProjection: false);
+                sb.AppendLine($"        this.{member.Name} = {mappedExpression};");
             }
         }
         else
@@ -591,7 +627,9 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
             var member = initializableMembers[i];
             var comma = i == initializableMembers.Length - 1 ? "" : ",";
-            sb.AppendLine($"            {member.Name} = source.{member.Name}{comma}");
+            var sourceExpression = $"source.{member.Name}";
+            var mappedExpression = ConvertSourceToDtoExpression(sourceExpression, member, forProjection: false);
+            sb.AppendLine($"            {member.Name} = {mappedExpression}{comma}");
         }
 
         sb.AppendLine("        };");
@@ -627,7 +665,9 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             {
                 var member = initializableMembers[i];
                 var comma = i == initializableMembers.Length - 1 ? "" : ",";
-                sb.AppendLine($"            {member.Name} = source.{member.Name}{comma}");
+                var sourceExpression = $"source.{member.Name}";
+                var mappedExpression = ConvertSourceToDtoExpression(sourceExpression, member, forProjection: true);
+                sb.AppendLine($"            {member.Name} = {mappedExpression}{comma}");
             }
 
             sb.AppendLine("        };");
@@ -659,6 +699,13 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
             // Find the corresponding source member to check nullability
             var sourceMember = model.Members.FirstOrDefault(sm => sm.Name == member.Name);
+
+            if (member.IsEnumConversion && member.OriginalEnumTypeName != null)
+            {
+                var convertedExpression = ConvertDtoToSourceExpression(member);
+                sb.AppendLine($"            {member.Name} = {convertedExpression}{comma}");
+                continue;
+            }
 
             // If the DTO member is nullable but the source is not, use GetValueOrDefault()
             if (member.TypeName.EndsWith("?") && sourceMember != null && !sourceMember.TypeName.EndsWith("?"))
@@ -782,6 +829,275 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine();
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
+    }
+
+    private static FacetMember CreateGenerateDtoMember(
+        string name,
+        ITypeSymbol typeSymbol,
+        FacetMemberKind kind,
+        bool isInitOnly,
+        bool isRequired,
+        bool isReadOnly,
+        string? convertEnumsTo)
+    {
+        var isCollection = GeneratorUtilities.TryGetCollectionElementType(typeSymbol, out var elementType, out var collectionWrapper);
+        var originalTypeName = GeneratorUtilities.GetTypeNameWithNullability(typeSymbol);
+        var typeName = originalTypeName;
+        bool isEnumConversion = false;
+        string? originalEnumTypeName = null;
+
+        if (IsSupportedEnumConversion(convertEnumsTo))
+        {
+            if (isCollection && elementType != null)
+            {
+                var underlyingElement = elementType;
+                bool elementIsNullable = false;
+                if (underlyingElement is INamedTypeSymbol namedElement &&
+                    namedElement.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+                {
+                    underlyingElement = namedElement.TypeArguments[0];
+                    elementIsNullable = true;
+                }
+
+                if (underlyingElement.TypeKind == TypeKind.Enum && collectionWrapper != null)
+                {
+                    isEnumConversion = true;
+                    originalEnumTypeName = underlyingElement.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    var convertedElementType = convertEnumsTo == "string"
+                        ? (elementIsNullable ? "string?" : "string")
+                        : (elementIsNullable ? "int?" : "int");
+                    typeName = GeneratorUtilities.WrapInCollectionType(convertedElementType, collectionWrapper);
+                    if (typeSymbol.NullableAnnotation == NullableAnnotation.Annotated)
+                    {
+                        typeName += "?";
+                    }
+                }
+            }
+            else
+            {
+                var underlyingType = typeSymbol;
+                bool isNullableEnum = false;
+                if (underlyingType is INamedTypeSymbol namedType &&
+                    namedType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+                {
+                    underlyingType = namedType.TypeArguments[0];
+                    isNullableEnum = true;
+                }
+
+                if (underlyingType.TypeKind == TypeKind.Enum)
+                {
+                    isEnumConversion = true;
+                    originalEnumTypeName = underlyingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    typeName = convertEnumsTo == "string"
+                        ? (isNullableEnum ? "string?" : "string")
+                        : (isNullableEnum ? "int?" : "int");
+                }
+            }
+        }
+
+        return new FacetMember(
+            name,
+            typeName,
+            kind,
+            typeSymbol.IsValueType,
+            isInitOnly,
+            isRequired,
+            isReadOnly,
+            null,
+            false,
+            null,
+            null,
+            isCollection,
+            collectionWrapper,
+            collectionWrapper,
+            originalTypeName,
+            null,
+            false,
+            true,
+            name,
+            false,
+            null,
+            null,
+            true,
+            null,
+            null,
+            isEnumConversion,
+            originalEnumTypeName,
+            false,
+            false,
+            false);
+    }
+
+    private static string? ExtractConvertEnumsTo(ImmutableArray<KeyValuePair<string, TypedConstant>> args)
+    {
+        var arg = args.FirstOrDefault(kvp => kvp.Key == "ConvertEnumsTo");
+        if (arg.Value.Value is INamedTypeSymbol typeSymbol)
+        {
+            return typeSymbol.SpecialType switch
+            {
+                SpecialType.System_String => "string",
+                SpecialType.System_Int32 => "int",
+                _ => null
+            };
+        }
+
+        return null;
+    }
+
+    private static bool IsSupportedEnumConversion(string? convertEnumsTo)
+        => convertEnumsTo is "string" or "int";
+
+    private static string ConvertSourceToDtoExpression(string sourceExpression, FacetMember member, bool forProjection)
+    {
+        if (!member.IsEnumConversion || member.OriginalEnumTypeName == null)
+        {
+            return sourceExpression;
+        }
+
+        if (member.IsCollection)
+        {
+            return ConvertSourceEnumCollectionToDto(sourceExpression, member);
+        }
+
+        bool isNullableEnum = member.SourceMemberTypeName?.EndsWith("?") ?? false;
+        var targetType = member.TypeName.TrimEnd('?');
+        if (targetType == "string")
+        {
+            if (isNullableEnum)
+            {
+                return forProjection
+                    ? $"{sourceExpression} != null ? {sourceExpression}.Value.ToString() : null"
+                    : $"{sourceExpression}?.ToString()";
+            }
+
+            return $"{sourceExpression}.ToString()";
+        }
+
+        if (targetType == "int")
+        {
+            return isNullableEnum ? $"(int?){sourceExpression}" : $"(int){sourceExpression}";
+        }
+
+        return sourceExpression;
+    }
+
+    private static string ConvertSourceEnumCollectionToDto(string sourceExpression, FacetMember member)
+    {
+        var targetElementType = GetCollectionElementType(member.TypeName).TrimEnd('?');
+        string projection = targetElementType switch
+        {
+            "string" => $"{sourceExpression}.Select(x => x.ToString())",
+            "int" => $"{sourceExpression}.Select(x => (int)x)",
+            _ => sourceExpression
+        };
+
+        if (projection == sourceExpression)
+        {
+            return sourceExpression;
+        }
+
+        var wrappedProjection = WrapCollectionProjection(projection, member.CollectionWrapper, GetCollectionElementType(member.TypeName));
+        bool isNullableCollection = member.TypeName.EndsWith("?");
+        return isNullableCollection ? $"{sourceExpression} != null ? {wrappedProjection} : null" : wrappedProjection;
+    }
+
+    private static string ConvertDtoToSourceExpression(FacetMember member)
+    {
+        if (member.IsCollection)
+        {
+            return ConvertDtoCollectionToEnumSource(member);
+        }
+
+        var enumTypeName = member.OriginalEnumTypeName!;
+        bool dtoTypeIsNullable = member.TypeName.EndsWith("?");
+        bool sourceTypeIsNullable = member.SourceMemberTypeName?.EndsWith("?") ?? false;
+        var targetType = member.TypeName.TrimEnd('?');
+
+        if (targetType == "string")
+        {
+            if (dtoTypeIsNullable && sourceTypeIsNullable)
+                return $"this.{member.Name} != null ? ({enumTypeName}?)System.Enum.Parse<{enumTypeName}>(this.{member.Name}) : null";
+            if (dtoTypeIsNullable)
+                return $"System.Enum.Parse<{enumTypeName}>(this.{member.Name}!)";
+            return $"System.Enum.Parse<{enumTypeName}>(this.{member.Name})";
+        }
+
+        if (targetType == "int")
+        {
+            if (dtoTypeIsNullable && sourceTypeIsNullable)
+                return $"this.{member.Name} != null ? ({enumTypeName}?)({enumTypeName})this.{member.Name}.Value : null";
+            if (dtoTypeIsNullable)
+                return $"({enumTypeName})(this.{member.Name} ?? default)";
+            return $"({enumTypeName})this.{member.Name}";
+        }
+
+        return $"this.{member.Name}";
+    }
+
+    private static string ConvertDtoCollectionToEnumSource(FacetMember member)
+    {
+        var enumTypeName = member.OriginalEnumTypeName!;
+        var targetElementType = GetCollectionElementType(member.TypeName).TrimEnd('?');
+
+        string projection = targetElementType switch
+        {
+            "string" => $"this.{member.Name}.Select(x => System.Enum.Parse<{enumTypeName}>(x))",
+            "int" => $"this.{member.Name}.Select(x => ({enumTypeName})x)",
+            _ => $"this.{member.Name}"
+        };
+
+        if (projection == $"this.{member.Name}")
+        {
+            return projection;
+        }
+
+        var sourceWrapper = member.SourceCollectionWrapper ?? member.CollectionWrapper;
+        var wrappedProjection = WrapCollectionProjection(projection, sourceWrapper, enumTypeName);
+        bool dtoCollectionIsNullable = member.TypeName.EndsWith("?");
+        bool sourceCollectionIsNullable = member.SourceMemberTypeName?.EndsWith("?") ?? false;
+
+        if (dtoCollectionIsNullable && sourceCollectionIsNullable)
+            return $"this.{member.Name} != null ? {wrappedProjection} : null";
+        if (dtoCollectionIsNullable)
+            return $"{wrappedProjection}!";
+
+        return wrappedProjection;
+    }
+
+    private static string GetCollectionElementType(string collectionTypeName)
+    {
+        var typeName = collectionTypeName.TrimEnd('?');
+        if (!typeName.Contains("<") || !typeName.Contains(">"))
+        {
+            return typeName.EndsWith("[]", StringComparison.Ordinal)
+                ? typeName.Substring(0, typeName.Length - 2)
+                : typeName;
+        }
+
+        var start = typeName.IndexOf('<') + 1;
+        var end = typeName.LastIndexOf('>');
+        return typeName.Substring(start, end - start).Trim();
+    }
+
+    private static string WrapCollectionProjection(string projection, string? collectionWrapper, string elementTypeName)
+    {
+        return collectionWrapper switch
+        {
+            "array" => $"{projection}.ToArray()",
+            "IEnumerable" => projection,
+            "Collection" => $"new global::System.Collections.ObjectModel.Collection<{elementTypeName}>({projection}.ToList())",
+            "ImmutableArray" => $"{projection}.ToImmutableArray()",
+            "ImmutableList" => $"{projection}.ToImmutableList()",
+            "ImmutableHashSet" => $"{projection}.ToImmutableHashSet()",
+            "ImmutableSortedSet" => $"{projection}.ToImmutableSortedSet()",
+            "ImmutableQueue" => $"global::System.Collections.Immutable.ImmutableQueue.CreateRange({projection})",
+            "ImmutableStack" => $"global::System.Collections.Immutable.ImmutableStack.CreateRange({projection})",
+            "IImmutableList" => $"{projection}.ToImmutableList()",
+            "IImmutableSet" => $"{projection}.ToImmutableHashSet()",
+            "IImmutableQueue" => $"global::System.Collections.Immutable.ImmutableQueue.CreateRange({projection})",
+            "IImmutableStack" => $"global::System.Collections.Immutable.ImmutableStack.CreateRange({projection})",
+            _ => $"{projection}.ToList()"
+        };
     }
 
 

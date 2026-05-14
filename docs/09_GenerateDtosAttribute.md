@@ -33,6 +33,7 @@ public class User
 | `IncludeFields`      | `bool`      | Include public fields from the source type (default: false).        |
 | `GenerateConstructors`| `bool`     | Generate constructors for the DTOs (default: true).                 |
 | `GenerateProjections`| `bool`      | Generate projection expressions for the DTOs (default: true).       |
+| `ConvertEnumsTo`     | `Type?`     | Convert enum properties to `typeof(string)` or `typeof(int)` (default: null). |
 | `UseFullName`        | `bool`      | Use full type name in generated file names to avoid collisions (default: false). |
 
 ### DtoTypes Enum
@@ -213,6 +214,22 @@ var patch = new UserPatch
     Name = "Jane Doe",  // Implicitly converted to Optional<string>
     IsActive = false    // Implicitly converted to Optional<bool>
 };
+```
+
+## Enum Conversion
+
+You can convert enum properties in generated DTOs the same way as with `[Facet]`, using `ConvertEnumsTo`.
+
+```csharp
+[GenerateDtos(Types = DtoTypes.Response, ConvertEnumsTo = typeof(string))]
+public class Order
+{
+    public int Id { get; set; }
+    public OrderStatus Status { get; set; }
+}
+
+// Generated DTO property:
+// public string Status { get; set; }
 ```
 
 ### Distinguishing Null from Unspecified

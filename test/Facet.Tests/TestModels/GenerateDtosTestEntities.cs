@@ -72,6 +72,22 @@ public enum OrderStatus
     Cancelled
 }
 
+[GenerateDtos(Types = DtoTypes.Response, OutputType = OutputType.Class, ConvertEnumsTo = typeof(string))]
+public class TestOrderStringEnumConversion
+{
+    public int Id { get; set; }
+    public OrderStatus Status { get; set; }
+    public OrderStatus? PreviousStatus { get; set; }
+}
+
+[GenerateDtos(Types = DtoTypes.Response, OutputType = OutputType.Class, ConvertEnumsTo = typeof(int))]
+public class TestOrderIntEnumConversion
+{
+    public int Id { get; set; }
+    public OrderStatus Status { get; set; }
+    public OrderStatus? PreviousStatus { get; set; }
+}
+
 [GenerateDtos(Types = DtoTypes.Create, OutputType = OutputType.Class, ExcludeProperties = new[] { "SecretKey" })]
 [GenerateDtos(Types = DtoTypes.Response, OutputType = OutputType.Class, ExcludeProperties = new[] { "SecretKey", "InternalData" })]
 public class TestMultiConfigEntity
