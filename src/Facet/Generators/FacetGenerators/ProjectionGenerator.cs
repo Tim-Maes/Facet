@@ -239,6 +239,9 @@ internal static class ProjectionGenerator
             sb.AppendLine($"{bodyIndent}    if (__derivedMember != null)");
             sb.AppendLine($"{bodyIndent}    {{");
             sb.AppendLine($"{bodyIndent}        var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __p);");
+            sb.AppendLine($"{bodyIndent}        var __memberType = ((global::System.Reflection.PropertyInfo)__derivedMember).PropertyType;");
+            sb.AppendLine($"{bodyIndent}        if (__body.Type != __memberType && __memberType.IsAssignableFrom(__body.Type))");
+            sb.AppendLine($"{bodyIndent}            __body = global::System.Linq.Expressions.Expression.Convert(__body, __memberType);");
             sb.AppendLine($"{bodyIndent}        __bindings.RemoveAll(b => ((global::System.Linq.Expressions.MemberAssignment)b).Member.Name == __derivedMember.Name);");
             sb.AppendLine($"{bodyIndent}        __bindings.Add(global::System.Linq.Expressions.Expression.Bind(__derivedMember, __body));");
             sb.AppendLine($"{bodyIndent}    }}");
@@ -254,6 +257,9 @@ internal static class ProjectionGenerator
             sb.AppendLine($"{bodyIndent}foreach (var (__member, __expr) in __builder.Mappings)");
             sb.AppendLine($"{bodyIndent}{{");
             sb.AppendLine($"{bodyIndent}    var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __p);");
+            sb.AppendLine($"{bodyIndent}    var __memberType2 = ((global::System.Reflection.PropertyInfo)__member).PropertyType;");
+            sb.AppendLine($"{bodyIndent}    if (__body.Type != __memberType2 && __memberType2.IsAssignableFrom(__body.Type))");
+            sb.AppendLine($"{bodyIndent}        __body = global::System.Linq.Expressions.Expression.Convert(__body, __memberType2);");
             sb.AppendLine($"{bodyIndent}    __bindings.RemoveAll(b => ((global::System.Linq.Expressions.MemberAssignment)b).Member.Name == __member.Name);");
             sb.AppendLine($"{bodyIndent}    __bindings.Add(global::System.Linq.Expressions.Expression.Bind(__member, __body));");
             sb.AppendLine($"{bodyIndent}}}");

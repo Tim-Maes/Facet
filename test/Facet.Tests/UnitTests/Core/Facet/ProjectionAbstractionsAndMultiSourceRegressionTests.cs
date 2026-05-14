@@ -453,3 +453,134 @@ public class FiveLevelProjectionRegressionTests
         dto.Level2.Level3.Level4.Should().BeNull();
     }
 }
+
+// ─── Bug regression: multi-source concrete nested facet in inherited DTO ───────
+// Scenario: UnitFacet590 has two concrete sources (UnitEntity590 and UnitDto590).
+// The UnitEntity590 source has no ConfigureProjection, so it would normally use the
+// inline projection path. BaseFacetDto590 includes Unit as a NestedFacet.
+// DerivedFacetDto590 inherits from BaseFacetDto590 without its own NestedFacets.
+// ParentDto590 has DerivedFacetDto590 as a nested facet.
+// Level 1 (DerivedFacetDto590.Projection) should correctly map Unit.
+// Level 2 (ParentDto590.Projection) should also correctly map Item.Unit.
+
+public class UnitEntity590
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+// A second source that is a generated/Facet class (simulates the scenario where
+// the second source may have no visible members to the source generator)
+public class UnitDto590
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+[Facet(typeof(UnitEntity590),
+    Include = new[] { nameof(UnitEntity590.Id), nameof(UnitEntity590.Name) })]
+[Facet(typeof(UnitDto590),
+    Include = new[] { nameof(UnitDto590.Id), nameof(UnitDto590.Name) })]
+public partial class UnitFacet590
+{
+}
+
+public class BaseItemEntity590
+{
+    public int Id { get; set; }
+    public UnitEntity590? Unit { get; set; }
+}
+
+public class DerivedItemEntity590 : BaseItemEntity590
+{
+    public string Code { get; set; } = string.Empty;
+}
+
+[Facet(typeof(BaseItemEntity590),
+    Include = new[] { nameof(BaseItemEntity590.Id), nameof(BaseItemEntity590.Unit) },
+    NestedFacets = new[] { typeof(UnitFacet590) })]
+public partial class BaseItemDto590
+{
+}
+
+[Facet(typeof(DerivedItemEntity590),
+    Include = new[] { nameof(DerivedItemEntity590.Code) })]
+public partial class DerivedItemDto590 : BaseItemDto590
+{
+}
+
+public class ParentEntity590
+{
+    public int Id { get; set; }
+    public DerivedItemEntity590? Item { get; set; }
+}
+
+[Facet(typeof(ParentEntity590),
+    Include = new[] { nameof(ParentEntity590.Id), nameof(ParentEntity590.Item) },
+    NestedFacets = new[] { typeof(DerivedItemDto590) })]
+public partial class ParentDto590
+{
+}
+
+public class MultiSourceConcreteNestedInInheritedDtoTests
+{
+    [Fact]
+    public void Projection_Level1_InheritedDto_WithMultiSourceConcreteNestedFacet_ShouldMapUnit()
+    {
+        var source = new DerivedItemEntity590
+        {
+            Id = 1,
+            Code = "ITEM-1",
+            Unit = new UnitEntity590 { Id = 42, Name = "Widget" }
+        };
+
+        var dto = DerivedItemDto590.Projection.Compile()(source);
+
+        dto.Id.Should().Be(1);
+        dto.Code.Should().Be("ITEM-1");
+        dto.Unit.Should().NotBeNull();
+        dto.Unit!.Id.Should().Be(42);
+        dto.Unit.Name.Should().Be("Widget");
+    }
+
+    [Fact]
+    public void Projection_Level2_ParentWithInheritedNestedDto_ShouldMapUnitAtSecondLevel()
+    {
+        var source = new ParentEntity590
+        {
+            Id = 10,
+            Item = new DerivedItemEntity590
+            {
+                Id = 1,
+                Code = "ITEM-1",
+                Unit = new UnitEntity590 { Id = 42, Name = "Widget" }
+            }
+        };
+
+        var dto = ParentDto590.Projection.Compile()(source);
+
+        dto.Id.Should().Be(10);
+        dto.Item.Should().NotBeNull();
+        dto.Item!.Id.Should().Be(1);
+        dto.Item.Code.Should().Be("ITEM-1");
+        dto.Item.Unit.Should().NotBeNull();
+        dto.Item.Unit!.Id.Should().Be(42);
+        dto.Item.Unit.Name.Should().Be("Widget");
+    }
+
+    [Fact]
+    public void Projection_Level1_InheritedDto_NullUnit_ShouldMapUnitAsNull()
+    {
+        var source = new DerivedItemEntity590
+        {
+            Id = 2,
+            Code = "ITEM-2",
+            Unit = null
+        };
+
+        var dto = DerivedItemDto590.Projection.Compile()(source);
+
+        dto.Id.Should().Be(2);
+        dto.Unit.Should().BeNull();
+    }
+}
