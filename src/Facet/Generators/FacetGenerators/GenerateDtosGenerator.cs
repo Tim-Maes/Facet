@@ -269,37 +269,8 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         // Generate Query DTO
         if ((model.Types & DtoTypes.Query) != 0)
         {
-            var queryMembers = model.Members.Select(m => new FacetMember(
-                m.Name,
-                GeneratorUtilities.MakeNullable(m.TypeName),
-                m.Kind,
-                m.IsValueType,
-                m.IsInitOnly,
-                false,
-                m.IsReadOnly,
-                null,
-                false,
-                null,
-                null,
-                m.IsCollection,
-                m.CollectionWrapper,
-                m.SourceCollectionWrapper,
-                m.SourceMemberTypeName,
-                null,
-                false,
-                true,
-                m.SourcePropertyName,
-                false,
-                null,
-                null,
-                true,
-                null,
-                null,
-                m.IsEnumConversion,
-                m.OriginalEnumTypeName,
-                false,
-                false,
-                false)) // Make all properties optional in Query DTOs
+            var queryMembers = model.Members
+                .Select(CreateQueryMember) // Make all properties optional in Query DTOs
                 .ToImmutableArray();
 
             var queryDtoName = BuildDtoName(sourceTypeName, "", "Query", model.Prefix, model.Suffix);
@@ -863,9 +834,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 {
                     isEnumConversion = true;
                     originalEnumTypeName = underlyingElement.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    var convertedElementType = convertEnumsTo == "string"
-                        ? (elementIsNullable ? "string?" : "string")
-                        : (elementIsNullable ? "int?" : "int");
+                    var convertedElementType = GetConvertedEnumType(convertEnumsTo!, elementIsNullable);
                     typeName = GeneratorUtilities.WrapInCollectionType(convertedElementType, collectionWrapper);
                     if (typeSymbol.NullableAnnotation == NullableAnnotation.Annotated)
                     {
@@ -888,9 +857,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 {
                     isEnumConversion = true;
                     originalEnumTypeName = underlyingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    typeName = convertEnumsTo == "string"
-                        ? (isNullableEnum ? "string?" : "string")
-                        : (isNullableEnum ? "int?" : "int");
+                    typeName = GetConvertedEnumType(convertEnumsTo!, isNullableEnum);
                 }
             }
         }
@@ -946,6 +913,51 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
     private static bool IsSupportedEnumConversion(string? convertEnumsTo)
         => convertEnumsTo is "string" or "int";
+
+    private static string GetConvertedEnumType(string convertEnumsTo, bool isNullable)
+    {
+        if (convertEnumsTo == "string")
+        {
+            return isNullable ? "string?" : "string";
+        }
+
+        return isNullable ? "int?" : "int";
+    }
+
+    private static FacetMember CreateQueryMember(FacetMember member)
+    {
+        return new FacetMember(
+            member.Name,
+            GeneratorUtilities.MakeNullable(member.TypeName),
+            member.Kind,
+            member.IsValueType,
+            member.IsInitOnly,
+            false,
+            member.IsReadOnly,
+            null,
+            false,
+            null,
+            null,
+            member.IsCollection,
+            member.CollectionWrapper,
+            member.SourceCollectionWrapper,
+            member.SourceMemberTypeName,
+            null,
+            false,
+            true,
+            member.SourcePropertyName,
+            false,
+            null,
+            null,
+            true,
+            null,
+            null,
+            member.IsEnumConversion,
+            member.OriginalEnumTypeName,
+            false,
+            false,
+            false);
+    }
 
     private static string ConvertSourceToDtoExpression(string sourceExpression, FacetMember member, bool forProjection)
     {
