@@ -1025,6 +1025,18 @@ public class User
 // - UpsertUserRequest (includes Id, for create/update operations)
 ```
 
+`[GenerateDtos]` also supports enum conversion via `ConvertEnumsTo`, just like `[Facet]`:
+
+```csharp
+[GenerateDtos(Types = DtoTypes.Response, ConvertEnumsTo = typeof(string))]
+public class Order
+{
+    public OrderStatus Status { get; set; }
+}
+
+// Generated: public string Status { get; set; }
+```
+
 #### Entities with Smart Exclusions
 
 ```csharp

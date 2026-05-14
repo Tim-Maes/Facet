@@ -16,6 +16,7 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
     public bool IncludeFields { get; }
     public bool GenerateConstructors { get; }
     public bool GenerateProjections { get; }
+    public string? ConvertEnumsTo { get; }
     public ImmutableArray<string> ExcludeProperties { get; }
     public ImmutableArray<FacetMember> Members { get; }
     public bool UseFullName { get; }
@@ -31,6 +32,7 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         bool includeFields,
         bool generateConstructors,
         bool generateProjections,
+        string? convertEnumsTo,
         ImmutableArray<string> excludeProperties,
         ImmutableArray<FacetMember> members,
         bool useFullName)
@@ -45,6 +47,7 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         IncludeFields = includeFields;
         GenerateConstructors = generateConstructors;
         GenerateProjections = generateProjections;
+        ConvertEnumsTo = convertEnumsTo;
         ExcludeProperties = excludeProperties;
         Members = members;
         UseFullName = useFullName;
@@ -65,6 +68,7 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             && IncludeFields == other.IncludeFields
             && GenerateConstructors == other.GenerateConstructors
             && GenerateProjections == other.GenerateProjections
+            && ConvertEnumsTo == other.ConvertEnumsTo
             && ExcludeProperties.SequenceEqual(other.ExcludeProperties)
             && Members.SequenceEqual(other.Members)
             && UseFullName == other.UseFullName;
@@ -87,6 +91,7 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             hash = hash * 31 + IncludeFields.GetHashCode();
             hash = hash * 31 + GenerateConstructors.GetHashCode();
             hash = hash * 31 + GenerateProjections.GetHashCode();
+            hash = hash * 31 + (ConvertEnumsTo?.GetHashCode() ?? 0);
             hash = hash * 31 + UseFullName.GetHashCode();
 
             foreach (var prop in ExcludeProperties)
