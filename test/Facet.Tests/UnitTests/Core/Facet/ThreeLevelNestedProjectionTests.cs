@@ -656,3 +656,125 @@ public class ThreeLevelNestedProjectionTests
         dto.Dispatch.Customer.Email.Should().Be("jane@example.com");
     }
 }
+
+// Regression test for: only the deepest (level 2) nested facet has ConfigureProjection,
+// and neither the parent (level 0) nor the middle (level 1) DTO has any configuration.
+// Scenario: InventoryItemScanRetrieval -> OrderLinePickingScanRetrieval -> OrderLinePickingProductScanRetrieval (has config)
+
+public class RootEntity360
+{
+    public int Id { get; set; }
+    public string RootName { get; set; } = string.Empty;
+    public MiddleEntity360? Middle { get; set; }
+}
+
+public class MiddleEntity360
+{
+    public int Id { get; set; }
+    public string MiddleName { get; set; } = string.Empty;
+    public DeepEntity360? Deep { get; set; }
+}
+
+public class DeepEntity360
+{
+    public int Id { get; set; }
+    public string DeepName { get; set; } = string.Empty;
+}
+
+[Facet(typeof(DeepEntity360),
+    Configuration = typeof(DeepFacet360Config),
+    Include = new[] { "Id", "DeepName" })]
+public partial class DeepFacet360
+{
+}
+
+public class DeepFacet360Config : IFacetProjectionMapConfiguration<DeepEntity360, DeepFacet360>
+{
+    public static void ConfigureProjection(IFacetProjectionBuilder<DeepEntity360, DeepFacet360> builder)
+    {
+        builder.Map(d => d.DeepName, s => "DEEP-" + s.DeepName);
+    }
+}
+
+[Facet(typeof(MiddleEntity360),
+    Include = new[] { "Id", "MiddleName", "Deep" },
+    NestedFacets = new[] { typeof(DeepFacet360) })]
+public partial class MiddleFacet360
+{
+}
+
+[Facet(typeof(RootEntity360),
+    Include = new[] { "Id", "RootName", "Middle" },
+    NestedFacets = new[] { typeof(MiddleFacet360) })]
+public partial class RootFacet360
+{
+}
+
+public class DeepestLevelConfigProjectionTests
+{
+    private RootEntity360 CreateEntity() => new()
+    {
+        Id = 1,
+        RootName = "root",
+        Middle = new MiddleEntity360
+        {
+            Id = 2,
+            MiddleName = "middle",
+            Deep = new DeepEntity360 { Id = 3, DeepName = "leaf" }
+        }
+    };
+
+    [Fact]
+    public void Projection_OnlyDeepestLevel_HasConfigureProjection_ShouldApplyConfig()
+    {
+        // Arrange: Level 0 (Root) and Level 1 (Middle) have NO ConfigureProjection.
+        // Level 2 (Deep) HAS ConfigureProjection. Verifies RequiresLazyProjection
+        // recurses correctly and ConfigureProjection is applied at the deepest level.
+        var entity = CreateEntity();
+
+        var projection = RootFacet360.Projection.Compile();
+        var dto = projection(entity);
+
+        dto.Id.Should().Be(1);
+        dto.Middle.Should().NotBeNull();
+        dto.Middle!.Id.Should().Be(2);
+        dto.Middle.Deep.Should().NotBeNull();
+        dto.Middle.Deep!.Id.Should().Be(3);
+        dto.Middle.Deep.DeepName.Should().Be("DEEP-leaf",
+            "ConfigureProjection on the deepest nested facet must be applied even when parent and grandparent have no config");
+    }
+
+    [Fact]
+    public void Projection_OnlyDeepestLevel_HasConfigureProjection_ViaQueryable_ShouldApplyConfig()
+    {
+        var entities = new[] { CreateEntity() }.AsQueryable();
+
+        var dtos = entities.Select(RootFacet360.Projection).ToList();
+
+        dtos.Should().HaveCount(1);
+        dtos[0].Middle!.Deep!.DeepName.Should().Be("DEEP-leaf",
+            "ConfigureProjection on the deepest nested facet must be applied via Queryable");
+    }
+
+    [Fact]
+    public void Projection_OnlyDeepestLevel_NullMiddle_ShouldReturnNull()
+    {
+        var entity = new RootEntity360 { Id = 1, RootName = "root", Middle = null };
+        var dto = RootFacet360.Projection.Compile()(entity);
+        dto.Middle.Should().BeNull();
+    }
+
+    [Fact]
+    public void Projection_OnlyDeepestLevel_NullDeep_ShouldReturnNullDeep()
+    {
+        var entity = new RootEntity360
+        {
+            Id = 1,
+            RootName = "root",
+            Middle = new MiddleEntity360 { Id = 2, MiddleName = "middle", Deep = null }
+        };
+        var dto = RootFacet360.Projection.Compile()(entity);
+        dto.Middle.Should().NotBeNull();
+        dto.Middle!.Deep.Should().BeNull();
+    }
+}
