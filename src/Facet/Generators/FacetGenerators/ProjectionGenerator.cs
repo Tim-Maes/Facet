@@ -1027,7 +1027,13 @@ internal static class ProjectionGenerator
 
         foreach (var member in nestedFacetMembers)
         {
-            var nestedModel = FindNestedFacetModel(member.TypeName.TrimEnd('?'), facetLookup, member.NestedFacetSourceTypeName);
+            // For collection members, the TypeName is e.g. "List<Foo>?" — we need the element
+            // type "Foo" to look up the nested facet model, not the collection wrapper type.
+            var lookupTypeName = member.IsCollection
+                ? ExpressionBuilder.ExtractElementTypeFromCollectionTypeName(member.TypeName).TrimEnd('?')
+                : member.TypeName.TrimEnd('?');
+
+            var nestedModel = FindNestedFacetModel(lookupTypeName, facetLookup, member.NestedFacetSourceTypeName);
             if (nestedModel == null)
                 continue;
 
