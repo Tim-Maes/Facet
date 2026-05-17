@@ -101,7 +101,14 @@ internal static class ToSourceGenerator
             return;
 
         var applyMethodName = methodName ?? "ApplyToSource";
-        var newMod = model.BaseHidesFacetMembers && methodName == null ? "new " : "";
+        // ApplyToSource(TSource) takes a source-specific parameter. It only hides a base
+        // class method when the base facet also maps to the same source type. Using "new"
+        // unconditionally when BaseHidesFacetMembers=true causes CS0109 whenever the base
+        // facet uses a different source type (different parameter type → no hiding).
+        var baseSrcName = model.BaseFacetInfo?.BaseSourceTypeName;
+        var newMod = model.BaseHidesFacetMembers && methodName == null
+                     && baseSrcName != null && baseSrcName == model.SourceTypeName
+                     ? "new " : "";
 
         sb.AppendLine();
         sb.AppendLine("    /// <summary>");

@@ -18,6 +18,9 @@ public static class FacetExtensions
     // For a facet target type TTarget, cache the [Facet(typeof(TSource))] declared source type (TSource).
     private static readonly ConcurrentDictionary<Type, Type> _declaredSourceTypeByTarget = new();
 
+    // For multi-source facets: cache ALL declared source types per target type.
+    private static readonly ConcurrentDictionary<Type, Type[]> _allDeclaredSourcesByTarget = new();
+
     // Cached MethodInfo for ToFacet<TSource, TTarget>(TSource)
     private static readonly MethodInfo _toFacetTwoGenericMethod =
         typeof(FacetExtensions)
@@ -90,15 +93,11 @@ public static class FacetExtensions
 
         var targetType = typeof(TTarget);
 
-        var declaredSource = GetDeclaredSourceType(targetType)
+        // For multi-source facets, find the declared source type that the actual source instance matches.
+        var declaredSource = GetMatchingDeclaredSourceType(targetType, source.GetType())
             ?? throw new InvalidOperationException(
-                $"Type '{targetType.FullName}' must be annotated with [Facet(typeof(...))] to use ToFacet<{targetType.Name}>().");
-
-        if (!declaredSource.IsInstanceOfType(source))
-        {
-            throw new InvalidOperationException(
-                $"Source instance type '{source.GetType().FullName}' is not assignable to declared Facet source '{declaredSource.FullName}' for target '{targetType.FullName}'.");
-        }
+                $"Source instance type '{source.GetType().FullName}' is not assignable to any declared Facet source for target '{targetType.FullName}'. " +
+                $"Ensure the target type is annotated with [Facet(typeof(...))] and the source type matches one of the declared sources.");
 
         var forwarded = _toFacetTwoGenericMethod.MakeGenericMethod(declaredSource, targetType)
                                          .Invoke(null, new[] { source });
@@ -444,6 +443,28 @@ public static class FacetExtensions
         }
 
         return declared;
+    }
+
+    /// <summary>
+    /// Returns the declared Facet source type (from any [Facet] attribute) that the given
+    /// <paramref name="sourceInstanceType"/> is assignable to.  Supports multi-source facets
+    /// that carry multiple [Facet(typeof(...))] attributes.
+    /// </summary>
+    private static Type? GetMatchingDeclaredSourceType(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type targetType,
+        Type sourceInstanceType)
+    {
+        var allSources = _allDeclaredSourcesByTarget.GetOrAdd(targetType, t =>
+            t.GetCustomAttributesData()
+             .Where(a => a.AttributeType.FullName == "Facet.FacetAttribute")
+             .Select(a => a.ConstructorArguments.Count > 0 && a.ConstructorArguments[0].ArgumentType == typeof(Type)
+                 ? a.ConstructorArguments[0].Value as Type
+                 : null)
+             .Where(st => st != null)
+             .Select(st => st!)
+             .ToArray());
+
+        return allSources.FirstOrDefault(s => s.IsAssignableFrom(sourceInstanceType));
     }
 
     private static LambdaExpression GetDeclaredProjectionLambda(
