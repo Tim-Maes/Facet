@@ -279,7 +279,12 @@ internal static class ProjectionGenerator
         // allowing second-level (and deeper) reverse navigation properties to be included.
         if (hasNestedFacets && isSingleSource)
         {
-            GenerateProjectionForMethod(sb, src, tgt, safeName, propertyName, memberIndent, model.BaseHidesFacetMembers);
+            // 'new' on ProjectionFor only makes sense when the base facet ALSO has nested facets,
+            // because ProjectionFor is only generated for facets with nested facets.
+            // BaseHidesFacetMembers=true means the base generates 'Projection', but NOT necessarily 'ProjectionFor'.
+            var baseAlsoHasNestedFacets = model.BaseHidesFacetMembers
+                && model.BaseFacetInfo?.NestedFacetMappings.Count > 0;
+            GenerateProjectionForMethod(sb, src, tgt, safeName, propertyName, memberIndent, baseAlsoHasNestedFacets);
             GenerateBuildProjectionExcluding(sb, model, memberIndent, facetLookup, nestedFacetMembers, src, tgt);
         }
     }
