@@ -23,13 +23,4 @@ public interface IFacetProjectionBuilder<TSource, TTarget>
     IFacetProjectionBuilder<TSource, TTarget> Map<TValue>(
         Expression<Func<TTarget, TValue>> targetMember,
         Expression<Func<TSource, TValue>> valueExpression);
-
-    /// <summary>
-    /// Maps a nullable target property to a non-nullable value expression, avoiding CS8620
-    /// when the source projection returns a non-nullable type but the target property is nullable.
-    /// </summary>
-    IFacetProjectionBuilder<TSource, TTarget> Map<TValue>(
-        Expression<Func<TTarget, TValue?>> targetMember,
-        Expression<Func<TSource, TValue>> valueExpression)
-        where TValue : class;
 }

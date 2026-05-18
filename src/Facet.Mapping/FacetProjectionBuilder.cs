@@ -23,14 +23,4 @@ public sealed class FacetProjectionBuilder<TSource, TTarget>
         Mappings.Add((member, valueExpression));
         return this;
     }
-
-    public IFacetProjectionBuilder<TSource, TTarget> Map<TValue>(
-        Expression<Func<TTarget, TValue?>> targetMember,
-        Expression<Func<TSource, TValue>> valueExpression)
-        where TValue : class
-    {
-        var member = ((MemberExpression)targetMember.Body).Member;
-        Mappings.Add((member, valueExpression));
-        return this;
-    }
 }
