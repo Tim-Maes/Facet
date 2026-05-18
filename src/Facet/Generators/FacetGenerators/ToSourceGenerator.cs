@@ -26,7 +26,9 @@ internal static class ToSourceGenerator
     {
         var methodName = toSourceMethodName ?? "ToSource";
         var isCustomName = toSourceMethodName != null;
-        var newMod = model.BaseHidesFacetMembers && !isCustomName ? "new " : "";
+        // Only emit 'new' when the base facet actually generates ToSource/BackTo (GenerateToSource=true).
+        // Using BaseHidesFacetMembers alone causes CS0109 when the base facet has GenerateToSource=false.
+        var newMod = model.BaseHidesToSource && !isCustomName ? "new " : "";
 
         bool hasDepthLimit = model.MaxDepthToSource > 0;
 
@@ -102,11 +104,10 @@ internal static class ToSourceGenerator
 
         var applyMethodName = methodName ?? "ApplyToSource";
         // ApplyToSource(TSource) takes a source-specific parameter. It only hides a base
-        // class method when the base facet also maps to the same source type. Using "new"
-        // unconditionally when BaseHidesFacetMembers=true causes CS0109 whenever the base
-        // facet uses a different source type (different parameter type → no hiding).
+        // class method when the base facet also has GenerateToSource=true AND maps the same
+        // source type. Using "new" when these conditions are not met causes CS0109.
         var baseSrcName = model.BaseFacetInfo?.BaseSourceTypeName;
-        var newMod = model.BaseHidesFacetMembers && methodName == null
+        var newMod = model.BaseHidesToSource && methodName == null
                      && baseSrcName != null && baseSrcName == model.SourceTypeName
                      ? "new " : "";
 

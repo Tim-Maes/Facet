@@ -114,6 +114,14 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public bool BaseHidesFacetMembers { get; }
 
     /// <summary>
+    /// When true, the base class of this facet also has <c>GenerateToSource = true</c>, meaning
+    /// it generates <c>ToSource()</c>, <c>BackTo()</c>, and <c>ApplyToSource()</c> methods.
+    /// The <c>new</c> modifier should be emitted on these members only when this is true;
+    /// otherwise the base doesn't have these methods and emitting <c>new</c> causes CS0109.
+    /// </summary>
+    public bool BaseHidesToSource { get; }
+
+    /// <summary>
     /// When true, the base class of this facet already declares a <c>FromSource</c> method
     /// whose parameter type matches this facet's source type. Only in this case does the
     /// derived <c>FromSource</c> actually hide the base method and require the <c>new</c> modifier.
@@ -183,7 +191,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         bool hasMapConfiguration = false,
         BaseFacetInfo? baseFacetInfo = null,
         int maxDepthToSource = 0,
-        ImmutableArray<string> sourcePropertyNames = default)
+        ImmutableArray<string> sourcePropertyNames = default,
+        bool baseHidesToSource = false)
     {
         Name = name;
         Namespace = @namespace;
@@ -225,6 +234,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         BaseHidesFromSource = baseHidesFromSource;
         BaseFacetInfo = baseFacetInfo;
         SourcePropertyNames = sourcePropertyNames.IsDefault ? ImmutableArray<string>.Empty : sourcePropertyNames;
+        BaseHidesToSource = baseHidesToSource;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -266,6 +276,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && GenerateEquality == other.GenerateEquality
             && ToSourceConfigurationTypeName == other.ToSourceConfigurationTypeName
             && BaseHidesFacetMembers == other.BaseHidesFacetMembers
+            && BaseHidesToSource == other.BaseHidesToSource
             && HasProjectionMapConfiguration == other.HasProjectionMapConfiguration
             && HasMapConfiguration == other.HasMapConfiguration
             && BaseHidesFromSource == other.BaseHidesFromSource
@@ -307,6 +318,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + GenerateEquality.GetHashCode();
             hash = hash * 31 + (ToSourceConfigurationTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + BaseHidesFacetMembers.GetHashCode();
+            hash = hash * 31 + BaseHidesToSource.GetHashCode();
             hash = hash * 31 + HasProjectionMapConfiguration.GetHashCode();
             hash = hash * 31 + HasMapConfiguration.GetHashCode();
             hash = hash * 31 + BaseHidesFromSource.GetHashCode();

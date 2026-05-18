@@ -132,9 +132,14 @@ internal static class CodeBuilder
             if (!(model.HasExistingPrimaryConstructor && model.IsRecord))
             {
                 var sourceSpecificName = "ProjectionFrom" + GetSourceSimpleName(model);
+                // Add 'new' when the base facet also has a ProjectionFrom{Source} with the same source type,
+                // which happens when both base and derived are single-source facets sharing the same source.
+                var baseSrcMatches = model.BaseHidesFacetMembers
+                    && model.BaseFacetInfo?.BaseSourceTypeName == model.SourceTypeName;
+                var aliasNewMod = baseSrcMatches ? "new " : "";
                 sb.AppendLine();
                 ProjectionGenerator.GenerateProjectionDocumentation(sb, model, memberIndent, sourceSpecificName);
-                sb.AppendLine($"{memberIndent}public static Expression<Func<{model.SourceTypeName}, {model.Name}>> {sourceSpecificName} => Projection;");
+                sb.AppendLine($"{memberIndent}public static {aliasNewMod}Expression<Func<{model.SourceTypeName}, {model.Name}>> {sourceSpecificName} => Projection;");
             }
         }
 

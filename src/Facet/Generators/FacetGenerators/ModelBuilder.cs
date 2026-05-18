@@ -299,6 +299,7 @@ internal static class ModelBuilder
         var sourceTypeFullName = sourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var baseHidesFacetMembers = BaseHidesFacetMembers(targetSymbol);
         var baseHidesFromSource = BaseHidesFromSource(targetSymbol, sourceTypeFullName);
+        var baseHidesToSource = BaseHidesToSourceMembers(targetSymbol);
 
         // Collect source type member names for MapFrom expression disambiguation
         var sourcePropertyNames = CollectSourcePropertyNames(sourceType);
@@ -343,7 +344,8 @@ internal static class ModelBuilder
             hasMapConfiguration,
             baseFacetInfo,
             maxDepthToSource,
-            sourcePropertyNames);
+            sourcePropertyNames,
+            baseHidesToSource);
     }
 
     #region Private Helper Methods
@@ -1244,6 +1246,46 @@ private static Dictionary<string, (string targetName, string source, bool revers
                 {
                     return true;
                 }
+            }
+
+            baseType = baseType.BaseType;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Returns true when any single-source base Facet of the target also has
+    /// <c>GenerateToSource = true</c>, meaning it generates <c>ToSource()</c>,
+    /// <c>BackTo()</c>, and <c>ApplyToSource()</c> methods that the derived class would hide.
+    /// Emitting <c>new</c> on those methods without this being true causes CS0109.
+    /// </summary>
+    private static bool BaseHidesToSourceMembers(INamedTypeSymbol targetSymbol)
+    {
+        var baseType = targetSymbol.BaseType;
+        while (baseType != null && baseType.SpecialType != SpecialType.System_Object)
+        {
+            var baseFacetAttrs = baseType.GetAttributes()
+                .Where(a => a.AttributeClass?.ToDisplayString() == FacetConstants.FacetAttributeFullName)
+                .ToArray();
+
+            // Only single-source facets generate default-named ToSource/BackTo/ApplyToSource
+            if (baseFacetAttrs.Length == 1)
+            {
+                var generateToSource = baseFacetAttrs[0].NamedArguments
+                    .FirstOrDefault(a => a.Key == FacetConstants.AttributeNames.GenerateToSource)
+                    .Value;
+
+                if (generateToSource.Value is true)
+                    return true;
+            }
+
+            // Also check for manually declared ToSource/BackTo members
+            foreach (var member in baseType.GetMembers())
+            {
+                if ((member.Name == "ToSource" || member.Name == "BackTo" || member.Name == "ApplyToSource") &&
+                    member.DeclaredAccessibility == Accessibility.Public)
+                    return true;
             }
 
             baseType = baseType.BaseType;

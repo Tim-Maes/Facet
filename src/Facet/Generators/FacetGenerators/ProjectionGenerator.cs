@@ -279,7 +279,7 @@ internal static class ProjectionGenerator
         // allowing second-level (and deeper) reverse navigation properties to be included.
         if (hasNestedFacets && isSingleSource)
         {
-            GenerateProjectionForMethod(sb, src, tgt, safeName, propertyName, memberIndent);
+            GenerateProjectionForMethod(sb, src, tgt, safeName, propertyName, memberIndent, model.BaseHidesFacetMembers);
             GenerateBuildProjectionExcluding(sb, model, memberIndent, facetLookup, nestedFacetMembers, src, tgt);
         }
     }
@@ -1270,10 +1270,12 @@ internal static class ProjectionGenerator
         string tgt,
         string safeName,
         string propertyName,
-        string memberIndent)
+        string memberIndent,
+        bool baseHidesFacetMembers = false)
     {
+        var newMod = baseHidesFacetMembers ? "new " : "";
         sb.AppendLine();
-        sb.AppendLine($"{memberIndent}internal static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> ProjectionFor(string __requesterType)");
+        sb.AppendLine($"{memberIndent}internal static {newMod}global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> ProjectionFor(string __requesterType)");
         sb.AppendLine($"{memberIndent}{{");
         sb.AppendLine($"{memberIndent}    // If this DTO is currently being built (re-entrant), return a partial projection");
         sb.AppendLine($"{memberIndent}    // that excludes the requester type to break the cycle while including other nested facets.");
