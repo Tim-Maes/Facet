@@ -656,3 +656,221 @@ public class ThreeLevelNestedProjectionTests
         dto.Dispatch.Customer.Email.Should().Be("jane@example.com");
     }
 }
+
+// Regression test for: only the deepest (level 2) nested facet has ConfigureProjection,
+// and neither the parent (level 0) nor the middle (level 1) DTO has any configuration.
+// Scenario: InventoryItemScanRetrieval -> OrderLinePickingScanRetrieval -> OrderLinePickingProductScanRetrieval (has config)
+
+public class RootEntity360
+{
+    public int Id { get; set; }
+    public string RootName { get; set; } = string.Empty;
+    public MiddleEntity360? Middle { get; set; }
+}
+
+public class MiddleEntity360
+{
+    public int Id { get; set; }
+    public string MiddleName { get; set; } = string.Empty;
+    public DeepEntity360? Deep { get; set; }
+}
+
+public class DeepEntity360
+{
+    public int Id { get; set; }
+    public string DeepName { get; set; } = string.Empty;
+}
+
+[Facet(typeof(DeepEntity360),
+    Configuration = typeof(DeepFacet360Config),
+    Include = new[] { "Id", "DeepName" })]
+public partial class DeepFacet360
+{
+}
+
+public class DeepFacet360Config : IFacetProjectionMapConfiguration<DeepEntity360, DeepFacet360>
+{
+    public static void ConfigureProjection(IFacetProjectionBuilder<DeepEntity360, DeepFacet360> builder)
+    {
+        builder.Map(d => d.DeepName, s => "DEEP-" + s.DeepName);
+    }
+}
+
+[Facet(typeof(MiddleEntity360),
+    Include = new[] { "Id", "MiddleName", "Deep" },
+    NestedFacets = new[] { typeof(DeepFacet360) })]
+public partial class MiddleFacet360
+{
+}
+
+[Facet(typeof(RootEntity360),
+    Include = new[] { "Id", "RootName", "Middle" },
+    NestedFacets = new[] { typeof(MiddleFacet360) })]
+public partial class RootFacet360
+{
+}
+
+public class DeepestLevelConfigProjectionTests
+{
+    private RootEntity360 CreateEntity() => new()
+    {
+        Id = 1,
+        RootName = "root",
+        Middle = new MiddleEntity360
+        {
+            Id = 2,
+            MiddleName = "middle",
+            Deep = new DeepEntity360 { Id = 3, DeepName = "leaf" }
+        }
+    };
+
+    [Fact]
+    public void Projection_OnlyDeepestLevel_HasConfigureProjection_ShouldApplyConfig()
+    {
+        // Arrange: Level 0 (Root) and Level 1 (Middle) have NO ConfigureProjection.
+        // Level 2 (Deep) HAS ConfigureProjection. Verifies RequiresLazyProjection
+        // recurses correctly and ConfigureProjection is applied at the deepest level.
+        var entity = CreateEntity();
+
+        var projection = RootFacet360.Projection.Compile();
+        var dto = projection(entity);
+
+        dto.Id.Should().Be(1);
+        dto.Middle.Should().NotBeNull();
+        dto.Middle!.Id.Should().Be(2);
+        dto.Middle.Deep.Should().NotBeNull();
+        dto.Middle.Deep!.Id.Should().Be(3);
+        dto.Middle.Deep.DeepName.Should().Be("DEEP-leaf",
+            "ConfigureProjection on the deepest nested facet must be applied even when parent and grandparent have no config");
+    }
+
+    [Fact]
+    public void Projection_OnlyDeepestLevel_HasConfigureProjection_ViaQueryable_ShouldApplyConfig()
+    {
+        var entities = new[] { CreateEntity() }.AsQueryable();
+
+        var dtos = entities.Select(RootFacet360.Projection).ToList();
+
+        dtos.Should().HaveCount(1);
+        dtos[0].Middle!.Deep!.DeepName.Should().Be("DEEP-leaf",
+            "ConfigureProjection on the deepest nested facet must be applied via Queryable");
+    }
+
+    [Fact]
+    public void Projection_OnlyDeepestLevel_NullMiddle_ShouldReturnNull()
+    {
+        var entity = new RootEntity360 { Id = 1, RootName = "root", Middle = null };
+        var dto = RootFacet360.Projection.Compile()(entity);
+        dto.Middle.Should().BeNull();
+    }
+
+    [Fact]
+    public void Projection_OnlyDeepestLevel_NullDeep_ShouldReturnNullDeep()
+    {
+        var entity = new RootEntity360
+        {
+            Id = 1,
+            RootName = "root",
+            Middle = new MiddleEntity360 { Id = 2, MiddleName = "middle", Deep = null }
+        };
+        var dto = RootFacet360.Projection.Compile()(entity);
+        dto.Middle.Should().NotBeNull();
+        dto.Middle!.Deep.Should().BeNull();
+    }
+}
+
+// Regression test for: parent DTO has a COLLECTION nested facet whose element type has
+// ConfigureProjection. RequiresLazyProjection must correctly extract the element type
+// from the collection TypeName (not use the raw "List<T>" type) so that the parent
+// takes the lazy path and the collection element's ConfigureProjection is applied.
+// Scenario: OrderLineDispatchScanRetrieval -> List<OrderLineDispatchProductScanRetrieval> (has config)
+
+public class DispatchEntity361
+{
+    public int Id { get; set; }
+    public string Reference { get; set; } = string.Empty;
+    public List<DispatchProductEntity361> Products { get; set; } = [];
+}
+
+public class DispatchProductEntity361
+{
+    public int Id { get; set; }
+    public string ProductCode { get; set; } = string.Empty;
+    public int Quantity { get; set; }
+}
+
+[Facet(typeof(DispatchProductEntity361),
+    Configuration = typeof(DispatchProductFacet361Config),
+    Include = new[] { "Id", "ProductCode", "Quantity" })]
+public partial class DispatchProductFacet361
+{
+}
+
+public class DispatchProductFacet361Config : IFacetProjectionMapConfiguration<DispatchProductEntity361, DispatchProductFacet361>
+{
+    public static void ConfigureProjection(IFacetProjectionBuilder<DispatchProductEntity361, DispatchProductFacet361> builder)
+    {
+        builder.Map(d => d.ProductCode, s => "PROD-" + s.ProductCode);
+    }
+}
+
+[Facet(typeof(DispatchEntity361),
+    Include = new[] { "Id", "Reference", "Products" },
+    NestedFacets = new[] { typeof(DispatchProductFacet361) })]
+public partial class DispatchFacet361
+{
+}
+
+public class CollectionNestedFacetWithConfigTests
+{
+    private DispatchEntity361 CreateEntity() => new()
+    {
+        Id = 1,
+        Reference = "DISP-001",
+        Products =
+        [
+            new DispatchProductEntity361 { Id = 10, ProductCode = "ABC", Quantity = 5 },
+            new DispatchProductEntity361 { Id = 11, ProductCode = "XYZ", Quantity = 3 },
+        ]
+    };
+
+    [Fact]
+    public void Projection_CollectionNestedFacet_WithConfigOnElementType_ShouldApplyConfig()
+    {
+        // Bug: RequiresLazyProjection used member.TypeName ("List<T>?") directly instead of
+        // extracting the element type, so FindNestedFacetModel returned null for collection
+        // members, causing RequiresLazyProjection to return false when it should be true.
+        // Parent took the inline path and ConfigureProjection on the element type was skipped.
+        var entity = CreateEntity();
+
+        var dto = DispatchFacet361.Projection.Compile()(entity);
+
+        dto.Id.Should().Be(1);
+        dto.Reference.Should().Be("DISP-001");
+        dto.Products.Should().HaveCount(2);
+        dto.Products![0].ProductCode.Should().Be("PROD-ABC",
+            "ConfigureProjection on the collection element type must be applied");
+        dto.Products[1].ProductCode.Should().Be("PROD-XYZ");
+    }
+
+    [Fact]
+    public void Projection_CollectionNestedFacet_WithConfigOnElementType_ViaQueryable_ShouldApplyConfig()
+    {
+        var entities = new[] { CreateEntity() }.AsQueryable();
+
+        var dtos = entities.Select(DispatchFacet361.Projection).ToList();
+
+        dtos.Should().HaveCount(1);
+        dtos[0].Products.Should().HaveCount(2);
+        dtos[0].Products![0].ProductCode.Should().Be("PROD-ABC",
+            "ConfigureProjection on collection element type must apply via Queryable");
+    }
+
+    [Fact]
+    public void Projection_CollectionNestedFacet_EmptyCollection_ShouldReturnEmpty()
+    {
+        var entity = new DispatchEntity361 { Id = 2, Reference = "DISP-002", Products = [] };
+        var dto = DispatchFacet361.Projection.Compile()(entity);
+        dto.Products.Should().BeEmpty();
+    }
+}

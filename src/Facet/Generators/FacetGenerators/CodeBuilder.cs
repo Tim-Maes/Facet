@@ -124,6 +124,23 @@ internal static class CodeBuilder
         if (model.GenerateExpressionProjection)
         {
             ProjectionGenerator.GenerateProjectionProperty(sb, model, memberIndent, facetLookup);
+
+            // Also generate ProjectionFrom{SourceSimpleName} as an alias for Projection,
+            // providing a uniform API across single-source and multi-source facets.
+            // This lets generic code always use ProjectionFromX regardless of source count.
+            // Skip for records with existing primary constructors (projection not supported).
+            if (!(model.HasExistingPrimaryConstructor && model.IsRecord))
+            {
+                var sourceSpecificName = "ProjectionFrom" + GetSourceSimpleName(model);
+                // Add 'new' when the base facet also has a ProjectionFrom{Source} with the same source type,
+                // which happens when both base and derived are single-source facets sharing the same source.
+                var baseSrcMatches = model.BaseHidesFacetMembers
+                    && model.BaseFacetInfo?.BaseSourceTypeName == model.SourceTypeName;
+                var aliasNewMod = baseSrcMatches ? "new " : "";
+                sb.AppendLine();
+                ProjectionGenerator.GenerateProjectionDocumentation(sb, model, memberIndent, sourceSpecificName);
+                sb.AppendLine($"{memberIndent}public static {aliasNewMod}Expression<Func<{model.SourceTypeName}, {model.Name}>> {sourceSpecificName} => Projection;");
+            }
         }
 
         if (model.GenerateToSource)
