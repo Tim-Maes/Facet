@@ -37,13 +37,21 @@ internal sealed class BaseFacetInfo
     /// </summary>
     public ImmutableDictionary<string, (string childFacetTypeName, string sourceTypeName)> NestedFacetMappings { get; }
 
-    public BaseFacetInfo(string baseTypeName, string baseSourceTypeName, string? baseConfigurationTypeName, ImmutableArray<string> includedMembers, ImmutableDictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings)
+    /// <summary>
+    /// True when the nearest ancestor Facet has exactly one [Facet] attribute (single-source).
+    /// Only single-source facets generate <c>ProjectionFor(string)</c> — multi-source facets do not.
+    /// Used to avoid emitting spurious <c>new</c> on <c>ProjectionFor</c> in derived facets.
+    /// </summary>
+    public bool IsBaseSingleSource { get; }
+
+    public BaseFacetInfo(string baseTypeName, string baseSourceTypeName, string? baseConfigurationTypeName, ImmutableArray<string> includedMembers, ImmutableDictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings, bool isBaseSingleSource = true)
     {
         BaseTypeName = baseTypeName;
         BaseSourceTypeName = baseSourceTypeName;
         BaseConfigurationTypeName = baseConfigurationTypeName;
         IncludedMembers = includedMembers;
         NestedFacetMappings = nestedFacetMappings;
+        IsBaseSingleSource = isBaseSingleSource;
     }
 }
 

@@ -1309,6 +1309,7 @@ private static Dictionary<string, (string targetName, string source, bool revers
         var allIncludedMembers = new List<string>();
         var allNestedFacetMappings = new Dictionary<string, (string childFacetTypeName, string sourceTypeName)>();
         bool foundAny = false;
+        int nearestBaseFacetCount = 0;
 
         var baseType = targetSymbol.BaseType;
         while (baseType != null && baseType.SpecialType != SpecialType.System_Object)
@@ -1392,6 +1393,7 @@ private static Dictionary<string, (string targetName, string source, bool revers
                         }
 
                         foundAny = true;
+                        nearestBaseFacetCount = facetAttrs.Count;
                     }
 
                     // Accumulate Include members from all ancestor facets
@@ -1430,7 +1432,8 @@ private static Dictionary<string, (string targetName, string source, bool revers
             nearestBaseSourceTypeName!,
             nearestBaseConfigurationTypeName,
             allIncludedMembers.ToImmutableArray(),
-            allNestedFacetMappings.ToImmutableDictionary());
+            allNestedFacetMappings.ToImmutableDictionary(),
+            isBaseSingleSource: nearestBaseFacetCount == 1);
     }
 
     /// <summary>
