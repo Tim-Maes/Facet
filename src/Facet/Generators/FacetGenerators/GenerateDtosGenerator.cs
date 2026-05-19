@@ -229,12 +229,16 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         context.CancellationToken.ThrowIfCancellationRequested();
 
         var sourceTypeName = GetSimpleTypeName(model.SourceTypeName);
+        // C# convention: interface names start with `I`. Apply at the outermost
+        // position so the user's Prefix still sits between `I` and the entity name
+        // (e.g. `Prefix = "Admin"` -> `IAdminCreateXRequest`, not `AdminICreateXRequest`).
+        var interfaceLeader = model.OutputType == OutputType.Interface ? "I" : "";
 
         // Generate Create DTO (excludes ID fields)
         if ((model.Types & DtoTypes.Create) != 0)
         {
             var createMembers = FilterMembers(model.Members, model.ExcludeProperties, IdFieldPatterns);
-            var createDtoName = BuildDtoName(sourceTypeName, "Create", "Request", model.Prefix, model.Suffix);
+            var createDtoName = interfaceLeader + BuildDtoName(sourceTypeName, "Create", "Request", model.Prefix, model.Suffix);
             var createCode = GenerateDtoCode(model, createDtoName, createMembers, "Create");
             context.AddSource($"{GenerateFileDtoFullName(model, createDtoName)}", SourceText.From(createCode, Encoding.UTF8));
         }
@@ -243,7 +247,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         if ((model.Types & DtoTypes.Update) != 0)
         {
             var updateMembers = FilterMembers(model.Members, model.ExcludeProperties);
-            var updateDtoName = BuildDtoName(sourceTypeName, "Update", "Request", model.Prefix, model.Suffix);
+            var updateDtoName = interfaceLeader + BuildDtoName(sourceTypeName, "Update", "Request", model.Prefix, model.Suffix);
             var updateCode = GenerateDtoCode(model, updateDtoName, updateMembers, "Update");
             context.AddSource($"{GenerateFileDtoFullName(model, updateDtoName)}", SourceText.From(updateCode, Encoding.UTF8));
         }
@@ -252,7 +256,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         if ((model.Types & DtoTypes.Upsert) != 0)
         {
             var upsertMembers = FilterMembers(model.Members, model.ExcludeProperties);
-            var upsertDtoName = BuildDtoName(sourceTypeName, "Upsert", "Request", model.Prefix, model.Suffix);
+            var upsertDtoName = interfaceLeader + BuildDtoName(sourceTypeName, "Upsert", "Request", model.Prefix, model.Suffix);
             var upsertCode = GenerateDtoCode(model, upsertDtoName, upsertMembers, "Upsert");
             context.AddSource($"{GenerateFileDtoFullName(model, upsertDtoName)}", SourceText.From(upsertCode, Encoding.UTF8));
         }
@@ -261,7 +265,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         if ((model.Types & DtoTypes.Response) != 0)
         {
             var responseMembers = FilterMembers(model.Members, model.ExcludeProperties);
-            var responseDtoName = BuildDtoName(sourceTypeName, "", "Response", model.Prefix, model.Suffix);
+            var responseDtoName = interfaceLeader + BuildDtoName(sourceTypeName, "", "Response", model.Prefix, model.Suffix);
             var responseCode = GenerateDtoCode(model, responseDtoName, responseMembers, "Response");
             context.AddSource($"{GenerateFileDtoFullName(model, responseDtoName)}", SourceText.From(responseCode, Encoding.UTF8));
         }
@@ -273,14 +277,16 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 .Select(CreateQueryMember) // Make all properties optional in Query DTOs
                 .ToImmutableArray();
 
-            var queryDtoName = BuildDtoName(sourceTypeName, "", "Query", model.Prefix, model.Suffix);
+            var queryDtoName = interfaceLeader + BuildDtoName(sourceTypeName, "", "Query", model.Prefix, model.Suffix);
 
             var queryCode = GenerateDtoCode(model, queryDtoName, queryMembers, "Query");
             context.AddSource($"{GenerateFileDtoFullName(model, queryDtoName)}", SourceText.From(queryCode, Encoding.UTF8));
         }
 
-        // Generate Patch DTO (uses Optional<T> to distinguish between unspecified and null)
-        if ((model.Types & DtoTypes.Patch) != 0)
+        // Generate Patch DTO (uses Optional<T> to distinguish between unspecified and null).
+        // Patch DTOs require an ApplyTo method body; skip them on interface output and let
+        // the implementer provide the method on the concrete type.
+        if ((model.Types & DtoTypes.Patch) != 0 && model.OutputType != OutputType.Interface)
         {
             var patchMembers = FilterMembers(model.Members, model.ExcludeProperties);
             var patchDtoName = BuildDtoName(sourceTypeName, "", "Patch", model.Prefix, model.Suffix);
@@ -356,6 +362,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     {
         var sb = new StringBuilder();
         var sourceTypeName = GetSimpleTypeName(model.SourceTypeName);
+        var isInterface = model.OutputType == OutputType.Interface;
         var hasInitOnlyProperties = members.Any(m => m.IsInitOnly);
         var hasReadOnlyFields = members.Any(m => m.IsReadOnly);
 
@@ -364,25 +371,25 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         GenerateDtoTypeDeclaration(sb, model, dtoName, sourceTypeName, purpose);
 
         // Generate members
-        GenerateDtoMembers(sb, members);
+        GenerateDtoMembers(sb, model, members);
 
-        // Generate constructors if requested
-        if (model.GenerateConstructors)
+        // Constructors, projections, and ToSource methods only make sense on a
+        // concrete type; interfaces declare contract, not behavior.
+        if (!isInterface)
         {
-            GenerateDtoConstructors(sb, model, dtoName, sourceTypeName, members, hasInitOnlyProperties, hasReadOnlyFields);
+            if (model.GenerateConstructors)
+            {
+                GenerateDtoConstructors(sb, model, dtoName, sourceTypeName, members, hasInitOnlyProperties, hasReadOnlyFields);
+            }
+
+            if (model.GenerateProjections)
+            {
+                GenerateDtoProjection(sb, model, dtoName, sourceTypeName, members, hasInitOnlyProperties, hasReadOnlyFields);
+            }
+
+            GenerateDtoToSource(sb, model, dtoName, sourceTypeName, members);
+            GenerateDtoBackTo(sb, model, dtoName, sourceTypeName);
         }
-
-        // Generate projection if requested
-        if (model.GenerateProjections)
-        {
-            GenerateDtoProjection(sb, model, dtoName, sourceTypeName, members, hasInitOnlyProperties, hasReadOnlyFields);
-        }
-
-        // Generate ToSource method
-        GenerateDtoToSource(sb, model, dtoName, sourceTypeName, members);
-
-        // Generate deprecated BackTo method
-        GenerateDtoBackTo(sb, model, dtoName, sourceTypeName);
 
         sb.AppendLine("}");
 
@@ -420,45 +427,62 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             OutputType.Record => "record",
             OutputType.RecordStruct => "record struct",
             OutputType.Struct => "struct",
+            OutputType.Interface => "interface",
             _ => "record"
         };
 
         sb.AppendLine($"/// <summary>");
-        sb.AppendLine($"/// Generated {purpose} DTO for {sourceTypeName}.");
+        sb.AppendLine($"/// Generated {purpose} DTO contract for {sourceTypeName}.");
         sb.AppendLine($"/// </summary>");
 
-        // Add [Facet] attribute to make it work with extension methods
-        if (model.ConvertEnumsTo != null)
+        // The [Facet] attribute drives runtime mapping behavior for the concrete DTO and
+        // is meaningless on an interface declaration, so skip it for interface output.
+        if (model.OutputType != OutputType.Interface)
         {
-            var convertType = model.ConvertEnumsTo == "string" ? "string" : "int";
-            sb.AppendLine($"[Facet.Facet(typeof({model.SourceTypeName}), ConvertEnumsTo = typeof({convertType}))]");
-        }
-        else
-        {
-            sb.AppendLine($"[Facet.Facet(typeof({model.SourceTypeName}))]");
+            if (model.ConvertEnumsTo != null)
+            {
+                var convertType = model.ConvertEnumsTo == "string" ? "string" : "int";
+                sb.AppendLine($"[Facet.Facet(typeof({model.SourceTypeName}), ConvertEnumsTo = typeof({convertType}))]");
+            }
+            else
+            {
+                sb.AppendLine($"[Facet.Facet(typeof({model.SourceTypeName}))]");
+            }
         }
 
         sb.AppendLine($"public {keyword} {dtoName}");
         sb.AppendLine("{");
     }
 
-    private static void GenerateDtoMembers(StringBuilder sb, ImmutableArray<FacetMember> members)
+    private static void GenerateDtoMembers(StringBuilder sb, GenerateDtosTargetModel model, ImmutableArray<FacetMember> members)
     {
+        var isInterface = model.OutputType == OutputType.Interface;
         foreach (var member in members)
         {
             if (member.Kind == FacetMemberKind.Property)
             {
-                GenerateDtoProperty(sb, member);
+                GenerateDtoProperty(sb, member, isInterface);
             }
-            else
+            else if (!isInterface)
             {
+                // Interfaces cannot declare fields; entity fields are surfaced as
+                // get-only interface properties in the same loop, so silently skip
+                // here rather than fail generation.
                 GenerateDtoField(sb, member);
             }
         }
     }
 
-    private static void GenerateDtoProperty(StringBuilder sb, FacetMember member)
+    private static void GenerateDtoProperty(StringBuilder sb, FacetMember member, bool isInterface)
     {
+        if (isInterface)
+        {
+            // Interface members: no `public`, no setter, no `required`, no initializer.
+            // The implementer chooses get-only vs get/set vs init.
+            sb.AppendLine($"    {member.TypeName} {member.Name} {{ get; }}");
+            return;
+        }
+
         var propDef = $"public {member.TypeName} {member.Name}";
 
         if (member.IsInitOnly)

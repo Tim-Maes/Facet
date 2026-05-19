@@ -147,3 +147,16 @@ public class TestNestedType
     public string Property1 { get; set; } = string.Empty;
     public int Property2 { get; set; }
 }
+
+// Interface output: emits ICreateTestInterfaceEntityRequest / IUpdateTestInterfaceEntityRequest /
+// TestInterfaceEntityResponse as interfaces declaring the entity-mapped properties as get-only.
+// Useful when you want compile-time enforcement that hand-written DTOs cover all entity fields
+// without giving up the DTO's own shape (construction syntax, validation, extra fields).
+[GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response, OutputType = OutputType.Interface)]
+public class TestInterfaceEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public bool IsActive { get; set; }
+}
