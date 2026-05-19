@@ -35,8 +35,6 @@ using Facet.Mapping;                     // For mapper interfaces
 
 ### Example 1: Simple Type Conversion (Vector2)
 
-This addresses the GitHub issue #134 - converting separate X, Y properties into a Vector2 type.
-
 ```csharp
 // Domain entity
 public class User

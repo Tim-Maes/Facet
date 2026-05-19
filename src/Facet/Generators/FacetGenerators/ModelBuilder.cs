@@ -229,7 +229,7 @@ internal static class ModelBuilder
             members = members.AddRange(expressionMembers);
         }
 
-        // Get the namespace early - needed for fullName calculation (GitHub issue #249)
+        // Get the namespace early
         var ns = targetSymbol.ContainingNamespace.IsGlobalNamespace
             ? null
             : targetSymbol.ContainingNamespace.ToDisplayString();
@@ -255,7 +255,6 @@ internal static class ModelBuilder
         else if (ns != null)
         {
             // Include namespace to avoid collisions for types with the same name in different namespaces
-            // (GitHub issue #249)
             fullName = ns + "." + targetSymbol.Name;
         }
         else
@@ -272,7 +271,7 @@ internal static class ModelBuilder
         // Check if the source type has a positional constructor
         var hasPositionalConstructor = TypeAnalyzer.HasPositionalConstructor(sourceType);
 
-        // Check if ToSource can actually be generated (GitHub issue #220)
+        // Check if ToSource can actually be generated
         // If the source type doesn't have an accessible parameterless constructor or has inaccessible setters,
         // skip ToSource generation to avoid compilation errors
         if (generateToSource && !hasPositionalConstructor)
@@ -580,15 +579,10 @@ internal static class ModelBuilder
         // to the generated target type. Generating a partial defining declaration would require
         // the user to provide an implementing declaration, which breaks the DTO use case.
         // It also doesn't work with other source generators (e.g., CommunityToolkit.Mvvm)
-        // because source generators don't chain. (GitHub issue #277)
+        // because source generators don't chain.
         var isSourcePartial = IsPartialDefiningProperty(property);
 
         // Extract property initializer/default value from source
-        // Skip initializers for:
-        // 1. Nested facets - the type changes and the initializer won't be compatible
-        // 2. NullableProperties = true - query DTOs should default to null, not the source initializer
-        // 3. Partial source properties - the source defining declaration cannot have initializers,
-        //    so there's nothing to extract anyway
         string? defaultValue = null;
         if (!isNestedFacet && !nullableProperties && !isSourcePartial)
         {
@@ -756,8 +750,8 @@ internal static class ModelBuilder
             isEnumConversion,
             originalEnumTypeName,
             isNestedType,
-            isPartial: false, // Never propagate partial from source (GitHub issue #277)
-            isSourceInitOnly: isInitOnly)); // Raw source accessor — needed by ApplyToSource generation
+            isPartial: false, // Never propagate partial from source
+            isSourceInitOnly: isInitOnly)); // Raw source accessor 
         addedMembers.Add(memberName);
     }
 

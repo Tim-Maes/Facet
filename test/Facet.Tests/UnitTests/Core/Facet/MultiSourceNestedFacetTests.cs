@@ -39,7 +39,7 @@ public partial class UnitDropDownDto335;
 public partial class OrderLineDto335;
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Regression test for PR #365 / Allan's report:
+// Regression test for PR #365
 // When the first source of a multi-source facet is itself a generated facet
 // (its properties are not visible to the source generator), FindNestedFacetModel
 // must still pick the model whose SourceTypeName matches the member's

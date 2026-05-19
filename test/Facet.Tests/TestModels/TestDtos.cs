@@ -325,11 +325,6 @@ public partial class OrderDto
     public OrderMetadata? Metadata { get; set; }
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Multi-source mapping test DTOs (GitHub issue: map different source types to the
-// same target type).
-// ──────────────────────────────────────────────────────────────────────────────
-
 /// <summary>
 /// A DTO that can be constructed from either <see cref="MultiSourceEntityA"/> or
 /// <see cref="MultiSourceEntityB"/> – both share Id and Name.

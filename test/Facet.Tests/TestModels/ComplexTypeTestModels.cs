@@ -147,7 +147,7 @@ public partial record BobChildModel;
 [Facet(typeof(Bob), NestedFacets = [typeof(BobChildModel)])]
 public partial record BobModel;
 
-// Test models for GitHub issue #220 - Smarter GenerateToSource
+// Test models for GitHub issue #220; Smarter GenerateToSource
 public class MyClass
 {
     public string Name { get; private set; }
