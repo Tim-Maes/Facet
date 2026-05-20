@@ -26,7 +26,17 @@ public enum OutputType
     Class = 0,
     Record = 1,
     Struct = 2,
-    RecordStruct = 3
+    RecordStruct = 3,
+    /// <summary>
+    /// Generates an interface declaring the entity-mapped properties as get-only members.
+    /// Useful when you want compile-time enforcement that a hand-written DTO contains all
+    /// the entity's properties (the DTO declares <c>: IMyEntityCreateRequest</c> and the
+    /// compiler fails until every interface member is satisfied) without surrendering the
+    /// DTO's own shape (construction syntax, validation attributes, extra non-entity fields).
+    /// Constructors, projections, and ToSource methods are not emitted on interface output.
+    /// Not supported for Patch DTOs (their ApplyTo method requires a concrete implementation).
+    /// </summary>
+    Interface = 4
 }
 
 /// <summary>
