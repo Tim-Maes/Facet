@@ -57,6 +57,91 @@ public class User
 | `Record`      | Generate as records      |
 | `Struct`      | Generate as structs      |
 | `RecordStruct`| Generate as record structs |
+| `Interface`   | Generate as interfaces declaring entity-mapped properties as get-only members. See [Interface Output](#interface-output). |
+
+## Interface Output
+
+Setting `OutputType = OutputType.Interface` emits the DTO as an **interface** declaring each entity-mapped property as a get-only member, rather than a concrete class/record/struct. This is useful when you want compile-time enforcement that a hand-written DTO covers all the entity's properties — without giving up control over the DTO's own shape (construction syntax, validation attributes, extra non-entity fields).
+
+### Usage
+
+```csharp
+[GenerateDtos(Types = DtoTypes.Update, OutputType = OutputType.Interface)]
+public class User
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string? Email { get; set; }
+    public bool IsActive { get; set; }
+}
+```
+
+This generates:
+
+```csharp
+public interface IUpdateUserRequest
+{
+    int Id { get; }
+    string Name { get; }
+    string? Email { get; }
+    bool IsActive { get; }
+}
+```
+
+### Naming
+
+Interface output prepends an `I` to the generated name, following C# convention. Any `Prefix` you supply sits between the `I` and the entity name:
+
+| Configuration | Generated name |
+|---------------|----------------|
+| `OutputType = OutputType.Interface` | `IUpdateUserRequest` |
+| `OutputType = OutputType.Interface, Prefix = "Admin"` | `IAdminUpdateUserRequest` |
+| `OutputType = OutputType.Interface, Suffix = "Contract"` | `IUpdateUserRequestContract` |
+
+### What is (and isn't) emitted
+
+Interfaces declare contract, not behavior, so on interface output the generator emits **only** the property declarations. The following are intentionally **not** emitted:
+
+- Constructors (interfaces can't declare them)
+- `Projection` expressions and `FromSource` mappings
+- `ToSource` / `BackTo` methods
+- The `[Facet]` attribute (it drives runtime mapping on the concrete type and is meaningless on an interface)
+
+Properties are emitted as `{ get; }` only — the implementer chooses whether to back them with `get;`, `get; set;`, `get; init;`, or `required`.
+
+### Patch DTOs
+
+`DtoTypes.Patch` is **skipped** under `OutputType.Interface`. Patch DTOs rely on `Optional<T>` and an `ApplyTo` method whose body must live on a concrete type. If you request `Types = DtoTypes.All` with interface output, every DTO type except `Patch` will be generated.
+
+### When to use it
+
+Use `OutputType.Interface` when you want the generator to act as a **contract producer** rather than a DTO producer. The canonical scenario:
+
+1. The entity has the canonical shape (and grows over time).
+2. You write the DTOs by hand — typically as positional records with validation attributes, custom constructors, or extra request-only fields.
+3. You want the build to fail the moment an entity property is added but not propagated to the DTO.
+
+```csharp
+// Entity declares the contract producer
+[GenerateDtos(Types = DtoTypes.Update, OutputType = OutputType.Interface)]
+public class User
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string? Email { get; set; }
+    public bool IsActive { get; set; }
+}
+
+// Hand-written positional record satisfies the generated contract.
+// Adding a property to User without updating this record is now a compile error.
+public sealed record UpdateUserRequest(
+    int Id,
+    [Required] string Name,
+    string? Email,
+    bool IsActive) : IUpdateUserRequest;
+```
+
+If you instead want the generator to own the DTO outright — including constructors, projections, and mapping — use `OutputType.Class`, `OutputType.Record`, `OutputType.Struct`, or `OutputType.RecordStruct`.
 
 ## Excluding Audit Fields
 
