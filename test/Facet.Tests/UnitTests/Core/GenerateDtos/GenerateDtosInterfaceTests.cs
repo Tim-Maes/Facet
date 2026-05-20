@@ -102,4 +102,21 @@ public class GenerateDtosInterfaceTests
         dto.Description.Should().BeNull();
         dto.IsActive.Should().BeTrue();
     }
+
+    /// <summary>
+    /// The canonical motivating use case from the PR description: a hand-written positional
+    /// record whose synthesized init-only properties satisfy the generated interface contract.
+    /// </summary>
+    private sealed record PositionalImpl(int Id, string Name, string? Description, bool IsActive)
+      : IUpdateTestInterfaceEntityRequest;
+
+    [Fact]
+    public void Interface_CanBeImplementedByPositionalRecord()
+    {
+        IUpdateTestInterfaceEntityRequest dto = new PositionalImpl(2, "rec", "desc", false);
+        dto.Id.Should().Be(2);
+        dto.Name.Should().Be("rec");
+        dto.Description.Should().Be("desc");
+        dto.IsActive.Should().BeFalse();
+    }
 }
