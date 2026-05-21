@@ -1358,7 +1358,13 @@ Use `Facet.Dashboard` to visualize your Facets!
 
 Note that these are perfomed by using the `<TSource, TDestination>` mapping method overloads wherever possible, as they are significantly faster than the `<TDestination>` versions.
 
+Collection mapping benchmark:
+
 <img width="1649" height="557" alt="image" src="https://github.com/user-attachments/assets/bdb149ca-4ce0-4276-887e-09c206b9323d" />
+
+Nested mappings:
+
+<img width="1298" height="212" alt="image" src="https://github.com/user-attachments/assets/9fd66b64-fe6e-49c0-a0e0-831bcaf1645e" />
 
 ## Contributors
 
