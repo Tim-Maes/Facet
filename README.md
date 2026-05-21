@@ -1358,25 +1358,17 @@ Use `Facet.Dashboard` to visualize your Facets!
 
 Note that these are perfomed by using the `<TSource, TDestination>` mapping method overloads wherever possible, as they are significantly faster than the `<TDestination>` versions.
 
-**Simple mapping**
 
-| Method           | Mean      | Ratio        | Allocated | Alloc Ratio |
-|----------------- |----------:|-------------:|----------:|------------:|
-| Facet            |  5.922 ns |     baseline |      40 B |             |
-| Mapperly         |  6.227 ns | 1.05x slower |      40 B |  1.00x more |
-| Mapster | 13.243 ns | 2.24x slower |      40 B |  1.00x more |
-| AutoMapper       | 31.459 ns | 5.31x slower |      40 B |  1.00x more |
+**Collection mapping (1000 items)**
 
-**Nested mapping**
-
-| Method           | Mean      | Ratio        | Allocated | Alloc Ratio |
-|----------------- |----------:|-------------:|----------:|------------:|
-| Facet            |  5.497 ns |     baseline |      32 B |             |
-| Mapperly         |  9.015 ns | 1.64x slower |      72 B |  2.25x more |
-| Mapster | 17.743 ns | 3.23x slower |      72 B |  2.25x more |
-| AutoMapper       | 36.794 ns | 6.69x slower |      72 B |  2.25x more |
-
-
+| Method       | Mean         | Ratio        | Allocated | Alloc Ratio |
+|------------- |-------------:|-------------:|----------:|------------:|
+| Facet        |   6,231.5 ns |     baseline |  56,304 B |             |
+| Hand-written |   6,763.5 ns | 1.09x slower |  64,232 B |  1.14x more |
+| Forge        |   6,906.7 ns | 1.11x slower |  64,232 B |  1.14x more |
+| Mapperly     |   9,433.9 ns | 1.51x slower |  64,200 B |  1.14x more |
+| Mapster      |   9,512.7 ns | 1.53x slower |  64,160 B |  1.14x more |
+| AutoMapper   |  10,363.7 ns | 1.66x slower |  72,704 B |  1.29x more |
 
 ## Contributors
 
