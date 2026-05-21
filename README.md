@@ -1358,17 +1358,7 @@ Use `Facet.Dashboard` to visualize your Facets!
 
 Note that these are perfomed by using the `<TSource, TDestination>` mapping method overloads wherever possible, as they are significantly faster than the `<TDestination>` versions.
 
-
-**Collection mapping (1000 items)**
-
-| Method       | Mean         | Ratio        | Allocated | Alloc Ratio |
-|------------- |-------------:|-------------:|----------:|------------:|
-| Facet        |   6,231.5 ns |     baseline |  56,304 B |             |
-| Hand-written |   6,763.5 ns | 1.09x slower |  64,232 B |  1.14x more |
-| Forge        |   6,906.7 ns | 1.11x slower |  64,232 B |  1.14x more |
-| Mapperly     |   9,433.9 ns | 1.51x slower |  64,200 B |  1.14x more |
-| Mapster      |   9,512.7 ns | 1.53x slower |  64,160 B |  1.14x more |
-| AutoMapper   |  10,363.7 ns | 1.66x slower |  72,704 B |  1.29x more |
+<img width="1649" height="557" alt="image" src="https://github.com/user-attachments/assets/bdb149ca-4ce0-4276-887e-09c206b9323d" />
 
 ## Contributors
 
