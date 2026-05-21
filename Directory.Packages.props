@@ -6,9 +6,9 @@
 	<ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
 		<PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
 		<PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.0" />
-		<PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.7" />
+		<PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.8" />
 		<PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.0" />
-		<PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.7" />
+		<PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.8" />
 		<PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
 		<PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
 		<PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.0" />
@@ -54,13 +54,13 @@
 		<PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
 
 		<!-- SourceLink for debugging support -->
-		<PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.203" />
+		<PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.300" />
 
 		<!-- Testing Dependencies -->
-		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.4.0" />
+		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
 		<PackageVersion Include="xunit" Version="2.9.3" />
 		<PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
-		<PackageVersion Include="FluentAssertions" Version="8.9.0" />
+		<PackageVersion Include="FluentAssertions" Version="8.10.0" />
 
 		<!-- Benchmark Dependencies -->
 		<PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />
