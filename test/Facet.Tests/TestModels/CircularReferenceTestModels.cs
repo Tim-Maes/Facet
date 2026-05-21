@@ -49,12 +49,12 @@ public partial record BookFacetWithTracking;
 [Facet(typeof(OrgEmployee), MaxDepth = 5, PreserveReferences = true, NestedFacets = [typeof(OrgEmployeeFacet)])]
 public partial record OrgEmployeeFacet;
 
-// Facets relying on default MaxDepth (10) — no explicit MaxDepth or PreserveReferences
-// These verify that the defaults work correctly for circular reference scenarios
-[Facet(typeof(Author), NestedFacets = [typeof(BookFacetDefault)])]
+// Facets with PreserveReferences enabled for circular reference scenarios
+// PreserveReferences defaults to false for performance; opt-in for circular graph safety
+[Facet(typeof(Author), PreserveReferences = true, NestedFacets = [typeof(BookFacetDefault)])]
 public partial record AuthorFacetDefault;
 
-[Facet(typeof(Book), NestedFacets = [typeof(AuthorFacetDefault)])]
+[Facet(typeof(Book), PreserveReferences = true, NestedFacets = [typeof(AuthorFacetDefault)])]
 public partial record BookFacetDefault;
 
 // Deep non-circular chain to verify default MaxDepth allows at least depth 5

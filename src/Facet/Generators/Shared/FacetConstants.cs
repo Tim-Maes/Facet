@@ -66,7 +66,7 @@ internal static class FacetConstants
     /// <summary>
     /// The default setting for preserving object references during mapping to detect circular references.
     /// </summary>
-    public const bool DefaultPreserveReferences = true;
+    public const bool DefaultPreserveReferences = false;
 
     /// <summary>
     /// The prefix used to specify global namespace qualification.

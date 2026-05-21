@@ -911,8 +911,7 @@ public class CircularReferenceTests
         var book = new Book { Id = 1, Title = "Default Book", Author = author };
         author.Books.Add(book);
 
-        // Act — no explicit MaxDepth or PreserveReferences set on AuthorFacetDefault
-        // Default: MaxDepth=10, PreserveReferences=true
+        // Act — AuthorFacetDefault explicitly sets PreserveReferences = true
         var facet = new AuthorFacetDefault(author);
 
         // Assert — should not stack overflow and should map first level
@@ -923,7 +922,7 @@ public class CircularReferenceTests
         facet.Books.Should().HaveCount(1);
         facet.Books![0].Title.Should().Be("Default Book");
 
-        // With PreserveReferences=true (default), the same Author object instance
+        // With PreserveReferences=true, the same Author object instance
         // is detected as already processed, so Book.Author is null.
         // This is correct circular reference prevention behavior.
         facet.Books[0].Author.Should().BeNull(
@@ -1019,13 +1018,13 @@ public partial record SimpleLeafNoDepthDto;
 public partial record ParentWithLeafNoDepthDto;
 
 // Facets with default settings for existing models
-[Facet(typeof(OrgEmployee), NestedFacets = [typeof(OrgEmployeeDefaultFacet)])]
+[Facet(typeof(OrgEmployee), PreserveReferences = true, NestedFacets = [typeof(OrgEmployeeDefaultFacet)])]
 public partial record OrgEmployeeDefaultFacet;
 
-[Facet(typeof(Author), NestedFacets = [typeof(BookDefaultDto)])]
+[Facet(typeof(Author), PreserveReferences = true, NestedFacets = [typeof(BookDefaultDto)])]
 public partial record AuthorDefaultDto;
 
-[Facet(typeof(Book), NestedFacets = [typeof(AuthorDefaultDto)])]
+[Facet(typeof(Book), PreserveReferences = true, NestedFacets = [typeof(AuthorDefaultDto)])]
 public partial record BookDefaultDto;
 
 // For mixed settings test

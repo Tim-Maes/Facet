@@ -100,7 +100,7 @@ internal sealed class GlobalConfigurationDefaults
     public int MaxDepthToSource { get; }
 
     /// <summary>
-    /// Default value for PreserveReferences (default: true).
+    /// Default value for PreserveReferences (default: false).
     /// Can be overridden by setting the Facet_PreserveReferences MSBuild property.
     /// </summary>
     public bool PreserveReferences { get; }
