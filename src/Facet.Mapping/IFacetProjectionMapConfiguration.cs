@@ -8,7 +8,7 @@ namespace Facet.Mapping;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Expressions passed to <see cref="IFacetProjectionBuilder{TSource,TTarget}.Map{TValue}"/>
+/// Expressions passed to <see cref="IFacetProjectionBuilder{TSource,TTarget}.Map{TTargetValue,TSourceValue}"/>
 /// must be EF Core-translatable. If they are not, EF Core will throw at query execution time.
 /// </para>
 /// <para>

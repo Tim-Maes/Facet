@@ -10,7 +10,7 @@ public static class FacetProjectionExpressionExtensions
 {
     /// <summary>
     /// Reinterprets a non-nullable projection expression as returning a nullable result.
-    /// Use this when passing a <c>ProjectionFromX</c> to <see cref="IFacetProjectionBuilder{TSource,TTarget}.Map{TValue}"/>
+    /// Use this when passing a <c>ProjectionFromX</c> to <see cref="IFacetProjectionBuilder{TSource,TTarget}.Map{TTargetValue,TSourceValue}"/>
     /// for a nullable target property, to avoid CS8620 nullability warnings.
     /// </summary>
     /// <remarks>
