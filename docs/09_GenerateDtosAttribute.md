@@ -58,6 +58,7 @@ public class User
 | `Struct`      | Generate as structs      |
 | `RecordStruct`| Generate as record structs |
 | `Interface`   | Generate as interfaces declaring entity-mapped properties as get-only members. See [Interface Output](#interface-output). |
+| `PartialClass`| Generate as `partial class` (not sealed) with the same properties and constructors as `Class`, but without projections or `ToSource`/`BackTo` — meant to be extended by a hand-written partial. See [Partial Class Output](#partial-class-output). |
 
 ## Interface Output
 
@@ -142,6 +143,127 @@ public sealed record UpdateUserRequest(
 ```
 
 If you instead want the generator to own the DTO outright — including constructors, projections, and mapping — use `OutputType.Class`, `OutputType.Record`, `OutputType.Struct`, or `OutputType.RecordStruct`.
+
+## Partial Class Output
+
+Setting `OutputType = OutputType.PartialClass` emits the DTO as a `public partial class` (not sealed) with get/set properties and the same constructors as `OutputType.Class`, but **without** the `Projection` expression, `ToSource`, or `BackTo` methods. The intent is for callers to extend the DTO with their own hand-written partial in the same project — adding validation attributes, computed members, custom mapping, or extra request-only fields — without giving up the generator-emitted property surface or constructors.
+
+### Usage
+
+```csharp
+[GenerateDtos(Types = DtoTypes.Update, OutputType = OutputType.PartialClass)]
+public class User
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public bool IsActive { get; set; }
+}
+```
+
+This generates:
+
+```csharp
+[Facet.Facet(typeof(User))]
+public partial class UpdateUserRequest
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = default!;
+    public bool IsActive { get; set; }
+
+    public UpdateUserRequest(User source)
+    {
+        this.Id = source.Id;
+        this.Name = source.Name;
+        this.IsActive = source.IsActive;
+    }
+
+    public UpdateUserRequest() { }
+}
+```
+
+You then add a sibling partial file with whatever the generator can't (or shouldn't) own:
+
+```csharp
+public partial class UpdateUserRequest
+{
+    [Required, MinLength(2)]
+    public string Name { get; set; } = default!; // overrides the generated declaration via the partial
+
+    // Extra non-entity field
+    public string? CorrelationId { get; set; }
+
+    public string DisplayLabel => $"{Id}: {Name}";
+}
+```
+
+### What is (and isn't) emitted
+
+`OutputType.PartialClass` emits:
+
+- A `public partial class` declaration (the `partial` keyword is the only structural difference from `OutputType.Class`)
+- All entity-mapped properties as `public { get; set; }`
+- The source-copy constructor (`new XDto(SourceEntity source)`) — with `[SetsRequiredMembers]` when any property is `required`
+- The parameterless constructor
+- The `[Facet]` attribute
+
+The following are intentionally **not** emitted (in contrast to `OutputType.Class`):
+
+- The `Projection` expression
+- `FromSource` factory
+- `ToSource` / `BackTo` methods
+
+The rationale: a hand-written partial may add members the generator can't see, so a generator-owned mapping would be incomplete. Callers who want full mapping should use `OutputType.Class` instead; callers who want extensibility own the mapping themselves.
+
+### Not sealed
+
+`OutputType.PartialClass` deliberately does not seal the emitted class so it can serve as a shared base for hand-written derived types — useful when several DTOs share most of an entity's shape but differ in a few fields (e.g. `GlobalSoftware` / `LocalSoftware` extending a generated `SoftwareDto`).
+
+### Composing with `OutputType.Interface`
+
+When the same entity carries **both** an `OutputType.Interface` attribute and an `OutputType.PartialClass` attribute with overlapping `DtoTypes`, the partial class declares the matching generated interface as a base — pairing the two outputs into a contract + implementation set automatically.
+
+```csharp
+[GenerateDtos(Types = DtoTypes.Update, OutputType = OutputType.Interface)]
+[GenerateDtos(Types = DtoTypes.Update, OutputType = OutputType.PartialClass)]
+public class User
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+}
+```
+
+Generates:
+
+```csharp
+public interface IUpdateUserRequest
+{
+    int Id { get; }
+    string Name { get; }
+}
+
+public partial class UpdateUserRequest : IUpdateUserRequest
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = default!;
+    // ... constructors as above
+}
+```
+
+The match requires equal `Prefix`, `Suffix`, and `Namespace` between the two attributes. Bits in `DtoTypes` that aren't shared are not coupled — e.g. an Interface attribute covering `Create | Update` paired with a PartialClass attribute covering `Update | Response` produces an `IUpdateUserRequest` interface and partial class only for `Update`; `Create` is interface-only and `Response` is a plain (unimplemented) partial.
+
+### Patch DTOs
+
+`DtoTypes.Patch` is generated normally under `OutputType.PartialClass` — the patch DTO is emitted as `partial class` with its `ApplyTo` method, and a hand-written partial can extend it like any other DTO type.
+
+### When to use it
+
+Pick `OutputType.PartialClass` when:
+
+- You want the generator to own the property surface and constructors, but reserve the right to extend them.
+- You want a shared, unsealed base for several derived DTOs.
+- You want to layer hand-written validation attributes or computed members onto a generated DTO without forking the generator's output.
+
+If you don't need extensibility, prefer `OutputType.Class` — it also emits `Projection`, `ToSource`, and `BackTo` for full round-tripping.
 
 ## Excluding Audit Fields
 

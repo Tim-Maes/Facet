@@ -36,7 +36,19 @@ public enum OutputType
     /// Constructors, projections, and ToSource methods are not emitted on interface output.
     /// Not supported for Patch DTOs (their ApplyTo method requires a concrete implementation).
     /// </summary>
-    Interface = 4
+    Interface = 4,
+    /// <summary>
+    /// Generates a <c>partial class</c> (not sealed) with get/set properties and the same constructors
+    /// as <see cref="Class"/>, but without projection, <c>ToSource</c>, or <c>BackTo</c> methods.
+    /// Designed to be extended by a hand-written partial file in the same project — that is where
+    /// callers add validation attributes, computed members, custom constructors, or mapping logic.
+    /// When a sibling <c>[GenerateDtos]</c> attribute on the same type uses
+    /// <see cref="Interface"/> for the matching DTO type, the generated partial class also declares
+    /// the matching generated interface as a base (e.g. <c>: ICreateUserRequest</c>) so the two
+    /// outputs compose into a contract + implementation pair.
+    /// Not supported for Patch DTOs (their <c>ApplyTo</c> method already lives on a concrete type).
+    /// </summary>
+    PartialClass = 5
 }
 
 /// <summary>

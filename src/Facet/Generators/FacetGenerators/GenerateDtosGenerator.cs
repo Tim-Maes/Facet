@@ -109,7 +109,54 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             }
         }
 
-        return models.Count > 0 ? models : null;
+        if (models.Count == 0) return null;
+
+        // Resolve sibling interface composition: a PartialClass output should declare a base of
+        // `: I{Name}` for any DTO type that ALSO has a matching Interface attribute on the same source
+        // (same Prefix/Suffix/Namespace, overlapping DtoTypes). This pairs the two outputs into a
+        // contract + implementation without the user having to wire it up by hand.
+        var interfaceModels = models.Where(m => m.OutputType == OutputType.Interface).ToList();
+        if (interfaceModels.Count == 0)
+        {
+            return models;
+        }
+
+        for (int i = 0; i < models.Count; i++)
+        {
+            var model = models[i];
+            if (model.OutputType != OutputType.PartialClass) continue;
+
+            DtoTypes siblingMask = DtoTypes.None;
+            foreach (var iface in interfaceModels)
+            {
+                if (iface.Prefix != model.Prefix) continue;
+                if (iface.Suffix != model.Suffix) continue;
+                if (iface.TargetNamespace != model.TargetNamespace) continue;
+
+                siblingMask |= iface.Types & model.Types;
+            }
+
+            if (siblingMask == DtoTypes.None) continue;
+
+            models[i] = new GenerateDtosTargetModel(
+                model.SourceTypeName,
+                model.SourceNamespace,
+                model.TargetNamespace,
+                model.Types,
+                model.OutputType,
+                model.Prefix,
+                model.Suffix,
+                model.IncludeFields,
+                model.GenerateConstructors,
+                model.GenerateProjections,
+                model.ConvertEnumsTo,
+                model.ExcludeProperties,
+                model.Members,
+                model.UseFullName,
+                siblingMask);
+        }
+
+        return models;
     }
 
     private static GenerateDtosTargetModel? GetDtosModel(GeneratorAttributeSyntaxContext context, AttributeData attribute, INamedTypeSymbol sourceSymbol, bool forceExcludeAuditFields, CancellationToken token)
@@ -239,7 +286,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
             var createMembers = FilterMembers(model.Members, model.ExcludeProperties, IdFieldPatterns);
             var createDtoName = interfaceLeader + BuildDtoName(sourceTypeName, "Create", "Request", model.Prefix, model.Suffix);
-            var createCode = GenerateDtoCode(model, createDtoName, createMembers, "Create");
+            var createCode = GenerateDtoCode(model, createDtoName, createMembers, "Create", DtoTypes.Create);
             context.AddSource($"{GenerateFileDtoFullName(model, createDtoName)}", SourceText.From(createCode, Encoding.UTF8));
         }
 
@@ -248,7 +295,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
             var updateMembers = FilterMembers(model.Members, model.ExcludeProperties);
             var updateDtoName = interfaceLeader + BuildDtoName(sourceTypeName, "Update", "Request", model.Prefix, model.Suffix);
-            var updateCode = GenerateDtoCode(model, updateDtoName, updateMembers, "Update");
+            var updateCode = GenerateDtoCode(model, updateDtoName, updateMembers, "Update", DtoTypes.Update);
             context.AddSource($"{GenerateFileDtoFullName(model, updateDtoName)}", SourceText.From(updateCode, Encoding.UTF8));
         }
 
@@ -257,7 +304,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
             var upsertMembers = FilterMembers(model.Members, model.ExcludeProperties);
             var upsertDtoName = interfaceLeader + BuildDtoName(sourceTypeName, "Upsert", "Request", model.Prefix, model.Suffix);
-            var upsertCode = GenerateDtoCode(model, upsertDtoName, upsertMembers, "Upsert");
+            var upsertCode = GenerateDtoCode(model, upsertDtoName, upsertMembers, "Upsert", DtoTypes.Upsert);
             context.AddSource($"{GenerateFileDtoFullName(model, upsertDtoName)}", SourceText.From(upsertCode, Encoding.UTF8));
         }
 
@@ -266,7 +313,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
             var responseMembers = FilterMembers(model.Members, model.ExcludeProperties);
             var responseDtoName = interfaceLeader + BuildDtoName(sourceTypeName, "", "Response", model.Prefix, model.Suffix);
-            var responseCode = GenerateDtoCode(model, responseDtoName, responseMembers, "Response");
+            var responseCode = GenerateDtoCode(model, responseDtoName, responseMembers, "Response", DtoTypes.Response);
             context.AddSource($"{GenerateFileDtoFullName(model, responseDtoName)}", SourceText.From(responseCode, Encoding.UTF8));
         }
 
@@ -279,7 +326,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
             var queryDtoName = interfaceLeader + BuildDtoName(sourceTypeName, "", "Query", model.Prefix, model.Suffix);
 
-            var queryCode = GenerateDtoCode(model, queryDtoName, queryMembers, "Query");
+            var queryCode = GenerateDtoCode(model, queryDtoName, queryMembers, "Query", DtoTypes.Query);
             context.AddSource($"{GenerateFileDtoFullName(model, queryDtoName)}", SourceText.From(queryCode, Encoding.UTF8));
         }
 
@@ -358,17 +405,18 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         return members.Where(m => !exclusions.Contains(m.Name)).ToImmutableArray();
     }
 
-    private static string GenerateDtoCode(GenerateDtosTargetModel model, string dtoName, ImmutableArray<FacetMember> members, string purpose)
+    private static string GenerateDtoCode(GenerateDtosTargetModel model, string dtoName, ImmutableArray<FacetMember> members, string purpose, DtoTypes dtoType)
     {
         var sb = new StringBuilder();
         var sourceTypeName = GetSimpleTypeName(model.SourceTypeName);
         var isInterface = model.OutputType == OutputType.Interface;
+        var isPartialClass = model.OutputType == OutputType.PartialClass;
         var hasInitOnlyProperties = members.Any(m => m.IsInitOnly);
         var hasReadOnlyFields = members.Any(m => m.IsReadOnly);
 
         // Generate file structure
         GenerateDtoFileHeader(sb, model);
-        GenerateDtoTypeDeclaration(sb, model, dtoName, sourceTypeName, purpose);
+        GenerateDtoTypeDeclaration(sb, model, dtoName, sourceTypeName, purpose, dtoType);
 
         // Generate members
         GenerateDtoMembers(sb, model, members);
@@ -382,13 +430,19 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 GenerateDtoConstructors(sb, model, dtoName, sourceTypeName, members, hasInitOnlyProperties, hasReadOnlyFields);
             }
 
-            if (model.GenerateProjections)
+            // PartialClass is meant to be extended by a hand-written partial — the user owns mapping
+            // (and may need to map into hand-added members the generator can't see), so we skip
+            // Projection / ToSource / BackTo. The all-args ctor and parameterless ctor are still emitted.
+            if (!isPartialClass)
             {
-                GenerateDtoProjection(sb, model, dtoName, sourceTypeName, members, hasInitOnlyProperties, hasReadOnlyFields);
-            }
+                if (model.GenerateProjections)
+                {
+                    GenerateDtoProjection(sb, model, dtoName, sourceTypeName, members, hasInitOnlyProperties, hasReadOnlyFields);
+                }
 
-            GenerateDtoToSource(sb, model, dtoName, sourceTypeName, members);
-            GenerateDtoBackTo(sb, model, dtoName, sourceTypeName);
+                GenerateDtoToSource(sb, model, dtoName, sourceTypeName, members);
+                GenerateDtoBackTo(sb, model, dtoName, sourceTypeName);
+            }
         }
 
         sb.AppendLine("}");
@@ -419,7 +473,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
     }
 
-    private static void GenerateDtoTypeDeclaration(StringBuilder sb, GenerateDtosTargetModel model, string dtoName, string sourceTypeName, string purpose)
+    private static void GenerateDtoTypeDeclaration(StringBuilder sb, GenerateDtosTargetModel model, string dtoName, string sourceTypeName, string purpose, DtoTypes dtoType)
     {
         var keyword = model.OutputType switch
         {
@@ -428,6 +482,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             OutputType.RecordStruct => "record struct",
             OutputType.Struct => "struct",
             OutputType.Interface => "interface",
+            OutputType.PartialClass => "partial class",
             _ => "record"
         };
 
@@ -450,7 +505,16 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             }
         }
 
-        sb.AppendLine($"public {keyword} {dtoName}");
+        // For PartialClass output, declare the matching generated interface as a base type when a
+        // sibling Interface attribute on the same source covers this DTO type. The interface name
+        // mirrors the partial class name with an `I` leader (e.g. `ICreateUserRequest`).
+        var baseList = "";
+        if (model.OutputType == OutputType.PartialClass && (model.SiblingInterfaceTypes & dtoType) != 0)
+        {
+            baseList = $" : I{dtoName}";
+        }
+
+        sb.AppendLine($"public {keyword} {dtoName}{baseList}");
         sb.AppendLine("{");
     }
 
@@ -761,6 +825,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             OutputType.Record => "record",
             OutputType.RecordStruct => "record struct",
             OutputType.Struct => "struct",
+            OutputType.PartialClass => "partial class",
             _ => "record"
         };
 

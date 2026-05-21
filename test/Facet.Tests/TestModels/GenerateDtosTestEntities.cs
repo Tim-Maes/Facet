@@ -160,3 +160,40 @@ public class TestInterfaceEntity
     public string? Description { get; set; }
     public bool IsActive { get; set; }
 }
+
+// PartialClass output: emits CreateTestPartialClassEntityRequest / UpdateTestPartialClassEntityRequest /
+// TestPartialClassEntityResponse as `public partial class` (not sealed) with get/set properties and the
+// same constructors as OutputType.Class — but without projection/ToSource/BackTo. The hand-written
+// partial below adds an extra computed property to prove the partial keyword survived generation.
+[GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response, OutputType = OutputType.PartialClass)]
+public class TestPartialClassEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public bool IsActive { get; set; }
+}
+
+// Hand-written partial extension — fails to compile if the generated DTOs are NOT emitted as `partial class`.
+public partial class UpdateTestPartialClassEntityRequest
+{
+    public string DisplayLabel => $"{Id}: {Name}";
+}
+
+// Both Interface and PartialClass on the same entity: the PartialClass output should declare the
+// matching generated interface as a base type, composing into a contract + implementation pair.
+[GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response, OutputType = OutputType.Interface)]
+[GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response, OutputType = OutputType.PartialClass)]
+public class TestPartialAndInterfaceEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+}
+
+// PartialClass intentionally NOT sealed: a hand-written derived type should compile.
+// This exercises the GlobalSoftware/LocalSoftware-style inheritance scenario.
+public class DerivedFromGeneratedPartial : UpdateTestPartialClassEntityRequest
+{
+    public string DerivedOnly { get; set; } = string.Empty;
+}
