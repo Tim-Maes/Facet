@@ -20,6 +20,14 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
     public ImmutableArray<string> ExcludeProperties { get; }
     public ImmutableArray<FacetMember> Members { get; }
     public bool UseFullName { get; }
+    /// <summary>
+    /// The set of DTO type bits for which a sibling <see cref="OutputType.Interface"/> attribute on the
+    /// same source type generates a matching interface (same Prefix/Suffix/Namespace, overlapping
+    /// <see cref="DtoTypes"/>). Only meaningful for <see cref="OutputType.PartialClass"/> models;
+    /// lets the generator declare <c>: I{Name}</c> on the partial class so the two outputs compose
+    /// into a contract + implementation pair.
+    /// </summary>
+    public DtoTypes SiblingInterfaceTypes { get; }
 
     public GenerateDtosTargetModel(
         string sourceTypeName,
@@ -35,7 +43,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         string? convertEnumsTo,
         ImmutableArray<string> excludeProperties,
         ImmutableArray<FacetMember> members,
-        bool useFullName)
+        bool useFullName,
+        DtoTypes siblingInterfaceTypes = DtoTypes.None)
     {
         SourceTypeName = sourceTypeName;
         SourceNamespace = sourceNamespace;
@@ -51,6 +60,7 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         ExcludeProperties = excludeProperties;
         Members = members;
         UseFullName = useFullName;
+        SiblingInterfaceTypes = siblingInterfaceTypes;
     }
 
     public bool Equals(GenerateDtosTargetModel? other)
@@ -71,7 +81,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             && ConvertEnumsTo == other.ConvertEnumsTo
             && ExcludeProperties.SequenceEqual(other.ExcludeProperties)
             && Members.SequenceEqual(other.Members)
-            && UseFullName == other.UseFullName;
+            && UseFullName == other.UseFullName
+            && SiblingInterfaceTypes == other.SiblingInterfaceTypes;
     }
 
     public override bool Equals(object? obj) => obj is GenerateDtosTargetModel other && Equals(other);
@@ -93,6 +104,7 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             hash = hash * 31 + GenerateProjections.GetHashCode();
             hash = hash * 31 + (ConvertEnumsTo?.GetHashCode() ?? 0);
             hash = hash * 31 + UseFullName.GetHashCode();
+            hash = hash * 31 + SiblingInterfaceTypes.GetHashCode();
 
             foreach (var prop in ExcludeProperties)
                 hash = hash * 31 + prop.GetHashCode();
