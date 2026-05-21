@@ -229,7 +229,7 @@ internal static class ModelBuilder
             members = members.AddRange(expressionMembers);
         }
 
-        // Get the namespace early - needed for fullName calculation (GitHub issue #249)
+        // Get the namespace early
         var ns = targetSymbol.ContainingNamespace.IsGlobalNamespace
             ? null
             : targetSymbol.ContainingNamespace.ToDisplayString();
@@ -255,7 +255,6 @@ internal static class ModelBuilder
         else if (ns != null)
         {
             // Include namespace to avoid collisions for types with the same name in different namespaces
-            // (GitHub issue #249)
             fullName = ns + "." + targetSymbol.Name;
         }
         else
@@ -272,7 +271,7 @@ internal static class ModelBuilder
         // Check if the source type has a positional constructor
         var hasPositionalConstructor = TypeAnalyzer.HasPositionalConstructor(sourceType);
 
-        // Check if ToSource can actually be generated (GitHub issue #220)
+        // Check if ToSource can actually be generated
         // If the source type doesn't have an accessible parameterless constructor or has inaccessible setters,
         // skip ToSource generation to avoid compilation errors
         if (generateToSource && !hasPositionalConstructor)
@@ -299,6 +298,7 @@ internal static class ModelBuilder
         var sourceTypeFullName = sourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var baseHidesFacetMembers = BaseHidesFacetMembers(targetSymbol);
         var baseHidesFromSource = BaseHidesFromSource(targetSymbol, sourceTypeFullName);
+        var baseHidesToSource = BaseHidesToSourceMembers(targetSymbol);
 
         // Collect source type member names for MapFrom expression disambiguation
         var sourcePropertyNames = CollectSourcePropertyNames(sourceType);
@@ -343,7 +343,8 @@ internal static class ModelBuilder
             hasMapConfiguration,
             baseFacetInfo,
             maxDepthToSource,
-            sourcePropertyNames);
+            sourcePropertyNames,
+            baseHidesToSource);
     }
 
     #region Private Helper Methods
@@ -578,15 +579,10 @@ internal static class ModelBuilder
         // to the generated target type. Generating a partial defining declaration would require
         // the user to provide an implementing declaration, which breaks the DTO use case.
         // It also doesn't work with other source generators (e.g., CommunityToolkit.Mvvm)
-        // because source generators don't chain. (GitHub issue #277)
+        // because source generators don't chain.
         var isSourcePartial = IsPartialDefiningProperty(property);
 
         // Extract property initializer/default value from source
-        // Skip initializers for:
-        // 1. Nested facets - the type changes and the initializer won't be compatible
-        // 2. NullableProperties = true - query DTOs should default to null, not the source initializer
-        // 3. Partial source properties - the source defining declaration cannot have initializers,
-        //    so there's nothing to extract anyway
         string? defaultValue = null;
         if (!isNestedFacet && !nullableProperties && !isSourcePartial)
         {
@@ -754,8 +750,8 @@ internal static class ModelBuilder
             isEnumConversion,
             originalEnumTypeName,
             isNestedType,
-            isPartial: false, // Never propagate partial from source (GitHub issue #277)
-            isSourceInitOnly: isInitOnly)); // Raw source accessor — needed by ApplyToSource generation
+            isPartial: false, // Never propagate partial from source
+            isSourceInitOnly: isInitOnly)); // Raw source accessor 
         addedMembers.Add(memberName);
     }
 
@@ -1253,6 +1249,46 @@ private static Dictionary<string, (string targetName, string source, bool revers
     }
 
     /// <summary>
+    /// Returns true when any single-source base Facet of the target also has
+    /// <c>GenerateToSource = true</c>, meaning it generates <c>ToSource()</c>,
+    /// <c>BackTo()</c>, and <c>ApplyToSource()</c> methods that the derived class would hide.
+    /// Emitting <c>new</c> on those methods without this being true causes CS0109.
+    /// </summary>
+    private static bool BaseHidesToSourceMembers(INamedTypeSymbol targetSymbol)
+    {
+        var baseType = targetSymbol.BaseType;
+        while (baseType != null && baseType.SpecialType != SpecialType.System_Object)
+        {
+            var baseFacetAttrs = baseType.GetAttributes()
+                .Where(a => a.AttributeClass?.ToDisplayString() == FacetConstants.FacetAttributeFullName)
+                .ToArray();
+
+            // Only single-source facets generate default-named ToSource/BackTo/ApplyToSource
+            if (baseFacetAttrs.Length == 1)
+            {
+                var generateToSource = baseFacetAttrs[0].NamedArguments
+                    .FirstOrDefault(a => a.Key == FacetConstants.AttributeNames.GenerateToSource)
+                    .Value;
+
+                if (generateToSource.Value is true)
+                    return true;
+            }
+
+            // Also check for manually declared ToSource/BackTo members
+            foreach (var member in baseType.GetMembers())
+            {
+                if ((member.Name == "ToSource" || member.Name == "BackTo" || member.Name == "ApplyToSource") &&
+                    member.DeclaredAccessibility == Accessibility.Public)
+                    return true;
+            }
+
+            baseType = baseType.BaseType;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Gets information about the base Facet class if the target inherits from another Facet.
     /// Returns null if the base class is not a Facet.
     /// </summary>
@@ -1267,6 +1303,7 @@ private static Dictionary<string, (string targetName, string source, bool revers
         var allIncludedMembers = new List<string>();
         var allNestedFacetMappings = new Dictionary<string, (string childFacetTypeName, string sourceTypeName)>();
         bool foundAny = false;
+        int nearestBaseFacetCount = 0;
 
         var baseType = targetSymbol.BaseType;
         while (baseType != null && baseType.SpecialType != SpecialType.System_Object)
@@ -1350,6 +1387,7 @@ private static Dictionary<string, (string targetName, string source, bool revers
                         }
 
                         foundAny = true;
+                        nearestBaseFacetCount = facetAttrs.Count;
                     }
 
                     // Accumulate Include members from all ancestor facets
@@ -1388,7 +1426,8 @@ private static Dictionary<string, (string targetName, string source, bool revers
             nearestBaseSourceTypeName!,
             nearestBaseConfigurationTypeName,
             allIncludedMembers.ToImmutableArray(),
-            allNestedFacetMappings.ToImmutableDictionary());
+            allNestedFacetMappings.ToImmutableDictionary(),
+            isBaseSingleSource: nearestBaseFacetCount == 1);
     }
 
     /// <summary>

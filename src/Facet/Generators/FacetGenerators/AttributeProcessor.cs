@@ -46,7 +46,7 @@ internal static class AttributeProcessor
             // Skip attributes that are consumed by other source generators to trigger code generation.
             // Copying these to a generated DTO would cause analyzer errors from those generators.
             // For example, [ObservableProperty] from CommunityToolkit.Mvvm triggers the MVVM
-            // analyzer on the DTO, which is not an ObservableObject. (GitHub issue #277)
+            // analyzer on the DTO, which is not an ObservableObject.
             if (IsSourceGeneratorTriggerAttribute(attributeFullName)) continue;
 
             // Check if attribute can be applied to the target member type

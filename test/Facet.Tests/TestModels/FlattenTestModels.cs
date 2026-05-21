@@ -336,7 +336,7 @@ public partial class DataExtendedLookupFacet;
     FlattenTo = [typeof(DataTableFlattenedDto)])]
 public partial class DataTableFacet;
 
-// Flattened DTO - should include properties from both the lookup and the nested Extended entity
+// Flattened DTO 
 public partial class DataTableFlattenedDto
 {
     // From DataTableEntity (parent)
@@ -347,13 +347,13 @@ public partial class DataTableFlattenedDto
     public int DataId { get; set; }
     public int ExtendedId { get; set; }
 
-    // From DataExtendedEntity (nested within collection item) - THIS IS THE BUG
+    // From DataExtendedEntity (nested within collection item)
     // These properties should be populated by traversing through ExtendedLookups[].Extended.*
     public string ExtendedValue { get; set; } = string.Empty;
     public int NumericValue { get; set; }
 }
 
-// Test models for FlattenTo with multiple Name property collisions (Issue #196)
+// Test models for FlattenTo with multiple Name property collisions
 // This scenario tests SmartLeaf naming when multiple nested paths have properties with the same name
 public class ProductCatalogEntity
 {
@@ -428,7 +428,7 @@ public partial class ProductCatalogFlattenedDto
     public string Country { get; set; } = string.Empty;           // From Brand.Country (no collision, no prefix)
 }
 
-// Test models for IncludeCollections feature (GitHub issue #242)
+// Test models for IncludeCollections feature
 public class ApiResponse
 {
     public int Id { get; set; }

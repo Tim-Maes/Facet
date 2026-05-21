@@ -37,13 +37,21 @@ internal sealed class BaseFacetInfo
     /// </summary>
     public ImmutableDictionary<string, (string childFacetTypeName, string sourceTypeName)> NestedFacetMappings { get; }
 
-    public BaseFacetInfo(string baseTypeName, string baseSourceTypeName, string? baseConfigurationTypeName, ImmutableArray<string> includedMembers, ImmutableDictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings)
+    /// <summary>
+    /// True when the nearest ancestor Facet has exactly one [Facet] attribute (single-source).
+    /// Only single-source facets generate <c>ProjectionFor(string)</c> — multi-source facets do not.
+    /// Used to avoid emitting spurious <c>new</c> on <c>ProjectionFor</c> in derived facets.
+    /// </summary>
+    public bool IsBaseSingleSource { get; }
+
+    public BaseFacetInfo(string baseTypeName, string baseSourceTypeName, string? baseConfigurationTypeName, ImmutableArray<string> includedMembers, ImmutableDictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings, bool isBaseSingleSource = true)
     {
         BaseTypeName = baseTypeName;
         BaseSourceTypeName = baseSourceTypeName;
         BaseConfigurationTypeName = baseConfigurationTypeName;
         IncludedMembers = includedMembers;
         NestedFacetMappings = nestedFacetMappings;
+        IsBaseSingleSource = isBaseSingleSource;
     }
 }
 
@@ -112,6 +120,14 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     /// The <c>new</c> modifier will be emitted on those members to suppress CS0108.
     /// </summary>
     public bool BaseHidesFacetMembers { get; }
+
+    /// <summary>
+    /// When true, the base class of this facet also has <c>GenerateToSource = true</c>, meaning
+    /// it generates <c>ToSource()</c>, <c>BackTo()</c>, and <c>ApplyToSource()</c> methods.
+    /// The <c>new</c> modifier should be emitted on these members only when this is true;
+    /// otherwise the base doesn't have these methods and emitting <c>new</c> causes CS0109.
+    /// </summary>
+    public bool BaseHidesToSource { get; }
 
     /// <summary>
     /// When true, the base class of this facet already declares a <c>FromSource</c> method
@@ -183,7 +199,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         bool hasMapConfiguration = false,
         BaseFacetInfo? baseFacetInfo = null,
         int maxDepthToSource = 0,
-        ImmutableArray<string> sourcePropertyNames = default)
+        ImmutableArray<string> sourcePropertyNames = default,
+        bool baseHidesToSource = false)
     {
         Name = name;
         Namespace = @namespace;
@@ -225,6 +242,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         BaseHidesFromSource = baseHidesFromSource;
         BaseFacetInfo = baseFacetInfo;
         SourcePropertyNames = sourcePropertyNames.IsDefault ? ImmutableArray<string>.Empty : sourcePropertyNames;
+        BaseHidesToSource = baseHidesToSource;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -266,6 +284,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && GenerateEquality == other.GenerateEquality
             && ToSourceConfigurationTypeName == other.ToSourceConfigurationTypeName
             && BaseHidesFacetMembers == other.BaseHidesFacetMembers
+            && BaseHidesToSource == other.BaseHidesToSource
             && HasProjectionMapConfiguration == other.HasProjectionMapConfiguration
             && HasMapConfiguration == other.HasMapConfiguration
             && BaseHidesFromSource == other.BaseHidesFromSource
@@ -307,6 +326,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + GenerateEquality.GetHashCode();
             hash = hash * 31 + (ToSourceConfigurationTypeName?.GetHashCode() ?? 0);
             hash = hash * 31 + BaseHidesFacetMembers.GetHashCode();
+            hash = hash * 31 + BaseHidesToSource.GetHashCode();
             hash = hash * 31 + HasProjectionMapConfiguration.GetHashCode();
             hash = hash * 31 + HasMapConfiguration.GetHashCode();
             hash = hash * 31 + BaseHidesFromSource.GetHashCode();

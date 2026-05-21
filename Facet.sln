@@ -22,6 +22,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{0C88DD14
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Tests", "test\Facet.Tests\Facet.Tests.csproj", "{519E7976-7BE4-4E93-9A45-01A160AA1684}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Tests.ExternalLib", "test\Facet.Tests.ExternalLib\Facet.Tests.ExternalLib.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Mapping.Expressions", "src\Facet.Mapping.Expressions\Facet.Mapping.Expressions.csproj", "{538881BB-5006-4D97-8D73-7C73979AE7C3}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Facet.Extensions.EFCore.Mapping", "src\Facet.Extensions.EFCore.Mapping\Facet.Extensions.EFCore.Mapping.csproj", "{9D11593F-8A2C-8FD7-AFF5-F49D54DFAF18}"
@@ -106,6 +108,18 @@ Global
 		{519E7976-7BE4-4E93-9A45-01A160AA1684}.Release|x64.Build.0 = Release|Any CPU
 		{519E7976-7BE4-4E93-9A45-01A160AA1684}.Release|x86.ActiveCfg = Release|Any CPU
 		{519E7976-7BE4-4E93-9A45-01A160AA1684}.Release|x86.Build.0 = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|x64.Build.0 = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|x86.Build.0 = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|x64.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|x64.Build.0 = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|x86.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|x86.Build.0 = Release|Any CPU
 		{538881BB-5006-4D97-8D73-7C73979AE7C3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{538881BB-5006-4D97-8D73-7C73979AE7C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{538881BB-5006-4D97-8D73-7C73979AE7C3}.Debug|x64.ActiveCfg = Debug|Any CPU

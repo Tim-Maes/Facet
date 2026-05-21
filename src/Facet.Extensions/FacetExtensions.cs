@@ -18,6 +18,9 @@ public static class FacetExtensions
     // For a facet target type TTarget, cache the [Facet(typeof(TSource))] declared source type (TSource).
     private static readonly ConcurrentDictionary<Type, Type> _declaredSourceTypeByTarget = new();
 
+    // For multi-source facets: cache ALL declared source types per target type.
+    private static readonly ConcurrentDictionary<Type, Type[]> _allDeclaredSourcesByTarget = new();
+
     // Cached MethodInfo for ToFacet<TSource, TTarget>(TSource)
     private static readonly MethodInfo _toFacetTwoGenericMethod =
         typeof(FacetExtensions)
@@ -44,8 +47,9 @@ public static class FacetExtensions
                 return ps.Length == 1;
             });
 
-    // Cached Expression<Func<DeclaredSource, TTarget>> from TTarget.Projection.
-    private static readonly ConcurrentDictionary<Type, LambdaExpression> _declaredProjectionByTarget = new();
+    // Cached Expression<Func<DeclaredSource, TTarget>> from TTarget.Projection or TTarget.ProjectionFromX.
+    // Key is (TargetType, SourceType) to support multi-source facets where different sources yield different projections.
+    private static readonly ConcurrentDictionary<(Type TargetType, Type? SourceType), LambdaExpression> _declaredProjectionByTarget = new();
 
     // Cache of adapted Expression<Func<TElement, TTarget>> shapes per (element, target).
     private static readonly ConcurrentDictionary<(Type ElementType, Type TargetType), LambdaExpression>
@@ -89,15 +93,11 @@ public static class FacetExtensions
 
         var targetType = typeof(TTarget);
 
-        var declaredSource = GetDeclaredSourceType(targetType)
+        // For multi-source facets, find the declared source type that the actual source instance matches.
+        var declaredSource = GetMatchingDeclaredSourceType(targetType, source.GetType())
             ?? throw new InvalidOperationException(
-                $"Type '{targetType.FullName}' must be annotated with [Facet(typeof(...))] to use ToFacet<{targetType.Name}>().");
-
-        if (!declaredSource.IsInstanceOfType(source))
-        {
-            throw new InvalidOperationException(
-                $"Source instance type '{source.GetType().FullName}' is not assignable to declared Facet source '{declaredSource.FullName}' for target '{targetType.FullName}'.");
-        }
+                $"Source instance type '{source.GetType().FullName}' is not assignable to any declared Facet source for target '{targetType.FullName}'. " +
+                $"Ensure the target type is annotated with [Facet(typeof(...))] and the source type matches one of the declared sources.");
 
         var forwarded = _toFacetTwoGenericMethod.MakeGenericMethod(declaredSource, targetType)
                                          .Invoke(null, new[] { source });
@@ -357,13 +357,27 @@ public static class FacetExtensions
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
 
+        // First try the standard "Projection" property (single-source facets)
         var prop = typeof(TTarget).GetProperty(
             "Projection",
             BindingFlags.Public | BindingFlags.Static);
 
+        // If no standard Projection, try ProjectionFrom{SourceName} for multi-source facets
         if (prop is null)
-            throw new InvalidOperationException(
-                $"Type {typeof(TTarget).Name} must define a public static Projection property.");
+        {
+            var sourceSimpleName = typeof(TSource).Name;
+            var projectionPropertyName = $"ProjectionFrom{sourceSimpleName}";
+            prop = typeof(TTarget).GetProperty(
+                projectionPropertyName,
+                BindingFlags.Public | BindingFlags.Static);
+
+            if (prop is null)
+            {
+                throw new InvalidOperationException(
+                    $"Type {typeof(TTarget).Name} does not define a public static Projection property or {projectionPropertyName} property. " +
+                    $"Ensure the facet is decorated with [Facet(typeof({typeof(TSource).Name}))].");
+            }
+        }
 
         var expr = (Expression<Func<TSource, TTarget>>)prop.GetValue(null)!;
         return source.Select(expr);
@@ -393,7 +407,7 @@ public static class FacetExtensions
 
         var targetType = typeof(TTarget);        
 
-        var declaredProjection = GetDeclaredProjectionLambda(targetType);
+        var declaredProjection = GetDeclaredProjectionLambda(targetType, source.ElementType);
 
         // Adapt the declared projection to the source's actual element type, if needed.
         var adapted = GetOrBuildAdaptedProjection(source.ElementType, targetType, declaredProjection);
@@ -431,22 +445,65 @@ public static class FacetExtensions
         return declared;
     }
 
-    private static LambdaExpression GetDeclaredProjectionLambda([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type targetType)
+    /// <summary>
+    /// Returns the declared Facet source type (from any [Facet] attribute) that the given
+    /// <paramref name="sourceInstanceType"/> is assignable to.  Supports multi-source facets
+    /// that carry multiple [Facet(typeof(...))] attributes.
+    /// </summary>
+    private static Type? GetMatchingDeclaredSourceType(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type targetType,
+        Type sourceInstanceType)
     {
-        if (_declaredProjectionByTarget.TryGetValue(targetType, out var cached))
+        var allSources = _allDeclaredSourcesByTarget.GetOrAdd(targetType, t =>
+            t.GetCustomAttributesData()
+             .Where(a => a.AttributeType.FullName == "Facet.FacetAttribute")
+             .Select(a => a.ConstructorArguments.Count > 0 && a.ConstructorArguments[0].ArgumentType == typeof(Type)
+                 ? a.ConstructorArguments[0].Value as Type
+                 : null)
+             .Where(st => st != null)
+             .Select(st => st!)
+             .ToArray());
+
+        return allSources.FirstOrDefault(s => s.IsAssignableFrom(sourceInstanceType));
+    }
+
+    private static LambdaExpression GetDeclaredProjectionLambda(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] Type targetType,
+        Type? sourceElementType = null)
+    {
+        var cacheKey = (targetType, sourceElementType);
+        if (_declaredProjectionByTarget.TryGetValue(cacheKey, out var cached))
             return cached;
 
-        var prop = targetType.GetProperty("Projection", BindingFlags.Public | BindingFlags.Static)
-                  ?? throw new InvalidOperationException(
-                      $"Type {targetType.Name} must define a public static Projection property.");
+        // First try the standard "Projection" property (single-source facets)
+        var prop = targetType.GetProperty("Projection", BindingFlags.Public | BindingFlags.Static);
+
+        // If no standard Projection, try ProjectionFrom{SourceName} for multi-source facets
+        if (prop == null && sourceElementType != null)
+        {
+            var sourceSimpleName = sourceElementType.Name;
+            var projectionPropertyName = $"ProjectionFrom{sourceSimpleName}";
+            prop = targetType.GetProperty(projectionPropertyName, BindingFlags.Public | BindingFlags.Static);
+        }
+
+        if (prop == null)
+        {
+            // Multi-source facet: no matching projection found.
+            // The caller must use the two-generic-parameter SelectFacet<TSource, TTarget> instead.
+            throw new InvalidOperationException(
+                $"Type {targetType.Name} does not define a public static Projection property. " +
+                $"This may be a multi-source facet with multiple [Facet] attributes. " +
+                $"For multi-source facets, use SelectFacet<TSource, {targetType.Name}>() instead of SelectFacet<{targetType.Name}>(), " +
+                $"or use the source-specific projection property (e.g., ProjectionFrom{{SourceName}}).");
+        }
 
         var value = prop.GetValue(null)
                    ?? throw new InvalidOperationException($"{targetType.Name}.Projection returned null.");
 
         if (value is not LambdaExpression lambda)
             throw new InvalidOperationException($"{targetType.Name}.Projection must be an Expression<Func<..., {targetType.Name}>>.");
-        
-        _declaredProjectionByTarget[targetType] = lambda;
+
+        _declaredProjectionByTarget[cacheKey] = lambda;
         return lambda;
     }
 
