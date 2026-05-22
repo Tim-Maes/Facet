@@ -33,7 +33,7 @@ internal static class ProjectionGenerator
         {
             GenerateProjectionNotSupportedComment(sb, model, memberIndent);
         }
-        else if (model.HasProjectionMapConfiguration || RequiresLazyProjection(model, facetLookup))
+        else if (model.HasProjectionMapConfiguration || RequiresLazyProjection(model, facetLookup) || model.BaseFacetInfo?.BaseConfigurationTypeName != null)
         {
             GenerateProjectionDocumentation(sb, model, memberIndent, propertyName);
             GenerateLazyProjection(sb, model, memberIndent, facetLookup, propertyName);
