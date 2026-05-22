@@ -1300,6 +1300,8 @@ private static Dictionary<string, (string targetName, string source, bool revers
         string? nearestBaseTypeName = null;
         string? nearestBaseSourceTypeName = null;
         string? nearestBaseConfigurationTypeName = null;
+        string? configurationSourceTypeName = null;
+        string? configurationTargetTypeName = null;
         var allIncludedMembers = new List<string>();
         var allNestedFacetMappings = new Dictionary<string, (string childFacetTypeName, string sourceTypeName)>();
         bool foundAny = false;
@@ -1360,7 +1362,15 @@ private static Dictionary<string, (string targetName, string source, bool revers
                         nearestBaseTypeName = baseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                         nearestBaseSourceTypeName = bestBaseSourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-                        // Extract the Configuration type if specified and compatible with the selected base source/target pair
+                        foundAny = true;
+                        nearestBaseFacetCount = facetAttrs.Count;
+                    }
+
+                    // Extract the Configuration type from the nearest ancestor that has one.
+                    // This is outside the !foundAny block so we can find Configuration from
+                    // grandparent Facets when intermediate ancestors don't have one.
+                    if (nearestBaseConfigurationTypeName == null)
+                    {
                         var configArg = bestFacetAttr.NamedArguments.FirstOrDefault(arg => arg.Key == "Configuration");
                         if (!configArg.Equals(default(KeyValuePair<string, TypedConstant>)))
                         {
@@ -1381,13 +1391,15 @@ private static Dictionary<string, (string targetName, string source, bool revers
                                     if (implementsProjectionConfig)
                                     {
                                         nearestBaseConfigurationTypeName = configType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                                        // Track the actual source/target types the Configuration expects,
+                                        // which may differ from the nearest ancestor's types when the
+                                        // Configuration is on a grandparent Facet.
+                                        configurationSourceTypeName = bestBaseSourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                                        configurationTargetTypeName = baseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                                     }
                                 }
                             }
                         }
-
-                        foundAny = true;
-                        nearestBaseFacetCount = facetAttrs.Count;
                     }
 
                     // Accumulate Include members from all ancestor facets
@@ -1427,7 +1439,9 @@ private static Dictionary<string, (string targetName, string source, bool revers
             nearestBaseConfigurationTypeName,
             allIncludedMembers.ToImmutableArray(),
             allNestedFacetMappings.ToImmutableDictionary(),
-            isBaseSingleSource: nearestBaseFacetCount == 1);
+            isBaseSingleSource: nearestBaseFacetCount == 1,
+            baseConfigurationSourceTypeName: configurationSourceTypeName,
+            baseConfigurationTargetTypeName: configurationTargetTypeName);
     }
 
     /// <summary>

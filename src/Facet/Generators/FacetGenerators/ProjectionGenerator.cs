@@ -230,7 +230,7 @@ internal static class ProjectionGenerator
         if (model.BaseFacetInfo?.BaseConfigurationTypeName != null)
         {
             sb.AppendLine($"{bodyIndent}// Apply base Facet projection mappings");
-            sb.AppendLine($"{bodyIndent}var __baseBuilder = new global::Facet.Mapping.FacetProjectionBuilder<{model.BaseFacetInfo.BaseSourceTypeName}, {model.BaseFacetInfo.BaseTypeName}>();");
+            sb.AppendLine($"{bodyIndent}var __baseBuilder = new global::Facet.Mapping.FacetProjectionBuilder<{model.BaseFacetInfo.BaseConfigurationSourceTypeName}, {model.BaseFacetInfo.BaseConfigurationTargetTypeName}>();");
             sb.AppendLine($"{bodyIndent}{model.BaseFacetInfo.BaseConfigurationTypeName}.ConfigureProjection(__baseBuilder);");
             sb.AppendLine($"{bodyIndent}foreach (var (__member, __expr) in __baseBuilder.Mappings)");
             sb.AppendLine($"{bodyIndent}{{");
@@ -1388,7 +1388,7 @@ internal static class ProjectionGenerator
         if (model.BaseFacetInfo?.BaseConfigurationTypeName != null)
         {
             sb.AppendLine($"{bodyIndent}// Apply base Facet projection mappings");
-            sb.AppendLine($"{bodyIndent}var __baseBuilder = new global::Facet.Mapping.FacetProjectionBuilder<{model.BaseFacetInfo.BaseSourceTypeName}, {model.BaseFacetInfo.BaseTypeName}>();");
+            sb.AppendLine($"{bodyIndent}var __baseBuilder = new global::Facet.Mapping.FacetProjectionBuilder<{model.BaseFacetInfo.BaseConfigurationSourceTypeName}, {model.BaseFacetInfo.BaseConfigurationTargetTypeName}>();");
             sb.AppendLine($"{bodyIndent}{model.BaseFacetInfo.BaseConfigurationTypeName}.ConfigureProjection(__baseBuilder);");
             sb.AppendLine($"{bodyIndent}foreach (var (__member, __expr) in __baseBuilder.Mappings)");
             sb.AppendLine($"{bodyIndent}{{");

@@ -439,6 +439,40 @@ public class InheritedFacetProjectionTests
         dto.AssignedToUnitName.Should().Be("Unit A",
             "AssignedToUnitName should be mapped from base Configuration's builder.Map()");
     }
+
+    [Fact]
+    public void Projection_WithGrandchildWithoutConfiguration_ShouldIncludeGrandparentConfigurationMappings()
+    {
+        // Arrange - Regression test: grandchild Facet WITHOUT Configuration, inheriting from
+        // intermediate Facet (also no config), which inherits from grandparent Facet WITH Configuration.
+        // This is the exact "Production" scenario reported by the user.
+        var entity = new OrderLineProductionEntity381
+        {
+            Id = 1,
+            Number = "ORD-002",
+            OrderedWeightInKg = 25.0m,
+            OrderedCount = 10,
+            ProductionDate = new DateTime(2024, 6, 15),
+            OrderHeader = new OrderHeader381 { Number = "HDR-002" },
+            AssignedToUnit = new Unit381 { Name = "Unit B" }
+        };
+
+        // Act
+        var dto = OrderLineProductionDto381.Projection.Compile()(entity);
+
+        // Assert - Grandchild's own properties
+        dto.ProductionDate.Should().Be(new DateTime(2024, 6, 15));
+
+        // Assert - Intermediate's properties
+        dto.OrderedWeightInKg.Should().Be(25.0m);
+        dto.OrderedCount.Should().Be(10);
+
+        // Assert - Grandparent's Configuration-mapped properties MUST be included
+        dto.OrderHeaderNumber.Should().Be("HDR-002",
+            "OrderHeaderNumber should be mapped from grandparent Configuration's builder.Map()");
+        dto.AssignedToUnitName.Should().Be("Unit B",
+            "AssignedToUnitName should be mapped from grandparent Configuration's builder.Map()");
+    }
 }
 
 public class UnitEntity338
@@ -973,5 +1007,24 @@ public class OrderLineBaseDto381MapConfig
            nameof(OrderLineWithWeightEntity381.OrderedCount)
        })]
 public partial class OrderLineWithWeightDto381 : OrderLineBaseDto381
+{
+}
+
+/// <summary>Grandchild entity adding more properties.</summary>
+public class OrderLineProductionEntity381 : OrderLineWithWeightEntity381
+{
+    public DateTime ProductionDate { get; set; }
+}
+
+/// <summary>
+/// Grandchild Facet: inherits from intermediate (no config) which inherits from base (has config).
+/// Tests that GetBaseFacetInfo walks past the intermediate to find the grandparent's Configuration.
+/// </summary>
+[Facet(typeof(OrderLineProductionEntity381),
+       Include = new[]
+       {
+           nameof(OrderLineProductionEntity381.ProductionDate)
+       })]
+public partial class OrderLineProductionDto381 : OrderLineWithWeightDto381
 {
 }
