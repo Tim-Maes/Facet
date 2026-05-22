@@ -43,7 +43,14 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 - [What is being generated?](docs/07_WhatIsBeingGenerated.md)
 - [Configure generated files output location](docs/12_GeneratedFilesOutput.md)
 - [Global configuration defaults](docs/21_GlobalConfigurationDefaults.md) - Override attribute defaults project-wide
-- [Comprehensive article about Facetting](https://tim-maes.com/blog/2025/09/28/facets-in-dotnet-(2)/)
+
+## :handshake: Community
+
+- [Contributing Guide](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Governance](GOVERNANCE.md)
+- [Security Policy](SECURITY.md)
+- [Support Guide](SUPPORT.md)
 
 ## :star: Features
 
