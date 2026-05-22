@@ -279,12 +279,34 @@ internal static class ProjectionGenerator
         // allowing second-level (and deeper) reverse navigation properties to be included.
         if (hasNestedFacets && isSingleSource)
         {
-            // 'new' on ProjectionFor only makes sense when the base facet is single-source AND has nested
-            // facets — only then does the base also generate ProjectionFor. Multi-source bases never do.
-            var baseAlsoHasNestedFacets = model.BaseHidesFacetMembers
-                && model.BaseFacetInfo?.IsBaseSingleSource == true
-                && model.BaseFacetInfo?.NestedFacetMappings.Count > 0;
-            GenerateProjectionForMethod(sb, src, tgt, safeName, propertyName, memberIndent, baseAlsoHasNestedFacets);
+            var baseAlsoGeneratesProjectionFor = false;
+            if (model.BaseHidesFacetMembers && model.BaseFacetInfo?.IsBaseSingleSource == true)
+            {
+                var baseTypeName = GeneratorUtilities.StripGlobalPrefix(model.BaseFacetInfo!.BaseTypeName);
+                var visited = new HashSet<string>();
+                while (baseTypeName != null && visited.Add(baseTypeName))
+                {
+                    if (facetLookup.TryGetValue(baseTypeName, out var baseModels) && baseModels.Count == 1)
+                    {
+                        var baseModel = baseModels[0];
+                        var baseHasNestedFacets = baseModel.Members.Any(m => m.MapFromIncludeInProjection && m.IsNestedFacet);
+                        var baseIsLazy = baseModel.HasProjectionMapConfiguration || RequiresLazyProjection(baseModel, facetLookup);
+                        if (baseHasNestedFacets && baseIsLazy)
+                        {
+                            baseAlsoGeneratesProjectionFor = true;
+                            break;
+                        }
+                        baseTypeName = baseModel.BaseFacetInfo != null
+                            ? GeneratorUtilities.StripGlobalPrefix(baseModel.BaseFacetInfo.BaseTypeName)
+                            : null;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
+            GenerateProjectionForMethod(sb, src, tgt, safeName, propertyName, memberIndent, baseAlsoGeneratesProjectionFor);
             GenerateBuildProjectionExcluding(sb, model, memberIndent, facetLookup, nestedFacetMembers, src, tgt);
         }
     }

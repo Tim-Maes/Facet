@@ -15,9 +15,9 @@ public sealed class FacetProjectionBuilder<TSource, TTarget>
 {
     public List<(MemberInfo Member, LambdaExpression ValueExpression)> Mappings { get; } = new();
 
-    public IFacetProjectionBuilder<TSource, TTarget> Map<TValue>(
-        Expression<Func<TTarget, TValue>> targetMember,
-        Expression<Func<TSource, TValue>> valueExpression)
+    public IFacetProjectionBuilder<TSource, TTarget> Map<TTargetValue, TSourceValue>(
+        Expression<Func<TTarget, TTargetValue>> targetMember,
+        Expression<Func<TSource, TSourceValue>> valueExpression)
     {
         var member = ((MemberExpression)targetMember.Body).Member;
         Mappings.Add((member, valueExpression));
