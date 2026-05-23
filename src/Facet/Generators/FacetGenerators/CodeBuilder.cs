@@ -455,7 +455,7 @@ internal static class CodeBuilder
         if (model.BaseFacetInfo?.BaseConfigurationTypeName != null)
         {
             sb.AppendLine($"{innerIndent}// Apply base Facet projection mappings");
-            sb.AppendLine($"{innerIndent}var __baseBuilder = new global::Facet.Mapping.FacetProjectionBuilder<{model.BaseFacetInfo.BaseSourceTypeName}, {model.BaseFacetInfo.BaseTypeName}>();");
+            sb.AppendLine($"{innerIndent}var __baseBuilder = new global::Facet.Mapping.FacetProjectionBuilder<{model.BaseFacetInfo.BaseConfigurationSourceTypeName}, {model.BaseFacetInfo.BaseConfigurationTargetTypeName}>();");
             sb.AppendLine($"{innerIndent}{model.BaseFacetInfo.BaseConfigurationTypeName}.ConfigureProjection(__baseBuilder);");
             sb.AppendLine($"{innerIndent}foreach (var (__member, __expr) in __baseBuilder.Mappings)");
             sb.AppendLine($"{innerIndent}{{");

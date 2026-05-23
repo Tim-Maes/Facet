@@ -409,6 +409,70 @@ public class InheritedFacetProjectionTests
         backToEntity.Should().NotBeNull();
         backToEntity.Name.Should().Be("EntityUnit");
     }
+
+    [Fact]
+    public void Projection_WithChildWithoutConfiguration_ShouldIncludeBaseConfigurationMappings()
+    {
+        // Arrange
+        var entity = new OrderLineWithWeightEntity381
+        {
+            Id = 1,
+            Number = "ORD-001",
+            OrderedWeightInKg = 10.5m,
+            OrderedCount = 5,
+            OrderHeader = new OrderHeader381 { Number = "HDR-001" },
+            AssignedToUnit = new Unit381 { Name = "Unit A" }
+        };
+
+        // Act
+        var dto = OrderLineWithWeightDto381.Projection.Compile()(entity);
+
+        // Assert
+        dto.OrderedWeightInKg.Should().Be(10.5m);
+        dto.OrderedCount.Should().Be(5);
+
+        // Assert
+        dto.Number.Should().Be("ORD-001");
+
+        dto.OrderHeaderNumber.Should().Be("HDR-001",
+            "OrderHeaderNumber should be mapped from base Configuration's builder.Map()");
+        dto.AssignedToUnitName.Should().Be("Unit A",
+            "AssignedToUnitName should be mapped from base Configuration's builder.Map()");
+    }
+
+    [Fact]
+    public void Projection_WithGrandchildWithoutConfiguration_ShouldIncludeGrandparentConfigurationMappings()
+    {
+        // Arrange - Regression test: grandchild Facet WITHOUT Configuration, inheriting from
+        // intermediate Facet (also no config), which inherits from grandparent Facet WITH Configuration.
+        // This is the exact "Production" scenario reported by the user.
+        var entity = new OrderLineProductionEntity381
+        {
+            Id = 1,
+            Number = "ORD-002",
+            OrderedWeightInKg = 25.0m,
+            OrderedCount = 10,
+            ProductionDate = new DateTime(2024, 6, 15),
+            OrderHeader = new OrderHeader381 { Number = "HDR-002" },
+            AssignedToUnit = new Unit381 { Name = "Unit B" }
+        };
+
+        // Act
+        var dto = OrderLineProductionDto381.Projection.Compile()(entity);
+
+        // Assert - Grandchild's own properties
+        dto.ProductionDate.Should().Be(new DateTime(2024, 6, 15));
+
+        // Assert - Intermediate's properties
+        dto.OrderedWeightInKg.Should().Be(25.0m);
+        dto.OrderedCount.Should().Be(10);
+
+        // Assert - Grandparent's Configuration-mapped properties MUST be included
+        dto.OrderHeaderNumber.Should().Be("HDR-002",
+            "OrderHeaderNumber should be mapped from grandparent Configuration's builder.Map()");
+        dto.AssignedToUnitName.Should().Be("Unit B",
+            "AssignedToUnitName should be mapped from grandparent Configuration's builder.Map()");
+    }
 }
 
 public class UnitEntity338
@@ -874,4 +938,93 @@ public class OrderLineDispatchDto345_18MapConfig
         builder.Map(d => d.DeliveryTime, s => s.DeliveryTime.AddHours(2));
         builder.Map(d => d.ShipmentTime, s => s.ShipmentTime.AddHours(3));
     }
+}
+
+/// <summary>Base entity with a navigation property for expression-based mapping.</summary>
+public class OrderLineBaseEntity381
+{
+    public int Id { get; set; }
+    public string Number { get; set; } = string.Empty;
+    public OrderHeader381? OrderHeader { get; set; }
+    public Unit381? AssignedToUnit { get; set; }
+}
+
+public class OrderHeader381
+{
+    public string Number { get; set; } = string.Empty;
+}
+
+public class Unit381
+{
+    public string Name { get; set; } = string.Empty;
+}
+
+/// <summary>Derived entity that adds its own properties.</summary>
+public class OrderLineWithWeightEntity381 : OrderLineBaseEntity381
+{
+    public decimal OrderedWeightInKg { get; set; }
+    public long OrderedCount { get; set; }
+}
+
+/// <summary>
+/// Base Facet with a Configuration that maps expression-based properties.
+/// The properties OrderHeaderNumber and AssignedToUnitName are user-declared
+/// on the partial and mapped via ConfigureProjection (not in Include).
+/// </summary>
+[Facet(typeof(OrderLineBaseEntity381),
+       Configuration = typeof(OrderLineBaseDto381MapConfig),
+       Include = new[]
+       {
+           nameof(OrderLineBaseEntity381.Number)
+       })]
+public partial class OrderLineBaseDto381
+{
+    [MapFrom("OrderHeader.Number")]
+    public string OrderHeaderNumber { get; set; } = null!;
+
+    [MapFrom("AssignedToUnit.Name")]
+    public string? AssignedToUnitName { get; set; }
+}
+
+public class OrderLineBaseDto381MapConfig
+    : IFacetProjectionMapConfiguration<OrderLineBaseEntity381, OrderLineBaseDto381>
+{
+    public static void ConfigureProjection(
+        IFacetProjectionBuilder<OrderLineBaseEntity381, OrderLineBaseDto381> builder)
+    {
+        builder.Map(d => d.OrderHeaderNumber, s => s.OrderHeader != null ? s.OrderHeader.Number : "");
+        builder.Map(d => d.AssignedToUnitName, s => s.AssignedToUnit != null ? s.AssignedToUnit.Name : null);
+    }
+}
+
+/// <summary>
+/// Child Facet that inherits from base but has NO own Configuration.
+/// </summary>
+[Facet(typeof(OrderLineWithWeightEntity381),
+       Include = new[]
+       {
+           nameof(OrderLineWithWeightEntity381.OrderedWeightInKg),
+           nameof(OrderLineWithWeightEntity381.OrderedCount)
+       })]
+public partial class OrderLineWithWeightDto381 : OrderLineBaseDto381
+{
+}
+
+/// <summary>Grandchild entity adding more properties.</summary>
+public class OrderLineProductionEntity381 : OrderLineWithWeightEntity381
+{
+    public DateTime ProductionDate { get; set; }
+}
+
+/// <summary>
+/// Grandchild Facet: inherits from intermediate (no config) which inherits from base (has config).
+/// Tests that GetBaseFacetInfo walks past the intermediate to find the grandparent's Configuration.
+/// </summary>
+[Facet(typeof(OrderLineProductionEntity381),
+       Include = new[]
+       {
+           nameof(OrderLineProductionEntity381.ProductionDate)
+       })]
+public partial class OrderLineProductionDto381 : OrderLineWithWeightDto381
+{
 }

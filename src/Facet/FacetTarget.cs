@@ -27,6 +27,18 @@ internal sealed class BaseFacetInfo
     public string? BaseConfigurationTypeName { get; }
 
     /// <summary>
+    /// The source type name that the Configuration's ConfigureProjection expects.
+    /// May differ from BaseSourceTypeName when the Configuration is on a grandparent Facet.
+    /// </summary>
+    public string? BaseConfigurationSourceTypeName { get; }
+
+    /// <summary>
+    /// The target type name that the Configuration's ConfigureProjection expects.
+    /// May differ from BaseTypeName when the Configuration is on a grandparent Facet.
+    /// </summary>
+    public string? BaseConfigurationTargetTypeName { get; }
+
+    /// <summary>
     /// The Include properties specified in the base Facet's [Facet] attribute.
     /// </summary>
     public ImmutableArray<string> IncludedMembers { get; }
@@ -44,11 +56,13 @@ internal sealed class BaseFacetInfo
     /// </summary>
     public bool IsBaseSingleSource { get; }
 
-    public BaseFacetInfo(string baseTypeName, string baseSourceTypeName, string? baseConfigurationTypeName, ImmutableArray<string> includedMembers, ImmutableDictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings, bool isBaseSingleSource = true)
+    public BaseFacetInfo(string baseTypeName, string baseSourceTypeName, string? baseConfigurationTypeName, ImmutableArray<string> includedMembers, ImmutableDictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings, bool isBaseSingleSource = true, string? baseConfigurationSourceTypeName = null, string? baseConfigurationTargetTypeName = null)
     {
         BaseTypeName = baseTypeName;
         BaseSourceTypeName = baseSourceTypeName;
         BaseConfigurationTypeName = baseConfigurationTypeName;
+        BaseConfigurationSourceTypeName = baseConfigurationSourceTypeName ?? baseSourceTypeName;
+        BaseConfigurationTargetTypeName = baseConfigurationTargetTypeName ?? baseTypeName;
         IncludedMembers = includedMembers;
         NestedFacetMappings = nestedFacetMappings;
         IsBaseSingleSource = isBaseSingleSource;
