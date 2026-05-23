@@ -23,6 +23,10 @@ You should **not** need to install `Facet.Attributes` directly unless you're bui
 - `[GenerateDtos]` - Batch DTO generation
 - `[Wrapper]` - Generate wrapper types
 
+## Enums Included
+
+- `PropertySetAccessor` - Controls the set accessor emitted on generated properties (`Preserve` / `Set` / `Init`). Used via `[Facet(SetAccessor = PropertySetAccessor.Init)]`.
+
 ## AOT Compatibility
 
 This package is fully compatible with AOT (Ahead-Of-Time) compilation, including .NET MAUI applications. The separation of attributes from the source generator ensures that Roslyn dependencies do not leak into your runtime.

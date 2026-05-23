@@ -73,6 +73,7 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 - **`CollectionTargetType`** - remap source collection types (e.g. `Collection<T>`) to `List<T>` or any target collection type globally per facet; per-property via `[MapFrom(..., AsCollection = typeof(List<>))]`
 - **`GenerateCopyConstructor`** - generate a copy constructor for cloning and MVVM scenarios
 - **`GenerateEquality`** - generate value-based `Equals`, `GetHashCode`, `==`, `!=` for class DTOs
+- **`SetAccessor`** - force `{ get; init; }` or `{ get; set; }` on all generated properties for immutable / mutable variants
 
 ### Advanced Features
 - **Multi-source mapping** — a single target class can carry multiple `[Facet]` attributes, each mapping from a different source type; produces per-source constructors, projections (`ProjectionFrom{Source}`), and reverse-mapping methods (`To{Source}()`)
@@ -748,6 +749,44 @@ var original = new UserDto(user);
 var copy = new UserDto(original);
 original == copy; // true — same values, different instances
 ```
+
+</details>
+
+<details>
+  <summary>Set Accessor Override (SetAccessor)</summary>
+
+Force `{ get; init; }` or `{ get; set; }` on every generated property with a single attribute parameter.
+
+| Value | Accessor | Use case |
+|---|---|---|
+| `Preserve` *(default)* | Matches source | Normal DTOs |
+| `Init` | `{ get; init; }` | Immutable read models |
+| `Set` | `{ get; set; }` | Mutable versions of init-only types |
+
+```csharp
+public class Order
+{
+    public int Id { get; set; }
+    public string Reference { get; set; } = string.Empty;
+    public decimal Total { get; set; }
+}
+
+// Mutable builder
+[Facet(typeof(Order))]
+public partial class OrderBuilder;
+
+// Immutable snapshot — all { get; init; }
+[Facet(typeof(Order), SetAccessor = PropertySetAccessor.Init)]
+public partial class ImmutableOrder;
+```
+
+```csharp
+var builder = new OrderBuilder { Reference = "ORD-001", Total = 99.99m };
+var order = new ImmutableOrder(builder.ToSource());
+// order.Reference = "x"; // compile error — init-only
+```
+
+See [Set Accessor Override](docs/03_AttributeReference.md#set-accessor-override) for full docs.
 
 </details>
 

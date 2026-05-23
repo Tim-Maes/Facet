@@ -467,6 +467,23 @@ public sealed class FacetAttribute : Attribute
     public bool GenerateEquality { get; set; } = false;
 
     /// <summary>
+    /// Controls the set accessor emitted on all generated properties.
+    /// <list type="bullet">
+    ///   <item><description><see cref="PropertySetAccessor.Preserve"/> (default) — keeps the source accessor: <c>set</c> stays <c>set</c>, <c>init</c> stays <c>init</c>.</description></item>
+    ///   <item><description><see cref="PropertySetAccessor.Set"/> — forces <c>{ get; set; }</c> on every generated property.</description></item>
+    ///   <item><description><see cref="PropertySetAccessor.Init"/> — forces <c>{ get; init; }</c> on every generated property, producing an immutable facet.</description></item>
+    /// </list>
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// // Immutable DTO — all properties use { get; init; }
+    /// [Facet(typeof(Foo), SetAccessor = PropertySetAccessor.Init)]
+    /// public partial class ImmutableFoo;
+    /// </code>
+    /// </example>
+    public PropertySetAccessor SetAccessor { get; set; } = PropertySetAccessor.Preserve;
+
+    /// <summary>
     /// Creates a new FacetAttribute that targets a given source type and excludes specified members.
     /// </summary>
     /// <param name="sourceType">The type to generate from.</param>

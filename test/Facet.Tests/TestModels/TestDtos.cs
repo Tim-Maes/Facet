@@ -404,3 +404,18 @@ public partial class UnitMultiSourceInheritedFacet : UnitBaseFacet;
 [Facet(typeof(LocationEntity), nameof(LocationEntity.Location), GenerateToSource = true)]
 public partial class LocationDto;
 
+// SetAccessor feature test DTOs (#381)
+[Facet(typeof(User), "Password", "CreatedAt", SetAccessor = PropertySetAccessor.Init)]
+public partial class UserImmutableDto;
+
+[Facet(typeof(User), "Password", "CreatedAt", SetAccessor = PropertySetAccessor.Set)]
+public partial class UserMutableDto;
+
+// Verify SetAccessor.Preserve keeps init-only from source (using record, which defaults preserveInitOnly = true)
+[Facet(typeof(ImmutableEntity), SetAccessor = PropertySetAccessor.Preserve)]
+public partial record ImmutableEntityPreserveDto;
+
+// Verify SetAccessor.Set forces set on init-only source
+[Facet(typeof(ImmutableEntity), SetAccessor = PropertySetAccessor.Set)]
+public partial class ImmutableEntityMutableDto;
+

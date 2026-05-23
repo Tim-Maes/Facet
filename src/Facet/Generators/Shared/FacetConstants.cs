@@ -138,5 +138,6 @@ internal static class FacetConstants
         public const string ToSourceConfiguration = "ToSourceConfiguration";
         public const string CollectionTargetType = "CollectionTargetType";
         public const string AsCollection = "AsCollection";
+        public const string SetAccessor = "SetAccessor";
     }
 }
