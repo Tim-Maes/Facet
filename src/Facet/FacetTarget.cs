@@ -103,6 +103,11 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public ImmutableArray<string> FlattenToTypes { get; }
 
     /// <summary>
+    /// Controls the set accessor emitted on all generated properties.
+    /// </summary>
+    public PropertySetAccessor SetAccessor { get; }
+
+    /// <summary>
     /// The top-level property and field names of the source type (including inherited members).
     /// Used to disambiguate navigation properties from static type names in MapFrom expressions.
     /// </summary>
@@ -214,7 +219,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         BaseFacetInfo? baseFacetInfo = null,
         int maxDepthToSource = 0,
         ImmutableArray<string> sourcePropertyNames = default,
-        bool baseHidesToSource = false)
+        bool baseHidesToSource = false,
+        PropertySetAccessor setAccessor = PropertySetAccessor.Preserve)
     {
         Name = name;
         Namespace = @namespace;
@@ -257,6 +263,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         BaseFacetInfo = baseFacetInfo;
         SourcePropertyNames = sourcePropertyNames.IsDefault ? ImmutableArray<string>.Empty : sourcePropertyNames;
         BaseHidesToSource = baseHidesToSource;
+        SetAccessor = setAccessor;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -302,7 +309,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && HasProjectionMapConfiguration == other.HasProjectionMapConfiguration
             && HasMapConfiguration == other.HasMapConfiguration
             && BaseHidesFromSource == other.BaseHidesFromSource
-            && SourcePropertyNames.SequenceEqual(other.SourcePropertyNames);
+            && SourcePropertyNames.SequenceEqual(other.SourcePropertyNames)
+            && SetAccessor == other.SetAccessor;
     }
 
     public override bool Equals(object? obj) => obj is FacetTargetModel other && Equals(other);
@@ -345,6 +353,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             hash = hash * 31 + HasMapConfiguration.GetHashCode();
             hash = hash * 31 + BaseHidesFromSource.GetHashCode();
             hash = hash * 31 + SourcePropertyNames.Length.GetHashCode();
+            hash = hash * 31 + SetAccessor.GetHashCode();
             hash = hash * 31 + Members.Length.GetHashCode();
 
             foreach (var member in Members)

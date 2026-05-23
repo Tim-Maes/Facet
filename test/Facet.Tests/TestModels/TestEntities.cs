@@ -512,3 +512,11 @@ public class LocationEntity
     public required string Description { get; set; }
 }
 
+    // Test entity with init-only properties for SetAccessor tests
+    public class ImmutableEntity
+    {
+        public int Id { get; init; }
+        public string Name { get; init; } = string.Empty;
+        public string Description { get; init; } = string.Empty;
+    }
+

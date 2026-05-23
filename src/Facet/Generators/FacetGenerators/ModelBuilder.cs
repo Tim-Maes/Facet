@@ -114,6 +114,9 @@ internal static class ModelBuilder
         // Extract ConvertEnumsTo parameter
         var convertEnumsTo = AttributeParser.ExtractConvertEnumsTo(attribute);
 
+        // Extract SetAccessor parameter
+        var setAccessor = (PropertySetAccessor)AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.SetAccessor, (int)PropertySetAccessor.Preserve);
+
         // Extract GenerateCopyConstructor and GenerateEquality parameters - use global defaults
         var generateCopyConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateCopyConstructor, globalDefaults.GenerateCopyConstructor);
         var generateEquality = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateEquality, globalDefaults.GenerateEquality);
@@ -221,7 +224,8 @@ internal static class ModelBuilder
             baseClassMemberNames,
             collectionTargetType,
             externalDocProvider,
-            token);
+            token,
+            setAccessor);
 
         // Add expression-based members (from MapFrom with expressions)
         if (expressionMembers.Count > 0)
@@ -344,7 +348,8 @@ internal static class ModelBuilder
             baseFacetInfo,
             maxDepthToSource,
             sourcePropertyNames,
-            baseHidesToSource);
+            baseHidesToSource,
+            setAccessor);
     }
 
     #region Private Helper Methods
@@ -368,7 +373,8 @@ internal static class ModelBuilder
         ImmutableArray<string> baseClassMemberNames,
         string? collectionTargetType,
         ExternalXmlDocProvider? externalDocProvider,
-        CancellationToken token)
+        CancellationToken token,
+        PropertySetAccessor setAccessor = PropertySetAccessor.Preserve)
     {
         var members = new List<FacetMember>();
         var excludedRequiredMembers = new List<FacetMember>();
@@ -415,7 +421,8 @@ internal static class ModelBuilder
                     externalDocProvider,
                     members,
                     excludedRequiredMembers,
-                    addedMembers);
+                    addedMembers,
+                    setAccessor);
             }
             else if (includeFields && member is IFieldSymbol field && field.DeclaredAccessibility == Accessibility.Public)
             {
@@ -457,7 +464,8 @@ internal static class ModelBuilder
         ExternalXmlDocProvider? externalDocProvider,
         List<FacetMember> members,
         List<FacetMember> excludedRequiredMembers,
-        HashSet<string> addedMembers)
+        HashSet<string> addedMembers,
+        PropertySetAccessor setAccessor = PropertySetAccessor.Preserve)
     {
         var memberXmlDocumentation = copyDocs ? CodeGenerationHelpers.ExtractXmlDocumentation(property, inheritDocs, externalDocProvider) : null;
 
@@ -482,7 +490,12 @@ internal static class ModelBuilder
             return;
         }
 
-        var shouldPreserveInitOnly = preserveInitOnly && isInitOnly;
+        var shouldPreserveInitOnly = setAccessor switch
+        {
+            PropertySetAccessor.Init => true,
+            PropertySetAccessor.Set => false,
+            _ => preserveInitOnly && isInitOnly,
+        };
         // Honor the target property's own 'required' modifier when it maps from a non-required source property.
         var shouldPreserveRequired = (preserveRequired && isRequired) || (hasMapFrom && mapFromInfo.isTargetRequired);
 

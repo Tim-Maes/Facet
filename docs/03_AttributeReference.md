@@ -46,6 +46,7 @@ public partial class MyFacet { }
 | `CollectionTargetType`         | `Type?`   | Overrides the collection type used for **all** mapped collection properties on this facet. Use an open generic type such as `typeof(List<>)` to remap source collections (e.g. `Collection<T>` from EF Core entities) to a different target type. See [Collection Type Mapping](#collection-type-mapping) below. |
 | `GenerateCopyConstructor`      | `bool`    | Generate a copy constructor that accepts another instance of the same facet type and copies all member values (default: false). See [Copy Constructor](#copy-constructor) below. |
 | `GenerateEquality`             | `bool`    | Generate value-based equality members (`Equals`, `GetHashCode`, `==`, `!=`) and implement `IEquatable<T>` (default: false). Ignored for records. See [Equality Generation](#equality-generation) below. |
+| `SetAccessor`                  | `PropertySetAccessor` | Override the set accessor emitted on all generated properties. `Preserve` (default) keeps the source accessor; `Set` forces `{ get; set; }`; `Init` forces `{ get; init; }`. See [Set Accessor Override](#set-accessor-override) below. |
 
 ## Include vs Exclude
 
@@ -944,6 +945,88 @@ public partial class UnitDto { }
 // facet.Items is List<UnitItemDto>
 // facet.ToSource().Items is Collection<UnitItemEntity> , original source type restored
 ```
+
+---
+
+## Set Accessor Override
+
+The `SetAccessor` parameter controls which set accessor is emitted on **every** generated property, overriding the default behaviour.
+
+| Value | Generated accessor | When to use |
+|---|---|---|
+| `PropertySetAccessor.Preserve` *(default)* | Same as the source property | Usual DTO/projection work |
+| `PropertySetAccessor.Set` | `{ get; set; }` | Force mutability even when source uses `init` |
+| `PropertySetAccessor.Init` | `{ get; init; }` | Immutable DTOs — all properties settable only during construction |
+
+### Basic Usage
+
+```csharp
+// All generated properties use { get; init; }
+[Facet(typeof(Foo), SetAccessor = PropertySetAccessor.Init)]
+public partial class ImmutableFoo;
+
+// All generated properties use { get; set; }
+[Facet(typeof(Foo), SetAccessor = PropertySetAccessor.Set)]
+public partial class MutableFoo;
+```
+
+### Builder Pattern Example
+
+`SetAccessor` is ideal for a **mutable builder → immutable read model** workflow:
+
+```csharp
+public class Order
+{
+    public int Id { get; set; }
+    public string Reference { get; set; } = string.Empty;
+    public decimal Total { get; set; }
+}
+
+// Mutable version — build up the object in multiple steps
+[Facet(typeof(Order))]
+public partial class OrderBuilder;
+
+// Immutable version, locked down after construction
+[Facet(typeof(Order), SetAccessor = PropertySetAccessor.Init)]
+public partial class ImmutableOrder;
+```
+
+```csharp
+// Build
+var builder = new OrderBuilder();
+builder.Reference = "ORD-001";
+builder.Total = 99.99m;
+
+// Freeze into an immutable snapshot
+var order = new ImmutableOrder(builder.ToSource());
+// order.Reference = "x"; // <- compile error: init-only
+```
+
+### Generated Code
+
+```csharp
+// Source
+public class Foo
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+}
+
+// SetAccessor = PropertySetAccessor.Init
+public partial class ImmutableFoo
+{
+    public int Id { get; init; }
+    public string Name { get; init; } = default!;
+}
+```
+
+### Interaction with `PreserveInitOnlyProperties`
+
+`SetAccessor` takes full precedence:
+
+- `SetAccessor = Init` > all properties get `init`, regardless of source or `PreserveInitOnlyProperties`
+- `SetAccessor = Set` > all properties get `set`, even if `PreserveInitOnlyProperties = true`
+- `SetAccessor = Preserve` (default) > falls back to the normal `PreserveInitOnlyProperties` logic
 
 ---
 
