@@ -22,21 +22,27 @@ internal sealed class BaseFacetInfo
     public string BaseSourceTypeName { get; }
 
     /// <summary>
-    /// The configuration type name for the base Facet (if it has ConfigureProjection).
+    /// The configuration type name for the nearest base Facet ancestor (if it has ConfigureProjection).
     /// </summary>
     public string? BaseConfigurationTypeName { get; }
 
     /// <summary>
-    /// The source type name that the Configuration's ConfigureProjection expects.
+    /// The source type name that the nearest Configuration's ConfigureProjection expects.
     /// May differ from BaseSourceTypeName when the Configuration is on a grandparent Facet.
     /// </summary>
     public string? BaseConfigurationSourceTypeName { get; }
 
     /// <summary>
-    /// The target type name that the Configuration's ConfigureProjection expects.
+    /// The target type name that the nearest Configuration's ConfigureProjection expects.
     /// May differ from BaseTypeName when the Configuration is on a grandparent Facet.
     /// </summary>
     public string? BaseConfigurationTargetTypeName { get; }
+
+    /// <summary>
+    /// All projection configurations from the full ancestor chain, nearest first.
+    /// Includes configs from every ancestor Facet that has one, even when intermediate ancestors lack one.
+    /// </summary>
+    public ImmutableArray<(string ConfigTypeName, string SourceTypeName, string TargetTypeName)> AllBaseProjectionConfigs { get; }
 
     /// <summary>
     /// The Include properties specified in the base Facet's [Facet] attribute.
@@ -56,7 +62,7 @@ internal sealed class BaseFacetInfo
     /// </summary>
     public bool IsBaseSingleSource { get; }
 
-    public BaseFacetInfo(string baseTypeName, string baseSourceTypeName, string? baseConfigurationTypeName, ImmutableArray<string> includedMembers, ImmutableDictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings, bool isBaseSingleSource = true, string? baseConfigurationSourceTypeName = null, string? baseConfigurationTargetTypeName = null)
+    public BaseFacetInfo(string baseTypeName, string baseSourceTypeName, string? baseConfigurationTypeName, ImmutableArray<string> includedMembers, ImmutableDictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings, bool isBaseSingleSource = true, string? baseConfigurationSourceTypeName = null, string? baseConfigurationTargetTypeName = null, ImmutableArray<(string ConfigTypeName, string SourceTypeName, string TargetTypeName)> allBaseProjectionConfigs = default)
     {
         BaseTypeName = baseTypeName;
         BaseSourceTypeName = baseSourceTypeName;
@@ -66,6 +72,19 @@ internal sealed class BaseFacetInfo
         IncludedMembers = includedMembers;
         NestedFacetMappings = nestedFacetMappings;
         IsBaseSingleSource = isBaseSingleSource;
+
+        if (!allBaseProjectionConfigs.IsDefault)
+        {
+            AllBaseProjectionConfigs = allBaseProjectionConfigs;
+        }
+        else if (BaseConfigurationTypeName != null)
+        {
+            AllBaseProjectionConfigs = ImmutableArray.Create((BaseConfigurationTypeName, BaseConfigurationSourceTypeName!, BaseConfigurationTargetTypeName!));
+        }
+        else
+        {
+            AllBaseProjectionConfigs = ImmutableArray<(string, string, string)>.Empty;
+        }
     }
 }
 

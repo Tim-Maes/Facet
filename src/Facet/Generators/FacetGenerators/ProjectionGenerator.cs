@@ -33,7 +33,7 @@ internal static class ProjectionGenerator
         {
             GenerateProjectionNotSupportedComment(sb, model, memberIndent);
         }
-        else if (model.HasProjectionMapConfiguration || RequiresLazyProjection(model, facetLookup) || model.BaseFacetInfo?.BaseConfigurationTypeName != null)
+        else if (model.HasProjectionMapConfiguration || RequiresLazyProjection(model, facetLookup) || model.BaseFacetInfo?.AllBaseProjectionConfigs.Length > 0)
         {
             GenerateProjectionDocumentation(sb, model, memberIndent, propertyName);
             GenerateLazyProjection(sb, model, memberIndent, facetLookup, propertyName);
@@ -226,27 +226,32 @@ internal static class ProjectionGenerator
             sb.AppendLine();
         }
 
-        // Apply base Facet ConfigureProjection if present
-        if (model.BaseFacetInfo?.BaseConfigurationTypeName != null)
+        // Apply all base Facet ConfigureProjection configs found in the ancestor chain
+        if (model.BaseFacetInfo?.AllBaseProjectionConfigs.Length > 0)
         {
             sb.AppendLine($"{bodyIndent}// Apply base Facet projection mappings");
-            sb.AppendLine($"{bodyIndent}var __baseBuilder = new global::Facet.Mapping.FacetProjectionBuilder<{model.BaseFacetInfo.BaseConfigurationSourceTypeName}, {model.BaseFacetInfo.BaseConfigurationTargetTypeName}>();");
-            sb.AppendLine($"{bodyIndent}{model.BaseFacetInfo.BaseConfigurationTypeName}.ConfigureProjection(__baseBuilder);");
-            sb.AppendLine($"{bodyIndent}foreach (var (__member, __expr) in __baseBuilder.Mappings)");
-            sb.AppendLine($"{bodyIndent}{{");
-            sb.AppendLine($"{bodyIndent}    // Get the corresponding member in the derived type");
-            sb.AppendLine($"{bodyIndent}    var __derivedMember = typeof({tgt}).GetProperty(__member.Name);");
-            sb.AppendLine($"{bodyIndent}    if (__derivedMember != null)");
-            sb.AppendLine($"{bodyIndent}    {{");
-            sb.AppendLine($"{bodyIndent}        var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __p);");
-            sb.AppendLine($"{bodyIndent}        var __memberType = ((global::System.Reflection.PropertyInfo)__derivedMember).PropertyType;");
-            sb.AppendLine($"{bodyIndent}        if (__body.Type != __memberType && __memberType.IsAssignableFrom(__body.Type))");
-            sb.AppendLine($"{bodyIndent}            __body = global::System.Linq.Expressions.Expression.Convert(__body, __memberType);");
-            sb.AppendLine($"{bodyIndent}        __bindings.RemoveAll(b => ((global::System.Linq.Expressions.MemberAssignment)b).Member.Name == __derivedMember.Name);");
-            sb.AppendLine($"{bodyIndent}        __bindings.Add(global::System.Linq.Expressions.Expression.Bind(__derivedMember, __body));");
-            sb.AppendLine($"{bodyIndent}    }}");
-            sb.AppendLine($"{bodyIndent}}}");
-            sb.AppendLine();
+            foreach (var (cfgTypeName, cfgSrcTypeName, cfgTgtTypeName) in model.BaseFacetInfo.AllBaseProjectionConfigs)
+            {
+                sb.AppendLine($"{bodyIndent}{{");
+                sb.AppendLine($"{bodyIndent}    var __baseBuilder = new global::Facet.Mapping.FacetProjectionBuilder<{cfgSrcTypeName}, {cfgTgtTypeName}>();");
+                sb.AppendLine($"{bodyIndent}    {cfgTypeName}.ConfigureProjection(__baseBuilder);");
+                sb.AppendLine($"{bodyIndent}    foreach (var (__member, __expr) in __baseBuilder.Mappings)");
+                sb.AppendLine($"{bodyIndent}    {{");
+                sb.AppendLine($"{bodyIndent}        // Get the corresponding member in the derived type");
+                sb.AppendLine($"{bodyIndent}        var __derivedMember = typeof({tgt}).GetProperty(__member.Name);");
+                sb.AppendLine($"{bodyIndent}        if (__derivedMember != null)");
+                sb.AppendLine($"{bodyIndent}        {{");
+                sb.AppendLine($"{bodyIndent}            var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __p);");
+                sb.AppendLine($"{bodyIndent}            var __memberType = ((global::System.Reflection.PropertyInfo)__derivedMember).PropertyType;");
+                sb.AppendLine($"{bodyIndent}            if (__body.Type != __memberType && __memberType.IsAssignableFrom(__body.Type))");
+                sb.AppendLine($"{bodyIndent}                __body = global::System.Linq.Expressions.Expression.Convert(__body, __memberType);");
+                sb.AppendLine($"{bodyIndent}            __bindings.RemoveAll(b => ((global::System.Linq.Expressions.MemberAssignment)b).Member.Name == __derivedMember.Name);");
+                sb.AppendLine($"{bodyIndent}            __bindings.Add(global::System.Linq.Expressions.Expression.Bind(__derivedMember, __body));");
+                sb.AppendLine($"{bodyIndent}        }}");
+                sb.AppendLine($"{bodyIndent}    }}");
+                sb.AppendLine($"{bodyIndent}}}");
+                sb.AppendLine();
+            }
         }
 
         // Apply ConfigureProjection overrides from derived class (only if this model has its own configuration)
@@ -1067,7 +1072,7 @@ internal static class ProjectionGenerator
             if (nestedModel.HasProjectionMapConfiguration)
                 return true;
 
-            if (nestedModel.BaseFacetInfo?.BaseConfigurationTypeName != null)
+            if (nestedModel.BaseFacetInfo?.AllBaseProjectionConfigs.Length > 0)
                 return true;
 
             // Recurse into the nested model's own nested facets
@@ -1281,7 +1286,7 @@ internal static class ProjectionGenerator
 
         // Must be lazy (uses GenerateLazyProjection path)
         if (nestedModel.HasProjectionMapConfiguration) return true;
-        if (nestedModel.BaseFacetInfo?.BaseConfigurationTypeName != null) return true;
+        if (nestedModel.BaseFacetInfo?.AllBaseProjectionConfigs.Length > 0) return true;
         return RequiresLazyProjection(nestedModel, facetLookup);
     }
 
@@ -1384,23 +1389,28 @@ internal static class ProjectionGenerator
             sb.AppendLine();
         }
 
-        // Apply base Facet ConfigureProjection if present (same as BuildProjection)
-        if (model.BaseFacetInfo?.BaseConfigurationTypeName != null)
+        // Apply all base Facet ConfigureProjection configs found in the ancestor chain (same as BuildProjection)
+        if (model.BaseFacetInfo?.AllBaseProjectionConfigs.Length > 0)
         {
             sb.AppendLine($"{bodyIndent}// Apply base Facet projection mappings");
-            sb.AppendLine($"{bodyIndent}var __baseBuilder = new global::Facet.Mapping.FacetProjectionBuilder<{model.BaseFacetInfo.BaseConfigurationSourceTypeName}, {model.BaseFacetInfo.BaseConfigurationTargetTypeName}>();");
-            sb.AppendLine($"{bodyIndent}{model.BaseFacetInfo.BaseConfigurationTypeName}.ConfigureProjection(__baseBuilder);");
-            sb.AppendLine($"{bodyIndent}foreach (var (__member, __expr) in __baseBuilder.Mappings)");
-            sb.AppendLine($"{bodyIndent}{{");
-            sb.AppendLine($"{bodyIndent}    var __derivedMember = typeof({tgt}).GetProperty(__member.Name);");
-            sb.AppendLine($"{bodyIndent}    if (__derivedMember != null)");
-            sb.AppendLine($"{bodyIndent}    {{");
-            sb.AppendLine($"{bodyIndent}        var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __p);");
-            sb.AppendLine($"{bodyIndent}        __bindings.RemoveAll(b => ((global::System.Linq.Expressions.MemberAssignment)b).Member.Name == __derivedMember.Name);");
-            sb.AppendLine($"{bodyIndent}        __bindings.Add(global::System.Linq.Expressions.Expression.Bind(__derivedMember, __body));");
-            sb.AppendLine($"{bodyIndent}    }}");
-            sb.AppendLine($"{bodyIndent}}}");
-            sb.AppendLine();
+            foreach (var (cfgTypeName, cfgSrcTypeName, cfgTgtTypeName) in model.BaseFacetInfo.AllBaseProjectionConfigs)
+            {
+                sb.AppendLine($"{bodyIndent}{{");
+                sb.AppendLine($"{bodyIndent}    var __baseBuilder = new global::Facet.Mapping.FacetProjectionBuilder<{cfgSrcTypeName}, {cfgTgtTypeName}>();");
+                sb.AppendLine($"{bodyIndent}    {cfgTypeName}.ConfigureProjection(__baseBuilder);");
+                sb.AppendLine($"{bodyIndent}    foreach (var (__member, __expr) in __baseBuilder.Mappings)");
+                sb.AppendLine($"{bodyIndent}    {{");
+                sb.AppendLine($"{bodyIndent}        var __derivedMember = typeof({tgt}).GetProperty(__member.Name);");
+                sb.AppendLine($"{bodyIndent}        if (__derivedMember != null)");
+                sb.AppendLine($"{bodyIndent}        {{");
+                sb.AppendLine($"{bodyIndent}            var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __p);");
+                sb.AppendLine($"{bodyIndent}            __bindings.RemoveAll(b => ((global::System.Linq.Expressions.MemberAssignment)b).Member.Name == __derivedMember.Name);");
+                sb.AppendLine($"{bodyIndent}            __bindings.Add(global::System.Linq.Expressions.Expression.Bind(__derivedMember, __body));");
+                sb.AppendLine($"{bodyIndent}        }}");
+                sb.AppendLine($"{bodyIndent}    }}");
+                sb.AppendLine($"{bodyIndent}}}");
+                sb.AppendLine();
+            }
         }
 
         // Apply own ConfigureProjection if present (same as BuildProjection)
