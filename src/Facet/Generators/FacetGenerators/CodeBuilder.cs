@@ -455,20 +455,20 @@ internal static class CodeBuilder
         if (model.BaseFacetInfo?.AllBaseProjectionConfigs.Length > 0)
         {
             sb.AppendLine($"{innerIndent}// Apply base Facet projection mappings");
-            foreach (var (cfgTypeName, cfgSrcTypeName, cfgTgtTypeName) in model.BaseFacetInfo.AllBaseProjectionConfigs)
+            for (int __cfgIdx = 0; __cfgIdx < model.BaseFacetInfo.AllBaseProjectionConfigs.Length; __cfgIdx++)
             {
+                var (cfgTypeName, cfgSrcTypeName, cfgTgtTypeName) = model.BaseFacetInfo.AllBaseProjectionConfigs[__cfgIdx];
+                var builderVar = __cfgIdx == 0 ? "__baseBuilder" : $"__baseBuilder{__cfgIdx}";
+                sb.AppendLine($"{innerIndent}var {builderVar} = new global::Facet.Mapping.FacetProjectionBuilder<{cfgSrcTypeName}, {cfgTgtTypeName}>();");
+                sb.AppendLine($"{innerIndent}{cfgTypeName}.ConfigureProjection({builderVar});");
+                sb.AppendLine($"{innerIndent}foreach (var (__member, __expr) in {builderVar}.Mappings)");
                 sb.AppendLine($"{innerIndent}{{");
-                sb.AppendLine($"{innerIndent}    var __baseBuilder = new global::Facet.Mapping.FacetProjectionBuilder<{cfgSrcTypeName}, {cfgTgtTypeName}>();");
-                sb.AppendLine($"{innerIndent}    {cfgTypeName}.ConfigureProjection(__baseBuilder);");
-                sb.AppendLine($"{innerIndent}    foreach (var (__member, __expr) in __baseBuilder.Mappings)");
+                sb.AppendLine($"{innerIndent}    var __derivedMember = typeof({tgt}).GetProperty(__member.Name);");
+                sb.AppendLine($"{innerIndent}    if (__derivedMember != null)");
                 sb.AppendLine($"{innerIndent}    {{");
-                sb.AppendLine($"{innerIndent}        var __derivedMember = typeof({tgt}).GetProperty(__member.Name);");
-                sb.AppendLine($"{innerIndent}        if (__derivedMember != null)");
-                sb.AppendLine($"{innerIndent}        {{");
-                sb.AppendLine($"{innerIndent}            var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __sourceParam);");
-                sb.AppendLine($"{innerIndent}            __assignments.Add(global::System.Linq.Expressions.Expression.Assign(");
-                sb.AppendLine($"{innerIndent}                global::System.Linq.Expressions.Expression.MakeMemberAccess(__targetParam, __derivedMember), __body));");
-                sb.AppendLine($"{innerIndent}        }}");
+                sb.AppendLine($"{innerIndent}        var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __sourceParam);");
+                sb.AppendLine($"{innerIndent}        __assignments.Add(global::System.Linq.Expressions.Expression.Assign(");
+                sb.AppendLine($"{innerIndent}            global::System.Linq.Expressions.Expression.MakeMemberAccess(__targetParam, __derivedMember), __body));");
                 sb.AppendLine($"{innerIndent}    }}");
                 sb.AppendLine($"{innerIndent}}}");
                 sb.AppendLine();
