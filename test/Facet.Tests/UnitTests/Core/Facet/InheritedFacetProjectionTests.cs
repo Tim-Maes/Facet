@@ -473,6 +473,38 @@ public class InheritedFacetProjectionTests
         dto.AssignedToUnitName.Should().Be("Unit B",
             "AssignedToUnitName should be mapped from grandparent Configuration's builder.Map()");
     }
+
+    [Fact]
+    public void Projection_WithMultipleConfigsInChain_ShouldApplyAllAncestorConfigs()
+    {
+        // Regression test for Allan Michaelsen's report: deep inheritance chain where TWO
+        // ancestors each have their own Configuration. Previously only the nearest config
+        // was applied; configs from deeper ancestors were silently dropped.
+        // Chain: GrandChildDto (no cfg) → ParentDto (config B) → GapDto (no cfg) → BaseDto (config A)
+        var entity = new MultiConfigGrandChildEntity381
+        {
+            Id = 7,
+            BaseTag = "alpha",
+            GapField = "gap",
+            ParentTag = "beta",
+            GrandChildTag = "gamma"
+        };
+
+        var dto = MultiConfigGrandChildDto381.Projection.Compile()(entity);
+
+        // BaseDto's ConfigureProjection must be applied (config A: "BASE-" prefix)
+        dto.BaseTag.Should().Be("BASE-alpha",
+            "BaseDto's ConfigureProjection must run even though GapDto has no config");
+
+        // ParentDto's ConfigureProjection must also be applied (config B: "PARENT-" prefix)
+        dto.ParentTag.Should().Be("PARENT-beta",
+            "ParentDto's ConfigureProjection must run");
+
+        // Simple properties must be mapped normally
+        dto.GapField.Should().Be("gap");
+        dto.GrandChildTag.Should().Be("gamma");
+        dto.Id.Should().Be(7);
+    }
 }
 
 public class UnitEntity338
@@ -1026,5 +1058,77 @@ public class OrderLineProductionEntity381 : OrderLineWithWeightEntity381
            nameof(OrderLineProductionEntity381.ProductionDate)
        })]
 public partial class OrderLineProductionDto381 : OrderLineWithWeightDto381
+{
+}
+
+// --- Multi-config chain test models (Allan Michaelsen scenario) ---
+// Tests that ALL configs in the ancestor chain are applied, not just the nearest one.
+// Chain: GrandChildDto (config C) → ParentDto (config B) → GapDto (no config) → BaseDto (config A)
+
+public class MultiConfigBaseEntity381
+{
+    public int Id { get; set; }
+    public string BaseTag { get; set; } = string.Empty;
+}
+
+public class MultiConfigGapEntity381 : MultiConfigBaseEntity381
+{
+    public string GapField { get; set; } = string.Empty;
+}
+
+public class MultiConfigParentEntity381 : MultiConfigGapEntity381
+{
+    public string ParentTag { get; set; } = string.Empty;
+}
+
+public class MultiConfigGrandChildEntity381 : MultiConfigParentEntity381
+{
+    public string GrandChildTag { get; set; } = string.Empty;
+}
+
+[Facet(typeof(MultiConfigBaseEntity381),
+       Configuration = typeof(MultiConfigBaseDto381MapConfig),
+       Include = new[] { nameof(MultiConfigBaseEntity381.BaseTag) })]
+public partial class MultiConfigBaseDto381
+{
+    public int Id { get; set; }
+}
+
+public class MultiConfigBaseDto381MapConfig
+    : IFacetProjectionMapConfiguration<MultiConfigBaseEntity381, MultiConfigBaseDto381>
+{
+    public static void ConfigureProjection(
+        IFacetProjectionBuilder<MultiConfigBaseEntity381, MultiConfigBaseDto381> builder)
+    {
+        builder.Map(d => d.BaseTag, s => "BASE-" + s.BaseTag);
+    }
+}
+
+[Facet(typeof(MultiConfigGapEntity381),
+       Include = new[] { nameof(MultiConfigGapEntity381.GapField) })]
+public partial class MultiConfigGapDto381 : MultiConfigBaseDto381
+{
+}
+
+[Facet(typeof(MultiConfigParentEntity381),
+       Configuration = typeof(MultiConfigParentDto381MapConfig),
+       Include = new[] { nameof(MultiConfigParentEntity381.ParentTag) })]
+public partial class MultiConfigParentDto381 : MultiConfigGapDto381
+{
+}
+
+public class MultiConfigParentDto381MapConfig
+    : IFacetProjectionMapConfiguration<MultiConfigParentEntity381, MultiConfigParentDto381>
+{
+    public static void ConfigureProjection(
+        IFacetProjectionBuilder<MultiConfigParentEntity381, MultiConfigParentDto381> builder)
+    {
+        builder.Map(d => d.ParentTag, s => "PARENT-" + s.ParentTag);
+    }
+}
+
+[Facet(typeof(MultiConfigGrandChildEntity381),
+       Include = new[] { nameof(MultiConfigGrandChildEntity381.GrandChildTag) })]
+public partial class MultiConfigGrandChildDto381 : MultiConfigParentDto381
 {
 }

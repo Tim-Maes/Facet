@@ -1307,9 +1307,8 @@ private static Dictionary<string, (string targetName, string source, bool revers
     /// </summary>
     private static BaseFacetInfo? GetBaseFacetInfo(INamedTypeSymbol targetSymbol, INamedTypeSymbol derivedSourceType, Compilation compilation)
     {
-        // Walk the full ancestor chain to accumulate IncludedMembers and NestedFacetMappings
-        // from ALL ancestor facets. The nearest ancestor provides BaseTypeName, BaseSourceTypeName,
-        // and BaseConfigurationTypeName.
+        // Walk the full ancestor chain to accumulate IncludedMembers, NestedFacetMappings, and ALL
+        // projection configurations. The nearest ancestor provides BaseTypeName and BaseSourceTypeName.
         string? nearestBaseTypeName = null;
         string? nearestBaseSourceTypeName = null;
         string? nearestBaseConfigurationTypeName = null;
@@ -1317,6 +1316,7 @@ private static Dictionary<string, (string targetName, string source, bool revers
         string? configurationTargetTypeName = null;
         var allIncludedMembers = new List<string>();
         var allNestedFacetMappings = new Dictionary<string, (string childFacetTypeName, string sourceTypeName)>();
+        var allBaseProjectionConfigs = new List<(string ConfigTypeName, string SourceTypeName, string TargetTypeName)>();
         bool foundAny = false;
         int nearestBaseFacetCount = 0;
 
@@ -1379,10 +1379,9 @@ private static Dictionary<string, (string targetName, string source, bool revers
                         nearestBaseFacetCount = facetAttrs.Count;
                     }
 
-                    // Extract the Configuration type from the nearest ancestor that has one.
-                    // This is outside the !foundAny block so we can find Configuration from
-                    // grandparent Facets when intermediate ancestors don't have one.
-                    if (nearestBaseConfigurationTypeName == null)
+                    // Collect ALL Configuration types from the full ancestor chain (nearest first).
+                    // This fixes the gap where an intermediate ancestor without a config was causing
+                    // grandparent configs to be silently dropped.
                     {
                         var configArg = bestFacetAttr.NamedArguments.FirstOrDefault(arg => arg.Key == "Configuration");
                         if (!configArg.Equals(default(KeyValuePair<string, TypedConstant>)))
@@ -1403,12 +1402,19 @@ private static Dictionary<string, (string targetName, string source, bool revers
 
                                     if (implementsProjectionConfig)
                                     {
-                                        nearestBaseConfigurationTypeName = configType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                                        // Track the actual source/target types the Configuration expects,
-                                        // which may differ from the nearest ancestor's types when the
-                                        // Configuration is on a grandparent Facet.
-                                        configurationSourceTypeName = bestBaseSourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                                        configurationTargetTypeName = baseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                                        var cfgTypeName = configType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                                        var cfgSourceTypeName = bestBaseSourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                                        var cfgTargetTypeName = baseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+                                        allBaseProjectionConfigs.Add((cfgTypeName, cfgSourceTypeName, cfgTargetTypeName));
+
+                                        // Track nearest config separately for backward-compat properties.
+                                        if (nearestBaseConfigurationTypeName == null)
+                                        {
+                                            nearestBaseConfigurationTypeName = cfgTypeName;
+                                            configurationSourceTypeName = cfgSourceTypeName;
+                                            configurationTargetTypeName = cfgTargetTypeName;
+                                        }
                                     }
                                 }
                             }
@@ -1454,7 +1460,8 @@ private static Dictionary<string, (string targetName, string source, bool revers
             allNestedFacetMappings.ToImmutableDictionary(),
             isBaseSingleSource: nearestBaseFacetCount == 1,
             baseConfigurationSourceTypeName: configurationSourceTypeName,
-            baseConfigurationTargetTypeName: configurationTargetTypeName);
+            baseConfigurationTargetTypeName: configurationTargetTypeName,
+            allBaseProjectionConfigs: allBaseProjectionConfigs.ToImmutableArray());
     }
 
     /// <summary>
