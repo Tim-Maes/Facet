@@ -1,4 +1,4 @@
-using Facet.Tests.TestModels;
+ï»¿using Facet.Tests.TestModels;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
 
@@ -11,7 +11,6 @@ public class CopyConstructorTests
     [Fact]
     public void CopyConstructor_ShouldCopyAllProperties()
     {
-        // Arrange
         var source = new PersonForCopyAndEquality
         {
             Id = 42,
@@ -22,10 +21,8 @@ public class CopyConstructorTests
         };
         var original = new PersonWithCopyConstructorDto(source);
 
-        // Act
         var copy = new PersonWithCopyConstructorDto(original);
 
-        // Assert
         copy.Should().NotBeSameAs(original);
         copy.Id.Should().Be(42);
         copy.Name.Should().Be("Alice");
@@ -37,7 +34,6 @@ public class CopyConstructorTests
     [Fact]
     public void CopyConstructor_ShouldHandleNullableProperties()
     {
-        // Arrange
         var source = new PersonForCopyAndEquality
         {
             Id = 1,
@@ -48,17 +44,14 @@ public class CopyConstructorTests
         };
         var original = new PersonWithCopyConstructorDto(source);
 
-        // Act
         var copy = new PersonWithCopyConstructorDto(original);
 
-        // Assert
         copy.BirthDate.Should().BeNull();
     }
 
     [Fact]
     public void CopyConstructor_ShouldCreateIndependentCopy()
     {
-        // Arrange
         var source = new PersonForCopyAndEquality
         {
             Id = 1,
@@ -69,13 +62,11 @@ public class CopyConstructorTests
         };
         var original = new PersonWithCopyConstructorDto(source);
 
-        // Act
         var copy = new PersonWithCopyConstructorDto(original);
-        // Modify the original — the copy should remain unchanged
+        
         original.Name = "Changed";
         original.Age = 99;
 
-        // Assert
         copy.Name.Should().Be("Charlie");
         copy.Age.Should().Be(35);
     }
@@ -83,7 +74,6 @@ public class CopyConstructorTests
     [Fact]
     public void CopyConstructor_ShouldThrowOnNull_ForClassFacets()
     {
-        // Act & Assert
         var act = () => new PersonWithCopyConstructorDto((PersonWithCopyConstructorDto)null!);
         act.Should().Throw<ArgumentNullException>();
     }
@@ -91,7 +81,6 @@ public class CopyConstructorTests
     [Fact]
     public void CopyConstructor_ShouldWorkWithBothFeatures()
     {
-        // Arrange — facet with both GenerateCopyConstructor and GenerateEquality
         var source = new PersonForCopyAndEquality
         {
             Id = 7,
@@ -102,10 +91,8 @@ public class CopyConstructorTests
         };
         var original = new PersonWithCopyAndEqualityDto(source);
 
-        // Act
         var copy = new PersonWithCopyAndEqualityDto(original);
 
-        // Assert — copy should equal the original
         copy.Should().Be(original);
         copy.Id.Should().Be(7);
     }
@@ -113,7 +100,6 @@ public class CopyConstructorTests
     [Fact]
     public void CopyConstructor_ShouldWorkOnStruct()
     {
-        // Arrange
         var source = new PersonForCopyAndEquality
         {
             Id = 10,
@@ -123,10 +109,8 @@ public class CopyConstructorTests
         };
         var original = new PersonStructWithCopyAndEquality(source);
 
-        // Act
         var copy = new PersonStructWithCopyAndEquality(original);
 
-        // Assert
         copy.Id.Should().Be(10);
         copy.Name.Should().Be("Eve");
         copy.Email.Should().Be("eve@example.com");

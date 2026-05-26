@@ -1,4 +1,4 @@
-using Facet.Tests.TestModels;
+﻿using Facet.Tests.TestModels;
 using System.Reflection;
 
 namespace Facet.Tests.UnitTests.Core.GenerateDtos;
@@ -60,9 +60,7 @@ public class GenerateDtosPartialClassTests
         var type = TestAssembly.GetType("Facet.Tests.TestModels.UpdateTestPartialClassEntityRequest");
         type.Should().NotBeNull();
 
-        // The generator-emitted properties (Id/Name/Description/IsActive) must be get/set, distinguishing
-        // PartialClass from the Interface output (which is get-only). DisplayLabel comes from a hand-written
-        // partial and is intentionally get-only — skip it.
+        // Note: DisplayLabel comes from a hand-written partial, so the generated interface should stay get-only.
         var generatedProps = new[] { "Id", "Name", "Description", "IsActive" };
         foreach (var name in generatedProps)
         {
@@ -87,10 +85,8 @@ public class GenerateDtosPartialClassTests
         var type = TestAssembly.GetType("Facet.Tests.TestModels.UpdateTestPartialClassEntityRequest");
         type.Should().NotBeNull();
 
-        // Parameterless constructor
         type!.GetConstructor(Type.EmptyTypes).Should().NotBeNull("PartialClass should emit a parameterless constructor");
 
-        // Source-copy constructor: ctor(TestPartialClassEntity source)
         var sourceCtor = type.GetConstructor(new[] { typeof(TestPartialClassEntity) });
         sourceCtor.Should().NotBeNull("PartialClass should emit a constructor taking the source type");
     }
@@ -101,8 +97,7 @@ public class GenerateDtosPartialClassTests
         var type = TestAssembly.GetType("Facet.Tests.TestModels.UpdateTestPartialClassEntityRequest");
         type.Should().NotBeNull();
 
-        // PartialClass intentionally omits projection / ToSource / BackTo — the user owns mapping in their
-        // hand-written partial. (The DisplayLabel partial below adds a member but not these helpers.)
+        // Note: PartialClass leaves projection and source-mapping members to user code.
         type!.GetMember("Projection").Should().BeEmpty();
         type.GetMember("FromSource").Should().BeEmpty();
         type.GetMember("ToSource").Should().BeEmpty();
@@ -112,8 +107,6 @@ public class GenerateDtosPartialClassTests
     [Fact]
     public void PartialClass_CanBeExtendedWithHandWrittenPartial()
     {
-        // The hand-written `public partial class UpdateTestPartialClassEntityRequest { public string DisplayLabel ... }`
-        // in TestModels can only compile if the generator emitted the class with the `partial` keyword.
         var dto = new UpdateTestPartialClassEntityRequest { Id = 7, Name = "Widget" };
         dto.DisplayLabel.Should().Be("7: Widget");
     }
@@ -121,8 +114,6 @@ public class GenerateDtosPartialClassTests
     [Fact]
     public void PartialClass_CanBeDerivedFrom()
     {
-        // Sanity check that the generated class isn't sealed — exercises the GlobalSoftware/LocalSoftware
-        // inheritance scenario the PartialClass output is designed to support.
         var derived = new DerivedFromGeneratedPartial { Id = 1, Name = "x", DerivedOnly = "y" };
         derived.Should().BeAssignableTo<UpdateTestPartialClassEntityRequest>();
     }
@@ -149,9 +140,6 @@ public class GenerateDtosPartialClassTests
     [Fact]
     public void PartialClass_WithSiblingInterface_ImplementsGeneratedInterface()
     {
-        // When both OutputType.Interface and OutputType.PartialClass are configured on the same source
-        // entity (with matching DtoTypes), the PartialClass output should declare the matching generated
-        // interface as a base type — composing into a contract + implementation pair.
         var partialType = TestAssembly.GetType("Facet.Tests.TestModels.UpdateTestPartialAndInterfaceEntityRequest");
         var interfaceType = TestAssembly.GetType("Facet.Tests.TestModels.IUpdateTestPartialAndInterfaceEntityRequest");
 
@@ -165,16 +153,12 @@ public class GenerateDtosPartialClassTests
     [Fact]
     public void PartialClass_WithoutSiblingInterface_DoesNotImplementUnrelatedInterface()
     {
-        // The TestPartialClassEntity declares ONLY a PartialClass attribute (no sibling Interface attribute).
-        // The matching ICreateTestPartialClassEntityRequest interface must NOT exist, and the partial
-        // class must not declare any generated interface base.
         var partialType = TestAssembly.GetType("Facet.Tests.TestModels.CreateTestPartialClassEntityRequest");
         var stranglerInterface = TestAssembly.GetType("Facet.Tests.TestModels.ICreateTestPartialClassEntityRequest");
 
         partialType.Should().NotBeNull();
         stranglerInterface.Should().BeNull("Interface output was not requested, so no I-prefixed type should be generated");
 
-        // Only system-provided interfaces (none expected) — no generated ones.
         partialType!.GetInterfaces().Where(i => i.Namespace == "Facet.Tests.TestModels").Should().BeEmpty();
     }
 }

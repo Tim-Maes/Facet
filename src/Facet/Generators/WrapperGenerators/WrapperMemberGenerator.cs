@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using System.Text;
 
 namespace Facet.Generators;
@@ -34,14 +34,12 @@ internal static class WrapperMemberGenerator
 
     private static void GenerateMember(StringBuilder sb, WrapperTargetModel model, FacetMember member, string indent)
     {
-        // Generate XML documentation if available
         if (!string.IsNullOrWhiteSpace(member.XmlDocumentation))
         {
             var indentedDocumentation = member.XmlDocumentation!.Replace("\n", $"\n{indent}");
             sb.AppendLine($"{indent}{indentedDocumentation}");
         }
 
-        // Generate attributes if CopyAttributes is enabled
         if (model.CopyAttributes && member.Attributes.Count > 0)
         {
             foreach (var attribute in member.Attributes)
@@ -50,7 +48,6 @@ internal static class WrapperMemberGenerator
             }
         }
 
-        // Generate the delegating property
         if (member.Kind == FacetMemberKind.Property)
         {
             GenerateDelegatingProperty(sb, model, member, indent);
@@ -63,20 +60,11 @@ internal static class WrapperMemberGenerator
 
     private static void GenerateDelegatingProperty(StringBuilder sb, WrapperTargetModel model, FacetMember member, string indent)
     {
-        // For wrappers, properties delegate to the source object
-        // For nested wrappers, we wrap the nested object
-        // Pattern (mutable): public TypeName PropertyName { get => _source.PropertyName; set => _source.PropertyName = value; }
-        // Pattern (nested): public NestedWrapper PropertyName { get => new NestedWrapper(_source.PropertyName); set => _source.PropertyName = value.Unwrap(); }
-        // Pattern (readonly): public TypeName PropertyName { get => _source.PropertyName; }
-
         sb.AppendLine($"{indent}public {member.TypeName} {member.Name}");
         sb.AppendLine($"{indent}{{");
 
-        // Generate getter
         if (member.IsNestedFacet)
         {
-            // For nested wrappers, wrap the source property
-            // Handle nullable types
             bool isNullable = member.TypeName.EndsWith("?");
             string wrapperType = isNullable ? member.TypeName.TrimEnd('?') : member.TypeName;
 
@@ -91,16 +79,13 @@ internal static class WrapperMemberGenerator
         }
         else
         {
-            // Simple delegation
             sb.AppendLine($"{indent}    get => {model.SourceFieldName}.{member.Name};");
         }
 
-        // Generate setter
         if (!model.ReadOnly)
         {
             if (member.IsNestedFacet)
             {
-                // For nested wrappers, unwrap the value
                 bool isNullable = member.TypeName.EndsWith("?");
                 if (isNullable)
                 {
@@ -113,7 +98,6 @@ internal static class WrapperMemberGenerator
             }
             else
             {
-                // Simple assignment
                 sb.AppendLine($"{indent}    set => {model.SourceFieldName}.{member.Name} = value;");
             }
         }
@@ -123,19 +107,11 @@ internal static class WrapperMemberGenerator
 
     private static void GenerateDelegatingField(StringBuilder sb, WrapperTargetModel model, FacetMember member, string indent)
     {
-        // For fields in wrappers, we generate properties that delegate to the source field
-        // For nested wrappers, we wrap the nested object
-        // Pattern (mutable): public TypeName FieldName { get => _source.FieldName; set => _source.FieldName = value; }
-        // Pattern (nested): public NestedWrapper FieldName { get => new NestedWrapper(_source.FieldName); set => _source.FieldName = value.Unwrap(); }
-        // Pattern (readonly): public TypeName FieldName { get => _source.FieldName; }
-
         sb.AppendLine($"{indent}public {member.TypeName} {member.Name}");
         sb.AppendLine($"{indent}{{");
 
-        // Generate getter
         if (member.IsNestedFacet)
         {
-            // For nested wrappers, wrap the source field
             bool isNullable = member.TypeName.EndsWith("?");
             string wrapperType = isNullable ? member.TypeName.TrimEnd('?') : member.TypeName;
 
@@ -150,16 +126,13 @@ internal static class WrapperMemberGenerator
         }
         else
         {
-            // Simple delegation
             sb.AppendLine($"{indent}    get => {model.SourceFieldName}.{member.Name};");
         }
 
-        // Generate setter
         if (!model.ReadOnly && !member.IsReadOnly)
         {
             if (member.IsNestedFacet)
             {
-                // For nested wrappers, unwrap the value
                 bool isNullable = member.TypeName.EndsWith("?");
                 if (isNullable)
                 {
@@ -172,7 +145,6 @@ internal static class WrapperMemberGenerator
             }
             else
             {
-                // Simple assignment
                 sb.AppendLine($"{indent}    set => {model.SourceFieldName}.{member.Name} = value;");
             }
         }

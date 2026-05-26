@@ -1,6 +1,5 @@
-namespace Facet.Tests.UnitTests.Core.Facet;
+﻿namespace Facet.Tests.UnitTests.Core.Facet;
 
-// Test entities
 public class MapFromTestEntity
 {
     public int Id { get; set; }
@@ -24,7 +23,6 @@ public class MapFromCompanyEntity
     public string Address { get; set; } = string.Empty;
 }
 
-// Simple property rename test
 [Facet(typeof(MapFromTestEntity), GenerateToSource = true)]
 public partial class MapFromSimpleFacet
 {
@@ -32,7 +30,6 @@ public partial class MapFromSimpleFacet
     public string Name { get; set; } = string.Empty;
 }
 
-// Multiple property renames
 [Facet(typeof(MapFromTestEntity), GenerateToSource = true)]
 public partial class MapFromMultipleFacet
 {
@@ -43,7 +40,6 @@ public partial class MapFromMultipleFacet
     public string FamilyName { get; set; } = string.Empty;
 }
 
-// Non-reversible mapping
 [Facet(typeof(MapFromTestEntity), GenerateToSource = true)]
 public partial class MapFromNonReversibleFacet
 {
@@ -51,7 +47,6 @@ public partial class MapFromNonReversibleFacet
     public string Name { get; set; } = string.Empty;
 }
 
-// Exclude from projection
 [Facet(typeof(MapFromTestEntity), GenerateToSource = true)]
 public partial class MapFromNoProjectionFacet
 {
@@ -59,29 +54,23 @@ public partial class MapFromNoProjectionFacet
     public string Name { get; set; } = string.Empty;
 }
 
-// Computed value - one-way mapping (default Reversible = false)
 [Facet(typeof(MapFromTestEntity), GenerateToSource = true)]
 public partial class MapFromComputedFacet
 {
-    // Computed from FirstName - cannot be reversed
     [MapFrom(nameof(MapFromTestEntity.FirstName))]
     public string DisplayName { get; set; } = string.Empty;
 
-    // Computed from LastName - cannot be reversed
     [MapFrom(nameof(MapFromTestEntity.LastName))]
     public string Surname { get; set; } = string.Empty;
 }
 
-// Computed expression - FirstName + LastName = FullName
 [Facet(typeof(MapFromTestEntity), GenerateToSource = true)]
 public partial class MapFromExpressionFacet
 {
-    // Computed expression - cannot be reversed
     [MapFrom(nameof(MapFromTestEntity.FirstName) + " + \" \" + " + nameof(MapFromTestEntity.LastName))]
     public string FullName { get; set; } = string.Empty;
 }
 
-// Nested facet with company
 [Facet(typeof(MapFromCompanyEntity), GenerateToSource = true)]
 public partial class MapFromCompanyFacet
 {
@@ -93,11 +82,6 @@ public partial class MapFromCompanyFacet
     NestedFacets = [typeof(MapFromCompanyFacet)],
     GenerateToSource = true)]
 public partial class MapFromNestedFacet;
-
-// ========================================
-// Nested Property Path Tests (not nested facets!)
-// These test [MapFrom("Property.Nested.Path")] using string literals
-// ========================================
 
 public class MapFromNestedPropertyEntity
 {
@@ -112,45 +96,36 @@ public class MapFromMultiLevelEntity
     public MapFromNestedPropertyEntity? Employee { get; set; }
 }
 
-// Test single-level nested property path: Company.CompanyName
 [Facet(typeof(MapFromNestedPropertyEntity),
-    exclude: [nameof(MapFromNestedPropertyEntity.Company)], // Exclude navigation property
+    exclude: [nameof(MapFromNestedPropertyEntity.Company)], 
     GenerateToSource = false)]
 public partial class MapFromSingleLevelPathFacet
 {
-    // Use string literal to access nested property
     [MapFrom("Company.CompanyName")]
     public string CompanyName { get; set; } = string.Empty;
 
     [MapFrom("Company.Address")]
     public string CompanyAddress { get; set; } = string.Empty;
     
-    // Same as above but not a hardcoded string literal - should generate same mapping
     [MapFrom(nameof(@MapFromNestedPropertyEntity.Company.CompanyName))]
     public string AlternativeCompanyName { get; set; } = string.Empty;
 }
 
-// Test multi-level nested property path: Employee.Company.CompanyName
 [Facet(typeof(MapFromMultiLevelEntity),
-    exclude: [nameof(MapFromMultiLevelEntity.Employee)], // Exclude navigation property
+    exclude: [nameof(MapFromMultiLevelEntity.Employee)], 
     GenerateToSource = false)]
 public partial class MapFromMultiLevelPathFacet
 {
-    // Two levels deep
     [MapFrom("Employee.Company.CompanyName")]
     public string EmployeeCompanyName { get; set; } = string.Empty;
 
-    // Two levels deep
     [MapFrom("Employee.Company.Address")]
     public string EmployeeCompanyAddress { get; set; } = string.Empty;
 
-    // Single level
     [MapFrom("Employee.Name")]
     public string EmployeeName { get; set; } = string.Empty;
 }
 
-// Navigation property expression test models - reproduces issue with MapFrom expressions
-// referencing navigation properties (e.g. "User.PrimaryGroupId == GroupId")
 public class MapFromGroupMembershipEntity
 {
     public int Id { get; set; }
@@ -180,7 +155,6 @@ public class MapFromTests
     [Fact]
     public void Constructor_ShouldMapSimplePropertyRename()
     {
-        // Arrange
         var entity = new MapFromTestEntity
         {
             Id = 1,
@@ -190,13 +164,11 @@ public class MapFromTests
             Age = 30
         };
 
-        // Act
         var facet = new MapFromSimpleFacet(entity);
 
-        // Assert
         facet.Should().NotBeNull();
         facet.Id.Should().Be(1);
-        facet.Name.Should().Be("John"); // Mapped from FirstName
+        facet.Name.Should().Be("John"); 
         facet.LastName.Should().Be("Doe");
         facet.Email.Should().Be("john@example.com");
         facet.Age.Should().Be(30);
@@ -205,7 +177,6 @@ public class MapFromTests
     [Fact]
     public void Constructor_ShouldMapMultiplePropertyRenames()
     {
-        // Arrange
         var entity = new MapFromTestEntity
         {
             Id = 2,
@@ -215,14 +186,12 @@ public class MapFromTests
             Age = 25
         };
 
-        // Act
         var facet = new MapFromMultipleFacet(entity);
 
-        // Assert
         facet.Should().NotBeNull();
         facet.Id.Should().Be(2);
-        facet.GivenName.Should().Be("Jane"); // Mapped from FirstName
-        facet.FamilyName.Should().Be("Smith"); // Mapped from LastName
+        facet.GivenName.Should().Be("Jane"); 
+        facet.FamilyName.Should().Be("Smith"); 
         facet.Email.Should().Be("jane@example.com");
         facet.Age.Should().Be(25);
     }
@@ -230,23 +199,20 @@ public class MapFromTests
     [Fact]
     public void ToSource_ShouldReverseSimpleMapping()
     {
-        // Arrange
         var facet = new MapFromSimpleFacet
         {
             Id = 3,
-            Name = "Bob", // Should map back to FirstName
+            Name = "Bob", 
             LastName = "Wilson",
             Email = "bob@example.com",
             Age = 40
         };
 
-        // Act
         var entity = facet.ToSource();
 
-        // Assert
         entity.Should().NotBeNull();
         entity.Id.Should().Be(3);
-        entity.FirstName.Should().Be("Bob"); // Mapped from Name
+        entity.FirstName.Should().Be("Bob"); 
         entity.LastName.Should().Be("Wilson");
         entity.Email.Should().Be("bob@example.com");
         entity.Age.Should().Be(40);
@@ -255,20 +221,17 @@ public class MapFromTests
     [Fact]
     public void ToSource_ShouldReverseMultipleMappings()
     {
-        // Arrange
         var facet = new MapFromMultipleFacet
         {
             Id = 4,
-            GivenName = "Alice", // Should map back to FirstName
-            FamilyName = "Brown", // Should map back to LastName
+            GivenName = "Alice", 
+            FamilyName = "Brown", 
             Email = "alice@example.com",
             Age = 35
         };
 
-        // Act
         var entity = facet.ToSource();
 
-        // Assert
         entity.Should().NotBeNull();
         entity.Id.Should().Be(4);
         entity.FirstName.Should().Be("Alice");
@@ -280,23 +243,20 @@ public class MapFromTests
     [Fact]
     public void ToSource_ShouldNotIncludeNonReversibleMapping()
     {
-        // Arrange
         var facet = new MapFromNonReversibleFacet
         {
             Id = 5,
-            Name = "Charlie", // Should NOT map back (Reversible = false)
+            Name = "Charlie", // Not reversible.
             LastName = "Davis",
             Email = "charlie@example.com",
             Age = 45
         };
 
-        // Act
         var entity = facet.ToSource();
 
-        // Assert
         entity.Should().NotBeNull();
         entity.Id.Should().Be(5);
-        // FirstName should be default since Name is not reversible
+        
         entity.FirstName.Should().BeEmpty();
         entity.LastName.Should().Be("Davis");
         entity.Email.Should().Be("charlie@example.com");
@@ -306,17 +266,14 @@ public class MapFromTests
     [Fact]
     public void Projection_ShouldMapSimplePropertyRename()
     {
-        // Arrange
         var entities = new[]
         {
             new MapFromTestEntity { Id = 1, FirstName = "John", LastName = "Doe", Email = "john@example.com", Age = 30 },
             new MapFromTestEntity { Id = 2, FirstName = "Jane", LastName = "Smith", Email = "jane@example.com", Age = 25 }
         }.AsQueryable();
 
-        // Act
         var facets = entities.Select(MapFromSimpleFacet.Projection).ToList();
 
-        // Assert
         facets.Should().HaveCount(2);
         facets[0].Id.Should().Be(1);
         facets[0].Name.Should().Be("John");
@@ -327,16 +284,13 @@ public class MapFromTests
     [Fact]
     public void Projection_ShouldMapMultiplePropertyRenames()
     {
-        // Arrange
         var entities = new[]
         {
             new MapFromTestEntity { Id = 1, FirstName = "John", LastName = "Doe", Email = "john@example.com", Age = 30 }
         }.AsQueryable();
 
-        // Act
         var facets = entities.Select(MapFromMultipleFacet.Projection).ToList();
 
-        // Assert
         facets.Should().HaveCount(1);
         facets[0].GivenName.Should().Be("John");
         facets[0].FamilyName.Should().Be("Doe");
@@ -345,7 +299,6 @@ public class MapFromTests
     [Fact]
     public void NestedFacet_ShouldMapPropertyRenameInNestedType()
     {
-        // Arrange
         var entity = new MapFromNestedEntity
         {
             Id = 1,
@@ -358,23 +311,20 @@ public class MapFromTests
             }
         };
 
-        // Act
         var facet = new MapFromNestedFacet(entity);
 
-        // Assert
         facet.Should().NotBeNull();
         facet.Id.Should().Be(1);
         facet.Name.Should().Be("Employee");
         facet.Company.Should().NotBeNull();
         facet.Company!.Id.Should().Be(100);
-        facet.Company.Name.Should().Be("Acme Corp"); // Mapped from CompanyName
+        facet.Company.Name.Should().Be("Acme Corp"); 
         facet.Company.Address.Should().Be("123 Main St");
     }
 
     [Fact]
     public void NestedFacet_ToSource_ShouldReverseNestedMapping()
     {
-        // Arrange
         var facet = new MapFromNestedFacet
         {
             Id = 2,
@@ -382,15 +332,13 @@ public class MapFromTests
             Company = new MapFromCompanyFacet
             {
                 Id = 200,
-                Name = "TechCo", // Should map back to CompanyName
+                Name = "TechCo", 
                 Address = "456 Tech Ave"
             }
         };
 
-        // Act
         var entity = facet.ToSource();
 
-        // Assert
         entity.Should().NotBeNull();
         entity.Id.Should().Be(2);
         entity.Name.Should().Be("Manager");
@@ -403,33 +351,26 @@ public class MapFromTests
     [Fact]
     public void SimplePropertyRename_ShouldNotGenerateDuplicateProperty()
     {
-        // This test verifies that the facet type has the correct properties
-        // and doesn't have duplicate properties from both user-declared and generated
-
-        // Arrange & Act
         var facetType = typeof(MapFromSimpleFacet);
         var properties = facetType.GetProperties();
 
-        // Assert - should have Id, Name (not FirstName), LastName, Email, Age, and Projection
         var propertyNames = properties.Select(p => p.Name).ToList();
         propertyNames.Should().Contain("Id");
         propertyNames.Should().Contain("Name");
         propertyNames.Should().Contain("LastName");
         propertyNames.Should().Contain("Email");
         propertyNames.Should().Contain("Age");
-        propertyNames.Should().Contain("Projection"); // Static property
-        // Should NOT contain FirstName since it was mapped to Name
+        propertyNames.Should().Contain("Projection"); 
+        
         propertyNames.Should().NotContain("FirstName");
     }
 
     [Fact]
     public void MultiplePropertyRenames_ShouldNotGenerateDuplicateProperties()
     {
-        // Arrange & Act
         var facetType = typeof(MapFromMultipleFacet);
         var properties = facetType.GetProperties();
 
-        // Assert
         properties.Select(p => p.Name).Should().Contain("GivenName");
         properties.Select(p => p.Name).Should().Contain("FamilyName");
         properties.Select(p => p.Name).Should().NotContain("FirstName");
@@ -439,7 +380,6 @@ public class MapFromTests
     [Fact]
     public void Constructor_ShouldMapComputedValues()
     {
-        // Arrange
         var entity = new MapFromTestEntity
         {
             Id = 1,
@@ -449,14 +389,12 @@ public class MapFromTests
             Age = 30
         };
 
-        // Act
         var facet = new MapFromComputedFacet(entity);
 
-        // Assert
         facet.Should().NotBeNull();
         facet.Id.Should().Be(1);
-        facet.DisplayName.Should().Be("John"); // Mapped from FirstName
-        facet.Surname.Should().Be("Doe"); // Mapped from LastName
+        facet.DisplayName.Should().Be("John"); 
+        facet.Surname.Should().Be("Doe"); 
         facet.Email.Should().Be("john@example.com");
         facet.Age.Should().Be(30);
     }
@@ -464,23 +402,20 @@ public class MapFromTests
     [Fact]
     public void ToSource_ShouldNotIncludeComputedValues_WhenReversibleIsFalse()
     {
-        // Arrange
         var facet = new MapFromComputedFacet
         {
             Id = 2,
-            DisplayName = "Jane", // Should NOT map back (Reversible = false by default)
-            Surname = "Smith", // Should NOT map back (Reversible = false by default)
+            DisplayName = "Jane", // Not reversible by default.
+            Surname = "Smith", // Not reversible by default.
             Email = "jane@example.com",
             Age = 25
         };
 
-        // Act
         var entity = facet.ToSource();
 
-        // Assert
         entity.Should().NotBeNull();
         entity.Id.Should().Be(2);
-        // FirstName and LastName should be default because mappings are not reversible
+        
         entity.FirstName.Should().BeEmpty();
         entity.LastName.Should().BeEmpty();
         entity.Email.Should().Be("jane@example.com");
@@ -490,16 +425,13 @@ public class MapFromTests
     [Fact]
     public void Projection_ShouldMapComputedValues()
     {
-        // Arrange
         var entities = new[]
         {
             new MapFromTestEntity { Id = 1, FirstName = "Alice", LastName = "Brown", Email = "alice@example.com", Age = 28 }
         }.AsQueryable();
 
-        // Act
         var facets = entities.Select(MapFromComputedFacet.Projection).ToList();
 
-        // Assert
         facets.Should().HaveCount(1);
         facets[0].Id.Should().Be(1);
         facets[0].DisplayName.Should().Be("Alice");
@@ -509,7 +441,6 @@ public class MapFromTests
     [Fact]
     public void Constructor_ShouldMapExpressionToFullName()
     {
-        // Arrange
         var entity = new MapFromTestEntity
         {
             Id = 1,
@@ -519,13 +450,11 @@ public class MapFromTests
             Age = 30
         };
 
-        // Act
         var facet = new MapFromExpressionFacet(entity);
 
-        // Assert
         facet.Should().NotBeNull();
         facet.Id.Should().Be(1);
-        facet.FullName.Should().Be("John Doe"); // Computed from FirstName + " " + LastName
+        facet.FullName.Should().Be("John Doe"); 
         facet.Email.Should().Be("john@example.com");
         facet.Age.Should().Be(30);
     }
@@ -533,31 +462,22 @@ public class MapFromTests
     [Fact]
     public void Projection_ShouldMapExpressionToFullName()
     {
-        // Arrange
         var entities = new[]
         {
             new MapFromTestEntity { Id = 1, FirstName = "Alice", LastName = "Smith", Email = "alice@example.com", Age = 28 },
             new MapFromTestEntity { Id = 2, FirstName = "Bob", LastName = "Jones", Email = "bob@example.com", Age = 35 }
         }.AsQueryable();
 
-        // Act
         var facets = entities.Select(MapFromExpressionFacet.Projection).ToList();
 
-        // Assert
         facets.Should().HaveCount(2);
         facets[0].FullName.Should().Be("Alice Smith");
         facets[1].FullName.Should().Be("Bob Jones");
     }
 
-    // ========================================
-    // Nested Property Path Tests
-    // Testing [MapFrom("Property.Nested.Path")] with string literals
-    // ========================================
-
     [Fact]
     public void Constructor_ShouldMapSingleLevelNestedPropertyPath()
     {
-        // Arrange
         var entity = new MapFromNestedPropertyEntity
         {
             Id = 1,
@@ -570,22 +490,19 @@ public class MapFromTests
             }
         };
 
-        // Act
         var facet = new MapFromSingleLevelPathFacet(entity);
 
-        // Assert
         facet.Should().NotBeNull();
         facet.Id.Should().Be(1);
         facet.Name.Should().Be("John Doe");
-        facet.CompanyName.Should().Be("Acme Corporation"); // From Company.CompanyName
-        facet.CompanyAddress.Should().Be("123 Main Street"); // From Company.Address
-        facet.AlternativeCompanyName.Should().Be("Acme Corporation"); // using nameof(@MapFromNestedPropertyEntity.Company.CompanyName)
+        facet.CompanyName.Should().Be("Acme Corporation"); 
+        facet.CompanyAddress.Should().Be("123 Main Street"); 
+        facet.AlternativeCompanyName.Should().Be("Acme Corporation"); 
     }
 
     [Fact]
     public void Projection_ShouldMapSingleLevelNestedPropertyPath()
     {
-        // Arrange
         var entities = new[]
         {
             new MapFromNestedPropertyEntity
@@ -612,10 +529,8 @@ public class MapFromTests
             }
         }.AsQueryable();
 
-        // Act
         var facets = entities.Select(MapFromSingleLevelPathFacet.Projection).ToList();
 
-        // Assert
         facets.Should().HaveCount(2);
         facets[0].CompanyName.Should().Be("TechCorp");
         facets[0].CompanyAddress.Should().Be("456 Tech Ave");
@@ -626,7 +541,6 @@ public class MapFromTests
     [Fact]
     public void Constructor_ShouldMapMultiLevelNestedPropertyPath()
     {
-        // Arrange
         var entity = new MapFromMultiLevelEntity
         {
             Id = 1,
@@ -643,21 +557,18 @@ public class MapFromTests
             }
         };
 
-        // Act
         var facet = new MapFromMultiLevelPathFacet(entity);
 
-        // Assert
         facet.Should().NotBeNull();
         facet.Id.Should().Be(1);
-        facet.EmployeeName.Should().Be("Jane Smith"); // From Employee.Name
-        facet.EmployeeCompanyName.Should().Be("Global Enterprises"); // From Employee.Company.CompanyName
-        facet.EmployeeCompanyAddress.Should().Be("999 Corporate Plaza"); // From Employee.Company.Address
+        facet.EmployeeName.Should().Be("Jane Smith"); 
+        facet.EmployeeCompanyName.Should().Be("Global Enterprises"); 
+        facet.EmployeeCompanyAddress.Should().Be("999 Corporate Plaza"); 
     }
 
     [Fact]
     public void Projection_ShouldMapMultiLevelNestedPropertyPath()
     {
-        // Arrange
         var entities = new[]
         {
             new MapFromMultiLevelEntity
@@ -692,10 +603,8 @@ public class MapFromTests
             }
         }.AsQueryable();
 
-        // Act
         var facets = entities.Select(MapFromMultiLevelPathFacet.Projection).ToList();
 
-        // Assert
         facets.Should().HaveCount(2);
         facets[0].EmployeeName.Should().Be("Alice Johnson");
         facets[0].EmployeeCompanyName.Should().Be("MegaCorp");
@@ -708,17 +617,13 @@ public class MapFromTests
     [Fact]
     public void Constructor_ShouldHandleNullIntermediatePropertyInNestedPath()
     {
-        // Arrange
         var entity = new MapFromNestedPropertyEntity
         {
             Id = 1,
             Name = "John Doe",
-            Company = null // Null company
+            Company = null 
         };
 
-        // Act & Assert
-        // This should throw NullReferenceException because Company is null
-        // and the generated code doesn't include null checks for nested paths
         var action = () => new MapFromSingleLevelPathFacet(entity);
         action.Should().Throw<NullReferenceException>();
     }
@@ -726,19 +631,16 @@ public class MapFromTests
     [Fact]
     public void Projection_ShouldHandleNullIntermediatePropertyInNestedPath()
     {
-        // Arrange
         var entities = new[]
         {
             new MapFromNestedPropertyEntity
             {
                 Id = 1,
                 Name = "Alice",
-                Company = null // Null company
+                Company = null 
             }
         }.AsQueryable();
 
-        // Act & Assert
-        // EF Core projection with null nested path should also fail
         var action = () => entities.Select(MapFromSingleLevelPathFacet.Projection).ToList();
         action.Should().Throw<NullReferenceException>();
     }
@@ -746,27 +648,22 @@ public class MapFromTests
     [Fact]
     public void Constructor_NestedPropertyPath_ShouldNotGenerateDuplicateProperties()
     {
-        // Verify that MapFrom with nested paths doesn't create duplicate properties
         var facetType = typeof(MapFromSingleLevelPathFacet);
         var properties = facetType.GetProperties();
         var propertyNames = properties.Select(p => p.Name).ToList();
 
-        // Should have our custom properties
         propertyNames.Should().Contain("CompanyName");
         propertyNames.Should().Contain("CompanyAddress");
 
-        // Should have auto-generated properties from MapFromNestedPropertyEntity
         propertyNames.Should().Contain("Id");
         propertyNames.Should().Contain("Name");
 
-        // Should NOT have the "Company" navigation property (it's mapped to nested paths)
         propertyNames.Should().NotContain("Company");
     }
 
     [Fact]
     public void Constructor_ShouldMapNavigationPropertyExpression()
     {
-        // Arrange - User.PrimaryGroupId matches GroupId
         var entity = new MapFromGroupMembershipEntity
         {
             Id = 42,
@@ -774,10 +671,8 @@ public class MapFromTests
             User = new MapFromUserEntity { Username = "alice", PrimaryGroupId = 7 }
         };
 
-        // Act
         var facet = new MapFromNavigationExpressionFacet(entity);
 
-        // Assert
         facet.Username.Should().Be("alice");
         facet.IsPrimary.Should().BeTrue("User.PrimaryGroupId (7) == GroupId (7)");
     }
@@ -785,7 +680,6 @@ public class MapFromTests
     [Fact]
     public void Constructor_ShouldMapNavigationPropertyExpression_WhenNotPrimary()
     {
-        // Arrange - User.PrimaryGroupId does NOT match GroupId
         var entity = new MapFromGroupMembershipEntity
         {
             Id = 43,
@@ -793,10 +687,8 @@ public class MapFromTests
             User = new MapFromUserEntity { Username = "bob", PrimaryGroupId = 99 }
         };
 
-        // Act
         var facet = new MapFromNavigationExpressionFacet(entity);
 
-        // Assert
         facet.Username.Should().Be("bob");
         facet.IsPrimary.Should().BeFalse("User.PrimaryGroupId (99) != GroupId (7)");
     }
@@ -804,17 +696,14 @@ public class MapFromTests
     [Fact]
     public void Projection_ShouldMapNavigationPropertyExpression()
     {
-        // Arrange
         var entities = new List<MapFromGroupMembershipEntity>
         {
             new() { Id = 1, GroupId = 5, User = new MapFromUserEntity { Username = "alice", PrimaryGroupId = 5 } },
             new() { Id = 2, GroupId = 5, User = new MapFromUserEntity { Username = "bob", PrimaryGroupId = 9 } },
         };
 
-        // Act
         var results = entities.AsQueryable().Select(MapFromNavigationExpressionFacet.Projection).ToList();
 
-        // Assert
         results[0].Username.Should().Be("alice");
         results[0].IsPrimary.Should().BeTrue();
         results[1].Username.Should().Be("bob");

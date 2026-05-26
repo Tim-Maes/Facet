@@ -1,4 +1,4 @@
-using Facet.Mapping;
+﻿using Facet.Mapping;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
@@ -84,7 +84,6 @@ public class DeepProjectionEfCoreQueryRegressionTests : IDisposable
         _context.DerivedRootEntities.Add(derived);
         await _context.SaveChangesAsync();
 
-        // Add a Level1Entity354 pointing to the same Level2 so Level2.Level1 is populated
         _context.Level1Entities.Add(new Level1Entity354 { Id = 99, Level2Id = derived.Level2!.Id });
         await _context.SaveChangesAsync();
         _context.ChangeTracker.Clear();
@@ -141,7 +140,6 @@ public class DeepProjectionEfCoreQueryRegressionTests : IDisposable
     [Fact]
     public async Task QueryProjection_LazyProjection_MaxDepth2_ShouldStopAtDepth2()
     {
-        // Level1 = depth 1, Level2 = depth 2, Level3 = depth 3 > MaxDepth → no nested
         var root = CreateInlineRoot(30, "MaxDepth");
         _context.Level1Entities.Add(root);
         await _context.SaveChangesAsync();
@@ -155,10 +153,10 @@ public class DeepProjectionEfCoreQueryRegressionTests : IDisposable
         dto.Id.Should().Be(30);
         dto.Level2.Should().NotBeNull("Level2 is at depth 2 which is <= MaxDepth=2");
         dto.Level2!.Level3.Should().NotBeNull("Level3 is projected (depth 3 reached), just without its nested members");
-        // Level3 is at depth 3 which exceeds MaxDepth=2, so its nested members are NOT projected
+        
         dto.Level2.Level3!.Level4.Should().BeNull("MaxDepth=2 stops nested projection at depth 3");
         dto.Level2.Level3.Level2.Should().BeNull("MaxDepth=2 stops nested projection at depth 3");
-        // Scalar and custom-configured members on Level3 are still projected
+        
         dto.Level2.Level3.Id.Should().Be(root.Level2!.Level3!.Id + 30, "Level3Dto354Config adds 30 to Id");
     }
 
@@ -328,8 +326,6 @@ public class Level1Dto354LazyConfig
     }
 }
 
-// MaxDepth=2: Level1 (depth 1) and Level2 (depth 2) are projected with nested;
-// Level3 (depth 3 > 2) gets scalar members only — its Level4 and Level2 reverse nav are null.
 [Facet(typeof(Level1Entity354),
     MaxDepth = 2,
     Include = new[] { nameof(Level1Entity354.Id), nameof(Level1Entity354.Level2) },

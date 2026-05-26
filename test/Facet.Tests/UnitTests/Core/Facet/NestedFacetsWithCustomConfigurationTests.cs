@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
 
@@ -69,7 +69,6 @@ public partial class CustomDepartmentDto;
     Configuration = typeof(CustomEmployeeMappingConfiguration))]
 public partial class CustomEmployeeDto
 {
-    // Custom calculated property (NOT in source)
     public string FullName { get; set; } = string.Empty;
 }
 
@@ -77,7 +76,6 @@ public class CustomEmployeeMappingConfiguration : IFacetMapConfiguration<CustomE
 {
     public static void Map(CustomEmployeeSource source, CustomEmployeeDto target)
     {
-        // Custom mapping: combine first and last name
         target.FullName = $"{source.FirstName} {source.LastName}";
     }
 }
@@ -98,7 +96,6 @@ public class CustomServiceProviderDto
     Configuration = typeof(CustomDamageMappingConfiguration))]
 public partial class CustomDamageDto
 {
-    // Custom calculated properties (NOT in source)
     public List<int> OfferIds { get; set; } = new();
     public List<int> AssignedPersonIds { get; set; } = new();
     public string ProviderId { get; set; } = string.Empty;
@@ -131,7 +128,6 @@ public class CustomDamageMappingConfiguration : IFacetMapConfiguration<CustomDam
     MaxDepth = 3)]
 public partial class CustomManagerDto
 {
-    // Custom property (NOT in source)
     public int DirectReportCount { get; set; }
 }
 
@@ -155,24 +151,19 @@ public class NestedFacetsWithCustomConfigurationTests
     [Fact]
     public void NestedFacet_WithCustomConfiguration_ShouldInstantiateNestedFacets()
     {
-        // Arrange
         var company = new CustomCompanySource { Id = 1, Name = "Tech Corp", Industry = "Technology" };
         var department = new CustomDepartmentSource { Id = 10, Name = "Engineering", Company = company };
         var employee = new CustomEmployeeSource { Id = 100, FirstName = "John", LastName = "Doe", Department = department, Company = company };
 
-        // Act
         var dto = new CustomEmployeeDto(employee);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(100);
         dto.FirstName.Should().Be("John");
         dto.LastName.Should().Be("Doe");
 
-        // Custom mapping should work
         dto.FullName.Should().Be("John Doe");
 
-        // CRITICAL: Nested facets should be instantiated, not null!
         dto.Department.Should().NotBeNull();
         dto.Department!.Id.Should().Be(10);
         dto.Department.Name.Should().Be("Engineering");
@@ -188,7 +179,6 @@ public class NestedFacetsWithCustomConfigurationTests
     [Fact]
     public void MultipleNestedFacets_WithCustomConfiguration_ShouldInstantiateAllNestedFacets()
     {
-        // Arrange - This is the exact scenario from the GitHub issue
         var offer1 = new CustomOfferSource { Id = 1, Description = "Offer 1", Amount = 100m };
         var offer2 = new CustomOfferSource { Id = 2, Description = "Offer 2", Amount = 200m };
 
@@ -215,15 +205,12 @@ public class NestedFacetsWithCustomConfigurationTests
             ServiceProviderLink = serviceProviderLink
         };
 
-        // Act
         var dto = new CustomDamageDto(damage);
 
-        // Assert - Basic properties
         dto.Should().NotBeNull();
         dto.Id.Should().Be(1000);
         dto.Description.Should().Be("Water damage in basement");
 
-        // Assert - Custom mapping logic works
         dto.OfferIds.Should().BeEquivalentTo(new[] { 1, 2 });
         dto.AssignedPersonIds.Should().BeEquivalentTo(new[] { 101, 102 });
         dto.ProviderId.Should().Be("provider-123");
@@ -232,11 +219,9 @@ public class NestedFacetsWithCustomConfigurationTests
         dto.ServiceProvider.ServiceProviderType.Should().Be("external");
         dto.ServiceProvider.FkGologServiceProviderId.Should().Be(999);
 
-        // CRITICAL: Nested facets should be instantiated!
-        // This was the bug - these were null or not properly instantiated
         dto.Creator.Should().NotBeNull();
         dto.Creator!.Id.Should().Be(100);
-        dto.Creator.FullName.Should().Be("John Doe"); // Custom mapping in nested facet should work
+        dto.Creator.FullName.Should().Be("John Doe"); 
         dto.Creator.Department.Should().NotBeNull();
         dto.Creator.Department!.Name.Should().Be("Engineering");
 
@@ -258,7 +243,6 @@ public class NestedFacetsWithCustomConfigurationTests
     [Fact]
     public void CollectionNestedFacets_WithCustomConfiguration_ShouldInstantiateWithDepthTracking()
     {
-        // Arrange
         var company = new CustomCompanySource { Id = 1, Name = "Tech Corp", Industry = "Technology" };
         var department = new CustomDepartmentSource { Id = 10, Name = "Engineering", Company = company };
 
@@ -275,19 +259,15 @@ public class NestedFacetsWithCustomConfigurationTests
             DirectReports = new List<CustomEmployeeSource> { report1, report2 }
         };
 
-        // Act
         var dto = new CustomManagerDto(manager);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(100);
         dto.FirstName.Should().Be("John");
         dto.LastName.Should().Be("Manager");
 
-        // Custom mapping should work
         dto.DirectReportCount.Should().Be(2);
 
-        // CRITICAL: Collection of nested facets should be instantiated with depth tracking
         dto.DirectReports.Should().NotBeNull();
         dto.DirectReports.Should().HaveCount(2);
 
@@ -303,25 +283,21 @@ public class NestedFacetsWithCustomConfigurationTests
     [Fact]
     public void NullableNestedFacet_WithCustomConfiguration_ShouldHandleNullCorrectly()
     {
-        // Arrange
         var employee = new CustomEmployeeSource
         {
             Id = 100,
             FirstName = "John",
             LastName = "Doe",
-            Department = null!, // Null nested facet
+            Department = null!, 
             Company = null!
         };
 
-        // Act
         var dto = new CustomEmployeeDto(employee);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(100);
-        dto.FullName.Should().Be("John Doe"); // Custom mapping should still work
+        dto.FullName.Should().Be("John Doe"); 
 
-        // Null nested facets should remain null, not throw
         dto.Department.Should().BeNull();
         dto.Company.Should().BeNull();
     }
@@ -329,31 +305,26 @@ public class NestedFacetsWithCustomConfigurationTests
     [Fact]
     public void EmptyCollectionNestedFacets_WithCustomConfiguration_ShouldHandleCorrectly()
     {
-        // Arrange
         var damage = new CustomDamageSource
         {
             Id = 1000,
             Description = "Minor damage",
             Creator = null,
-            AssignedPersons = new List<CustomEmployeeSource>(), // Empty collection
+            AssignedPersons = new List<CustomEmployeeSource>(), 
             Offers = new List<CustomOfferSource>(),
             ServiceProviderLink = null
         };
 
-        // Act
         var dto = new CustomDamageDto(damage);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(1000);
 
-        // Custom mapping should handle empty collections
         dto.OfferIds.Should().BeEmpty();
         dto.AssignedPersonIds.Should().BeEmpty();
-        dto.ProviderId.Should().Be("random uuid"); // Fallback value
+        dto.ProviderId.Should().Be("random uuid"); 
         dto.ServiceProvider.Should().BeNull();
 
-        // Empty collections should be instantiated, not null
         dto.AssignedPersons.Should().NotBeNull();
         dto.AssignedPersons.Should().BeEmpty();
         dto.Offers.Should().NotBeNull();
@@ -363,12 +334,10 @@ public class NestedFacetsWithCustomConfigurationTests
     }
 
     // Note: ToSource is not generated when custom configuration is present by default
-    // This is expected behavior and not part of the bug fix verification
-
+    
     [Fact]
     public void DepthTracking_WithNestedFacetsAndCustomConfiguration_ShouldRespectMaxDepth()
     {
-        // Arrange - Create a hierarchy deeper than MaxDepth (3)
         var company = new CustomCompanySource { Id = 1, Name = "Tech Corp", Industry = "Technology" };
         var department = new CustomDepartmentSource { Id = 10, Name = "Engineering", Company = company };
 
@@ -377,23 +346,17 @@ public class NestedFacetsWithCustomConfigurationTests
         var level1 = new CustomEmployeeSource { Id = 1, FirstName = "Level1", LastName = "Director", Department = department, Company = company, DirectReports = new List<CustomEmployeeSource> { level2 } };
         var ceo = new CustomEmployeeSource { Id = 0, FirstName = "CEO", LastName = "Boss", Department = department, Company = company, DirectReports = new List<CustomEmployeeSource> { level1 } };
 
-        // Act
         var dto = new CustomManagerDto(ceo);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(0);
-        dto.DirectReportCount.Should().Be(1); // Custom mapping works
+        dto.DirectReportCount.Should().Be(1); 
 
-        // Level 0 (CEO) - should have direct reports
         dto.DirectReports.Should().HaveCount(1);
         dto.DirectReports[0].Id.Should().Be(1);
 
-        // Level 1 (Director) - should have direct reports
         dto.DirectReports[0].Should().BeOfType<CustomEmployeeDto>();
 
-        // Level 2 (Manager) - MaxDepth is 3, so this should still be populated
-        // but we can verify the depth tracking mechanism is in place
         dto.DirectReports.Should().NotBeNull();
     }
 }

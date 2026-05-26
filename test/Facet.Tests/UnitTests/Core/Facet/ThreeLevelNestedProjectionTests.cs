@@ -1,4 +1,4 @@
-using System.Linq.Expressions;
+﻿using System.Linq.Expressions;
 using Facet.Mapping;
 using Facet.Tests.TestModels;
 
@@ -76,7 +76,6 @@ public class DispatchDto350LazyConfig
     public static void ConfigureProjection(
         IFacetProjectionBuilder<OrderLineDispatchEntity350, DispatchDto350Lazy> builder)
     {
-        // just a dummy mapping
     }
 }
 
@@ -94,7 +93,6 @@ public class OrderDto350LazyConfig
     public static void ConfigureProjection(
         IFacetProjectionBuilder<OrderEntity350, OrderDto350Lazy> builder)
     {
-        // just a dummy mapping
     }
 }
 
@@ -206,10 +204,9 @@ public class DispatchDto351Config
     public static void ConfigureProjection(
         IFacetProjectionBuilder<DispatchEntity351, DispatchDto351> builder)
     {
-        // Manually map deep paths
         builder.Map(d => d.AssignedToUnitName, s => s.AssignedToUnit != null ? s.AssignedToUnit.Name : null);
         builder.Map(d => d.OrderHeaderNumber, s => s.OrderHeader != null ? s.OrderHeader.Number : null);
-        // Customer is intentionally NOT mapped here — should be auto-projected as nested facet
+        
     }
 }
 
@@ -234,7 +231,6 @@ public class ProductDto351LzConfig
     public static void ConfigureProjection(
         IFacetProjectionBuilder<ProductEntity351, ProductDto351Lz> builder)
     {
-        // nothing extra — just triggers the lazy path
     }
 }
 
@@ -288,23 +284,18 @@ public class ThreeLevelNestedProjectionTests
     [Fact]
     public void Projection_InlinePath_ThreeLevelsDeep_ShouldPopulateAllLevels()
     {
-        // Arrange
         var entity = CreateTestEntity();
 
-        // Act
         var projection = OrderDto350.Projection.Compile();
         var dto = projection(entity);
 
-        // Assert - Level 1
         dto.Id.Should().Be(1);
         dto.OrderNumber.Should().Be("ORD-001");
 
-        // Assert - Level 2
         dto.Dispatch.Should().NotBeNull("Second level (Dispatch) should be populated");
         dto.Dispatch!.Id.Should().Be(2);
         dto.Dispatch.DispatchDate.Should().Be(new DateTime(2024, 6, 15));
 
-        // Assert - Level 3 (the critical one)
         dto.Dispatch.Customer.Should().NotBeNull("Third level (Customer) MUST be populated");
         dto.Dispatch.Customer!.Id.Should().Be(3);
         dto.Dispatch.Customer.Name.Should().Be("John Doe");
@@ -314,7 +305,6 @@ public class ThreeLevelNestedProjectionTests
     [Fact]
     public void Projection_InlinePath_ThreeLevelsDeep_WithNullSecondLevel_ShouldReturnNull()
     {
-        // Arrange
         var entity = new OrderEntity350
         {
             Id = 1,
@@ -322,11 +312,9 @@ public class ThreeLevelNestedProjectionTests
             Dispatch = null
         };
 
-        // Act
         var projection = OrderDto350.Projection.Compile();
         var dto = projection(entity);
 
-        // Assert
         dto.Id.Should().Be(1);
         dto.Dispatch.Should().BeNull("Dispatch is null in source");
     }
@@ -334,7 +322,6 @@ public class ThreeLevelNestedProjectionTests
     [Fact]
     public void Projection_InlinePath_ThreeLevelsDeep_WithNullThirdLevel_ShouldReturnNull()
     {
-        // Arrange
         var entity = new OrderEntity350
         {
             Id = 1,
@@ -347,11 +334,9 @@ public class ThreeLevelNestedProjectionTests
             }
         };
 
-        // Act
         var projection = OrderDto350.Projection.Compile();
         var dto = projection(entity);
 
-        // Assert
         dto.Dispatch.Should().NotBeNull();
         dto.Dispatch!.Customer.Should().BeNull("Customer is null in source");
     }
@@ -359,13 +344,10 @@ public class ThreeLevelNestedProjectionTests
     [Fact]
     public void Projection_InlinePath_ThreeLevelsDeep_ViaQueryable_ShouldPopulateAll()
     {
-        // Arrange
         var entities = new[] { CreateTestEntity() }.AsQueryable();
 
-        // Act
         var dtos = entities.Select(OrderDto350.Projection).ToList();
 
-        // Assert
         dtos.Should().HaveCount(1);
         var dto = dtos[0];
         dto.Dispatch.Should().NotBeNull();
@@ -376,23 +358,18 @@ public class ThreeLevelNestedProjectionTests
     [Fact]
     public void Projection_LazyPath_ThreeLevelsDeep_ShouldPopulateAllLevels()
     {
-        // Arrange
         var entity = CreateTestEntity();
 
-        // Act
         var projection = OrderDto350Lazy.Projection.Compile();
         var dto = projection(entity);
 
-        // Assert - Level 1
         dto.Id.Should().Be(1);
         dto.OrderNumber.Should().Be("ORD-001");
 
-        // Assert - Level 2
         dto.Dispatch.Should().NotBeNull("Second level (Dispatch) should be populated");
         dto.Dispatch!.Id.Should().Be(2);
         dto.Dispatch.DispatchDate.Should().Be(new DateTime(2024, 6, 15));
 
-        // Assert - Level 3 (the critical one)
         dto.Dispatch.Customer.Should().NotBeNull("Third level (Customer) MUST be populated via lazy projection");
         dto.Dispatch.Customer!.Id.Should().Be(3);
         dto.Dispatch.Customer.Name.Should().Be("JOHN DOE", "Name should be uppercased via ConfigureProjection");
@@ -402,13 +379,10 @@ public class ThreeLevelNestedProjectionTests
     [Fact]
     public void Projection_LazyPath_ThreeLevelsDeep_ViaQueryable_ShouldPopulateAll()
     {
-        // Arrange
         var entities = new[] { CreateTestEntity() }.AsQueryable();
 
-        // Act
         var dtos = entities.Select(OrderDto350Lazy.Projection).ToList();
 
-        // Assert
         dtos.Should().HaveCount(1);
         var dto = dtos[0];
         dto.Dispatch.Should().NotBeNull();
@@ -419,21 +393,16 @@ public class ThreeLevelNestedProjectionTests
     [Fact]
     public void Constructor_ThreeLevelsDeep_ShouldPopulateAllLevels()
     {
-        // Arrange
         var entity = CreateTestEntity();
 
-        // Act
         var dto = new OrderDto350(entity);
 
-        // Assert - Level 1
         dto.Id.Should().Be(1);
         dto.OrderNumber.Should().Be("ORD-001");
 
-        // Assert - Level 2
         dto.Dispatch.Should().NotBeNull("Second level should be populated");
         dto.Dispatch!.Id.Should().Be(2);
 
-        // Assert - Level 3
         dto.Dispatch.Customer.Should().NotBeNull("Third level MUST be populated via constructor");
         dto.Dispatch.Customer!.Id.Should().Be(3);
         dto.Dispatch.Customer.Name.Should().Be("John Doe");
@@ -461,28 +430,22 @@ public class ThreeLevelNestedProjectionTests
     [Fact]
     public void Projection_ManualDeepMaps_PlusNestedFacet_InlinePath_ShouldPopulateAll()
     {
-        // Arrange — Level 1 uses inline path, Level 2 has ConfigureProjection (lazy)
         var entity = CreateProduct351Entity();
 
-        // Act
         var projection = ProductDto351.Projection.Compile();
         var dto = projection(entity);
 
-        // Assert - Level 1
         dto.Id.Should().Be(1);
         dto.ProductName.Should().Be("Widget");
 
-        // Assert - Level 2
         dto.Dispatch.Should().NotBeNull("Second level (Dispatch) should be populated");
         dto.Dispatch!.Id.Should().Be(2);
 
-        // Assert - Manually mapped deep properties SHOULD work
         dto.Dispatch.AssignedToUnitName.Should().Be("Unit Alpha",
             "Manually mapped property via ConfigureProjection should work");
         dto.Dispatch.OrderHeaderNumber.Should().Be("HDR-001",
             "Manually mapped property via ConfigureProjection should work");
 
-        // Assert - Level 3 nested facet NOT manually mapped - THIS IS THE BUG AREA
         dto.Dispatch.Customer.Should().NotBeNull(
             "Third level nested facet (Customer) NOT in ConfigureProjection MUST still be populated");
         dto.Dispatch.Customer!.Id.Should().Be(3);
@@ -493,26 +456,20 @@ public class ThreeLevelNestedProjectionTests
     [Fact]
     public void Projection_ManualDeepMaps_PlusNestedFacet_LazyPath_ShouldPopulateAll()
     {
-        // Arrange — Level 1 ALSO uses lazy path (ConfigureProjection)
         var entity = CreateProduct351Entity();
 
-        // Act
         var projection = ProductDto351Lz.Projection.Compile();
         var dto = projection(entity);
 
-        // Assert - Level 1
         dto.Id.Should().Be(1);
         dto.ProductName.Should().Be("Widget");
 
-        // Assert - Level 2
         dto.Dispatch.Should().NotBeNull("Second level (Dispatch) should be populated");
         dto.Dispatch!.Id.Should().Be(2);
 
-        // Assert - Manually mapped deep properties
         dto.Dispatch.AssignedToUnitName.Should().Be("Unit Alpha");
         dto.Dispatch.OrderHeaderNumber.Should().Be("HDR-001");
 
-        // Assert - Level 3 nested facet
         dto.Dispatch.Customer.Should().NotBeNull(
             "Third level nested facet MUST be populated even through lazy path chain");
         dto.Dispatch.Customer!.Id.Should().Be(3);
@@ -522,13 +479,10 @@ public class ThreeLevelNestedProjectionTests
     [Fact]
     public void Projection_ManualDeepMaps_PlusNestedFacet_ViaQueryable_ShouldPopulateAll()
     {
-        // Arrange
         var entities = new[] { CreateProduct351Entity() }.AsQueryable();
 
-        // Act
         var dtos = entities.Select(ProductDto351.Projection).ToList();
 
-        // Assert
         var dto = dtos[0];
         dto.Dispatch.Should().NotBeNull();
         dto.Dispatch!.AssignedToUnitName.Should().Be("Unit Alpha");
@@ -539,7 +493,6 @@ public class ThreeLevelNestedProjectionTests
     [Fact]
     public void Projection_InheritedFacet_ThreeLevelsDeep_ShouldPopulateAllLevels()
     {
-        // Arrange
         var entity = new DerivedOrderEntity350
         {
             Id = 1,
@@ -557,20 +510,16 @@ public class ThreeLevelNestedProjectionTests
             }
         };
 
-        // Act
         var projection = DerivedOrderDto350.Projection.Compile();
         var dto = projection(entity);
 
-        // Assert - Level 1 (inherited from base)
         dto.Id.Should().Be(1);
         dto.Number.Should().Be("ORD-001");
 
-        // Assert - Level 2
         dto.Dispatch.Should().NotBeNull("Second level (Dispatch) should be populated");
         dto.Dispatch!.Id.Should().Be(2);
         dto.Dispatch.DispatchDate.Should().Be(new DateTime(2024, 6, 15));
 
-        // Assert - Level 3 (the critical one)
         dto.Dispatch.Customer.Should().NotBeNull("Third level (Customer) MUST be populated with inherited facet");
         dto.Dispatch.Customer!.Id.Should().Be(3);
         dto.Dispatch.Customer.Name.Should().Be("John Doe");
@@ -580,7 +529,6 @@ public class ThreeLevelNestedProjectionTests
     [Fact]
     public void Projection_InheritedFacet_WithConfigureProjection_ThreeLevelsDeep_ShouldPopulateAllLevels()
     {
-        // Arrange
         var entity = new DerivedOrderEntity350
         {
             Id = 1,
@@ -598,19 +546,15 @@ public class ThreeLevelNestedProjectionTests
             }
         };
 
-        // Act
         var projection = DerivedOrderDto350Lz.Projection.Compile();
         var dto = projection(entity);
 
-        // Assert - Level 1 (inherited, with ConfigureProjection mapping)
         dto.Id.Should().Be(1);
         dto.Number.Should().Be("ORD-ORD-001", "Number should be mapped from base ConfigureProjection");
 
-        // Assert - Level 2
         dto.Dispatch.Should().NotBeNull("Second level (Dispatch) should be populated");
         dto.Dispatch!.Id.Should().Be(2);
 
-        // Assert - Level 3
         dto.Dispatch.Customer.Should().NotBeNull("Third level (Customer) MUST be populated with inherited+lazy");
         dto.Dispatch.Customer!.Id.Should().Be(3);
         dto.Dispatch.Customer.Name.Should().Be("John Doe");
@@ -619,7 +563,6 @@ public class ThreeLevelNestedProjectionTests
     [Fact]
     public void Projection_NonNullableNested_ThreeLevelsDeep_ShouldPopulateAllLevels()
     {
-        // Arrange
         var entity = new OrderEntityNonNull350
         {
             Id = 1,
@@ -637,29 +580,21 @@ public class ThreeLevelNestedProjectionTests
             }
         };
 
-        // Act
         var projection = OrderDtoNonNull350.Projection.Compile();
         var dto = projection(entity);
 
-        // Assert - Level 1
         dto.Id.Should().Be(1);
         dto.OrderNumber.Should().Be("ORD-001");
 
-        // Assert - Level 2 (non-nullable)
         dto.Dispatch.Should().NotBeNull("Non-nullable Dispatch should be populated");
         dto.Dispatch!.Id.Should().Be(2);
 
-        // Assert - Level 3 (non-nullable, critical)
         dto.Dispatch.Customer.Should().NotBeNull("Non-nullable third level MUST be populated");
         dto.Dispatch.Customer!.Id.Should().Be(3);
         dto.Dispatch.Customer.Name.Should().Be("Jane Smith");
         dto.Dispatch.Customer.Email.Should().Be("jane@example.com");
     }
 }
-
-// Regression test for: only the deepest (level 2) nested facet has ConfigureProjection,
-// and neither the parent (level 0) nor the middle (level 1) DTO has any configuration.
-// Scenario: InventoryItemScanRetrieval -> OrderLinePickingScanRetrieval -> OrderLinePickingProductScanRetrieval (has config)
 
 public class RootEntity360
 {
@@ -727,9 +662,6 @@ public class DeepestLevelConfigProjectionTests
     [Fact]
     public void Projection_OnlyDeepestLevel_HasConfigureProjection_ShouldApplyConfig()
     {
-        // Arrange: Level 0 (Root) and Level 1 (Middle) have NO ConfigureProjection.
-        // Level 2 (Deep) HAS ConfigureProjection. Verifies RequiresLazyProjection
-        // recurses correctly and ConfigureProjection is applied at the deepest level.
         var entity = CreateEntity();
 
         var projection = RootFacet360.Projection.Compile();
@@ -778,12 +710,6 @@ public class DeepestLevelConfigProjectionTests
         dto.Middle!.Deep.Should().BeNull();
     }
 }
-
-// Regression test for: parent DTO has a COLLECTION nested facet whose element type has
-// ConfigureProjection. RequiresLazyProjection must correctly extract the element type
-// from the collection TypeName (not use the raw "List<T>" type) so that the parent
-// takes the lazy path and the collection element's ConfigureProjection is applied.
-// Scenario: OrderLineDispatchScanRetrieval -> List<OrderLineDispatchProductScanRetrieval> (has config)
 
 public class DispatchEntity361
 {
@@ -837,9 +763,6 @@ public class CollectionNestedFacetWithConfigTests
     [Fact]
     public void Projection_CollectionNestedFacet_WithConfigOnElementType_ShouldApplyConfig()
     {
-        // Bug: RequiresLazyProjection used member.TypeName ("List<T>?") directly instead of
-        // extracting the element type, so FindNestedFacetModel returned null for collection
-        // members, causing RequiresLazyProjection to return false when it should be true.
         // Parent took the inline path and ConfigureProjection on the element type was skipped.
         var entity = CreateEntity();
 

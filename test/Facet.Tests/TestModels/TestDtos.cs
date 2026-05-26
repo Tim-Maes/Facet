@@ -1,4 +1,4 @@
-namespace Facet.Tests.TestModels;
+﻿namespace Facet.Tests.TestModels;
 
 [Facet(typeof(User), "Password", "CreatedAt", GenerateToSource = true, SourceSignature = "a83684c8")]
 public partial class UserDto
@@ -29,11 +29,9 @@ public partial record ModernUserDto
 [Facet(typeof(UserWithEnum), GenerateToSource = true)]
 public partial class UserWithEnumDto;
 
-// Exact scenario from issue #298: plain record facet with required properties, no () workaround
 [Facet(typeof(ModernUser), "PasswordHash", "Bio", PreserveRequiredProperties = true)]
 public partial record ModernUserRequiredDto;
 
-// Issue #300: static properties should not be included in facets
 [Facet(typeof(EntityWithStaticMembers))]
 public partial record StaticMemberTestDto;
 
@@ -46,7 +44,6 @@ public partial struct ProductSummary;
 [Facet(typeof(EventLog), "Source", GenerateToSource = true)]
 public partial class EventLogDto;
 
-// Include functionality test DTOs
 [Facet(typeof(User), Include = new[] { "FirstName", "LastName", "Email" }, GenerateToSource = true)]
 public partial class UserIncludeDto;
 
@@ -104,15 +101,12 @@ public partial class UserDtoWithMapping
     public int Age { get; set; }
 }
 
-// Async mapping test classes - using existing UserDto
 public class UserDtoAsyncMapper : IFacetMapConfigurationAsync<User, UserDto>
 {
     public static async Task MapAsync(User source, UserDto target, CancellationToken cancellationToken = default)
     {
-        // Simulate async work
         await Task.Delay(10, cancellationToken);
         
-        // Set the custom properties that UserDto has
         target.FullName = $"{source.FirstName} {source.LastName}";
         target.Age = CalculateAge(source.DateOfBirth);
     }
@@ -140,9 +134,6 @@ public class ProductDtoAsyncMapper : IFacetMapConfigurationAsync<Product, Produc
     {
         await Task.Delay(5, cancellationToken);
         
-        // ProductDto has different properties - let's set what it actually has
-        // For this simple test, we'll just ensure the basic properties are copied by the constructor
-        // and we can add any additional logic here if needed
     }
 }
 
@@ -158,16 +149,14 @@ public class UserDtoHybridMapper : IFacetMapConfigurationHybrid<User, UserDto>
 {
     public static void Map(User source, UserDto target)
     {
-        // Sync mapping
         target.FullName = $"{source.FirstName} {source.LastName}";
         target.Age = CalculateAge(source.DateOfBirth);
     }
 
     public static async Task MapAsync(User source, UserDto target, CancellationToken cancellationToken = default)
     {
-        // Async mapping - for this simple test, just add some delay
         await Task.Delay(8, cancellationToken);
-        // UserDto doesn't have AsyncComputedField, so we'll just modify existing properties
+        
         target.FullName += " (Hybrid)";
     }
 
@@ -193,7 +182,6 @@ public partial class NullableTestDto
 {
 }
 
-// Test for GitHub issue: Source type with NO nullable properties but facet has nullable user-defined property
 [Facet(typeof(Dummy), exclude: [nameof(Dummy.Age)])]
 public partial record DummyDto
 {
@@ -201,7 +189,6 @@ public partial record DummyDto
     public string? NameInUpperCase { get; init; }
 }
 
-// Test for GitHub issue #194: Nested facet inside another facet
 [Facet(typeof(UserForNestedFacet), Include = [
     nameof(UserForNestedFacet.Id),
     nameof(UserForNestedFacet.Name),
@@ -215,7 +202,6 @@ public partial class UserDetailResponse
     public partial class UserAddressItem;
 }
 
-// NullableProperties functionality test DTOs
 [Facet(typeof(Product), "InternalNotes", "CreatedAt", NullableProperties = true, GenerateToSource = false)]
 public partial class ProductQueryDto;
 
@@ -225,18 +211,15 @@ public partial record UserQueryDto;
 [Facet(typeof(UserWithEnum), NullableProperties = true, GenerateToSource = false)]
 public partial class UserWithEnumQueryDto;
 
-// Test for excluding inherited property from base class
 [Facet(typeof(Category), "Id")]
 public partial record UpdateCategoryViewModel;
 
-// ConvertEnumsTo functionality test DTOs
 [Facet(typeof(UserWithEnum), ConvertEnumsTo = typeof(string), GenerateToSource = true)]
 public partial class UserWithEnumToStringDto;
 
 [Facet(typeof(UserWithEnum), ConvertEnumsTo = typeof(int), GenerateToSource = true)]
 public partial class UserWithEnumToIntDto;
 
-// Test with nullable enum property
 public class EntityWithNullableEnum
 {
     public int Id { get; set; }
@@ -251,11 +234,9 @@ public partial class NullableEnumToStringDto;
 [Facet(typeof(EntityWithNullableEnum), ConvertEnumsTo = typeof(int), GenerateToSource = true)]
 public partial class NullableEnumToIntDto;
 
-// Test ConvertEnumsTo with NullableProperties = true
 [Facet(typeof(UserWithEnum), ConvertEnumsTo = typeof(string), NullableProperties = true)]
 public partial class UserWithEnumToStringNullableDto;
 
-// Test with collection of enums
 public class EntityWithEnumCollection
 {
     public int Id { get; set; }
@@ -268,8 +249,6 @@ public partial class EntityWithEnumCollectionToStringDto;
 
 [Facet(typeof(EntityWithEnumCollection), ConvertEnumsTo = typeof(int), GenerateToSource = true)]
 public partial class EntityWithEnumCollectionToIntDto;
-
-// ToSourceConfiguration tests
 
 /// <summary>
 /// Simulates parsing/serialising a JSON metadata property on the round-trip.
@@ -316,7 +295,7 @@ public class OrderDtoToSourceMapper : IFacetToSourceConfiguration<OrderDto, Json
 }
 
 [Facet(typeof(JsonStoredEntity),
-    nameof(JsonStoredEntity.MetadataJson),  // excluded, DTO uses parsed Metadata instead
+    nameof(JsonStoredEntity.MetadataJson),  
     Configuration = typeof(OrderDtoForwardMapper),
     ToSourceConfiguration = typeof(OrderDtoToSourceMapper),
     GenerateToSource = true)]
@@ -371,12 +350,6 @@ public partial class UnitDropDownDto;
        NestedFacets = new[] { typeof(UnitDropDownDto) })]
 public partial class OrderLineBaseUpsertDto;
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Multi-source inherited facet test — verifies that custom-named members
-// (ProjectionFromX, ToX) do NOT get the 'new' keyword when the base class
-// has a single-source [Facet] attribute (regression test for CS0109).
-// ──────────────────────────────────────────────────────────────────────────────
-
 /// <summary>
 /// Base class with a single-source Facet.
 /// Generates standard members: Projection, ToSource, BackTo.
@@ -404,18 +377,15 @@ public partial class UnitMultiSourceInheritedFacet : UnitBaseFacet;
 [Facet(typeof(LocationEntity), nameof(LocationEntity.Location), GenerateToSource = true)]
 public partial class LocationDto;
 
-// SetAccessor feature test DTOs (#381)
 [Facet(typeof(User), "Password", "CreatedAt", SetAccessor = PropertySetAccessor.Init)]
 public partial class UserImmutableDto;
 
 [Facet(typeof(User), "Password", "CreatedAt", SetAccessor = PropertySetAccessor.Set)]
 public partial class UserMutableDto;
 
-// Verify SetAccessor.Preserve keeps init-only from source (using record, which defaults preserveInitOnly = true)
 [Facet(typeof(ImmutableEntity), SetAccessor = PropertySetAccessor.Preserve)]
 public partial record ImmutableEntityPreserveDto;
 
-// Verify SetAccessor.Set forces set on init-only source
 [Facet(typeof(ImmutableEntity), SetAccessor = PropertySetAccessor.Set)]
 public partial class ImmutableEntityMutableDto;
 

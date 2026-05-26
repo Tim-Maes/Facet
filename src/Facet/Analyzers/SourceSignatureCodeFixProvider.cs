@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
@@ -28,14 +28,11 @@ public class SourceSignatureCodeFixProvider : CodeFixProvider
         var diagnostic = context.Diagnostics.First();
         var diagnosticSpan = diagnostic.Location.SourceSpan;
 
-        // Find the attribute syntax
         var node = root.FindNode(diagnosticSpan);
         var attributeSyntax = node.AncestorsAndSelf().OfType<AttributeSyntax>().FirstOrDefault();
 
         if (attributeSyntax == null) return;
 
-        // Extract the new signature from the diagnostic message
-        // Message format: "Source entity '{0}' structure has changed. Update SourceSignature to '{1}' to acknowledge this change."
         var message = diagnostic.GetMessage();
         var newSignature = ExtractSignatureFromMessage(message);
 
@@ -51,7 +48,6 @@ public class SourceSignatureCodeFixProvider : CodeFixProvider
 
     private static string? ExtractSignatureFromMessage(string message)
     {
-        // Look for "Update SourceSignature to 'XXXXXXXX'"
         const string marker = "Update SourceSignature to '";
         var startIndex = message.IndexOf(marker);
         if (startIndex < 0) return null;
@@ -72,7 +68,6 @@ public class SourceSignatureCodeFixProvider : CodeFixProvider
         var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
         if (root == null) return document;
 
-        // Find existing SourceSignature argument
         var existingArg = attributeSyntax.ArgumentList?.Arguments
             .FirstOrDefault(a => a.NameEquals?.Name.Identifier.Text == "SourceSignature");
 
@@ -80,7 +75,6 @@ public class SourceSignatureCodeFixProvider : CodeFixProvider
 
         if (existingArg != null)
         {
-            // Update existing argument
             var newArg = existingArg.WithExpression(
                 SyntaxFactory.LiteralExpression(
                     SyntaxKind.StringLiteralExpression,
@@ -90,7 +84,6 @@ public class SourceSignatureCodeFixProvider : CodeFixProvider
         }
         else
         {
-            // Add new argument (shouldn't happen for FAC022, but handle gracefully)
             var newArg = SyntaxFactory.AttributeArgument(
                 SyntaxFactory.NameEquals("SourceSignature"),
                 null,

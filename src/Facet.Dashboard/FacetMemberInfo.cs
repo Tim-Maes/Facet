@@ -1,4 +1,4 @@
-namespace Facet.Dashboard;
+﻿namespace Facet.Dashboard;
 
 /// <summary>
 /// Represents information about a property or field on a type.

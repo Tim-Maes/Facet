@@ -1,4 +1,4 @@
-namespace Facet.Tests.UnitTests.Wrapper;
+﻿namespace Facet.Tests.UnitTests.Wrapper;
 
 public class Address
 {
@@ -24,11 +24,9 @@ public partial class PublicPersonWrapper { }
 
 public partial class NestedWrapperTests
 {
-
     [Fact]
     public void Nested_Wrapper_Should_Wrap_Nested_Properties()
     {
-        // Arrange
         var person = new Person
         {
             Id = 1,
@@ -43,10 +41,8 @@ public partial class NestedWrapperTests
             SocialSecurityNumber = "123-45-6789"
         };
 
-        // Act
         var wrapper = new PublicPersonWrapper(person);
 
-        // Assert
         wrapper.Id.Should().Be(1);
         wrapper.Name.Should().Be("John Doe");
         wrapper.Address.Should().NotBeNull();
@@ -54,14 +50,12 @@ public partial class NestedWrapperTests
         wrapper.Address.City.Should().Be("Springfield");
         wrapper.Address.ZipCode.Should().Be("12345");
 
-        // Country should be excluded by PublicAddressWrapper
         wrapper.Address.GetType().GetProperty("Country").Should().BeNull();
     }
 
     [Fact]
     public void Nested_Wrapper_Changes_Should_Propagate_To_Source()
     {
-        // Arrange
         var person = new Person
         {
             Id = 1,
@@ -70,24 +64,19 @@ public partial class NestedWrapperTests
         };
         var wrapper = new PublicPersonWrapper(person);
 
-        // Act
         wrapper.Address.City = "New York";
 
-        // Assert
         person.Address.City.Should().Be("New York");
     }
 
     [Fact]
     public void Nested_Wrapper_Should_Unwrap_Correctly()
     {
-        // Arrange
         var person = new Person { Address = new Address { City = "Seattle" } };
         var wrapper = new PublicPersonWrapper(person);
 
-        // Act
         var unwrapped = wrapper.Unwrap();
 
-        // Assert
         unwrapped.Should().BeSameAs(person);
         unwrapped.Address.City.Should().Be("Seattle");
     }
@@ -95,13 +84,10 @@ public partial class NestedWrapperTests
     [Fact]
     public void Nested_Wrapper_With_Nullable_Should_Handle_Null()
     {
-        // Arrange
         var person = new Person { Address = null! };
 
-        // Act
         var wrapper = new PublicPersonWrapper(person);
 
-        // Assert
         wrapper.Should().NotBeNull();
     }
 }

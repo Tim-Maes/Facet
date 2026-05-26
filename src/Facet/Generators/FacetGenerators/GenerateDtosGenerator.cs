@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
@@ -15,10 +15,9 @@ namespace Facet.Generators;
 public sealed class GenerateDtosGenerator : IIncrementalGenerator
 {
     private const string GenerateDtosAttributeName = "Facet.GenerateDtosAttribute";
-    // Keep for backward compatibility with obsolete attribute
+    
     private const string GenerateAuditableDtosAttributeName = "Facet.GenerateAuditableDtosAttribute";
 
-    // Diagnostic for generator internal errors
     private static readonly DiagnosticDescriptor GeneratorErrorRule = new DiagnosticDescriptor(
         "FAC100",
         "GenerateDtos generator encountered an error",
@@ -28,14 +27,12 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         isEnabledByDefault: true,
         description: "The GenerateDtos source generator encountered an unexpected error while processing this type.");
 
-    // Common audit field patterns
     private static readonly HashSet<string> DefaultAuditFields = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
     {
         "CreatedDate", "UpdatedDate", "CreatedAt", "UpdatedAt",
         "CreatedBy", "UpdatedBy", "CreatedById", "UpdatedById"
     };
 
-    // Common ID field patterns
     private static readonly HashSet<string> IdFieldPatterns = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
     {
         "Id"
@@ -51,7 +48,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             .Where(static m => m is not null)
             .SelectMany(static (models, _) => models!);
 
-        // Obsolete attribute: GenerateAuditableDtos (kept for backward compatibility)
         var generateAuditableDtosTargets = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 GenerateAuditableDtosAttributeName,
@@ -97,7 +93,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
         var models = new List<GenerateDtosTargetModel>();
 
-        // Process each attribute separately to support AllowMultiple
         foreach (var attribute in context.Attributes)
         {
             token.ThrowIfCancellationRequested();
@@ -111,10 +106,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
         if (models.Count == 0) return null;
 
-        // Resolve sibling interface composition: a PartialClass output should declare a base of
-        // `: I{Name}` for any DTO type that ALSO has a matching Interface attribute on the same source
-        // (same Prefix/Suffix/Namespace, overlapping DtoTypes). This pairs the two outputs into a
-        // contract + implementation without the user having to wire it up by hand.
         var interfaceModels = models.Where(m => m.OutputType == OutputType.Interface).ToList();
         if (interfaceModels.Count == 0)
         {
@@ -165,7 +156,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
         try
         {
-            // Extract attribute properties with proper enum handling
             var types = GetNamedArg(attribute.NamedArguments, "Types", DtoTypes.All);
             var outputType = GetNamedArg(attribute.NamedArguments, "OutputType", OutputType.Record);
             var targetNamespace = GetNamedArg<string?>(attribute.NamedArguments, "Namespace", null);
@@ -177,10 +167,8 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             var useFullName = GetNamedArg(attribute.NamedArguments, "UseFullName", false);
             var convertEnumsTo = ExtractConvertEnumsTo(attribute.NamedArguments);
             
-            // New property: ExcludeAuditFields (only on GenerateDtosAttribute, not on obsolete attribute)
             var excludeAuditFields = forceExcludeAuditFields || GetNamedArg(attribute.NamedArguments, "ExcludeAuditFields", false);
 
-            // Fix the ExcludeProperties handling
             var userExcludeProperties = new List<string>();
             var excludePropertiesArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "ExcludeProperties");
             if (excludePropertiesArg.Value.Kind != TypedConstantKind.Error && !excludePropertiesArg.Value.IsNull)
@@ -194,7 +182,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 }
             }
 
-            // Build exclusion list
             var excludeProperties = new HashSet<string>(userExcludeProperties, System.StringComparer.OrdinalIgnoreCase);
 
             if (excludeAuditFields)
@@ -265,7 +252,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
         catch (Exception ex)
         {
-            // Return null to skip this model, but the error is captured in the exception
             System.Diagnostics.Debug.WriteLine($"GenerateDtos error for {sourceSymbol.Name}: {ex.Message}");
             return null;
         }
@@ -276,12 +262,10 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         context.CancellationToken.ThrowIfCancellationRequested();
 
         var sourceTypeName = GetSimpleTypeName(model.SourceTypeName);
-        // C# convention: interface names start with `I`. Apply at the outermost
-        // position so the user's Prefix still sits between `I` and the entity name
-        // (e.g. `Prefix = "Admin"` -> `IAdminCreateXRequest`, not `AdminICreateXRequest`).
+        
+        // Keep a custom Prefix between I and the entity name.
         var interfaceLeader = model.OutputType == OutputType.Interface ? "I" : "";
 
-        // Generate Create DTO (excludes ID fields)
         if ((model.Types & DtoTypes.Create) != 0)
         {
             var createMembers = FilterMembers(model.Members, model.ExcludeProperties, IdFieldPatterns);
@@ -290,7 +274,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             context.AddSource($"{GenerateFileDtoFullName(model, createDtoName)}", SourceText.From(createCode, Encoding.UTF8));
         }
 
-        // Generate Update DTO (includes ID for identification)
         if ((model.Types & DtoTypes.Update) != 0)
         {
             var updateMembers = FilterMembers(model.Members, model.ExcludeProperties);
@@ -299,7 +282,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             context.AddSource($"{GenerateFileDtoFullName(model, updateDtoName)}", SourceText.From(updateCode, Encoding.UTF8));
         }
 
-        // Generate Upsert DTO (includes ID, can be null for create)
         if ((model.Types & DtoTypes.Upsert) != 0)
         {
             var upsertMembers = FilterMembers(model.Members, model.ExcludeProperties);
@@ -308,7 +290,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             context.AddSource($"{GenerateFileDtoFullName(model, upsertDtoName)}", SourceText.From(upsertCode, Encoding.UTF8));
         }
 
-        // Generate Response DTO (all non-excluded properties)
         if ((model.Types & DtoTypes.Response) != 0)
         {
             var responseMembers = FilterMembers(model.Members, model.ExcludeProperties);
@@ -317,11 +298,10 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             context.AddSource($"{GenerateFileDtoFullName(model, responseDtoName)}", SourceText.From(responseCode, Encoding.UTF8));
         }
 
-        // Generate Query DTO
         if ((model.Types & DtoTypes.Query) != 0)
         {
             var queryMembers = model.Members
-                .Select(CreateQueryMember) // Make all properties optional in Query DTOs
+                .Select(CreateQueryMember) 
                 .ToImmutableArray();
 
             var queryDtoName = interfaceLeader + BuildDtoName(sourceTypeName, "", "Query", model.Prefix, model.Suffix);
@@ -330,9 +310,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             context.AddSource($"{GenerateFileDtoFullName(model, queryDtoName)}", SourceText.From(queryCode, Encoding.UTF8));
         }
 
-        // Generate Patch DTO (uses Optional<T> to distinguish between unspecified and null).
-        // Patch DTOs require an ApplyTo method body; skip them on interface output and let
-        // the implementer provide the method on the concrete type.
+        // Patch DTO interfaces are skipped because ApplyTo needs a method body.
         if ((model.Types & DtoTypes.Patch) != 0 && model.OutputType != OutputType.Interface)
         {
             var patchMembers = FilterMembers(model.Members, model.ExcludeProperties);
@@ -377,7 +355,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
     private static string GetSimpleTypeName(string fullyQualifiedName)
     {
-        // remove global:: prefix if present (for types in global namespace)
         var name = Shared.GeneratorUtilities.StripGlobalPrefix(fullyQualifiedName);
 
         var parts = name.Split('.');
@@ -414,15 +391,11 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         var hasInitOnlyProperties = members.Any(m => m.IsInitOnly);
         var hasReadOnlyFields = members.Any(m => m.IsReadOnly);
 
-        // Generate file structure
         GenerateDtoFileHeader(sb, model);
         GenerateDtoTypeDeclaration(sb, model, dtoName, sourceTypeName, purpose, dtoType);
 
-        // Generate members
         GenerateDtoMembers(sb, model, members);
 
-        // Constructors, projections, and ToSource methods only make sense on a
-        // concrete type; interfaces declare contract, not behavior.
         if (!isInterface)
         {
             if (model.GenerateConstructors)
@@ -430,9 +403,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 GenerateDtoConstructors(sb, model, dtoName, sourceTypeName, members, hasInitOnlyProperties, hasReadOnlyFields);
             }
 
-            // PartialClass is meant to be extended by a hand-written partial — the user owns mapping
-            // (and may need to map into hand-added members the generator can't see), so we skip
-            // Projection / ToSource / BackTo. The all-args ctor and parameterless ctor are still emitted.
+            // PartialClass output leaves mapping members to the user-defined partial.
             if (!isPartialClass)
             {
                 if (model.GenerateProjections)
@@ -458,7 +429,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine("using System.Linq.Expressions;");
         sb.AppendLine();
 
-        // Nullable must be enabled in generated code with a directive
+        // Generated code needs #nullable enabled.
         var hasNullableRefTypeMembers = model.Members.Any(m => !m.IsValueType && m.TypeName.EndsWith("?"));
         if (hasNullableRefTypeMembers)
         {
@@ -490,8 +461,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine($"/// Generated {purpose} DTO contract for {sourceTypeName}.");
         sb.AppendLine($"/// </summary>");
 
-        // The [Facet] attribute drives runtime mapping behavior for the concrete DTO and
-        // is meaningless on an interface declaration, so skip it for interface output.
         if (model.OutputType != OutputType.Interface)
         {
             if (model.ConvertEnumsTo != null)
@@ -505,9 +474,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             }
         }
 
-        // For PartialClass output, declare the matching generated interface as a base type when a
-        // sibling Interface attribute on the same source covers this DTO type. The interface name
-        // mirrors the partial class name with an `I` leader (e.g. `ICreateUserRequest`).
+        // Partial classes implement sibling interfaces like ICreateUserRequest.
         var baseList = "";
         if (model.OutputType == OutputType.PartialClass && (model.SiblingInterfaceTypes & dtoType) != 0)
         {
@@ -529,9 +496,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             }
             else if (!isInterface)
             {
-                // Interfaces cannot declare fields; entity fields are surfaced as
-                // get-only interface properties in the same loop, so silently skip
-                // here rather than fail generation.
                 GenerateDtoField(sb, member);
             }
         }
@@ -541,8 +505,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     {
         if (isInterface)
         {
-            // Interface members: no `public`, no setter, no `required`, no initializer.
-            // The implementer chooses get-only vs get/set vs init.
             sb.AppendLine($"    {member.TypeName} {member.Name} {{ get; }}");
             return;
         }
@@ -558,8 +520,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             propDef += " { get; set; }";
         }
 
-        // For non-nullable reference type properties without a required modifier,
-        // add "= default!" to suppress CS8618 warnings in the generated code
+        // Suppress CS8618 for generated non-nullable refs.
         if (!member.IsValueType && !member.IsRequired && !NullabilityAnalyzer.IsNullableTypeName(member.TypeName))
         {
             propDef += " = default!;";
@@ -582,7 +543,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
         fieldDef += $" {member.TypeName} {member.Name}";
 
-        // For readonly fields, we need to provide a default value since they can't be assigned in constructor
         if (member.IsReadOnly)
         {
             var defaultValue = GeneratorUtilities.GetDefaultValueForType(member.TypeName);
@@ -590,8 +550,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
         else if (!member.IsValueType && !member.IsRequired && !NullabilityAnalyzer.IsNullableTypeName(member.TypeName))
         {
-            // For non-nullable reference type fields without a required modifier,
-            // add "= default!" to suppress CS8618 warnings
+            // Suppress CS8618 for generated non-nullable refs.
             fieldDef += " = default!";
         }
 
@@ -622,7 +581,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine($"    public {dtoName}({model.SourceTypeName} source)");
         sb.AppendLine("    {");
 
-        // Only assign to non-init-only properties and non-readonly fields
         var assignableMembers = members.Where(x => !x.IsInitOnly && !x.IsReadOnly).ToArray();
 
         if (assignableMembers.Length > 0)
@@ -636,14 +594,12 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
         else
         {
-            // If there are no assignable members, add a comment to explain
             sb.AppendLine("        // No assignable members to initialize from source");
             sb.AppendLine("        // (all members are either init-only properties or readonly fields with default values)");
         }
 
         sb.AppendLine("    }");
 
-        // Add parameterless constructor
         sb.AppendLine();
         sb.AppendLine($"    /// <summary>");
         sb.AppendLine($"    /// Initializes a new instance of the <see cref=\"{dtoName}\"/> class with default values.");
@@ -652,7 +608,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine("    {");
         sb.AppendLine("    }");
 
-        // Add static factory method for types with init-only properties or readonly fields
         if (hasInitOnlyProperties || hasReadOnlyFields)
         {
             GenerateDtoFromSourceFactory(sb, model, dtoName, sourceTypeName, members, hasReadOnlyFields);
@@ -680,7 +635,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine($"        return new {dtoName}");
         sb.AppendLine("        {");
 
-        // Only include non-readonly fields in the object initializer
         var initializableMembers = members.Where(m => !m.IsReadOnly).ToArray();
         for (int i = 0; i < initializableMembers.Length; i++)
         {
@@ -718,7 +672,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             sb.AppendLine($"        source => new {dtoName}");
             sb.AppendLine("        {");
 
-            // Only include non-readonly fields in the object initializer for projections too
             var initializableMembers = members.Where(m => !m.IsReadOnly).ToArray();
             for (int i = 0; i < initializableMembers.Length; i++)
             {
@@ -749,14 +702,12 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine($"        return new {model.SourceTypeName}");
         sb.AppendLine("        {");
 
-        // Map all members back to the source
         var toSourceMembers = members.Where(m => !m.IsReadOnly).ToArray();
         for (int i = 0; i < toSourceMembers.Length; i++)
         {
             var member = toSourceMembers[i];
             var comma = i == toSourceMembers.Length - 1 ? "" : ",";
 
-            // Find the corresponding source member to check nullability
             var sourceMember = model.Members.FirstOrDefault(sm => sm.Name == member.Name);
 
             if (member.IsEnumConversion && member.OriginalEnumTypeName != null)
@@ -766,17 +717,14 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 continue;
             }
 
-            // If the DTO member is nullable but the source is not, use GetValueOrDefault()
             if (member.TypeName.EndsWith("?") && sourceMember != null && !sourceMember.TypeName.EndsWith("?"))
             {
                 if (sourceMember.IsValueType)
                 {
-                    // For value types, use GetValueOrDefault()
                     sb.AppendLine($"            {member.Name} = this.{member.Name}.GetValueOrDefault(){comma}");
                 }
                 else
                 {
-                    // For reference types, use ?? operator with default
                     sb.AppendLine($"            {member.Name} = this.{member.Name} ?? default!{comma}");
                 }
             }
@@ -792,7 +740,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
     private static void GenerateDtoBackTo(StringBuilder sb, GenerateDtosTargetModel model, string dtoName, string sourceTypeName)
     {
-        // Generate deprecated BackTo method that calls ToSource
         sb.AppendLine();
         sb.AppendLine($"    /// <summary>");
         sb.AppendLine($"    /// Converts this instance of <see cref=\"{dtoName}\"/> back to an instance of the source type <see cref=\"{sourceTypeName}\"/>.");
@@ -807,7 +754,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         var sb = new StringBuilder();
         var sourceTypeName = GetSimpleTypeName(model.SourceTypeName);
 
-        // Generate file header
         GenerateFileHeader(sb);
         sb.AppendLine("using System;");
         sb.AppendLine();
@@ -818,7 +764,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             sb.AppendLine();
         }
 
-        // Generate type declaration
         var keyword = model.OutputType switch
         {
             OutputType.Class => "class",
@@ -836,7 +781,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine($"public {keyword} {dtoName}");
         sb.AppendLine("{");
 
-        // Generate properties wrapped in Optional<T>
         foreach (var member in members)
         {
             if (member.Kind == FacetMemberKind.Property)
@@ -846,7 +790,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             }
         }
 
-        // Generate ApplyTo method
         GeneratePatchApplyToMethod(sb, model, dtoName, sourceTypeName, members);
 
         sb.AppendLine("}");
@@ -867,7 +810,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine("        if (target == null) throw new System.ArgumentNullException(nameof(target));");
         sb.AppendLine();
 
-        // Generate property updates for non-readonly members
         var updatableMembers = members.Where(m => !m.IsReadOnly && m.Kind == FacetMemberKind.Property).ToArray();
         foreach (var member in updatableMembers)
         {
@@ -1200,7 +1142,6 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             _ => $"{projection}.ToList()"
         };
     }
-
 
     private static T GetNamedArg<T>(
         ImmutableArray<KeyValuePair<string, TypedConstant>> args,

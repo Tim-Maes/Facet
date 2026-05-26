@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -71,7 +71,6 @@ internal static class AttributeParser
                 {
                     if (childValue.Value is INamedTypeSymbol childWrapperType)
                     {
-                        // Find the Wrapper attribute on the child type to get its source type
                         var childWrapperAttr = childWrapperType.GetAttributes()
                             .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == FacetConstants.WrapperAttributeFullName);
 

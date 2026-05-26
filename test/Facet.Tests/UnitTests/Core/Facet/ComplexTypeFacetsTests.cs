@@ -1,4 +1,4 @@
-using Facet.Tests.TestModels;
+﻿using Facet.Tests.TestModels;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
 
@@ -7,7 +7,6 @@ public class ComplexTypeFacetsTests
     [Fact]
     public void ToFacet_ShouldMapSimpleNestedType_WhenUsingChildrenParameter()
     {
-        // Arrange
         var company = new CompanyEntity
         {
             Id = 1,
@@ -23,16 +22,13 @@ public class ComplexTypeFacetsTests
             }
         };
 
-        // Act
         var dto = new CompanyFacet(company);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(1);
         dto.Name.Should().Be("Acme Corp");
         dto.Industry.Should().Be("Technology");
 
-        // Child facet should be automatically mapped
         dto.HeadquartersAddress.Should().NotBeNull();
         dto.HeadquartersAddress.Street.Should().Be("123 Main St");
         dto.HeadquartersAddress.City.Should().Be("San Francisco");
@@ -44,7 +40,6 @@ public class ComplexTypeFacetsTests
     [Fact]
     public void ToFacet_ShouldMapMultipleDifferentNestedTypes_WhenUsingChildrenParameter()
     {
-        // Arrange
         var employee = new StaffMember
         {
             Id = 1,
@@ -78,10 +73,8 @@ public class ComplexTypeFacetsTests
             }
         };
 
-        // Act
         var dto = new StaffMemberFacet(employee);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(1);
         dto.FirstName.Should().Be("John");
@@ -89,23 +82,19 @@ public class ComplexTypeFacetsTests
         dto.Email.Should().Be("john.doe@example.com");
         dto.HireDate.Should().Be(new DateTime(2020, 1, 15));
 
-        // Excluded properties should not exist
         var dtoType = dto.GetType();
         dtoType.GetProperty("PasswordHash").Should().BeNull("PasswordHash should be excluded");
         dtoType.GetProperty("Salary").Should().BeNull("Salary should be excluded");
 
-        // Company child facet should be mapped
         dto.Company.Should().NotBeNull();
         dto.Company.Id.Should().Be(10);
         dto.Company.Name.Should().Be("Tech Solutions");
         dto.Company.Industry.Should().Be("Software");
 
-        // Nested child facet (Company -> Address)
         dto.Company.HeadquartersAddress.Should().NotBeNull();
         dto.Company.HeadquartersAddress.Street.Should().Be("456 Tech Blvd");
         dto.Company.HeadquartersAddress.City.Should().Be("Austin");
 
-        // HomeAddress child facet should be mapped
         dto.HomeAddress.Should().NotBeNull();
         dto.HomeAddress.Street.Should().Be("789 Residential Ave");
         dto.HomeAddress.City.Should().Be("Round Rock");
@@ -115,7 +104,6 @@ public class ComplexTypeFacetsTests
     [Fact]
     public void ToFacet_ShouldMapDeeplyNestedTypes_WhenUsingChildrenParameter()
     {
-        // Arrange
         var department = new DepartmentEntity
         {
             Id = 5,
@@ -169,35 +157,29 @@ public class ComplexTypeFacetsTests
             }
         };
 
-        // Act
         var dto = new DepartmentFacet(department);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(5);
         dto.Name.Should().Be("Engineering");
         dto.EmployeeCount.Should().Be(50);
 
-        // Company child facet
         dto.Company.Should().NotBeNull();
         dto.Company.Id.Should().Be(20);
         dto.Company.Name.Should().Be("Innovate Inc");
         dto.Company.HeadquartersAddress.Should().NotBeNull();
         dto.Company.HeadquartersAddress.City.Should().Be("Seattle");
 
-        // Manager (Employee) child facet
         dto.Manager.Should().NotBeNull();
         dto.Manager.Id.Should().Be(2);
         dto.Manager.FirstName.Should().Be("Jane");
         dto.Manager.LastName.Should().Be("Smith");
         dto.Manager.Email.Should().Be("jane.smith@innovate.com");
 
-        // Manager's Company child facet
         dto.Manager.Company.Should().NotBeNull();
         dto.Manager.Company.Name.Should().Be("Innovate Inc");
         dto.Manager.Company.HeadquartersAddress.City.Should().Be("Seattle");
 
-        // Manager's HomeAddress child facet
         dto.Manager.HomeAddress.Should().NotBeNull();
         dto.Manager.HomeAddress.Street.Should().Be("555 Manager Lane");
         dto.Manager.HomeAddress.City.Should().Be("Bellevue");
@@ -206,7 +188,6 @@ public class ComplexTypeFacetsTests
     [Fact]
     public void ToSource_ShouldMapBackToSourceType_WithSimpleNestedType()
     {
-        // Arrange
         var originalCompany = new CompanyEntity
         {
             Id = 1,
@@ -224,10 +205,8 @@ public class ComplexTypeFacetsTests
 
         var dto = new CompanyFacet(originalCompany);
 
-        // Act
         var mapped = dto.ToSource();
 
-        // Assert
         mapped.Should().NotBeNull();
         mapped.Id.Should().Be(1);
         mapped.Name.Should().Be("Test Corp");
@@ -244,7 +223,6 @@ public class ComplexTypeFacetsTests
     [Fact]
     public void ToSource_ShouldMapBackToSourceType_WithMultipleNestedTypes()
     {
-        // Arrange
         var originalEmployee = new StaffMember
         {
             Id = 3,
@@ -280,10 +258,8 @@ public class ComplexTypeFacetsTests
 
         var dto = new StaffMemberFacet(originalEmployee);
 
-        // Act
         var mapped = dto.ToSource();
 
-        // Assert
         mapped.Should().NotBeNull();
         mapped.Id.Should().Be(3);
         mapped.FirstName.Should().Be("Alice");
@@ -291,11 +267,9 @@ public class ComplexTypeFacetsTests
         mapped.Email.Should().Be("alice@example.com");
         mapped.HireDate.Should().Be(new DateTime(2019, 6, 1));
 
-        // Excluded properties should have default values
         mapped.PasswordHash.Should().BeEmpty();
         mapped.Salary.Should().Be(0m);
 
-        // Company should be mapped back
         mapped.Company.Should().NotBeNull();
         mapped.Company.Id.Should().Be(30);
         mapped.Company.Name.Should().Be("Example Co");
@@ -304,7 +278,6 @@ public class ComplexTypeFacetsTests
         mapped.Company.HeadquartersAddress.Street.Should().Be("200 Example Rd");
         mapped.Company.HeadquartersAddress.City.Should().Be("Example City");
 
-        // HomeAddress should be mapped back
         mapped.HomeAddress.Should().NotBeNull();
         mapped.HomeAddress.Street.Should().Be("300 Home St");
         mapped.HomeAddress.City.Should().Be("Home Town");
@@ -313,7 +286,6 @@ public class ComplexTypeFacetsTests
     [Fact]
     public void Projection_ShouldWork_WithChildFacets()
     {
-        // Arrange
         var companies = new[]
         {
             new CompanyEntity
@@ -332,10 +304,8 @@ public class ComplexTypeFacetsTests
             }
         }.AsQueryable();
 
-        // Act
         var dtos = companies.Select(CompanyFacet.Projection).ToList();
 
-        // Assert
         dtos.Should().HaveCount(2);
 
         dtos[0].Id.Should().Be(1);
@@ -354,13 +324,11 @@ public class ComplexTypeFacetsTests
     [Fact]
     public void ChildFacet_TypeProperty_ShouldBeCorrectType()
     {
-        // Arrange & Act
         var dto = new CompanyFacet(new CompanyEntity
         {
             HeadquartersAddress = new AddressEntity { City = "Test" }
         });
 
-        // Assert
         dto.HeadquartersAddress.Should().BeOfType<AddressFacet>();
         dto.HeadquartersAddress.Should().NotBeAssignableTo<AddressEntity>();
     }
@@ -368,7 +336,6 @@ public class ComplexTypeFacetsTests
     [Fact]
     public void ToFacet_ShouldMapNestedFacets_WhenUsingExtensionMethod()
     {
-        // Arrange
         var staffMember = new StaffMember
         {
             Id = 1,
@@ -402,30 +369,25 @@ public class ComplexTypeFacetsTests
             }
         };
 
-        // Act
         var dto = staffMember.ToFacet<StaffMemberFacet>();
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(1);
         dto.FirstName.Should().Be("John");
         dto.LastName.Should().Be("Doe");
         dto.Email.Should().Be("john.doe@example.com");
 
-        // Verify nested Company facet
         dto.Company.Should().NotBeNull();
         dto.Company.Should().BeOfType<CompanyFacet>();
         dto.Company.Id.Should().Be(10);
         dto.Company.Name.Should().Be("Tech Solutions");
         dto.Company.Industry.Should().Be("Software");
 
-        // Verify nested Address within Company
         dto.Company.HeadquartersAddress.Should().NotBeNull();
         dto.Company.HeadquartersAddress.Should().BeOfType<AddressFacet>();
         dto.Company.HeadquartersAddress.Street.Should().Be("456 Tech Blvd");
         dto.Company.HeadquartersAddress.City.Should().Be("Austin");
 
-        // Verify HomeAddress facet
         dto.HomeAddress.Should().NotBeNull();
         dto.HomeAddress.Should().BeOfType<AddressFacet>();
         dto.HomeAddress.Street.Should().Be("789 Residential Ave");
@@ -435,7 +397,6 @@ public class ComplexTypeFacetsTests
     [Fact]
     public void SelectFacets_ShouldMapNestedFacets_WhenProjectingCollection()
     {
-        // Arrange
         var staffMembers = new[]
         {
             new StaffMember
@@ -470,13 +431,10 @@ public class ComplexTypeFacetsTests
             }
         }.AsQueryable();
 
-        // Act
         var dtos = staffMembers.SelectFacets<StaffMemberFacet>().ToList();
 
-        // Assert
         dtos.Should().HaveCount(2);
 
-        // First staff member
         dtos[0].FirstName.Should().Be("Alice");
         dtos[0].Company.Should().BeOfType<CompanyFacet>();
         dtos[0].Company.Name.Should().Be("Company A");
@@ -485,7 +443,6 @@ public class ComplexTypeFacetsTests
         dtos[0].HomeAddress.Should().BeOfType<AddressFacet>();
         dtos[0].HomeAddress.City.Should().Be("Brooklyn");
 
-        // Second staff member
         dtos[1].FirstName.Should().Be("Bob");
         dtos[1].Company.Should().BeOfType<CompanyFacet>();
         dtos[1].Company.Name.Should().Be("Company B");
@@ -498,7 +455,6 @@ public class ComplexTypeFacetsTests
     [Fact]
     public void ToFacet_WithTypedParameters_ShouldMapNestedFacets()
     {
-        // Arrange
         var company = new CompanyEntity
         {
             Id = 1,
@@ -514,16 +470,13 @@ public class ComplexTypeFacetsTests
             }
         };
 
-        // Act - Using typed ToFacet for better performance
         var dto = company.ToFacet<CompanyEntity, CompanyFacet>();
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(1);
         dto.Name.Should().Be("Acme Corp");
         dto.Industry.Should().Be("Technology");
 
-        // Child facet should be automatically mapped
         dto.HeadquartersAddress.Should().NotBeNull();
         dto.HeadquartersAddress.Should().BeOfType<AddressFacet>();
         dto.HeadquartersAddress.Street.Should().Be("123 Main St");
@@ -536,7 +489,6 @@ public class ComplexTypeFacetsTests
     [Fact]
     public void SelectFacets_WithTypedParameters_ShouldMapNestedFacets()
     {
-        // Arrange
         var companies = new[]
         {
             new CompanyEntity
@@ -555,10 +507,8 @@ public class ComplexTypeFacetsTests
             }
         }.AsQueryable();
 
-        // Act - Using typed SelectFacets for better performance
         var dtos = companies.SelectFacets<CompanyEntity, CompanyFacet>().ToList();
 
-        // Assert
         dtos.Should().HaveCount(2);
 
         dtos[0].Id.Should().Be(1);

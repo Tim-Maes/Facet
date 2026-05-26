@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Reflection;
@@ -10,7 +10,6 @@ public class CopyAttributesTests
     [Fact]
     public void Facet_ShouldCopyAttributes_WhenCopyAttributesIsTrue()
     {
-        // Arrange
         var userWithAnnotations = new UserWithDataAnnotations
         {
             Id = 1,
@@ -21,7 +20,6 @@ public class CopyAttributesTests
             PhoneNumber = "555-1234"
         };
 
-        // Act
         var dto = new UserWithDataAnnotationsDto
         {
             FirstName = userWithAnnotations.FirstName,
@@ -30,7 +28,6 @@ public class CopyAttributesTests
             Age = userWithAnnotations.Age
         };
 
-        // Assert
         var firstNameProperty = typeof(UserWithDataAnnotationsDto).GetProperty("FirstName");
         var lastNameProperty = typeof(UserWithDataAnnotationsDto).GetProperty("LastName");
         var emailProperty = typeof(UserWithDataAnnotationsDto).GetProperty("Email");
@@ -54,10 +51,8 @@ public class CopyAttributesTests
     [Fact]
     public void Facet_ShouldNotCopyAttributes_WhenCopyAttributesIsFalse()
     {
-        // Arrange & Act
         var dtoType = typeof(UserWithDataAnnotationsNoCopyDto);
 
-        // Assert
         var firstNameProperty = dtoType.GetProperty("FirstName");
         var emailProperty = dtoType.GetProperty("Email");
 
@@ -71,10 +66,8 @@ public class CopyAttributesTests
     [Fact]
     public void Facet_ShouldPreserveAttributeParameters_WhenCopyingAttributes()
     {
-        // Arrange & Act
         var firstNameProperty = typeof(UserWithDataAnnotationsDto).GetProperty("FirstName");
 
-        // Assert
         var stringLengthAttr = firstNameProperty!.GetCustomAttribute<StringLengthAttribute>();
         stringLengthAttr.Should().NotBeNull();
         stringLengthAttr!.MaximumLength.Should().Be(50);
@@ -83,10 +76,8 @@ public class CopyAttributesTests
     [Fact]
     public void Facet_ShouldCopyRangeAttribute_WithCorrectBounds()
     {
-        // Arrange
         var ageProperty = typeof(UserWithDataAnnotationsDto).GetProperty("Age");
 
-        // Assert
         var rangeAttr = ageProperty!.GetCustomAttribute<RangeAttribute>();
         rangeAttr.Should().NotBeNull();
         rangeAttr!.Minimum.Should().Be(0);
@@ -96,10 +87,8 @@ public class CopyAttributesTests
     [Fact]
     public void Facet_ShouldNotCopyCompilerGeneratedAttributes()
     {
-        // Arrange
         var dtoType = typeof(UserWithDataAnnotationsDto);
 
-        // Assert
         foreach (var property in dtoType.GetProperties())
         {
             var attributes = property.GetCustomAttributes(true);
@@ -115,10 +104,8 @@ public class CopyAttributesTests
     [Fact]
     public void Facet_ShouldCopyMultipleAttributes_OnSameProperty()
     {
-        // Arrange & Act
         var firstNameProperty = typeof(UserWithDataAnnotationsDto).GetProperty("FirstName");
 
-        // Assert
         var attributes = firstNameProperty!.GetCustomAttributes<ValidationAttribute>().ToList();
         attributes.Should().HaveCountGreaterThanOrEqualTo(2,
             "FirstName should have multiple validation attributes");
@@ -174,34 +161,26 @@ public class CopyAttributesTests
     [Fact]
     public void Facet_ShouldCopyAttributesFromDifferentNamespaces()
     {
-        // This test verifies the fix for GitHub issue: Source generation adds attributes
-        // like "DefaultValue" and "Column" but not their using statements.
-        // Arrange & Act
         var dtoType = typeof(DatabaseTableModelDto);
 
-        // Assert - Verify attributes from different namespaces are copied correctly
         var databaseTableIdProperty = dtoType.GetProperty("DatabaseTableID");
         var firstNameProperty = dtoType.GetProperty("FirstName");
         var systemChangeDateProperty = dtoType.GetProperty("SystemChangeDate");
         var systemChangeTypeProperty = dtoType.GetProperty("SystemChangeType");
 
-        // Check [Key] attribute (System.ComponentModel.DataAnnotations)
         databaseTableIdProperty.Should().NotBeNull();
         databaseTableIdProperty!.GetCustomAttribute<KeyAttribute>().Should().NotBeNull();
 
-        // Check [Column] attribute (System.ComponentModel.DataAnnotations.Schema)
         systemChangeDateProperty.Should().NotBeNull();
         var columnAttr = systemChangeDateProperty!.GetCustomAttribute<ColumnAttribute>();
         columnAttr.Should().NotBeNull();
         columnAttr!.Order.Should().Be(500);
 
-        // Check [DefaultValue] attribute (System.ComponentModel)
         systemChangeTypeProperty.Should().NotBeNull();
         var defaultValueAttr = systemChangeTypeProperty!.GetCustomAttribute<DefaultValueAttribute>();
         defaultValueAttr.Should().NotBeNull();
         defaultValueAttr!.Value.Should().Be("I");
 
-        // Verify all Column attributes with Order
         var systemChangeLoginProperty = dtoType.GetProperty("SystemChangeLogin");
         systemChangeLoginProperty.Should().NotBeNull();
         var loginColumnAttr = systemChangeLoginProperty!.GetCustomAttribute<ColumnAttribute>();
@@ -212,11 +191,9 @@ public class CopyAttributesTests
     [Fact]
     public void Facet_ShouldCopyConcurrencyCheckAttribute()
     {
-        // Arrange & Act
         var dtoType = typeof(DatabaseTableModelDto);
         var systemChangeDateProperty = dtoType.GetProperty("SystemChangeDate");
 
-        // Assert - Check [ConcurrencyCheck] attribute (System.ComponentModel.DataAnnotations)
         systemChangeDateProperty.Should().NotBeNull();
         systemChangeDateProperty!.GetCustomAttribute<ConcurrencyCheckAttribute>().Should().NotBeNull();
     }
@@ -224,10 +201,8 @@ public class CopyAttributesTests
     [Fact]
     public void Facet_ShouldCopyCustomAttributeWithEnumConstructorArgument()
     {
-        // Arrange & Act
         var dtoType = typeof(DatabaseTableWithEnumAttributeDto);
 
-        // Assert - Verify the attribute with enum was copied correctly
         var amountProperty = dtoType.GetProperty("Amount");
         amountProperty.Should().NotBeNull();
 
@@ -240,7 +215,6 @@ public class CopyAttributesTests
     [Fact]
     public void Facet_ShouldCopyAttributeWithMultipleEnumValues()
     {
-        // Additional test for enum attributes with different values
         var dtoType = typeof(DatabaseTableWithEnumAttributeDto);
 
         var createdAtProperty = dtoType.GetProperty("CreatedAt");
@@ -255,8 +229,6 @@ public class CopyAttributesTests
     [Fact]
     public void Facet_ShouldCopyAttributes_FromPartialProperty()
     {
-        // Verify that attributes from a partial property defining declaration are copied
-        // to the generated DTO property
         var nameProperty = typeof(SourceWithPartialPropertyDto).GetProperty("Name");
         nameProperty.Should().NotBeNull();
         nameProperty!.GetCustomAttribute<RequiredAttribute>().Should().NotBeNull(
@@ -266,8 +238,6 @@ public class CopyAttributesTests
     [Fact]
     public void Facet_ShouldNotGenerateDuplicateProperty_WhenSourceHasPartialProperty()
     {
-        // Verify that Facet does not create duplicate properties when the source type
-        // has both a defining and implementing partial property declaration.
         var nameProperties = typeof(SourceWithPartialPropertyDto).GetProperties()
             .Where(p => p.Name == "Name")
             .ToList();
@@ -277,17 +247,15 @@ public class CopyAttributesTests
     [Fact]
     public void Facet_ShouldGenerateRegularProperty_ForNonPartialProperty_InPartialSourceType()
     {
-        // Non-partial properties in the same source class should remain regular (non-partial).
         var ageProperty = typeof(SourceWithPartialPropertyDto).GetProperty("Age");
         ageProperty.Should().NotBeNull();
-        // Age has no [Required] on the source, so it should not appear on the DTO either
+        
         ageProperty!.GetCustomAttribute<RequiredAttribute>().Should().BeNull();
     }
 
     [Fact]
     public void Facet_ShouldMapPartialPropertyValue_ThroughConstructor()
     {
-        // Verify the generated constructor correctly maps values from the source's partial property.
         var source = new SourceWithPartialProperty { Name = "Alice", Age = 30 };
         var dto = new SourceWithPartialPropertyDto(source);
         dto.Name.Should().Be("Alice");
@@ -295,7 +263,6 @@ public class CopyAttributesTests
     }
 }
 
-// Source model with data annotations
 public class UserWithDataAnnotations
 {
     public int Id { get; set; }
@@ -317,17 +284,14 @@ public class UserWithDataAnnotations
     [Phone]
     public string? PhoneNumber { get; set; }
 
-    // This should be excluded and not appear in DTO
     public string Password { get; set; } = string.Empty;
 }
 
-// DTO with CopyAttributes = true
 [Facet(typeof(UserWithDataAnnotations), "Password", "PhoneNumber", CopyAttributes = true)]
 public partial class UserWithDataAnnotationsDto
 {
 }
 
-// DTO with CopyAttributes = false (default)
 [Facet(typeof(UserWithDataAnnotations), "Password", "PhoneNumber", "Age")]
 public partial class UserWithDataAnnotationsNoCopyDto
 {
@@ -404,7 +368,6 @@ public partial class ComplexProductDto
 {
 }
 
-// Source model with attributes from different namespaces (matching the reported issue)
 public class DatabaseTableModel
 {
     [Key]
@@ -426,13 +389,11 @@ public class DatabaseTableModel
     public string SystemChangeLogin { get; set; } = string.Empty;
 }
 
-// DTO with CopyAttributes = true - should compile with proper using statements
 [Facet(typeof(DatabaseTableModel), CopyAttributes = true)]
 public partial class DatabaseTableModelDto
 {
 }
 
-// Custom attribute with enum parameter
 public enum SortDirection
 {
     Ascending,
@@ -451,7 +412,6 @@ public class DefaultSortAttribute : Attribute
     }
 }
 
-// Source model with custom attribute that has enum constructor argument
 public class DatabaseTableWithEnumAttribute
 {
     [Key]
@@ -468,7 +428,6 @@ public class DatabaseTableWithEnumAttribute
     public string LastName { get; set; } = string.Empty;
 }
 
-// DTO with CopyAttributes = true - should compile with custom enum attribute
 [Facet(typeof(DatabaseTableWithEnumAttribute), CopyAttributes = true)]
 public partial class DatabaseTableWithEnumAttributeDto
 {
@@ -573,7 +532,6 @@ public class DatabaseTableWithGenericAttribute
     public SortDirection SortDirection { get; set; }
 }
 
-// DTO with CopyAttributes = true - should compile with custom generic attribute
 [Facet(typeof(DatabaseTableWithGenericAttribute), CopyAttributes = true)]
 public partial class DatabaseTableWithGenericAttributeDto
 {
@@ -581,14 +539,12 @@ public partial class DatabaseTableWithGenericAttributeDto
 
 public partial class SourceWithPartialProperty
 {
-    // Defining declaration: partial modifier + no accessor body
     [Required]
     public partial string Name { get; set; }
 
     public int Age { get; set; }
 }
 
-// Implementing declaration for the source type's partial property
 public partial class SourceWithPartialProperty
 {
     private string _sourceName = string.Empty;
@@ -599,13 +555,6 @@ public partial class SourceWithPartialProperty
     }
 }
 
-// Facet DTO — Facet now generates regular (non-partial) properties from partial source properties.
-// The partial modifier is NOT propagated because source generators don't chain,
-// so another generator (e.g., CommunityToolkit.Mvvm) can't provide an implementing declaration. (GitHub issue #277)
-// Generated:
-//   [Required] public string Name { get; set; } = default!;
-//   public int Age { get; set; }
-//   + constructor, projection, etc.
 [Facet(typeof(SourceWithPartialProperty), CopyAttributes = true)]
 public partial class SourceWithPartialPropertyDto
 {

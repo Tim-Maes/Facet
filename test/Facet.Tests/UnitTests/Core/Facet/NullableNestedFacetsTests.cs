@@ -1,8 +1,7 @@
-using Facet.Tests.TestModels;
+﻿using Facet.Tests.TestModels;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
 
-// Test entities with nullable nested properties
 public class PersonEntity
 {
     public int Id { get; set; }
@@ -31,7 +30,6 @@ public class OrganizationEntity
     public List<PersonEntity>? OptionalMembers { get; set; }
 }
 
-// Facet DTOs with nullable nested facets
 [Facet(typeof(DataTableExtendedDataEntity), GenerateToSource = true)]
 public partial record DataTableExtendedDataDto;
 
@@ -58,7 +56,6 @@ public class NullableNestedFacetsTests
     [Fact]
     public void Constructor_ShouldHandleNullNestedFacet_WithoutThrowingException()
     {
-        // Arrange
         var dataTable = new DataTableEntity
         {
             Id = 1,
@@ -67,10 +64,8 @@ public class NullableNestedFacetsTests
             ExtendedData = null
         };
 
-        // Act
         var dto = new DataTableFacetDto(dataTable);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(1);
         dto.Code.Should().Be("TEST001");
@@ -81,7 +76,6 @@ public class NullableNestedFacetsTests
     [Fact]
     public void Constructor_ShouldMapNonNullNestedFacet_Correctly()
     {
-        // Arrange
         var dataTable = new DataTableEntity
         {
             Id = 2,
@@ -94,10 +88,8 @@ public class NullableNestedFacetsTests
             }
         };
 
-        // Act
         var dto = new DataTableFacetDto(dataTable);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(2);
         dto.Code.Should().Be("TEST002");
@@ -110,7 +102,6 @@ public class NullableNestedFacetsTests
     [Fact]
     public void Constructor_ShouldHandleNullNestedFacet_InMultipleProperties()
     {
-        // Arrange
         var person = new PersonEntity
         {
             Id = 1,
@@ -118,10 +109,8 @@ public class NullableNestedFacetsTests
             MailingAddress = null
         };
 
-        // Act
         var dto = new PersonDto(person);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(1);
         dto.Name.Should().Be("John Doe");
@@ -131,7 +120,6 @@ public class NullableNestedFacetsTests
     [Fact]
     public void Constructor_ShouldMapNonNullNestedFacet_WhenProvided()
     {
-        // Arrange
         var person = new PersonEntity
         {
             Id = 2,
@@ -146,10 +134,8 @@ public class NullableNestedFacetsTests
             }
         };
 
-        // Act
         var dto = new PersonDto(person);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(2);
         dto.Name.Should().Be("Jane Smith");
@@ -161,7 +147,6 @@ public class NullableNestedFacetsTests
     [Fact]
     public void ToSource_ShouldHandleNullNestedFacet_Correctly()
     {
-        // Arrange
         var dto = new DataTableFacetDto
         {
             Id = 3,
@@ -170,10 +155,8 @@ public class NullableNestedFacetsTests
             ExtendedData = null
         };
 
-        // Act
         var entity = dto.ToSource();
 
-        // Assert
         entity.Should().NotBeNull();
         entity.Id.Should().Be(3);
         entity.Code.Should().Be("TEST003");
@@ -184,7 +167,6 @@ public class NullableNestedFacetsTests
     [Fact]
     public void ToSource_ShouldMapNonNullNestedFacet_Correctly()
     {
-        // Arrange
         var dto = new DataTableFacetDto
         {
             Id = 4,
@@ -197,10 +179,8 @@ public class NullableNestedFacetsTests
             }
         };
 
-        // Act
         var entity = dto.ToSource();
 
-        // Assert
         entity.Should().NotBeNull();
         entity.Id.Should().Be(4);
         entity.Code.Should().Be("TEST004");
@@ -213,7 +193,6 @@ public class NullableNestedFacetsTests
     [Fact]
     public void Constructor_ShouldHandleNullCollectionNestedFacet_WithoutThrowingException()
     {
-        // Arrange
         var org = new OrganizationEntity
         {
             Id = 1,
@@ -221,10 +200,8 @@ public class NullableNestedFacetsTests
             OptionalMembers = null
         };
 
-        // Act
         var dto = new OrganizationDto(org);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(1);
         dto.Name.Should().Be("Test Org");
@@ -234,7 +211,6 @@ public class NullableNestedFacetsTests
     [Fact]
     public void Constructor_ShouldMapNonNullCollectionNestedFacet_Correctly()
     {
-        // Arrange
         var org = new OrganizationEntity
         {
             Id = 2,
@@ -254,10 +230,8 @@ public class NullableNestedFacetsTests
             }
         };
 
-        // Act
         var dto = new OrganizationDto(org);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(2);
         dto.Name.Should().Be("Another Org");
@@ -275,7 +249,6 @@ public class NullableNestedFacetsTests
     [Fact]
     public void ToSource_ShouldHandleNullCollectionNestedFacet_Correctly()
     {
-        // Arrange
         var dto = new OrganizationDto
         {
             Id = 3,
@@ -283,10 +256,8 @@ public class NullableNestedFacetsTests
             OptionalMembers = null
         };
 
-        // Act
         var entity = dto.ToSource();
 
-        // Assert
         entity.Should().NotBeNull();
         entity.Id.Should().Be(3);
         entity.Name.Should().Be("Org 3");
@@ -296,7 +267,6 @@ public class NullableNestedFacetsTests
     [Fact]
     public void Projection_ShouldHandleNullNestedFacet_InLinqQuery()
     {
-        // Arrange
         var dataTables = new[]
         {
             new DataTableEntity
@@ -315,10 +285,8 @@ public class NullableNestedFacetsTests
             }
         }.AsQueryable();
 
-        // Act
         var dtos = dataTables.Select(DataTableFacetDto.Projection).ToList();
 
-        // Assert
         dtos.Should().HaveCount(2);
         dtos[0].Id.Should().Be(1);
         dtos[0].ExtendedData.Should().BeNull();

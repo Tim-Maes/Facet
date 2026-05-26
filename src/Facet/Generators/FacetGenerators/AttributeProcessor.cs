@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+ï»¿using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using System;
 using System.Collections.Generic;
@@ -37,30 +37,21 @@ internal static class AttributeProcessor
 
             var attributeFullName = attr.AttributeClass.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-            // Skip internal compiler-generated attributes
             if (attributeFullName.StartsWith("global::System.Runtime.CompilerServices.")) continue;
 
-            // Skip the base ValidationAttribute class itself (but allow derived classes)
             if (attributeFullName == "global::System.ComponentModel.DataAnnotations.ValidationAttribute") continue;
 
-            // Skip attributes that are consumed by other source generators to trigger code generation.
-            // Copying these to a generated DTO would cause analyzer errors from those generators.
-            // For example, [ObservableProperty] from CommunityToolkit.Mvvm triggers the MVVM
-            // analyzer on the DTO, which is not an ObservableObject.
             if (IsSourceGeneratorTriggerAttribute(attributeFullName)) continue;
 
-            // Check if attribute can be applied to the target member type
             var attributeTargets = GetAttributeTargets(attr.AttributeClass);
             if (targetKind == FacetMemberKind.Property && !attributeTargets.HasFlag(AttributeTargets.Property)) continue;
             if (targetKind == FacetMemberKind.Field && !attributeTargets.HasFlag(AttributeTargets.Field)) continue;
 
-            // Generate attribute syntax
             var attributeSyntax = GenerateAttributeSyntax(attr);
             if (!string.IsNullOrWhiteSpace(attributeSyntax))
             {
                 copiableAttributes.Add(attributeSyntax);
 
-                // Extract namespace from the attribute's full name
                 var ns = ExtractNamespaceFromAttributeFullName(attributeFullName);
                 if (!string.IsNullOrWhiteSpace(ns))
                 {
@@ -78,17 +69,14 @@ internal static class AttributeProcessor
     /// </summary>
     private static string? ExtractNamespaceFromAttributeFullName(string attributeFullName)
     {
-        // Remove global:: prefix
         var name = GeneratorUtilities.StripGlobalPrefix(attributeFullName);
 
-        // Remove generic type parameters before extracting namespace
         var genericIndex = name.IndexOf('<');
         if (genericIndex > 0)
         {
             name = name.Substring(0, genericIndex);
         }
 
-        // Find the last dot to separate namespace from type name
         var lastDotIndex = name.LastIndexOf('.');
         if (lastDotIndex > 0)
         {
@@ -115,7 +103,6 @@ internal static class AttributeProcessor
             }
         }
 
-        // Default to All if no AttributeUsage is specified
         return AttributeTargets.All;
     }
 
@@ -126,7 +113,6 @@ internal static class AttributeProcessor
     {
         var sb = new StringBuilder();
 
-        // Get the attribute name without the "Attribute" suffix if present
         var attributeName = attribute.AttributeClass!.Name;
         if (attributeName.EndsWith("Attribute") && attributeName.Length > 9)
         {
@@ -135,7 +121,6 @@ internal static class AttributeProcessor
 
         sb.Append($"[{attributeName}");
 
-        // Handle generic attributes (e.g., Attribute<T>)
         if (attribute.AttributeClass.IsGenericType)
         {
             sb.Append("<");
@@ -158,13 +143,11 @@ internal static class AttributeProcessor
             sb.Append("(");
             var arguments = new List<string>();
 
-            // Constructor arguments
             foreach (var arg in attribute.ConstructorArguments)
             {
                 arguments.Add(FormatTypedConstant(arg));
             }
 
-            // Named arguments
             foreach (var namedArg in attribute.NamedArguments)
             {
                 arguments.Add($"{namedArg.Key} = {FormatTypedConstant(namedArg.Value)}");
@@ -236,18 +219,15 @@ internal static class AttributeProcessor
         var enumTypeName = enumType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var underlyingValue = constant.Value;
 
-        // For flags enums, we need to handle combined values
         if (enumType.GetAttributes().Any(a => a.AttributeClass?.Name == "FlagsAttribute"))
         {
             return FormatFlagsEnumConstant(enumType, enumTypeName, underlyingValue);
         }
 
-        // For non-flags enums, find the matching member
         foreach (var member in enumType.GetMembers())
         {
             if (member is IFieldSymbol field && field.HasConstantValue)
             {
-                // Compare values (handle different underlying types)
                 if (AreEnumValuesEqual(field.ConstantValue, underlyingValue))
                 {
                     return $"{enumTypeName}.{field.Name}";
@@ -255,7 +235,6 @@ internal static class AttributeProcessor
             }
         }
 
-        // If no match found, cast the value (shouldn't normally happen)
         return $"({enumTypeName}){underlyingValue}";
     }
 
@@ -269,10 +248,8 @@ internal static class AttributeProcessor
 
         var longValue = Convert.ToInt64(underlyingValue);
 
-        // Special case: zero value
         if (longValue == 0)
         {
-            // Look for a member with value 0 (like "None")
             foreach (var member in enumType.GetMembers())
             {
                 if (member is IFieldSymbol field && field.HasConstantValue)
@@ -286,27 +263,24 @@ internal static class AttributeProcessor
             return $"({enumTypeName})0";
         }
 
-        // Collect all enum members and their values
         var membersWithValues = new List<(string Name, long Value)>();
         foreach (var member in enumType.GetMembers())
         {
             if (member is IFieldSymbol field && field.HasConstantValue)
             {
                 var fieldValue = Convert.ToInt64(field.ConstantValue);
-                if (fieldValue != 0) // Skip zero values for flags combination
+                if (fieldValue != 0) 
                 {
                     membersWithValues.Add((field.Name, fieldValue));
                 }
             }
         }
 
-        // Sort by value descending to match largest values first
         membersWithValues.Sort((a, b) => b.Value.CompareTo(a.Value));
 
         var matchedMembers = new List<string>();
         var remainingValue = longValue;
 
-        // First, check for an exact match (including composite values like "All")
         foreach (var (name, value) in membersWithValues)
         {
             if (value == longValue)
@@ -315,7 +289,6 @@ internal static class AttributeProcessor
             }
         }
 
-        // Decompose the value into individual flags
         foreach (var (name, value) in membersWithValues)
         {
             if (value != 0 && (remainingValue & value) == value)
@@ -330,7 +303,6 @@ internal static class AttributeProcessor
             return string.Join(" | ", matchedMembers);
         }
 
-        // If we couldn't decompose it fully, use a cast
         return $"({enumTypeName}){underlyingValue}";
     }
 
@@ -342,7 +314,6 @@ internal static class AttributeProcessor
         if (fieldValue == null || constantValue == null)
             return fieldValue == constantValue;
 
-        // Convert both to long for comparison to handle different underlying types
         try
         {
             var fieldLong = Convert.ToInt64(fieldValue);
@@ -351,7 +322,6 @@ internal static class AttributeProcessor
         }
         catch
         {
-            // If conversion fails, try direct comparison
             return fieldValue.Equals(constantValue);
         }
     }
@@ -364,7 +334,6 @@ internal static class AttributeProcessor
     /// </summary>
     private static readonly string[] SourceGeneratorTriggerNamespacePrefixes = new[]
     {
-        // CommunityToolkit.Mvvm — [ObservableProperty], [RelayCommand], [NotifyPropertyChangedFor], etc.
         "global::CommunityToolkit.Mvvm.",
     };
 

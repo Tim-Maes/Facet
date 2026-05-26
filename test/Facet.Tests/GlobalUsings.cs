@@ -1,4 +1,4 @@
-global using Xunit;
+﻿global using Xunit;
 global using FluentAssertions;
 global using Facet.Extensions;
 global using Facet.Mapping;

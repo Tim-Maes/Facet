@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -14,7 +14,6 @@ namespace Facet.Analyzers;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public class WrapperAttributeAnalyzer : DiagnosticAnalyzer
 {
-    // FAC018: Missing partial keyword
     public static readonly DiagnosticDescriptor MissingPartialKeywordRule = new DiagnosticDescriptor(
         "FAC018",
         "Type with [Wrapper] attribute must be declared as partial",
@@ -24,7 +23,6 @@ public class WrapperAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "Types marked with [Wrapper] must be partial to allow the source generator to add generated members.");
 
-    // FAC019: Invalid Exclude/Include property names
     public static readonly DiagnosticDescriptor InvalidPropertyNameRule = new DiagnosticDescriptor(
         "FAC019",
         "Property name does not exist in source type",
@@ -34,7 +32,6 @@ public class WrapperAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "Property names in Exclude or Include parameters must match properties in the source type.");
 
-    // FAC020: Invalid source type
     public static readonly DiagnosticDescriptor InvalidSourceTypeRule = new DiagnosticDescriptor(
         "FAC020",
         "Source type is not accessible or does not exist",
@@ -44,7 +41,6 @@ public class WrapperAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "The source type specified in the [Wrapper] attribute must be a valid, accessible type.");
 
-    // FAC021: Both Include and Exclude specified
     public static readonly DiagnosticDescriptor IncludeAndExcludeBothSpecifiedRule = new DiagnosticDescriptor(
         "FAC021",
         "Cannot specify both Include and Exclude",
@@ -71,7 +67,6 @@ public class WrapperAttributeAnalyzer : DiagnosticAnalyzer
     {
         var namedType = (INamedTypeSymbol)context.Symbol;
 
-        // Find all [Wrapper] attributes on this type
         var wrapperAttributes = namedType.GetAttributes()
             .Where(attr => attr.AttributeClass?.ToDisplayString() == "Facet.WrapperAttribute")
             .ToList();
@@ -79,7 +74,6 @@ public class WrapperAttributeAnalyzer : DiagnosticAnalyzer
         if (!wrapperAttributes.Any())
             return;
 
-        // Check if type is partial
         if (!IsPartialType(namedType))
         {
             var diagnostic = Diagnostic.Create(
@@ -89,7 +83,6 @@ public class WrapperAttributeAnalyzer : DiagnosticAnalyzer
             context.ReportDiagnostic(diagnostic);
         }
 
-        // Analyze each [Wrapper] attribute
         foreach (var wrapperAttr in wrapperAttributes)
         {
             AnalyzeWrapperAttribute(context, namedType, wrapperAttr);
@@ -98,14 +91,12 @@ public class WrapperAttributeAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeWrapperAttribute(SymbolAnalysisContext context, INamedTypeSymbol targetType, AttributeData wrapperAttr)
     {
-        // Get the source type (first constructor argument)
         if (wrapperAttr.ConstructorArguments.Length == 0)
             return;
 
         var sourceTypeArg = wrapperAttr.ConstructorArguments[0];
         if (sourceTypeArg.Value is not INamedTypeSymbol sourceType)
         {
-            // Invalid source type
             var diagnostic = Diagnostic.Create(
                 InvalidSourceTypeRule,
                 wrapperAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
@@ -114,7 +105,6 @@ public class WrapperAttributeAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        // Check if source type is accessible
         if (sourceType.TypeKind == TypeKind.Error)
         {
             var diagnostic = Diagnostic.Create(
@@ -125,11 +115,9 @@ public class WrapperAttributeAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        // Get all public properties/fields from source type (including inherited)
         var sourceMembers = new HashSet<string>(GetAllPublicMembers(sourceType)
             .Select(m => m.Name));
 
-        // Check Exclude parameter (constructor parameter)
         if (wrapperAttr.ConstructorArguments.Length > 1)
         {
             var excludeArg = wrapperAttr.ConstructorArguments[1];
@@ -148,13 +136,10 @@ public class WrapperAttributeAnalyzer : DiagnosticAnalyzer
             }
         }
 
-        // Check named arguments
         var includeArg = wrapperAttr.NamedArguments.FirstOrDefault(a => a.Key == "Include");
 
-        // Check Include parameter
         if (!includeArg.Equals(default) && !includeArg.Value.IsNull && includeArg.Value.Kind == TypedConstantKind.Array)
         {
-            // Check if both Include and Exclude are specified
             bool hasExclude = wrapperAttr.ConstructorArguments.Length > 1 &&
                              !wrapperAttr.ConstructorArguments[1].IsNull &&
                              wrapperAttr.ConstructorArguments[1].Values.Length > 0;
@@ -199,7 +184,6 @@ public class WrapperAttributeAnalyzer : DiagnosticAnalyzer
 
     private static bool IsPartialType(INamedTypeSymbol type)
     {
-        // A type is partial if any of its declarations has the partial modifier
         foreach (var syntaxRef in type.DeclaringSyntaxReferences)
         {
             var syntax = syntaxRef.GetSyntax();

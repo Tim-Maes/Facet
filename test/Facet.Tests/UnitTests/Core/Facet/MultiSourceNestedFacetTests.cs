@@ -1,6 +1,4 @@
-namespace Facet.Tests.UnitTests.Core.Facet;
-
-// --- Source entities ---
+﻿namespace Facet.Tests.UnitTests.Core.Facet;
 
 public class UnitEntity335
 {
@@ -23,28 +21,16 @@ public class OrderLineEntity335
     public UnitEntity335? AssignedToUnit { get; set; }
 }
 
-// --- Multi-source nested facet: attribute order UnitDto first, UnitEntity second ---
-
 [Facet(typeof(UnitDto335),
     Include = [nameof(UnitDto335.Name), nameof(UnitDto335.ValidationResult)])]
 [Facet(typeof(UnitEntity335),
     Include = [nameof(UnitEntity335.Name), nameof(UnitEntity335.ValidationResult)])]
 public partial class UnitDropDownDto335;
 
-// --- Parent facet using the multi-source facet as a nested property ---
-
 [Facet(typeof(OrderLineEntity335),
     Include = [nameof(OrderLineEntity335.AssignedToUnit), nameof(OrderLineEntity335.Number)],
     NestedFacets = [typeof(UnitDropDownDto335)])]
 public partial class OrderLineDto335;
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Regression test for PR #365
-// When the first source of a multi-source facet is itself a generated facet
-// (its properties are not visible to the source generator), FindNestedFacetModel
-// must still pick the model whose SourceTypeName matches the member's
-// NestedFacetSourceTypeName (i.e. the second source), not blindly use index 0.
-// ──────────────────────────────────────────────────────────────────────────────
 
 public class UnitEntity365
 {

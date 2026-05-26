@@ -1,4 +1,4 @@
-using Facet.Tests.TestModels;
+﻿using Facet.Tests.TestModels;
 using System.Reflection;
 
 namespace Facet.Tests.UnitTests.Core.GenerateDtos;
@@ -72,9 +72,8 @@ public class GenerateDtosInterfaceTests
         var type = TestAssembly.GetType("Facet.Tests.TestModels.IUpdateTestInterfaceEntityRequest");
         type.Should().NotBeNull();
 
-        // Interfaces cannot declare constructors at all; getting any constructor info would be a defect.
         type!.GetConstructors().Should().BeEmpty();
-        // The generator should not emit Projection / FromSource / ToSource on interface output.
+        
         type.GetMember("Projection").Should().BeEmpty();
         type.GetMember("FromSource").Should().BeEmpty();
         type.GetMember("ToSource").Should().BeEmpty();

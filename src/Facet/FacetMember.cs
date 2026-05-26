@@ -38,14 +38,12 @@ internal sealed class FacetMember : IEquatable<FacetMember>
 
     public bool IsPartial { get; }
 
-    // MapFrom attribute properties
     public string? MapFromSource { get; }
     public bool MapFromReversible { get; }
     public bool MapFromIncludeInProjection { get; }
     public string SourcePropertyName { get; }
     public bool IsUserDeclared { get; }
 
-    // MapWhen attribute properties
     public IReadOnlyList<string> MapWhenConditions { get; }
     public string? MapWhenDefault { get; }
     public bool MapWhenIncludeInProjection { get; }

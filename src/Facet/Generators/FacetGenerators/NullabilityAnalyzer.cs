@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 
 namespace Facet.Generators;
@@ -38,26 +38,21 @@ internal static class NullabilityAnalyzer
     /// </summary>
     public static bool ShouldTreatAsNullable(ITypeSymbol type, bool isRequired = false)
     {
-        // Value types with nullable annotation are explicitly nullable
         if (type.IsValueType)
         {
             return type.NullableAnnotation == NullableAnnotation.Annotated;
         }
 
-        // Reference types
-        // If explicitly annotated as nullable
         if (type.NullableAnnotation == NullableAnnotation.Annotated)
         {
             return true;
         }
 
-        // If explicitly annotated as non-nullable AND required, treat as non-nullable
         if (type.NullableAnnotation == NullableAnnotation.NotAnnotated && isRequired)
         {
             return false;
         }
 
-        // For safety, treat other reference types as potentially nullable
         return true;
     }
 

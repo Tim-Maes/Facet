@@ -1,4 +1,4 @@
-using Facet.Tests.TestModels;
+﻿using Facet.Tests.TestModels;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
 
@@ -7,7 +7,6 @@ public class CollectionNestedFacetsTests
     [Fact]
     public void ToFacet_ShouldMapListCollection_WhenUsingNestedFacets()
     {
-        // Arrange
         var order = new OrderEntity
         {
             Id = 1,
@@ -29,33 +28,27 @@ public class CollectionNestedFacetsTests
             }
         };
 
-        // Act
         var dto = new OrderFacet(order);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(1);
         dto.OrderNumber.Should().Be("ORD-2025-001");
         dto.OrderDate.Should().Be(new DateTime(2025, 1, 15));
 
-        // Verify collection mapping
         dto.Items.Should().NotBeNull();
         dto.Items.Should().HaveCount(3);
         dto.Items.Should().AllBeOfType<OrderItemFacet>();
 
-        // Verify first item
         dto.Items[0].Id.Should().Be(1);
         dto.Items[0].ProductName.Should().Be("Laptop");
         dto.Items[0].Price.Should().Be(1200.00m);
         dto.Items[0].Quantity.Should().Be(1);
 
-        // Verify second item
         dto.Items[1].Id.Should().Be(2);
         dto.Items[1].ProductName.Should().Be("Mouse");
         dto.Items[1].Price.Should().Be(25.00m);
         dto.Items[1].Quantity.Should().Be(2);
 
-        // Verify nested address
         dto.ShippingAddress.Should().NotBeNull();
         dto.ShippingAddress.Street.Should().Be("123 Main St");
         dto.ShippingAddress.City.Should().Be("Seattle");
@@ -64,7 +57,6 @@ public class CollectionNestedFacetsTests
     [Fact]
     public void ToFacet_ShouldMapArrayCollection_WhenUsingNestedFacets()
     {
-        // Arrange
         var team = new TeamEntity
         {
             Id = 10,
@@ -98,20 +90,16 @@ public class CollectionNestedFacetsTests
             }
         };
 
-        // Act
         var dto = new TeamFacet(team);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(10);
         dto.Name.Should().Be("Development Team");
 
-        // Verify array mapping
         dto.Members.Should().NotBeNull();
         dto.Members.Should().HaveCount(2);
         dto.Members.Should().AllBeOfType<StaffMemberFacet>();
 
-        // Verify first member (PasswordHash and Salary should be excluded)
         dto.Members[0].Id.Should().Be(1);
         dto.Members[0].FirstName.Should().Be("Alice");
         dto.Members[0].LastName.Should().Be("Johnson");
@@ -122,7 +110,6 @@ public class CollectionNestedFacetsTests
         dtoType.GetProperty("PasswordHash").Should().BeNull("PasswordHash should be excluded");
         dtoType.GetProperty("Salary").Should().BeNull("Salary should be excluded");
 
-        // Verify second member
         dto.Members[1].FirstName.Should().Be("Bob");
         dto.Members[1].LastName.Should().Be("Smith");
     }
@@ -130,7 +117,6 @@ public class CollectionNestedFacetsTests
     [Fact]
     public void ToFacet_ShouldMapICollectionType_WhenUsingNestedFacets()
     {
-        // Arrange
         var project = new ProjectEntity
         {
             Id = 500,
@@ -165,27 +151,22 @@ public class CollectionNestedFacetsTests
             }
         };
 
-        // Act
         var dto = new ProjectFacet(project);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(500);
         dto.Name.Should().Be("Project Phoenix");
 
-        // Verify ICollection mapping
         dto.Teams.Should().NotBeNull();
         dto.Teams.Should().HaveCount(2);
         dto.Teams.Should().AllBeOfType<TeamFacet>();
 
-        // Verify first team
         var firstTeam = dto.Teams.ElementAt(0);
         firstTeam.Id.Should().Be(1);
         firstTeam.Name.Should().Be("Backend Team");
         firstTeam.Members.Should().HaveCount(1);
         firstTeam.Members[0].FirstName.Should().Be("Charlie");
 
-        // Verify second team
         var secondTeam = dto.Teams.ElementAt(1);
         secondTeam.Id.Should().Be(2);
         secondTeam.Name.Should().Be("Frontend Team");
@@ -195,7 +176,6 @@ public class CollectionNestedFacetsTests
     [Fact]
     public void ToFacet_ShouldHandleEmptyCollections_WhenUsingNestedFacets()
     {
-        // Arrange
         var order = new OrderEntity
         {
             Id = 1,
@@ -205,10 +185,8 @@ public class CollectionNestedFacetsTests
             ShippingAddress = new AddressEntity()
         };
 
-        // Act
         var dto = new OrderFacet(order);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Items.Should().NotBeNull();
         dto.Items.Should().BeEmpty();
@@ -217,7 +195,6 @@ public class CollectionNestedFacetsTests
     [Fact]
     public void BackTo_ShouldMapListCollectionBackToSource()
     {
-        // Arrange
         var order = new OrderEntity
         {
             Id = 1,
@@ -240,10 +217,8 @@ public class CollectionNestedFacetsTests
 
         var dto = new OrderFacet(order);
 
-        // Act
         var mappedOrder = dto.ToSource();
 
-        // Assert
         mappedOrder.Should().NotBeNull();
         mappedOrder.Id.Should().Be(1);
         mappedOrder.OrderNumber.Should().Be("ORD-2025-001");
@@ -260,7 +235,6 @@ public class CollectionNestedFacetsTests
     [Fact]
     public void ToSource_ShouldMapArrayCollectionBackToSource()
     {
-        // Arrange
         var team = new TeamEntity
         {
             Id = 10,
@@ -284,10 +258,8 @@ public class CollectionNestedFacetsTests
 
         var dto = new TeamFacet(team);
 
-        // Act
         var mappedTeam = dto.ToSource();
 
-        // Assert
         mappedTeam.Should().NotBeNull();
         mappedTeam.Id.Should().Be(10);
         mappedTeam.Name.Should().Be("Development Team");
@@ -301,7 +273,6 @@ public class CollectionNestedFacetsTests
     [Fact]
     public void ToSource_ShouldMapICollectionBackToSource()
     {
-        // Arrange
         var project = new ProjectEntity
         {
             Id = 500,
@@ -315,10 +286,8 @@ public class CollectionNestedFacetsTests
 
         var dto = new ProjectFacet(project);
 
-        // Act
         var mappedProject = dto.ToSource();
 
-        // Assert
         mappedProject.Should().NotBeNull();
         mappedProject.Id.Should().Be(500);
         mappedProject.Name.Should().Be("Project Phoenix");
@@ -332,7 +301,6 @@ public class CollectionNestedFacetsTests
     [Fact]
     public void Collection_ShouldPreserveTypeFromSource()
     {
-        // Arrange
         var order = new OrderEntity
         {
             Id = 1,
@@ -345,17 +313,14 @@ public class CollectionNestedFacetsTests
             ShippingAddress = new AddressEntity()
         };
 
-        // Act
         var dto = new OrderFacet(order);
 
-        // Assert - Items should be List<OrderItemFacet>
         dto.Items.Should().BeAssignableTo<List<OrderItemFacet>>();
     }
 
     [Fact]
     public void ToFacet_ShouldMapIReadOnlyListCollection_WhenUsingNestedFacets()
     {
-        // Arrange
         var library = new LibraryEntity
         {
             Id = 1,
@@ -383,27 +348,22 @@ public class CollectionNestedFacetsTests
             }
         };
 
-        // Act
         var dto = new LibraryFacet(library);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(1);
         dto.Name.Should().Be("City Library");
 
-        // Verify IReadOnlyList<T> mapping
         dto.Books.Should().NotBeNull();
         dto.Books.Should().HaveCount(3);
         dto.Books.Should().AllBeOfType<LibraryBookFacet>();
         dto.Books.Should().BeAssignableTo<IReadOnlyList<LibraryBookFacet>>();
 
-        // Verify first book
         dto.Books[0].Id.Should().Be(1);
         dto.Books[0].Title.Should().Be("1984");
         dto.Books[0].Author.Should().Be("George Orwell");
         dto.Books[0].ISBN.Should().Be("978-0451524935");
 
-        // Verify IReadOnlyCollection<T> mapping
         dto.Staff.Should().NotBeNull();
         dto.Staff.Should().HaveCount(1);
         dto.Staff.Should().AllBeOfType<StaffMemberFacet>();
@@ -415,7 +375,6 @@ public class CollectionNestedFacetsTests
         staffMember.LastName.Should().Be("Doe");
         staffMember.Email.Should().Be("jane@library.com");
 
-        // Verify excluded properties
         var staffType = staffMember.GetType();
         staffType.GetProperty("PasswordHash").Should().BeNull("PasswordHash should be excluded");
         staffType.GetProperty("Salary").Should().BeNull("Salary should be excluded");
@@ -424,7 +383,6 @@ public class CollectionNestedFacetsTests
     [Fact]
     public void ToSource_ShouldMapIReadOnlyListCollectionBackToSource()
     {
-        // Arrange
         var library = new LibraryEntity
         {
             Id = 1,
@@ -439,15 +397,12 @@ public class CollectionNestedFacetsTests
 
         var dto = new LibraryFacet(library);
 
-        // Act
         var mappedLibrary = dto.ToSource();
 
-        // Assert
         mappedLibrary.Should().NotBeNull();
         mappedLibrary.Id.Should().Be(1);
         mappedLibrary.Name.Should().Be("City Library");
 
-        // Verify IReadOnlyList mapping back
         mappedLibrary.Books.Should().NotBeNull();
         mappedLibrary.Books.Should().HaveCount(2);
         mappedLibrary.Books.Should().AllBeOfType<LibraryBookEntity>();
@@ -457,7 +412,6 @@ public class CollectionNestedFacetsTests
         mappedLibrary.Books[0].Title.Should().Be("1984");
         mappedLibrary.Books[0].Author.Should().Be("George Orwell");
 
-        // Verify IReadOnlyCollection mapping back
         mappedLibrary.Staff.Should().NotBeNull();
         mappedLibrary.Staff.Should().BeEmpty();
         mappedLibrary.Staff.Should().BeAssignableTo<IReadOnlyCollection<StaffMember>>();
@@ -466,8 +420,6 @@ public class CollectionNestedFacetsTests
     [Fact]
     public void IReadOnlyList_ShouldWorkWithNestedFacets_ReproducesIssue218()
     {
-        // This test reproduces the exact scenario from GitHub issue #218
-        // Arrange
         var bob = new Bob
         {
             ReadOnlyRelationships = new List<BobChild>
@@ -482,13 +434,10 @@ public class CollectionNestedFacetsTests
             }
         };
 
-        // Act
         var bobModel = new BobModel(bob);
 
-        // Assert
         bobModel.Should().NotBeNull();
 
-        // Verify IReadOnlyList<BobChild> was correctly mapped to IReadOnlyList<BobChildModel>
         bobModel.ReadOnlyRelationships.Should().NotBeNull();
         bobModel.ReadOnlyRelationships.Should().HaveCount(2);
         bobModel.ReadOnlyRelationships.Should().AllBeOfType<BobChildModel>();
@@ -496,7 +445,6 @@ public class CollectionNestedFacetsTests
         bobModel.ReadOnlyRelationships[0].Name.Should().Be("Alice");
         bobModel.ReadOnlyRelationships[1].Name.Should().Be("Charlie");
 
-        // Verify List<BobChild> was correctly mapped to List<BobChildModel>
         bobModel.Relationships.Should().NotBeNull();
         bobModel.Relationships.Should().HaveCount(2);
         bobModel.Relationships.Should().AllBeOfType<BobChildModel>();
@@ -508,7 +456,6 @@ public class CollectionNestedFacetsTests
     [Fact]
     public void ToFacet_ShouldMapImmutableCollections_WhenUsingNestedFacets()
     {
-        // Arrange
         var museum = new MuseumEntity
         {
             Id = 1,
@@ -536,15 +483,12 @@ public class CollectionNestedFacetsTests
             )
         };
 
-        // Act
         var dto = new MuseumFacet(museum);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(1);
         dto.Name.Should().Be("National Museum");
 
-        // Verify ImmutableList<T> mapping
         dto.Artifacts.Should().NotBeNull();
         dto.Artifacts.Should().HaveCount(2);
         dto.Artifacts.Should().AllBeOfType<MuseumArtifactFacet>();
@@ -558,7 +502,6 @@ public class CollectionNestedFacetsTests
         dto.Artifacts[1].Id.Should().Be(2);
         dto.Artifacts[1].Name.Should().Be("Medieval Sword");
 
-        // Verify ImmutableArray<T> mapping
         dto.Curators.Should().NotBeNull();
         dto.Curators.Should().HaveCount(1);
         dto.Curators.Should().AllBeOfType<StaffMemberFacet>();
@@ -569,12 +512,10 @@ public class CollectionNestedFacetsTests
         curator.LastName.Should().Be("Johnson");
         curator.Email.Should().Be("sarah@museum.com");
 
-        // Verify excluded properties
         var curatorType = curator.GetType();
         curatorType.GetProperty("PasswordHash").Should().BeNull("PasswordHash should be excluded");
         curatorType.GetProperty("Salary").Should().BeNull("Salary should be excluded");
 
-        // Verify IImmutableList<T> mapping
         dto.ArchiveBooks.Should().NotBeNull();
         dto.ArchiveBooks.Should().HaveCount(1);
         dto.ArchiveBooks.Should().AllBeOfType<LibraryBookFacet>();
@@ -589,7 +530,6 @@ public class CollectionNestedFacetsTests
     [Fact]
     public void ToSource_ShouldMapImmutableCollectionsBackToSource()
     {
-        // Arrange
         var museum = new MuseumEntity
         {
             Id = 1,
@@ -618,15 +558,12 @@ public class CollectionNestedFacetsTests
 
         var dto = new MuseumFacet(museum);
 
-        // Act
         var mappedMuseum = dto.ToSource();
 
-        // Assert
         mappedMuseum.Should().NotBeNull();
         mappedMuseum.Id.Should().Be(1);
         mappedMuseum.Name.Should().Be("National Museum");
 
-        // Verify ImmutableList mapping back
         mappedMuseum.Artifacts.Should().NotBeNull();
         mappedMuseum.Artifacts.Should().HaveCount(1);
         mappedMuseum.Artifacts.Should().AllBeOfType<MuseumArtifactEntity>();
@@ -637,7 +574,6 @@ public class CollectionNestedFacetsTests
         mappedMuseum.Artifacts[0].Description.Should().Be("Greek pottery");
         mappedMuseum.Artifacts[0].YearAcquired.Should().Be(1950);
 
-        // Verify ImmutableArray mapping back
         mappedMuseum.Curators.Should().NotBeNull();
         mappedMuseum.Curators.Should().HaveCount(1);
         mappedMuseum.Curators.Should().AllBeOfType<StaffMember>();
@@ -647,7 +583,6 @@ public class CollectionNestedFacetsTests
         curator.FirstName.Should().Be("Dr. Sarah");
         curator.LastName.Should().Be("Johnson");
 
-        // Verify IImmutableList mapping back
         mappedMuseum.ArchiveBooks.Should().NotBeNull();
         mappedMuseum.ArchiveBooks.Should().HaveCount(1);
         mappedMuseum.ArchiveBooks.Should().AllBeOfType<LibraryBookEntity>();
@@ -660,7 +595,6 @@ public class CollectionNestedFacetsTests
     [Fact]
     public void ToFacet_ShouldHandleEmptyImmutableCollections()
     {
-        // Arrange
         var museum = new MuseumEntity
         {
             Id = 1,
@@ -670,10 +604,8 @@ public class CollectionNestedFacetsTests
             ArchiveBooks = System.Collections.Immutable.ImmutableList<LibraryBookEntity>.Empty
         };
 
-        // Act
         var dto = new MuseumFacet(museum);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(1);
         dto.Name.Should().Be("Empty Museum");
@@ -693,7 +625,6 @@ public class CollectionNestedFacetsTests
     [Fact]
     public void ToFacet_ShouldMapCustomCollectionTypes_AutomaticallyViaInterfaceDetection()
     {
-        // Arrange - custom collection type
         var gallery = new GalleryEntity
         {
             Id = 1,
@@ -705,20 +636,16 @@ public class CollectionNestedFacetsTests
             })
         };
 
-        // Act (this should work automatically via interface detection)
         var facet = new GalleryFacet(gallery);
 
-        // Assert
         facet.Should().NotBeNull();
         facet.Id.Should().Be(1);
         facet.Name.Should().Be("Modern Art Gallery");
 
-        // Verify that the custom collection was detected as IReadOnlyList and mapped correctly
         facet.Exhibits.Should().NotBeNull();
         facet.Exhibits.Should().HaveCount(2);
         facet.Exhibits.Should().AllBeOfType<MuseumArtifactFacet>();
 
-        // The custom collection implements IReadOnlyList, so it should be detected as such
         facet.Exhibits.Should().BeAssignableTo<System.Collections.Generic.IReadOnlyList<MuseumArtifactFacet>>();
 
         facet.Exhibits[0].Name.Should().Be("Starry Night");

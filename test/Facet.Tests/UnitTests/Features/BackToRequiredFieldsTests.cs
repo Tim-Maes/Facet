@@ -1,4 +1,4 @@
-using Facet.Tests.TestModels;
+﻿using Facet.Tests.TestModels;
 using Facet.Tests.Utilities;
 
 namespace Facet.Tests.UnitTests.Features;
@@ -8,7 +8,6 @@ public class BackToRequiredFieldsTests
     [Fact]
     public void BackTo_ShouldWork_WithExcludedRequiredFields()
     {
-        // Arrange
         var eventLog = new EventLog
         {
             Id = "test-event",
@@ -21,10 +20,8 @@ public class BackToRequiredFieldsTests
 
         var facet = eventLog.ToFacet<EventLog, EventLogDto>();
 
-        // Act
         var result = facet.BackTo<EventLog>();
 
-        // Assert
         result.Should().NotBeNull();
         result.Id.Should().Be("test-event");
         result.EventType.Should().Be("TestEvent");
@@ -37,7 +34,6 @@ public class BackToRequiredFieldsTests
     [Fact]
     public void BackTo_ShouldProvideDefaultValues_ForExcludedRequiredFields()
     {
-        // Arrange
         var originalEventLog = new EventLog
         {
             Id = "event-123",
@@ -50,10 +46,8 @@ public class BackToRequiredFieldsTests
 
         var eventLogDto = originalEventLog.ToFacet<EventLog, EventLogDto>();
 
-        // Act
         var mappedEventLog = eventLogDto.BackTo<EventLog>();
 
-        // Assert
         mappedEventLog.Should().NotBeNull();
         mappedEventLog.Id.Should().Be("event-123");
         mappedEventLog.EventType.Should().Be("UserLogin");
@@ -61,6 +55,6 @@ public class BackToRequiredFieldsTests
         mappedEventLog.Message.Should().Be("User logged in successfully");
         mappedEventLog.UserId.Should().Be("user-456");
         
-        mappedEventLog.Source.Should().Be(string.Empty); // String default value
+        mappedEventLog.Source.Should().Be(string.Empty); 
     }
 }

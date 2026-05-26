@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -10,7 +10,6 @@ namespace Facet.Analyzers;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
 {
-    // Diagnostic descriptors for different error scenarios
     public static readonly DiagnosticDescriptor TargetNotFacetRule = new DiagnosticDescriptor(
         "FAC001",
         "Type must be annotated with [Facet]",
@@ -46,7 +45,6 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
         var symbolInfo = context.SemanticModel.GetSymbolInfo(memberAccess);
         if (symbolInfo.Symbol is not IMethodSymbol method) return;
 
-        // Check if this is a call to one of the Facet extension methods
         if (method.ContainingType?.ToDisplayString() != "Facet.Extensions.FacetExtensions") return;
 
         switch (method.Name)
@@ -68,16 +66,13 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeToFacetCall(SyntaxNodeAnalysisContext context, IMethodSymbol method, InvocationExpressionSyntax invocation, MemberAccessExpressionSyntax memberAccess, bool isCollection)
     {
-        // Check both ToFacet<TTarget> and ToFacet<TSource, TTarget>
         if (method.TypeArguments.Length == 0) return;
 
         ITypeSymbol targetType;
         if (method.TypeArguments.Length == 1)
         {
-            // ToFacet<TTarget>(this object source)
             targetType = method.TypeArguments[0];
             
-            // We need to check the actual type of the object being called on
             var objectExpression = memberAccess.Expression;
             var objectTypeInfo = context.SemanticModel.GetTypeInfo(objectExpression);
             var sourceElementType = isCollection ? GetCollectionElementType(objectTypeInfo.Type) : objectTypeInfo.Type;
@@ -89,7 +84,6 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
         }
         else if (method.TypeArguments.Length == 2)
         {
-            // ToFacet<TSource, TTarget>(this TSource source)
             targetType = method.TypeArguments[1];
         }
         else
@@ -113,7 +107,6 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
 
         if (method.TypeArguments.Length == 2)
         {
-            // ToSource<TFacet, TFacetSource>(this TFacet facet)
             var facetType = method.TypeArguments[0];
             if (!HasFacetAttribute(facetType))
             {
@@ -126,8 +119,6 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
         }
         else if (method.TypeArguments.Length == 1)
         {
-            // ToSource<TFacetSource>(this object facet)
-            // We need to check the actual type of the object being called on
             var objectExpression = memberAccess.Expression;
             var objectTypeInfo = context.SemanticModel.GetTypeInfo(objectExpression);
             var sourceElementType = isCollection ? GetCollectionElementType(objectTypeInfo.Type) : objectTypeInfo.Type;
@@ -154,22 +145,18 @@ public class FacetExtensionUsageAnalyzer : DiagnosticAnalyzer
     {
         if (collectionType == null) return null;
 
-        // Check if it's an array type
         if (collectionType is IArrayTypeSymbol arrayType)
         {
             return arrayType.ElementType;
         }
 
-        // Check if it's a generic type that implements IEnumerable<T>
         if (collectionType is not INamedTypeSymbol namedType || !namedType.IsGenericType) return collectionType;
         
-        // First check if it's directly IEnumerable<T>
         if (namedType.ConstructedFrom.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>")
         {
             return namedType.TypeArguments[0];
         }
 
-        // Check if it implements IEnumerable<T>
         foreach (var iface in namedType.AllInterfaces)
         {
             if (iface.IsGenericType && 

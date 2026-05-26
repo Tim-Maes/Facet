@@ -1,4 +1,4 @@
-namespace Facet.Mapping;
+﻿namespace Facet.Mapping;
 
 /// <summary>
 /// Allows defining custom logic that runs BEFORE the automatic property mapping.

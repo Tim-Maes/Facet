@@ -1,4 +1,4 @@
-namespace Facet.Tests.UnitTests.Core.Facet;
+﻿namespace Facet.Tests.UnitTests.Core.Facet;
 
 /// <summary>
 /// Tests for GitHub issue #261: Nested facet + nullable ref compilation error
@@ -7,7 +7,6 @@ namespace Facet.Tests.UnitTests.Core.Facet;
 /// </summary>
 public partial class NestedFacetNullableRefTests
 {
-    // Domain classes
     public sealed class DomainObject
     {
         public List<DomainObjectItem> Items { get; set; } = [];
@@ -18,7 +17,6 @@ public partial class NestedFacetNullableRefTests
         public string? Value { get; set; }
     }
 
-    // DTOs with nested facets - with PreserveReferences enabled to trigger the nullable issue
     [Facet(typeof(DomainObject), MaxDepth = 2, PreserveReferences = true, NestedFacets = [typeof(DomainObjectItemDto)])]
     public sealed partial class DomainObjectDto;
 
@@ -28,7 +26,6 @@ public partial class NestedFacetNullableRefTests
     [Fact]
     public void NestedFacetCollection_WithNullableRefEnabled_ShouldCompile()
     {
-        // Arrange
         var domain = new DomainObject
         {
             Items =
@@ -39,10 +36,8 @@ public partial class NestedFacetNullableRefTests
             ]
         };
 
-        // Act
         var dto = new DomainObjectDto(domain);
 
-        // Assert
         Assert.NotNull(dto.Items);
         Assert.Equal(3, dto.Items.Count);
         Assert.Equal("Item 1", dto.Items[0].Value);
@@ -53,7 +48,6 @@ public partial class NestedFacetNullableRefTests
     [Fact]
     public void NestedFacetCollection_WithCircularReference_ShouldHandleCorrectly()
     {
-        // Arrange - This test ensures circular reference detection works correctly
         var domain = new DomainObject
         {
             Items =
@@ -62,10 +56,8 @@ public partial class NestedFacetNullableRefTests
             ]
         };
 
-        // Act
         var dto = new DomainObjectDto(domain);
 
-        // Assert
         Assert.NotNull(dto.Items);
         Assert.Single(dto.Items);
         Assert.Equal("Item 1", dto.Items[0].Value);

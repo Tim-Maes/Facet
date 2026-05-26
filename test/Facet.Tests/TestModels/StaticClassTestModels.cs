@@ -1,4 +1,4 @@
-namespace Application.Example1
+﻿namespace Application.Example1
 {
     public static class Foo
     {

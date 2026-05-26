@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Facet.Tests.TestModels;
 using Facet.Tests.Utilities;
 
@@ -9,13 +9,10 @@ public class ModernRecordTests
     [Fact]
     public void ToFacet_ShouldMapModernRecord_WithRequiredProperties()
     {
-        // Arrange
         var modernUser = TestDataFactory.CreateModernUser("Modern", "User");
 
-        // Act
         var dto = modernUser.ToFacet<ModernUser, ModernUserDto>();
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(modernUser.Id);
         dto.FirstName.Should().Be("Modern");
@@ -27,13 +24,10 @@ public class ModernRecordTests
     [Fact]
     public void ToFacet_ShouldExcludeSpecifiedProperties_FromModernRecord()
     {
-        // Arrange
         var modernUser = TestDataFactory.CreateModernUser();
 
-        // Act
         var dto = modernUser.ToFacet<ModernUser, ModernUserDto>();
 
-        // Assert
         var dtoType = dto.GetType();
         dtoType.GetProperty("PasswordHash").Should().BeNull("PasswordHash should be excluded");
         dtoType.GetProperty("Bio").Should().BeNull("Bio should be excluded");
@@ -42,22 +36,19 @@ public class ModernRecordTests
     [Fact]
     public void ToFacet_ShouldHandleNullableProperties_InModernRecord()
     {
-        // Arrange
         var modernUser = new ModernUser
         {
             Id = Guid.NewGuid().ToString(),
             FirstName = "Test",
             LastName = "User",
-            Email = null, // Nullable property
+            Email = null, 
             CreatedAt = DateTime.UtcNow,
             Bio = "Should be excluded",
             PasswordHash = "Should be excluded"
         };
 
-        // Act
         var dto = modernUser.ToFacet<ModernUser, ModernUserDto>();
 
-        // Assert
         dto.Email.Should().BeNull();
         dto.FirstName.Should().Be("Test");
         dto.LastName.Should().Be("User");
@@ -66,14 +57,11 @@ public class ModernRecordTests
     [Fact]
     public void ToFacet_ModernRecordDto_ShouldSupportRecordFeatures()
     {
-        // Arrange
         var modernUser = TestDataFactory.CreateModernUser("Record", "Features");
 
-        // Act
         var dto = modernUser.ToFacet<ModernUser, ModernUserDto>();
         var dto2 = modernUser.ToFacet<ModernUser, ModernUserDto>();
 
-        // Assert
         dto.Equals(dto2).Should().BeTrue("Records should have value equality");
         dto.GetHashCode().Should().Be(dto2.GetHashCode(), "Equal records should have same hash code");
     }
@@ -81,35 +69,29 @@ public class ModernRecordTests
     [Fact]
     public void ToFacet_ModernRecordDto_ShouldSupportWithExpressions()
     {
-        // Arrange
         var modernUser = TestDataFactory.CreateModernUser("With", "Expression");
         var dto = modernUser.ToFacet<ModernUser, ModernUserDto>();
 
-        // Act
         var modifiedDto = dto with { FirstName = "Modified" };
 
-        // Assert
         modifiedDto.FirstName.Should().Be("Modified");
-        modifiedDto.LastName.Should().Be("Expression"); // Other properties unchanged
-        dto.FirstName.Should().Be("With"); // Original unchanged
+        modifiedDto.LastName.Should().Be("Expression"); 
+        dto.FirstName.Should().Be("With"); 
     }
 
     [Fact]
     public void ToFacet_ModernRecordDto_ShouldHandleInitOnlyProperties()
     {
-        // Arrange
         var modernUser = new ModernUser
         {
             Id = "init-only-test",
             FirstName = "Init",
             LastName = "Only",
-            CreatedAt = DateTime.UtcNow // This is init-only in the source
+            CreatedAt = DateTime.UtcNow 
         };
 
-        // Act
         var dto = modernUser.ToFacet<ModernUser, ModernUserDto>();
 
-        // Assert
         dto.Id.Should().Be("init-only-test");
         dto.CreatedAt.Should().Be(modernUser.CreatedAt);
     }
@@ -117,18 +99,13 @@ public class ModernRecordTests
     [Fact]
     public void ToFacet_ShouldMapCustomPropertiesInRecord()
     {
-        // Arrange
         var modernUser = TestDataFactory.CreateModernUser("Custom", "Props");
 
-        // Act
         var dto = modernUser.ToFacet<ModernUser, ModernUserDto>();
 
-        // Assert
-        // The DTO can have custom properties that don't exist in the source
-        dto.FullName.Should().Be(string.Empty); // Default value for custom property
-        dto.DisplayName.Should().Be(string.Empty); // Default value for custom property
+        dto.FullName.Should().Be(string.Empty); 
+        dto.DisplayName.Should().Be(string.Empty); 
         
-        // But source properties should still be mapped
         dto.FirstName.Should().Be("Custom");
         dto.LastName.Should().Be("Props");
     }
@@ -136,7 +113,6 @@ public class ModernRecordTests
     [Fact]
     public void ToFacet_ShouldHandleGuidIds_InModernRecords()
     {
-        // Arrange
         var guidId = Guid.NewGuid().ToString();
         var modernUser = new ModernUser
         {
@@ -146,10 +122,8 @@ public class ModernRecordTests
             CreatedAt = DateTime.UtcNow
         };
 
-        // Act
         var dto = modernUser.ToFacet<ModernUser, ModernUserDto>();
 
-        // Assert
         dto.Id.Should().Be(guidId);
         Guid.TryParse(dto.Id, out _).Should().BeTrue("ID should be a valid GUID string");
     }
@@ -157,30 +131,23 @@ public class ModernRecordTests
     [Fact]
     public void ToFacet_ModernRecord_ShouldPreservePropertyCasing()
     {
-        // Arrange
         var modernUser = TestDataFactory.CreateModernUser("Case", "Sensitive");
 
-        // Act
         var dto = modernUser.ToFacet<ModernUser, ModernUserDto>();
 
-        // Assert
-        dto.FirstName.Should().Be("Case"); // Exact case preserved
-        dto.LastName.Should().Be("Sensitive"); // Exact case preserved
+        dto.FirstName.Should().Be("Case"); 
+        dto.LastName.Should().Be("Sensitive"); 
         
-        // Property names should match exactly (case-sensitive)
         var dtoType = dto.GetType();
         dtoType.GetProperty("FirstName").Should().NotBeNull();
-        dtoType.GetProperty("firstname").Should().BeNull(); // lowercase should not exist
+        dtoType.GetProperty("firstname").Should().BeNull(); 
     }
 
     [Fact]
     public void RecordFacet_ShouldPreserveRequiredModifier_WithoutWorkaround()
     {
-        // Issue #298: PreserveRequiredProperties should work for record facets
-        // without needing the empty primary constructor () workaround
         var dtoType = typeof(ModernUserRequiredDto);
 
-        // Verify required properties from source are marked required in the generated record
         var idProp = dtoType.GetProperty("Id")!;
         idProp.Should().NotBeNull();
         idProp.GetCustomAttribute<System.Runtime.CompilerServices.RequiredMemberAttribute>()
@@ -200,7 +167,6 @@ public class ModernRecordTests
     [Fact]
     public void RecordFacet_WithRequiredProperties_ShouldMapCorrectly()
     {
-        // Issue #298: Verify the record facet with required properties maps correctly
         var modernUser = new ModernUser
         {
             Id = "test-id",

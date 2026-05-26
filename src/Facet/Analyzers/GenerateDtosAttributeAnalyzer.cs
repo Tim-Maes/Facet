@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -14,7 +14,6 @@ namespace Facet.Analyzers;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public class GenerateDtosAttributeAnalyzer : DiagnosticAnalyzer
 {
-    // FAC011: GenerateDtos on non-class type
     public static readonly DiagnosticDescriptor NonClassTypeRule = new DiagnosticDescriptor(
         "FAC011",
         "[GenerateDtos] can only be applied to classes",
@@ -24,7 +23,6 @@ public class GenerateDtosAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "The [GenerateDtos] attribute is designed for class types and cannot be applied to structs, interfaces, or other type kinds.");
 
-    // FAC012: Invalid ExcludeProperties
     public static readonly DiagnosticDescriptor InvalidExcludePropertyRule = new DiagnosticDescriptor(
         "FAC012",
         "Excluded property does not exist",
@@ -34,7 +32,6 @@ public class GenerateDtosAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "Properties specified in ExcludeProperties should exist in the source type.");
 
-    // FAC013: DtoTypes.None specified
     public static readonly DiagnosticDescriptor NoDtoTypesRule = new DiagnosticDescriptor(
         "FAC013",
         "No DTO types selected for generation",
@@ -60,7 +57,6 @@ public class GenerateDtosAttributeAnalyzer : DiagnosticAnalyzer
     {
         var namedType = (INamedTypeSymbol)context.Symbol;
 
-        // Find [GenerateDtos] or [GenerateAuditableDtos] attributes
         var dtoAttributes = namedType.GetAttributes()
             .Where(attr =>
                 attr.AttributeClass?.ToDisplayString() == "Facet.GenerateDtosAttribute" ||
@@ -70,7 +66,6 @@ public class GenerateDtosAttributeAnalyzer : DiagnosticAnalyzer
         if (!dtoAttributes.Any())
             return;
 
-        // Check if type is a class
         if (namedType.TypeKind != TypeKind.Class)
         {
             foreach (var attr in dtoAttributes)
@@ -84,11 +79,9 @@ public class GenerateDtosAttributeAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        // Get all public properties from the type (including inherited)
         var typeProperties = new HashSet<string>(GetAllPublicProperties(namedType)
             .Select(m => m.Name));
 
-        // Analyze each attribute
         foreach (var attr in dtoAttributes)
         {
             AnalyzeGenerateDtosAttribute(context, namedType, attr, typeProperties);
@@ -101,11 +94,10 @@ public class GenerateDtosAttributeAnalyzer : DiagnosticAnalyzer
         AttributeData attr,
         HashSet<string> typeProperties)
     {
-        // Check DtoTypes parameter
         var typesArg = attr.NamedArguments.FirstOrDefault(a => a.Key == "Types");
         if (!typesArg.Equals(default) && typesArg.Value.Value is int typesValue)
         {
-            if (typesValue == 0) // DtoTypes.None
+            if (typesValue == 0) 
             {
                 var diagnostic = Diagnostic.Create(
                     NoDtoTypesRule,
@@ -114,7 +106,6 @@ public class GenerateDtosAttributeAnalyzer : DiagnosticAnalyzer
             }
         }
 
-        // Check ExcludeProperties parameter
         var excludeArg = attr.NamedArguments.FirstOrDefault(a => a.Key == "ExcludeProperties");
         if (!excludeArg.Equals(default) && !excludeArg.Value.IsNull && excludeArg.Value.Kind == TypedConstantKind.Array)
         {

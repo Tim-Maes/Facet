@@ -1,8 +1,7 @@
-using Facet.Mapping;
+﻿using Facet.Mapping;
 
 namespace Facet.Tests.UnitTests.Core.Facet.MappingHooksIntegration;
 
-// Test entity for generated hooks
 public class GeneratedHooksEntity
 {
     public int Id { get; set; }
@@ -12,7 +11,6 @@ public class GeneratedHooksEntity
     public bool IsActive { get; set; }
 }
 
-// BeforeMap hook configuration
 public class GeneratedBeforeMapConfig : IFacetBeforeMapConfiguration<GeneratedHooksEntity, GeneratedBeforeMapFacet>
 {
     public static void BeforeMap(GeneratedHooksEntity source, GeneratedBeforeMapFacet target)
@@ -21,7 +19,6 @@ public class GeneratedBeforeMapConfig : IFacetBeforeMapConfiguration<GeneratedHo
     }
 }
 
-// AfterMap hook configuration
 public class GeneratedAfterMapConfig : IFacetAfterMapConfiguration<GeneratedHooksEntity, GeneratedAfterMapFacet>
 {
     public static void AfterMap(GeneratedHooksEntity source, GeneratedAfterMapFacet target)
@@ -30,7 +27,6 @@ public class GeneratedAfterMapConfig : IFacetAfterMapConfiguration<GeneratedHook
     }
 }
 
-// Combined hooks configuration
 public class GeneratedCombinedConfig : IFacetMapHooksConfiguration<GeneratedHooksEntity, GeneratedCombinedFacet>
 {
     public static void BeforeMap(GeneratedHooksEntity source, GeneratedCombinedFacet target)
@@ -44,21 +40,18 @@ public class GeneratedCombinedConfig : IFacetMapHooksConfiguration<GeneratedHook
     }
 }
 
-// Generated facet with BeforeMap
 [Facet(typeof(GeneratedHooksEntity), BeforeMapConfiguration = typeof(GeneratedBeforeMapConfig))]
 public partial class GeneratedBeforeMapFacet
 {
     public DateTime MappedAt { get; set; }
 }
 
-// Generated facet with AfterMap
 [Facet(typeof(GeneratedHooksEntity), AfterMapConfiguration = typeof(GeneratedAfterMapConfig))]
 public partial class GeneratedAfterMapFacet
 {
     public string FullName { get; set; } = string.Empty;
 }
 
-// Generated facet with both hooks
 [Facet(typeof(GeneratedHooksEntity),
     BeforeMapConfiguration = typeof(GeneratedCombinedConfig),
     AfterMapConfiguration = typeof(GeneratedCombinedConfig))]
@@ -76,7 +69,6 @@ public class MappingHooksIntegrationTests
     [Fact]
     public void GeneratedFacet_WithBeforeMap_ShouldSetMappedAt()
     {
-        // Arrange
         var entity = new GeneratedHooksEntity
         {
             Id = 1,
@@ -87,11 +79,9 @@ public class MappingHooksIntegrationTests
         };
         var beforeCall = DateTime.UtcNow;
 
-        // Act
         var facet = new GeneratedBeforeMapFacet(entity);
         var afterCall = DateTime.UtcNow;
 
-        // Assert
         facet.Id.Should().Be(1);
         facet.FirstName.Should().Be("John");
         facet.LastName.Should().Be("Doe");
@@ -102,7 +92,6 @@ public class MappingHooksIntegrationTests
     [Fact]
     public void GeneratedFacet_WithAfterMap_ShouldComputeFullName()
     {
-        // Arrange
         var entity = new GeneratedHooksEntity
         {
             Id = 2,
@@ -112,10 +101,8 @@ public class MappingHooksIntegrationTests
             IsActive = true
         };
 
-        // Act
         var facet = new GeneratedAfterMapFacet(entity);
 
-        // Assert
         facet.Id.Should().Be(2);
         facet.FirstName.Should().Be("Jane");
         facet.LastName.Should().Be("Smith");
@@ -125,7 +112,6 @@ public class MappingHooksIntegrationTests
     [Fact]
     public void GeneratedFacet_WithCombinedHooks_ShouldCallBothBeforeAndAfter()
     {
-        // Arrange
         var entity = new GeneratedHooksEntity
         {
             Id = 3,
@@ -136,11 +122,9 @@ public class MappingHooksIntegrationTests
         };
         var beforeCall = DateTime.UtcNow;
 
-        // Act
         var facet = new GeneratedCombinedFacet(entity);
         var afterCall = DateTime.UtcNow;
 
-        // Assert
         facet.Id.Should().Be(3);
         facet.FirstName.Should().Be("Bob");
         facet.LastName.Should().Be("Johnson");
@@ -152,7 +136,6 @@ public class MappingHooksIntegrationTests
     [Fact]
     public void GeneratedFacet_WithBeforeMap_ShouldWorkWithFromSource()
     {
-        // Arrange
         var entity = new GeneratedHooksEntity
         {
             Id = 4,
@@ -163,11 +146,9 @@ public class MappingHooksIntegrationTests
         };
         var beforeCall = DateTime.UtcNow;
 
-        // Act
         var facet = GeneratedBeforeMapFacet.FromSource(entity);
         var afterCall = DateTime.UtcNow;
 
-        // Assert
         facet.FirstName.Should().Be("Alice");
         facet.MappedAt.Should().BeOnOrAfter(beforeCall);
         facet.MappedAt.Should().BeOnOrBefore(afterCall);
@@ -176,17 +157,14 @@ public class MappingHooksIntegrationTests
     [Fact]
     public void GeneratedFacet_WithAfterMap_ShouldWorkWithProjection()
     {
-        // Arrange
         var entities = new[]
         {
             new GeneratedHooksEntity { Id = 1, FirstName = "John", LastName = "Doe" },
             new GeneratedHooksEntity { Id = 2, FirstName = "Jane", LastName = "Smith" }
         }.AsQueryable();
 
-        // Act - Projection doesn't call hooks (they're runtime-only)
         var facets = entities.Select(GeneratedAfterMapFacet.Projection).ToList();
 
-        // Assert - Properties are mapped but FullName is NOT computed (hooks don't run in projections)
         facets.Should().HaveCount(2);
         facets[0].FirstName.Should().Be("John");
         facets[1].FirstName.Should().Be("Jane");

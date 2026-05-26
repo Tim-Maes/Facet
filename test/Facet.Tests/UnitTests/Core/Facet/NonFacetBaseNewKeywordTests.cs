@@ -1,4 +1,4 @@
-using Facet.Tests.TestModels.NonFacetBaseNewKeyword;
+﻿using Facet.Tests.TestModels.NonFacetBaseNewKeyword;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
 
@@ -12,7 +12,6 @@ public class NonFacetBaseNewKeywordTests
     [Fact]
     public void Facet_ShouldNotEmitNew_WhenBaseClassIsNotFacet()
     {
-        // Arrange
         var source = new OrderLineBaseEntity
         {
             Id = 1,
@@ -23,10 +22,8 @@ public class NonFacetBaseNewKeywordTests
             ModifiedByUserId = 20
         };
 
-        // Act
         var dto = OrderLineBaseDto312.FromSource(source);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Number.Should().Be("ORD-001");
         dto.Status.Should().Be(2);

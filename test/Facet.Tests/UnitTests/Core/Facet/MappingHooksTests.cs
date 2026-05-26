@@ -1,4 +1,4 @@
-using Facet.Mapping;
+﻿using Facet.Mapping;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
 
@@ -7,7 +7,6 @@ namespace Facet.Tests.UnitTests.Core.Facet;
 /// </summary>
 public class MappingHooksTests
 {
-    // Test entities
     public class HooksTestEntity
     {
         public int Id { get; set; }
@@ -17,7 +16,6 @@ public class MappingHooksTests
         public bool IsActive { get; set; }
     }
 
-    // BeforeMap configuration - validates and sets defaults
     public class UserBeforeMapConfig
     {
         public static void BeforeMap(HooksTestEntity source, BeforeMapFacet target)
@@ -31,7 +29,6 @@ public class MappingHooksTests
         }
     }
 
-    // AfterMap configuration - computes derived values
     public class UserAfterMapConfig
     {
         public static void AfterMap(HooksTestEntity source, AfterMapFacet target)
@@ -49,7 +46,6 @@ public class MappingHooksTests
         }
     }
 
-    // Combined hooks configuration
     public class UserCombinedHooksConfig
     {
         public static void BeforeMap(HooksTestEntity source, CombinedHooksFacet target)
@@ -72,7 +68,6 @@ public class MappingHooksTests
         }
     }
 
-    // Placeholder facets for unit tests
     public class BeforeMapFacet
     {
         public int Id { get; set; }
@@ -184,7 +179,6 @@ public class MappingHooksTests
     [Fact]
     public void BeforeMap_ShouldBeCalledBeforePropertyMapping()
     {
-        // Arrange
         var entity = new HooksTestEntity
         {
             Id = 1,
@@ -195,10 +189,8 @@ public class MappingHooksTests
         };
         var target = new BeforeMapFacet();
 
-        // Act
         UserBeforeMapConfig.BeforeMap(entity, target);
 
-        // Assert
         target.MappedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(1));
         target.ValidationMessage.Should().BeNull();
     }
@@ -206,7 +198,6 @@ public class MappingHooksTests
     [Fact]
     public void BeforeMap_ShouldSetValidationMessage_WhenInputInvalid()
     {
-        // Arrange
         var entity = new HooksTestEntity
         {
             Id = 1,
@@ -215,26 +206,21 @@ public class MappingHooksTests
         };
         var target = new BeforeMapFacet();
 
-        // Act
         UserBeforeMapConfig.BeforeMap(entity, target);
 
-        // Assert
         target.ValidationMessage.Should().Be("FirstName is required");
     }
 
     [Fact]
     public void BeforeMap_ShouldSetMappedAtTimestamp()
     {
-        // Arrange
         var entity = new HooksTestEntity { Id = 1, FirstName = "Test", LastName = "User" };
         var target = new BeforeMapFacet();
         var beforeCall = DateTime.UtcNow;
 
-        // Act
         UserBeforeMapConfig.BeforeMap(entity, target);
         var afterCall = DateTime.UtcNow;
 
-        // Assert
         target.MappedAt.Should().BeOnOrAfter(beforeCall);
         target.MappedAt.Should().BeOnOrBefore(afterCall);
     }
@@ -246,7 +232,6 @@ public class MappingHooksTests
     [Fact]
     public void AfterMap_ShouldComputeDerivedValues()
     {
-        // Arrange
         var birthDate = DateTime.Today.AddYears(-25);
         var entity = new HooksTestEntity
         {
@@ -265,10 +250,8 @@ public class MappingHooksTests
             IsActive = entity.IsActive
         };
 
-        // Act
         UserAfterMapConfig.AfterMap(entity, target);
 
-        // Assert
         target.FullName.Should().Be("John Doe");
         target.Age.Should().Be(25);
     }
@@ -276,7 +259,6 @@ public class MappingHooksTests
     [Fact]
     public void AfterMap_ShouldCalculateAge_ForRecentBirthday()
     {
-        // Arrange - birthday was 6 months ago
         var birthDate = DateTime.Today.AddMonths(-6).AddYears(-30);
         var entity = new HooksTestEntity
         {
@@ -292,17 +274,14 @@ public class MappingHooksTests
             DateOfBirth = entity.DateOfBirth
         };
 
-        // Act
         UserAfterMapConfig.AfterMap(entity, target);
 
-        // Assert
         target.Age.Should().Be(30);
     }
 
     [Fact]
     public void AfterMap_ShouldCalculateAge_ForUpcomingBirthday()
     {
-        // Arrange - birthday is 6 months from now
         var birthDate = DateTime.Today.AddMonths(6).AddYears(-30);
         var entity = new HooksTestEntity
         {
@@ -318,10 +297,8 @@ public class MappingHooksTests
             DateOfBirth = entity.DateOfBirth
         };
 
-        // Act
         UserAfterMapConfig.AfterMap(entity, target);
 
-        // Assert
         target.Age.Should().Be(29);
     }
 
@@ -332,7 +309,6 @@ public class MappingHooksTests
     [Fact]
     public void CombinedHooks_ShouldCallBothBeforeAndAfterMap()
     {
-        // Arrange
         var birthDate = DateTime.Today.AddYears(-35);
         var entity = new HooksTestEntity
         {
@@ -344,7 +320,6 @@ public class MappingHooksTests
         };
         var target = new CombinedHooksFacet();
 
-        // Act - Simulate full mapping lifecycle
         UserCombinedHooksConfig.BeforeMap(entity, target);
         var mappedAtTime = target.MappedAt;
         
@@ -356,7 +331,6 @@ public class MappingHooksTests
         
         UserCombinedHooksConfig.AfterMap(entity, target);
 
-        // Assert
         target.MappedAt.Should().Be(mappedAtTime);
         target.FullName.Should().Be("Jane Smith");
         target.Age.Should().Be(35);
@@ -365,7 +339,6 @@ public class MappingHooksTests
     [Fact]
     public void CombinedHooks_ShouldPreserveMappedAtFromBeforeMap()
     {
-        // Arrange
         var entity = new HooksTestEntity
         {
             Id = 1,
@@ -375,7 +348,6 @@ public class MappingHooksTests
         };
         var target = new CombinedHooksFacet();
 
-        // Act
         UserCombinedHooksConfig.BeforeMap(entity, target);
         var originalMappedAt = target.MappedAt;
         
@@ -385,7 +357,6 @@ public class MappingHooksTests
         
         UserCombinedHooksConfig.AfterMap(entity, target);
 
-        // Assert
         target.MappedAt.Should().Be(originalMappedAt);
     }
 

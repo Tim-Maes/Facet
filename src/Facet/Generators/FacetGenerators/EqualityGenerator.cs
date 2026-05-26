@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text;
 
 namespace Facet.Generators;
@@ -48,7 +48,6 @@ internal static class EqualityGenerator
         }
         else
         {
-            // struct
             sb.AppendLine($"{indent}public bool Equals({model.Name} other)");
             sb.AppendLine($"{indent}{{");
         }
@@ -147,13 +146,11 @@ internal static class EqualityGenerator
 
     private static string GetEqualityExpression(FacetMember member)
     {
-        // For value types, use direct comparison
         if (member.IsValueType)
         {
             return $"this.{member.Name} == other.{member.Name}";
         }
 
-        // For reference types, use EqualityComparer<T>.Default to handle nulls
         return $"System.Collections.Generic.EqualityComparer<{member.TypeName}>.Default.Equals(this.{member.Name}, other.{member.Name})";
     }
 
@@ -164,7 +161,6 @@ internal static class EqualityGenerator
             return $"{member.Name}.GetHashCode()";
         }
 
-        // For reference types, guard against null
         return $"({member.Name}?.GetHashCode() ?? 0)";
     }
 }

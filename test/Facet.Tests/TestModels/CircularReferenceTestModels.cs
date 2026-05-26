@@ -1,6 +1,5 @@
-namespace Facet.Tests.TestModels;
+﻿namespace Facet.Tests.TestModels;
 
-// Models with circular references
 public class Author
 {
     public int Id { get; set; }
@@ -15,7 +14,6 @@ public class Book
     public Author? Author { get; set; }
 }
 
-// Self-referencing model
 public class OrgEmployee
 {
     public int Id { get; set; }
@@ -24,32 +22,27 @@ public class OrgEmployee
     public List<OrgEmployee> DirectReports { get; set; } = new();
 }
 
-// Facets with MaxDepth for depth limiting (without reference tracking)
 [Facet(typeof(Author), MaxDepth = 2, PreserveReferences = false, NestedFacets = [typeof(BookFacetWithDepth)], GenerateToSource = true)]
 public partial record AuthorFacetWithDepth;
 
 [Facet(typeof(Book), MaxDepth = 2, PreserveReferences = false, NestedFacets = [typeof(AuthorFacetWithDepth)], GenerateToSource = true)]
 public partial record BookFacetWithDepth;
 
-// Facets with MaxDepth = 1 to test ToSource null-guard fix
 [Facet(typeof(Author), MaxDepth = 1, PreserveReferences = false, NestedFacets = [typeof(BookFacetMaxDepth1)], GenerateToSource = true)]
 public partial record AuthorFacetMaxDepth1;
 
 [Facet(typeof(Book), MaxDepth = 1, PreserveReferences = false, NestedFacets = [typeof(AuthorFacetMaxDepth1)], GenerateToSource = true)]
 public partial record BookFacetMaxDepth1;
 
-// Facets with PreserveReferences for runtime tracking (also needs MaxDepth to prevent generator SO)
 [Facet(typeof(Author), MaxDepth = 3, PreserveReferences = true, NestedFacets = [typeof(BookFacetWithTracking)])]
 public partial record AuthorFacetWithTracking;
 
 [Facet(typeof(Book), MaxDepth = 3, PreserveReferences = true, NestedFacets = [typeof(AuthorFacetWithTracking)])]
 public partial record BookFacetWithTracking;
 
-// Self-referencing facet with both MaxDepth and PreserveReferences
 [Facet(typeof(OrgEmployee), MaxDepth = 5, PreserveReferences = true, NestedFacets = [typeof(OrgEmployeeFacet)])]
 public partial record OrgEmployeeFacet;
 
-// Facets with PreserveReferences enabled for circular reference scenarios
 // PreserveReferences defaults to false for performance; opt-in for circular graph safety
 [Facet(typeof(Author), PreserveReferences = true, NestedFacets = [typeof(BookFacetDefault)])]
 public partial record AuthorFacetDefault;
@@ -57,7 +50,6 @@ public partial record AuthorFacetDefault;
 [Facet(typeof(Book), PreserveReferences = true, NestedFacets = [typeof(AuthorFacetDefault)])]
 public partial record BookFacetDefault;
 
-// Deep non-circular chain to verify default MaxDepth allows at least depth 5
 public class Level0 { public Level1? Child { get; set; } public string Name { get; set; } = ""; }
 public class Level1 { public Level2? Child { get; set; } public string Name { get; set; } = ""; }
 public class Level2 { public Level3? Child { get; set; } public string Name { get; set; } = ""; }
@@ -74,12 +66,6 @@ public partial record Level2Facet;
 public partial record Level3Facet;
 [Facet(typeof(Level4))]
 public partial record Level4Facet;
-
-// ---------------------------------------------------------------------------
-// MaxDepthToSource test models
-// Scenario: MaxDepth = 5 (full ToFacet nesting allowed) but MaxDepthToSource = 1
-// (only the top-level object is reverse-mapped; nested children are dropped).
-// ---------------------------------------------------------------------------
 
 [Facet(typeof(Author),
     MaxDepth = 5,

@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -23,24 +23,18 @@ internal static class ConstructorGenerator
         bool hasCustomMapping,
         bool hasRequiredProperties)
     {
-        // If the target has an existing primary constructor, skip constructor generation
-        // and provide only a factory method
         if (model.HasExistingPrimaryConstructor && model.IsRecord)
         {
             GenerateFactoryMethodForExistingPrimaryConstructor(sb, model, hasCustomMapping);
             return;
         }
 
-        // Check if we have nested facets and depth tracking is needed
         bool hasNestedFacets = model.Members.Any(m => m.IsNestedFacet);
-        // IMPORTANT: Generate depth-aware constructors whenever MaxDepth > 0 OR PreserveReferences is enabled
-        // This ensures ALL facets (even those without nested facets) can be instantiated with depth tracking
-        // when they are used as nested facets by other facets that have depth tracking enabled
+        
         bool needsDepthTracking = model.MaxDepth > 0 || model.PreserveReferences;
 
         GenerateMainConstructor(sb, model, isPositional, hasRequiredProperties, needsDepthTracking, hasInitOnlyProperties, hasCustomMapping);
 
-        // Generate internal depth-aware constructor if needed
         if (needsDepthTracking)
         {
             GenerateDepthAwareConstructor(sb, model, isPositional, hasInitOnlyProperties, hasCustomMapping, hasRequiredProperties);
@@ -59,8 +53,6 @@ internal static class ConstructorGenerator
     {
         sb.AppendLine();
 
-        // Don't generate parameterless constructor for records with existing primary constructors
-        // as it would conflict with the C# language rules
         if (model.HasExistingPrimaryConstructor && model.IsRecord)
         {
             sb.AppendLine($"    // Note: Parameterless constructor not generated for records with existing primary constructors");
@@ -69,7 +61,6 @@ internal static class ConstructorGenerator
             return;
         }
 
-        // Generate parameterless constructor XML documentation
         sb.AppendLine("    /// <summary>");
         sb.AppendLine($"    /// Initializes a new instance of the <see cref=\"{model.Name}\"/> class with default values.");
         sb.AppendLine("    /// </summary>");
@@ -78,7 +69,6 @@ internal static class ConstructorGenerator
         sb.AppendLine("    /// where you need to create an empty instance and populate properties later.");
         sb.AppendLine("    /// </remarks>");
 
-        // For positional records, we need to call the primary constructor with default values
         if (isPositional && !model.HasExistingPrimaryConstructor)
         {
             var defaultValues = model.Members.Select(m => GeneratorUtilities.GetDefaultValue(m.TypeName)).ToArray();
@@ -88,7 +78,7 @@ internal static class ConstructorGenerator
             sb.AppendLine("    {");
             sb.AppendLine("    }");
         }
-        // For non-positional types (classes, structs), generate a simple parameterless constructor
+        
         else if (!isPositional)
         {
             sb.AppendLine($"    public {model.Name}()");
@@ -124,7 +114,6 @@ internal static class ConstructorGenerator
 
         if (needsDepthTracking)
         {
-            // Chain to internal depth-aware constructor with reference tracking
             if (model.PreserveReferences)
             {
                 ctorSig += " : this(source, 0, new System.Collections.Generic.HashSet<object>(System.Collections.Generic.ReferenceEqualityComparer.Instance))";
@@ -136,7 +125,6 @@ internal static class ConstructorGenerator
         }
         else if (isPositional && !model.HasExistingPrimaryConstructor)
         {
-            // Traditional positional record - chain to primary constructor
             var sourceNames = GetSourcePropertySet(model);
             var args = string.Join(", ",
                 model.Members.Select(m => ExpressionBuilder.GetSourceValueExpression(m, "source", 0, false, false, sourceNames)));
@@ -144,7 +132,6 @@ internal static class ConstructorGenerator
         }
         else if (model.ChainToParameterlessConstructor && !isPositional)
         {
-            // Chain to user-defined parameterless constructor
             ctorSig += " : this()";
         }
 
@@ -155,7 +142,6 @@ internal static class ConstructorGenerator
         sb.AppendLine($"    {ctorSig}");
         sb.AppendLine("    {");
 
-        // Only generate body if not chaining to depth-aware constructor
         if (!needsDepthTracking)
         {
             GenerateMainConstructorBody(sb, model, isPositional, hasInitOnlyProperties, hasCustomMapping);
@@ -176,7 +162,6 @@ internal static class ConstructorGenerator
 
         if (!isPositional && !model.HasExistingPrimaryConstructor)
         {
-            // Call BeforeMap before property assignment
             if (hasBeforeMap)
             {
                 sb.AppendLine($"        {model.BeforeMapConfigurationTypeName}.BeforeMap(source, this);");
@@ -184,16 +169,12 @@ internal static class ConstructorGenerator
 
             if (hasCustomMapping && hasInitOnlyProperties)
             {
-                // For types with init-only properties and custom mapping,
-                // we can't assign after construction
                 sb.AppendLine($"        // This constructor should not be used for types with init-only properties and custom mapping");
                 sb.AppendLine($"        // Use FromSource factory method instead");
                 sb.AppendLine($"        throw new InvalidOperationException(\"Use {model.Name}.FromSource(source) for types with init-only properties\");");
             }
             else if (hasCustomMapping)
             {
-                // Regular mutable properties - initialize properly (including nested facets), then apply custom mapping
-                // This ensures nested facets are instantiated before custom mapping logic runs
                 var sourceNames = GetSourcePropertySet(model);
                 foreach (var m in model.Members)
                 {
@@ -204,8 +185,7 @@ internal static class ConstructorGenerator
             }
             else
             {
-                // No custom mapping - copy properties directly
-                // Init-only properties are included because constructors can set init accessors
+                // Constructors can assign init-only members.
                 var sourceNames = GetSourcePropertySet(model);
                 foreach (var m in model.Members)
                 {
@@ -214,7 +194,6 @@ internal static class ConstructorGenerator
                 }
             }
 
-            // Call AfterMap after property assignment (and after Configuration.Map if present)
             if (hasAfterMap)
             {
                 sb.AppendLine($"        {model.AfterMapConfigurationTypeName}.AfterMap(source, this);");
@@ -222,7 +201,6 @@ internal static class ConstructorGenerator
         }
         else if (hasCustomMapping && !model.HasExistingPrimaryConstructor)
         {
-            // For positional records/record structs with custom mapping
             if (hasBeforeMap)
             {
                 sb.AppendLine($"        {model.BeforeMapConfigurationTypeName}.BeforeMap(source, this);");
@@ -235,7 +213,6 @@ internal static class ConstructorGenerator
         }
         else if (!model.HasExistingPrimaryConstructor)
         {
-            // No custom mapping but may have hooks
             if (hasBeforeMap)
             {
                 sb.AppendLine($"        {model.BeforeMapConfigurationTypeName}.BeforeMap(source, this);");
@@ -275,7 +252,6 @@ internal static class ConstructorGenerator
 
         if (isPositional && !model.HasExistingPrimaryConstructor)
         {
-            // Traditional positional record - chain to primary constructor
             var sourceNames = GetSourcePropertySet(model);
             var args = string.Join(", ",
                 model.Members.Select(m => ExpressionBuilder.GetSourceValueExpression(m, "source", model.MaxDepth, true, model.PreserveReferences, sourceNames)));
@@ -283,7 +259,6 @@ internal static class ConstructorGenerator
         }
         else if (model.ChainToParameterlessConstructor && !isPositional)
         {
-            // Chain to user-defined parameterless constructor
             ctorSig += " : this()";
         }
 
@@ -300,7 +275,6 @@ internal static class ConstructorGenerator
         }
         else if (hasCustomMapping && !model.HasExistingPrimaryConstructor)
         {
-            // For positional records/record structs with custom mapping
             sb.AppendLine($"        {GetMappingCall(model, "source", "this")};");
         }
 
@@ -316,7 +290,6 @@ internal static class ConstructorGenerator
         var hasBeforeMap = !string.IsNullOrWhiteSpace(model.BeforeMapConfigurationTypeName);
         var hasAfterMap = !string.IsNullOrWhiteSpace(model.AfterMapConfigurationTypeName);
 
-        // Call BeforeMap first
         if (hasBeforeMap)
         {
             sb.AppendLine($"        {model.BeforeMapConfigurationTypeName}.BeforeMap(source, this);");
@@ -330,9 +303,6 @@ internal static class ConstructorGenerator
         }
         else if (hasCustomMapping)
         {
-            // Regular mutable properties - initialize with depth tracking, then apply custom mapping
-            // This ensures nested facets are properly instantiated with depth parameters
-            // before custom mapping logic runs (which can override values if needed)
             var sourceNames = GetSourcePropertySet(model);
             foreach (var m in model.Members)
             {
@@ -343,8 +313,7 @@ internal static class ConstructorGenerator
         }
         else
         {
-            // No custom mapping - copy properties directly with depth tracking
-            // Init-only properties are included because constructors can set init accessors
+            // Constructors can assign init-only members.
             var sourceNames = GetSourcePropertySet(model);
             foreach (var m in model.Members)
             {
@@ -353,7 +322,6 @@ internal static class ConstructorGenerator
             }
         }
 
-        // Call AfterMap after property assignment (and after Configuration.Map if present)
         if (hasAfterMap)
         {
             sb.AppendLine($"        {model.AfterMapConfigurationTypeName}.AfterMap(source, this);");
@@ -395,7 +363,6 @@ internal static class ConstructorGenerator
         }
         else
         {
-            // For simple cases, use object initializer syntax for best performance
             sb.AppendLine($"        return new {model.Name}");
             sb.AppendLine("        {");
             var sourceNames = GetSourcePropertySet(model);
@@ -413,9 +380,6 @@ internal static class ConstructorGenerator
 
     private static void GenerateFactoryMethodForExistingPrimaryConstructor(StringBuilder sb, FacetTargetModel model, bool hasCustomMapping)
     {
-        // For records with existing primary constructor, provide only a factory method
-        // Users must handle the primary constructor parameters manually
-
         sb.AppendLine($"    /// <summary>");
         sb.AppendLine($"    /// Creates a new {model.Name} from the source with faceted properties initialized.");
         sb.AppendLine($"    /// This record has an existing primary constructor, so you must provide values");

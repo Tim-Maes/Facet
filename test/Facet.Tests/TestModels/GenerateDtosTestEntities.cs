@@ -1,4 +1,4 @@
-using Facet;
+﻿using Facet;
 
 namespace Facet.Tests.TestModels;
 
@@ -21,7 +21,6 @@ public class TestUser
     public DateTime CreatedAt { get; set; }
 }
 
-// Dedicated entity for Patch DTO testing
 [GenerateDtos(Types = DtoTypes.Patch, OutputType = OutputType.Class)]
 public class PatchTestEntity
 {
@@ -33,7 +32,6 @@ public class PatchTestEntity
     public decimal Price { get; set; }
 }
 
-// Uses ExcludeAuditFields = true to automatically exclude audit fields
 [GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response, OutputType = OutputType.Class, ExcludeAuditFields = true)]
 public class TestProduct
 {
@@ -48,8 +46,6 @@ public class TestProduct
     public string CreatedBy { get; set; } = string.Empty;
     public string UpdatedBy { get; set; } = string.Empty;
 }
-
-// Additional test entities with different configurations
 
 [GenerateDtos(Types = DtoTypes.Response | DtoTypes.Query, OutputType = OutputType.Record)]
 public class TestOrder
@@ -109,7 +105,6 @@ public class TestCustomNaming
     public DateTime PublishedAt { get; set; }
 }
 
-// Uses ExcludeAuditFields = true with RecordStruct output
 [GenerateDtos(Types = DtoTypes.All, OutputType = OutputType.RecordStruct, ExcludeAuditFields = true)]
 public class TestCompactEntity
 {
@@ -126,9 +121,9 @@ public class TestEntityWithFields
 {
     public int Id;
     public string PublicField = string.Empty;
-    public readonly string ReadOnlyField = "readonly"; // Fixed name and made readonly
+    public readonly string ReadOnlyField = "readonly"; 
     public string PropertyField { get; set; } = string.Empty;
-    private string PrivateField = "private"; // Should not be included
+    private string PrivateField = "private"; 
 }
 
 [GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update, OutputType = OutputType.Class)]
@@ -148,10 +143,6 @@ public class TestNestedType
     public int Property2 { get; set; }
 }
 
-// Interface output: emits ICreateTestInterfaceEntityRequest / IUpdateTestInterfaceEntityRequest /
-// TestInterfaceEntityResponse as interfaces declaring the entity-mapped properties as get-only.
-// Useful when you want compile-time enforcement that hand-written DTOs cover all entity fields
-// without giving up the DTO's own shape (construction syntax, validation, extra fields).
 [GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response, OutputType = OutputType.Interface)]
 public class TestInterfaceEntity
 {
@@ -161,10 +152,7 @@ public class TestInterfaceEntity
     public bool IsActive { get; set; }
 }
 
-// PartialClass output: emits CreateTestPartialClassEntityRequest / UpdateTestPartialClassEntityRequest /
-// TestPartialClassEntityResponse as `public partial class` (not sealed) with get/set properties and the
-// same constructors as OutputType.Class — but without projection/ToSource/BackTo. The hand-written
-// partial below adds an extra computed property to prove the partial keyword survived generation.
+// PartialClass reuses class constructors, but mapping members stay user-authored.
 [GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response, OutputType = OutputType.PartialClass)]
 public class TestPartialClassEntity
 {
@@ -174,14 +162,11 @@ public class TestPartialClassEntity
     public bool IsActive { get; set; }
 }
 
-// Hand-written partial extension — fails to compile if the generated DTOs are NOT emitted as `partial class`.
 public partial class UpdateTestPartialClassEntityRequest
 {
     public string DisplayLabel => $"{Id}: {Name}";
 }
 
-// Both Interface and PartialClass on the same entity: the PartialClass output should declare the
-// matching generated interface as a base type, composing into a contract + implementation pair.
 [GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response, OutputType = OutputType.Interface)]
 [GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response, OutputType = OutputType.PartialClass)]
 public class TestPartialAndInterfaceEntity
@@ -192,7 +177,7 @@ public class TestPartialAndInterfaceEntity
 }
 
 // PartialClass intentionally NOT sealed: a hand-written derived type should compile.
-// This exercises the GlobalSoftware/LocalSoftware-style inheritance scenario.
+
 public class DerivedFromGeneratedPartial : UpdateTestPartialClassEntityRequest
 {
     public string DerivedOnly { get; set; } = string.Empty;

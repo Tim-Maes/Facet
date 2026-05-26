@@ -1,4 +1,4 @@
-using System.Linq;
+ï»¿using System.Linq;
 using System.Text;
 
 namespace Facet.Generators;
@@ -32,17 +32,13 @@ internal static class CopyConstructorGenerator
         sb.AppendLine($"{indent}public {model.Name}({model.Name} other)");
         sb.AppendLine($"{indent}{{");
 
-        // Add null check for reference types (classes)
         if (model.TypeKind == Microsoft.CodeAnalysis.TypeKind.Class)
         {
             sb.AppendLine($"{indent}    if (other is null) throw new System.ArgumentNullException(nameof(other));");
         }
 
-        // Copy all members
         foreach (var m in model.Members)
         {
-            // Skip init-only properties — they can't be assigned in a constructor body
-            // unless this is a positional record (handled differently)
             if (m.IsInitOnly)
                 continue;
 

@@ -1,6 +1,5 @@
-namespace Facet.Tests.UnitTests.Core.Facet;
+﻿namespace Facet.Tests.UnitTests.Core.Facet;
 
-// Test entities that mimic EF Core entities with navigation properties
 public class ChunkEmbedding1024
 {
     public int Id { get; set; }
@@ -26,7 +25,6 @@ public class EmbeddingModel
     public int Dimensions { get; set; }
 }
 
-// Test entity with nullable nested navigation property
 public class NullableWorkerEntity
 {
     public int Id { get; set; }
@@ -41,7 +39,6 @@ public class NullableCompanyEntity
     public string Address { get; set; } = string.Empty;
 }
 
-// Test entity for collection nested facets with NullableProperties
 public class NullableOrganizationEntity
 {
     public int Id { get; set; }
@@ -56,7 +53,6 @@ public class NullableEmployeeEntity
     public string Role { get; set; } = string.Empty;
 }
 
-// Facet DTOs - see GitHub issue #116
 [Facet(typeof(Chunk), GenerateToSource = true)]
 public partial class ChunkDto;
 
@@ -71,7 +67,6 @@ public partial class EmbeddingModelDto;
     GenerateToSource = true)]
 public partial class ChunkEmbedding1024Dto;
 
-// Test facets for nested facets with nullable properties
 [Facet(typeof(NullableCompanyEntity), NullableProperties = true, GenerateToSource = true)]
 public partial class NullableCompanyFacet;
 
@@ -82,7 +77,6 @@ public partial class NullableCompanyFacet;
     GenerateToSource = true)]
 public partial class NullableWorkerFacet;
 
-// Test facets for collection nested facets with nullable properties
 [Facet(typeof(NullableEmployeeEntity), NullableProperties = true)]
 public partial class NullableEmployeeFacet;
 
@@ -97,10 +91,8 @@ public class NullablePropertiesWithNestedFacetsTests
     [Fact]
     public void NestedFacet_ShouldBeNullable_WhenNullablePropertiesIsTrue()
     {
-        // Arrange & Act
         var dtoType = typeof(NullableWorkerFacet);
 
-        // Assert
         var idProp = dtoType.GetProperty("Id");
         idProp.Should().NotBeNull();
         idProp!.PropertyType.Should().Be(typeof(int?), "Id should be nullable int");
@@ -119,10 +111,8 @@ public class NullablePropertiesWithNestedFacetsTests
     [Fact]
     public void ChunkEmbedding1024Dto_ShouldHaveNullableNestedFacets_WhenNullablePropertiesIsTrue()
     {
-        // Arrange & Act
         var dtoType = typeof(ChunkEmbedding1024Dto);
 
-        // Assert - All properties should be nullable
         var idProp = dtoType.GetProperty("Id");
         idProp.Should().NotBeNull();
         idProp!.PropertyType.Should().Be(typeof(int?), "Id should be nullable int");
@@ -144,10 +134,8 @@ public class NullablePropertiesWithNestedFacetsTests
     [Fact]
     public void CollectionNestedFacet_ShouldBeNullable_WhenNullablePropertiesIsTrue()
     {
-        // Arrange & Act
         var dtoType = typeof(NullableOrganizationFacet);
 
-        // Assert
         var idProp = dtoType.GetProperty("Id");
         idProp.Should().NotBeNull();
         idProp!.PropertyType.Should().Be(typeof(int?), "Id should be nullable int");
@@ -161,7 +149,6 @@ public class NullablePropertiesWithNestedFacetsTests
     [Fact]
     public void Constructor_ShouldHandleNullNestedFacet_WithNullableProperties()
     {
-        // Arrange
         var worker = new NullableWorkerEntity
         {
             Id = 1,
@@ -169,10 +156,8 @@ public class NullablePropertiesWithNestedFacetsTests
             Company = null
         };
 
-        // Act
         var dto = new NullableWorkerFacet(worker);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(1);
         dto.Name.Should().Be("John Doe");
@@ -182,7 +167,6 @@ public class NullablePropertiesWithNestedFacetsTests
     [Fact]
     public void Constructor_ShouldMapNonNullNestedFacet_WithNullableProperties()
     {
-        // Arrange
         var worker = new NullableWorkerEntity
         {
             Id = 2,
@@ -195,10 +179,8 @@ public class NullablePropertiesWithNestedFacetsTests
             }
         };
 
-        // Act
         var dto = new NullableWorkerFacet(worker);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(2);
         dto.Name.Should().Be("Jane Smith");
@@ -211,7 +193,6 @@ public class NullablePropertiesWithNestedFacetsTests
     [Fact]
     public void ToSource_ShouldHandleNullableProperties_WithoutCompilationErrors()
     {
-        // Arrange
         var dto = new ChunkEmbedding1024Dto
         {
             Id = 1,
@@ -226,10 +207,8 @@ public class NullablePropertiesWithNestedFacetsTests
             }
         };
 
-        // Act
         var entity = dto.ToSource();
 
-        // Assert
         entity.Should().NotBeNull();
         entity.Id.Should().Be(1);
         entity.ChunkIdFk.Should().Be(10);
@@ -242,7 +221,6 @@ public class NullablePropertiesWithNestedFacetsTests
     [Fact]
     public void ToSource_ShouldHandleNullNestedFacet_WithNullableProperties()
     {
-        // Arrange
         var dto = new NullableWorkerFacet
         {
             Id = 3,
@@ -250,10 +228,8 @@ public class NullablePropertiesWithNestedFacetsTests
             Company = null
         };
 
-        // Act
         var entity = dto.ToSource();
 
-        // Assert
         entity.Should().NotBeNull();
         entity.Id.Should().Be(3);
         entity.Name.Should().Be("Bob Johnson");
@@ -263,7 +239,6 @@ public class NullablePropertiesWithNestedFacetsTests
     [Fact]
     public void ToSource_ShouldMapNonNullNestedFacet_WithNullableProperties()
     {
-        // Arrange
         var dto = new NullableWorkerFacet
         {
             Id = 4,
@@ -276,10 +251,8 @@ public class NullablePropertiesWithNestedFacetsTests
             }
         };
 
-        // Act
         var entity = dto.ToSource();
 
-        // Assert
         entity.Should().NotBeNull();
         entity.Id.Should().Be(4);
         entity.Name.Should().Be("Alice Williams");
@@ -292,7 +265,6 @@ public class NullablePropertiesWithNestedFacetsTests
     [Fact]
     public void Projection_ShouldHandleNullableNestedFacet_WithNullableProperties()
     {
-        // Arrange
         var workers = new[]
         {
             new NullableWorkerEntity
@@ -309,10 +281,8 @@ public class NullablePropertiesWithNestedFacetsTests
             }
         }.AsQueryable();
 
-        // Act
         var dtos = workers.Select(NullableWorkerFacet.Projection).ToList();
 
-        // Assert
         dtos.Should().HaveCount(2);
         dtos[0].Id.Should().Be(1);
         dtos[0].Company.Should().BeNull();

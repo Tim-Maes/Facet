@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using System.Linq;
 using System.Text;
@@ -18,10 +18,8 @@ internal static class WrapperCodeBuilder
         var sb = new StringBuilder();
         GenerateFileHeader(sb);
 
-        // Collect all namespaces from referenced types
         var namespacesToImport = CodeGenerationHelpers.CollectNamespacesForWrapper(model);
 
-        // Generate using statements for all required namespaces
         foreach (var ns in namespacesToImport.OrderBy(x => x))
         {
             sb.AppendLine($"using {ns};");
@@ -29,7 +27,7 @@ internal static class WrapperCodeBuilder
 
         sb.AppendLine();
 
-        // Nullable must be enabled in generated code with a directive
+        // Generated code needs #nullable enabled.
         var hasNullableRefTypeMembers = model.Members.Any(m => !m.IsValueType && m.TypeName.EndsWith("?"));
         if (hasNullableRefTypeMembers)
         {
@@ -42,10 +40,8 @@ internal static class WrapperCodeBuilder
             sb.AppendLine($"namespace {model.Namespace};");
         }
 
-        // Generate containing type hierarchy for nested classes
         var containingTypeIndent = GenerateContainingTypeHierarchy(sb, model);
 
-        // Generate type-level XML documentation if available
         if (!string.IsNullOrWhiteSpace(model.TypeXmlDocumentation))
         {
             var indentedDocumentation = model.TypeXmlDocumentation!.Replace("\n", $"\n{containingTypeIndent}");
@@ -59,22 +55,17 @@ internal static class WrapperCodeBuilder
 
         var memberIndent = containingTypeIndent + "    ";
 
-        // Generate private readonly source field
         sb.AppendLine($"{memberIndent}private readonly {model.SourceTypeName} {model.SourceFieldName};");
         sb.AppendLine();
 
-        // Generate delegating properties
         WrapperMemberGenerator.GenerateMembers(sb, model, memberIndent);
 
-        // Generate constructor
         WrapperConstructorGenerator.GenerateConstructor(sb, model, memberIndent);
 
-        // Generate Unwrap method
         GenerateUnwrapMethod(sb, model, memberIndent);
 
         sb.AppendLine($"{containingTypeIndent}}}");
 
-        // Close containing type braces
         CloseContainingTypeHierarchy(sb, model, containingTypeIndent);
 
         return sb.ToString();
@@ -97,7 +88,6 @@ internal static class WrapperCodeBuilder
         var containingTypeIndent = "";
         foreach (var containingType in model.ContainingTypes)
         {
-            // Don't specify accessibility for containing types - they're already defined in user code
             sb.AppendLine($"{containingTypeIndent}partial class {containingType}");
             sb.AppendLine($"{containingTypeIndent}{{");
             containingTypeIndent += "    ";
@@ -107,7 +97,6 @@ internal static class WrapperCodeBuilder
 
     private static void CloseContainingTypeHierarchy(StringBuilder sb, WrapperTargetModel model, string containingTypeIndent)
     {
-        // Close containing type braces
         for (int i = model.ContainingTypes.Length - 1; i >= 0; i--)
         {
             containingTypeIndent = containingTypeIndent.Substring(0, containingTypeIndent.Length - 4);

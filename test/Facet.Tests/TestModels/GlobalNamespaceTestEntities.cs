@@ -1,4 +1,4 @@
-using Facet;
+﻿using Facet;
 
 [GenerateDtos(Types = DtoTypes.All, OutputType = OutputType.Record)]
 public class TestGlobalNamespaceEntity

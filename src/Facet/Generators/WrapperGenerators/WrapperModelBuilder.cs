@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -27,29 +27,22 @@ internal static class WrapperModelBuilder
         var sourceType = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
         if (sourceType == null) return null;
 
-        // Parse attribute arguments
         var excluded = AttributeParser.ExtractExcludedMembers(attribute);
         var (included, isIncludeMode) = AttributeParser.ExtractIncludedMembers(attribute);
 
-        // Extract configuration settings
         var includeFields = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.IncludeFields, false);
         var copyAttributes = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.CopyAttributes, false);
         var useFullName = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.UseFullName, false);
         var readOnly = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.ReadOnly, false);
 
-        // Extract nested wrapper mappings
         var nestedWrapperMappings = AttributeParser.ExtractNestedWrapperMappings(attribute);
 
-        // Infer the type kind and whether it's a record from the target type declaration
         var (typeKind, isRecord) = TypeAnalyzer.InferTypeKind(targetSymbol);
 
-        // Create external XML doc provider for cross-assembly documentation resolution
         var externalDocProvider = new ExternalXmlDocProvider(context.SemanticModel.Compilation);
 
-        // Extract type-level XML documentation from the source type
         var typeXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(sourceType, false, externalDocProvider);
 
-        // Build members
         var members = ExtractMembers(
             sourceType,
             excluded,
@@ -61,7 +54,6 @@ internal static class WrapperModelBuilder
             externalDocProvider,
             token);
 
-        // Determine full name
         string fullName = useFullName
             ? targetSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).GetSafeName()
             : targetSymbol.Name;
@@ -70,10 +62,8 @@ internal static class WrapperModelBuilder
             ? null
             : targetSymbol.ContainingNamespace.ToDisplayString();
 
-        // Get containing types for nested classes
         var containingTypes = TypeAnalyzer.GetContainingTypes(targetSymbol);
 
-        // Get containing types for the source type
         var sourceContainingTypes = TypeAnalyzer.GetContainingTypes(sourceType);
 
         return new WrapperTargetModel(
@@ -150,17 +140,14 @@ internal static class WrapperModelBuilder
         bool isNestedWrapper = false;
         string? nestedWrapperSourceTypeName = null;
 
-        // Check if this property's type matches a nested wrapper source type
         if (nestedWrapperMappings.TryGetValue(propertyTypeName, out var nestedMapping))
         {
-            // Replace the type name with the nested wrapper type
             bool isNullable = property.Type.NullableAnnotation == NullableAnnotation.Annotated;
             typeName = isNullable ? nestedMapping.childWrapperTypeName + "?" : nestedMapping.childWrapperTypeName;
             isNestedWrapper = true;
             nestedWrapperSourceTypeName = nestedMapping.sourceTypeName;
         }
 
-        // Extract copiable attributes and their namespaces if requested
         List<string> attributes;
         List<string> attributeNamespaces;
         if (copyAttributes)
@@ -180,25 +167,25 @@ internal static class WrapperModelBuilder
             typeName,
             FacetMemberKind.Property,
             property.Type.IsValueType,
-            false, // isInitOnly
-            false, // isRequired
-            false, // isReadonly
+            false, 
+            false, 
+            false, 
             memberXmlDocumentation,
             isNestedWrapper,
             nestedWrapperSourceTypeName,
             attributes,
-            false, // isCollection
-            null,  // collectionWrapper
-            null,  // sourceCollectionWrapper
-            GeneratorUtilities.GetTypeNameWithNullability(property.Type), // sourceMemberTypeName
-            null,  // mapFromSource
-            false, // mapFromReversible
-            true,  // mapFromIncludeInProjection
-            null,  // sourcePropertyName
-            false, // isUserDeclared
-            null,  // mapWhenConditions
-            null,  // mapWhenDefault
-            true,  // mapWhenIncludeInProjection
+            false, 
+            null,  
+            null,  
+            GeneratorUtilities.GetTypeNameWithNullability(property.Type), 
+            null,  
+            false, 
+            true,  
+            null,  
+            false, 
+            null,  
+            null,  
+            true,  
             attributeNamespaces));
         addedMembers.Add(property.Name);
     }
@@ -218,17 +205,14 @@ internal static class WrapperModelBuilder
         bool isNestedWrapper = false;
         string? nestedWrapperSourceTypeName = null;
 
-        // Check if this field's type matches a nested wrapper source type
         if (nestedWrapperMappings.TryGetValue(fieldTypeName, out var nestedMapping))
         {
-            // Replace the type name with the nested wrapper type
             bool isNullable = field.Type.NullableAnnotation == NullableAnnotation.Annotated;
             typeName = isNullable ? nestedMapping.childWrapperTypeName + "?" : nestedMapping.childWrapperTypeName;
             isNestedWrapper = true;
             nestedWrapperSourceTypeName = nestedMapping.sourceTypeName;
         }
 
-        // Extract copiable attributes and their namespaces if requested
         List<string> attributes;
         List<string> attributeNamespaces;
         if (copyAttributes)
@@ -248,25 +232,25 @@ internal static class WrapperModelBuilder
             typeName,
             FacetMemberKind.Field,
             field.Type.IsValueType,
-            false, // isInitOnly
-            false, // isRequired
+            false, 
+            false, 
             field.IsReadOnly,
             memberXmlDocumentation,
             isNestedWrapper,
             nestedWrapperSourceTypeName,
             attributes,
-            false, // isCollection
-            null,  // collectionWrapper
-            null,  // sourceCollectionWrapper
+            false, 
+            null,  
+            null,  
             GeneratorUtilities.GetTypeNameWithNullability(field.Type),
-            null,  // mapFromSource
-            false, // mapFromReversible
-            true,  // mapFromIncludeInProjection
-            null,  // sourcePropertyName
-            false, // isUserDeclared
-            null,  // mapWhenConditions
-            null,  // mapWhenDefault
-            true,  // mapWhenIncludeInProjection
+            null,  
+            false, 
+            true,  
+            null,  
+            false, 
+            null,  
+            null,  
+            true,  
             attributeNamespaces));
         addedMembers.Add(field.Name);
     }

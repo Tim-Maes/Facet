@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
 using System.Linq;
@@ -34,9 +34,9 @@ internal static class CodeBuilder
 
         sb.AppendLine();
 
-        // Nullable must be enabled in generated code with a directive
+        // Generated code needs #nullable enabled.
         var hasNullableRefTypeMembers = model.Members.Any(m => !m.IsValueType && m.TypeName.EndsWith("?"));
-        // Enable nullable context when depth tracking is needed: the internal constructor uses HashSet<object>? __processed.
+        
         var needsDepthTracking = model.MaxDepth > 0 || model.PreserveReferences;
         if (hasNullableRefTypeMembers || needsDepthTracking)
         {
@@ -61,9 +61,6 @@ internal static class CodeBuilder
         var hasInitOnlyProperties = model.Members.Any(m => m.IsInitOnly);
         var hasRequiredProperties = model.Members.Any(m => m.IsRequired);
 
-        // Record classes can't use positional parameters when there are required members
-        // (C# doesn't allow 'required' on positional parameters of record classes).
-        // Record structs DO support it, so they can stay positional.
         var isPositional = model.IsRecord && !model.HasExistingPrimaryConstructor
             && !(model.TypeKind == TypeKind.Class && hasRequiredProperties);
         var hasCustomMapping = !string.IsNullOrWhiteSpace(model.ConfigurationTypeName);
@@ -110,7 +107,6 @@ internal static class CodeBuilder
             ConstructorGenerator.GenerateConstructor(sb, model, isPositional, hasInitOnlyProperties, hasCustomMapping, hasRequiredProperties);
         }
 
-        // Compiled projection-map action when config only provides ConfigureProjection (no Map).
         if (hasCustomMapping && !model.HasMapConfiguration && model.HasProjectionMapConfiguration)
         {
             GenerateProjectionMapAction(sb, model, memberIndent);
@@ -125,15 +121,10 @@ internal static class CodeBuilder
         {
             ProjectionGenerator.GenerateProjectionProperty(sb, model, memberIndent, facetLookup);
 
-            // Also generate ProjectionFrom{SourceSimpleName} as an alias for Projection,
-            // providing a uniform API across single-source and multi-source facets.
-            // This lets generic code always use ProjectionFromX regardless of source count.
-            // Skip for records with existing primary constructors (projection not supported).
             if (!(model.HasExistingPrimaryConstructor && model.IsRecord))
             {
                 var sourceSpecificName = "ProjectionFrom" + GetSourceSimpleName(model);
-                // Add 'new' when the base facet also has a ProjectionFrom{Source} with the same source type,
-                // which happens when both base and derived are single-source facets sharing the same source.
+                
                 var baseSrcMatches = model.BaseHidesFacetMembers
                     && model.BaseFacetInfo?.BaseSourceTypeName == model.SourceTypeName;
                 var aliasNewMod = baseSrcMatches ? "new " : "";
@@ -205,7 +196,6 @@ internal static class CodeBuilder
         var sb = new StringBuilder();
         GenerateFileHeader(sb);
 
-        // Collect namespaces and static-using directives from ALL models
         var namespacesToImport = new HashSet<string>();
         var staticUsingTypes = new HashSet<string>();
         foreach (var m in models)
@@ -224,7 +214,6 @@ internal static class CodeBuilder
 
         sb.AppendLine();
 
-        // Enable nullable context if ANY model needs it
         var needsNullable = models.Any(m =>
             m.Members.Any(mem => !mem.IsValueType && mem.TypeName.EndsWith("?"))
             || m.MaxDepth > 0
@@ -248,7 +237,6 @@ internal static class CodeBuilder
 
         var keyword = GetTypeKeyword(primaryModel);
 
-        // Build the union of all members across source models, deduplicating by name (first-wins).
         var seenMemberNames = new HashSet<string>();
         var unionMembers = new System.Collections.Generic.List<FacetMember>();
         foreach (var m in models)
@@ -263,14 +251,12 @@ internal static class CodeBuilder
         var hasInitOnlyUnion = unionMembers.Any(m => m.IsInitOnly);
         var hasRequiredUnion = unionMembers.Any(m => m.IsRequired);
 
-        // Positional record logic uses the primary model's member set for the declaration
         var isPositional = primaryModel.IsRecord && !primaryModel.HasExistingPrimaryConstructor
             && !(primaryModel.TypeKind == TypeKind.Class && hasRequiredUnion);
         var shouldGenerateEquality = primaryModel.GenerateEquality && !primaryModel.IsRecord;
 
         if (isPositional)
         {
-            // Use the primary model for positional declaration (shares the primary source's shape)
             GeneratePositionalDeclaration(sb, primaryModel, keyword, containingTypeIndent);
         }
 
@@ -286,18 +272,14 @@ internal static class CodeBuilder
 
         var memberIndent = containingTypeIndent + "    ";
 
-        // Generate union of properties once
         if (!isPositional || primaryModel.HasExistingPrimaryConstructor)
         {
-            // Build a synthetic model view with union members for MemberGenerator
             MemberGenerator.GenerateMembers(sb, primaryModel, memberIndent, unionMembers);
         }
 
-        // Shared: parameterless constructor (from primary model)
         if (primaryModel.GenerateParameterlessConstructor)
             ConstructorGenerator.GenerateParameterlessConstructor(sb, primaryModel, isPositional);
 
-        // Per-source: constructors + FromSource factory methods
         foreach (var model in models)
         {
             if (!model.GenerateConstructor) continue;
@@ -310,18 +292,15 @@ internal static class CodeBuilder
             ConstructorGenerator.GenerateConstructor(
                 sb, model, isPositional, modelHasInitOnly, hasCustomMapping, modelHasRequired);
 
-            // Generate compiled projection-map action when config only provides ConfigureProjection (no Map)
             if (hasCustomMapping && !model.HasMapConfiguration && model.HasProjectionMapConfiguration)
             {
                 GenerateProjectionMapAction(sb, model, memberIndent);
             }
         }
 
-        // Shared: copy constructor (from primary model)
         if (primaryModel.GenerateCopyConstructor)
             CopyConstructorGenerator.Generate(sb, primaryModel, memberIndent);
 
-        // Per-source: projections (use source-specific names to avoid static property conflicts)
         foreach (var model in models)
         {
             if (!model.GenerateExpressionProjection) continue;
@@ -330,7 +309,6 @@ internal static class CodeBuilder
             ProjectionGenerator.GenerateProjectionProperty(sb, model, memberIndent, facetLookup, projectionName);
         }
 
-        // Per-source: ToSource methods (use source-specific names to avoid method conflicts)
         foreach (var model in models)
         {
             if (!model.GenerateToSource) continue;
@@ -339,7 +317,6 @@ internal static class CodeBuilder
             ToSourceGenerator.Generate(sb, model, facetLookup, toSourceName);
         }
 
-        // Per-source: ApplyToSource methods (mutate an existing source instance)
         foreach (var model in models)
         {
             if (!model.GenerateToSource || model.SourceHasPositionalConstructor) continue;
@@ -348,14 +325,12 @@ internal static class CodeBuilder
             ToSourceGenerator.GenerateApplyToSource(sb, model, facetLookup, applyMethodName);
         }
 
-        // Per-source: FlattenTo
         foreach (var model in models)
         {
             if (model.FlattenToTypes.Length > 0)
                 FlattenToGenerator.Generate(sb, model, memberIndent, facetLookup);
         }
 
-        // Shared: equality members (from primary model)
         if (shouldGenerateEquality)
             EqualityGenerator.Generate(sb, primaryModel, memberIndent);
 
@@ -390,7 +365,7 @@ internal static class CodeBuilder
     private static string? GetToSourceMethodName(FacetTargetModel model, IReadOnlyList<FacetTargetModel> allModels)
     {
         if (allModels.Count <= 1)
-            return null; // Use default "ToSource" + BackTo
+            return null; 
 
         return "To" + GetSourceSimpleName(model);
     }
@@ -405,7 +380,7 @@ internal static class CodeBuilder
     private static string? GetApplyToSourceMethodName(FacetTargetModel model, IReadOnlyList<FacetTargetModel> allModels)
     {
         if (allModels.Count <= 1)
-            return null; // Use default "ApplyToSource"
+            return null; 
 
         return "ApplyTo" + GetSourceSimpleName(model);
     }
@@ -451,7 +426,6 @@ internal static class CodeBuilder
         sb.AppendLine($"{innerIndent}var __assignments = new global::System.Collections.Generic.List<global::System.Linq.Expressions.Expression>();");
         sb.AppendLine();
 
-        // Apply all base Facet ConfigureProjection configs found in the ancestor chain
         if (model.BaseFacetInfo?.AllBaseProjectionConfigs.Length > 0)
         {
             sb.AppendLine($"{innerIndent}// Apply base Facet projection mappings");
@@ -475,7 +449,6 @@ internal static class CodeBuilder
             }
         }
 
-        // Apply derived ConfigureProjection
         sb.AppendLine($"{innerIndent}var __builder = new global::Facet.Mapping.FacetProjectionBuilder<{src}, {tgt}>();");
         sb.AppendLine($"{innerIndent}global::{model.ConfigurationTypeName}.ConfigureProjection(__builder);");
         sb.AppendLine($"{innerIndent}foreach (var (__member, __expr) in __builder.Mappings)");
@@ -511,7 +484,6 @@ internal static class CodeBuilder
         var containingTypeIndent = "";
         foreach (var containingType in model.ContainingTypes)
         {
-            // Don't specify accessibility for containing types - they're already defined in user code
             sb.AppendLine($"{containingTypeIndent}partial class {containingType}");
             sb.AppendLine($"{containingTypeIndent}{{");
             containingTypeIndent += "    ";
@@ -521,7 +493,6 @@ internal static class CodeBuilder
 
     private static void CloseContainingTypeHierarchy(StringBuilder sb, FacetTargetModel model, string containingTypeIndent)
     {
-        // Close containing type braces
         for (int i = model.ContainingTypes.Length - 1; i >= 0; i--)
         {
             containingTypeIndent = containingTypeIndent.Substring(0, containingTypeIndent.Length - 4);
@@ -547,15 +518,14 @@ internal static class CodeBuilder
             model.Members.Select(m =>
             {
                 var param = $"{m.TypeName} {m.Name}";
-                // Add required modifier for positional parameters if needed
+                
                 if (m.IsRequired && model.TypeKind == TypeKind.Struct && model.IsRecord)
                 {
                     param = $"required {param}";
                 }
                 return param;
             }));
-        // Suppress CS1591 (missing XML comment) warnings for generated positional declarations
-        // This prevents warnings when GenerateDocumentationFile is enabled
+        
         sb.AppendLine($"{indent}#pragma warning disable CS1591");
         sb.AppendLine($"{indent}{model.Accessibility} partial {keyword} {model.Name}({parameters});");
         sb.AppendLine($"{indent}#pragma warning restore CS1591");

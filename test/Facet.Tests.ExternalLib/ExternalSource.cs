@@ -1,4 +1,4 @@
-namespace Facet.Tests.ExternalLib;
+﻿namespace Facet.Tests.ExternalLib;
 
 /// <summary>
 /// An external source type with documented properties.

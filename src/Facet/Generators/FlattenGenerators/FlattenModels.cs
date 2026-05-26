@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using Facet.Generators;
 using Microsoft.CodeAnalysis;
 using System.Collections.Generic;

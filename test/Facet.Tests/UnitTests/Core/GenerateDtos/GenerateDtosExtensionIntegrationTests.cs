@@ -1,4 +1,4 @@
-using Facet.Extensions;
+﻿using Facet.Extensions;
 using Facet.Tests.TestModels;
 using System.Reflection;
 
@@ -13,13 +13,10 @@ public class GenerateDtosExtensionIntegrationTests
     [Fact]
     public void GeneratedResponseDto_ShouldWork_WithToFacetExtension()
     {
-        // Arrange
         var user = CreateTestUser();
 
-        // Act
         var responseDto = user.ToFacet<TestUserResponse>();
 
-        // Assert
         responseDto.Should().NotBeNull();
         responseDto.Id.Should().Be(user.Id);
         responseDto.FirstName.Should().Be(user.FirstName);
@@ -34,7 +31,6 @@ public class GenerateDtosExtensionIntegrationTests
     [Fact]
     public void GeneratedResponseDto_ShouldWork_WithSelectFacetsExtension()
     {
-        // Arrange
         var users = new List<TestUser>
         {
             CreateTestUser(1, "Alice", "Johnson", "alice@test.com"),
@@ -42,10 +38,8 @@ public class GenerateDtosExtensionIntegrationTests
             CreateTestUser(3, "Charlie", "Brown", "charlie@test.com")
         };
 
-        // Act
         var responseDtos = users.SelectFacets<TestUserResponse>().ToList();
 
-        // Assert
         responseDtos.Should().HaveCount(3);
         responseDtos[0].FirstName.Should().Be("Alice");
         responseDtos[0].LastName.Should().Be("Johnson");
@@ -58,17 +52,14 @@ public class GenerateDtosExtensionIntegrationTests
     [Fact]
     public void GeneratedResponseDto_ShouldWork_WithTypedSelectFacets()
     {
-        // Arrange
         var users = new List<TestUser>
         {
             CreateTestUser(1, "Test1", "User1"),
             CreateTestUser(2, "Test2", "User2")
         };
 
-        // Act - Using typed version for better performance
         var responseDtos = users.SelectFacets<TestUser, TestUserResponse>().ToList();
 
-        // Assert
         responseDtos.Should().HaveCount(2);
         responseDtos[0].FirstName.Should().Be("Test1");
         responseDtos[1].FirstName.Should().Be("Test2");
@@ -77,13 +68,10 @@ public class GenerateDtosExtensionIntegrationTests
     [Fact]
     public void GeneratedAuditableDto_ShouldWork_WithFacetExtensions()
     {
-        // Arrange
         var product = CreateTestProduct();
 
-        // Act - Test with auditable DTO (should exclude audit fields)
         var responseDto = product.ToFacet<TestProductResponse>();
 
-        // Assert
         responseDto.Should().NotBeNull();
         responseDto.Id.Should().Be(product.Id);
         responseDto.Name.Should().Be(product.Name);
@@ -91,7 +79,6 @@ public class GenerateDtosExtensionIntegrationTests
         responseDto.Price.Should().Be(product.Price);
         responseDto.IsAvailable.Should().Be(product.IsAvailable);
         
-        // Verify audit fields are not accessible (they should be excluded)
         var responseType = typeof(TestProductResponse);
         responseType.GetProperty("CreatedAt").Should().BeNull("Audit fields should be excluded");
         responseType.GetProperty("CreatedBy").Should().BeNull("Audit fields should be excluded");
@@ -102,7 +89,6 @@ public class GenerateDtosExtensionIntegrationTests
     [Fact]
     public void GeneratedDtos_ShouldWork_InLinqQueryScenarios()
     {
-        // Arrange
         var users = new List<TestUser>
         {
             CreateTestUser(1, "Active", "User1", email: "active1@test.com", isActive: true),
@@ -110,7 +96,6 @@ public class GenerateDtosExtensionIntegrationTests
             CreateTestUser(3, "Active", "User3", email: "active3@test.com", isActive: true)
         };
 
-        // Act - Complex LINQ scenario with generated DTOs
         var activeUserDtos = users
             .Where(u => u.IsActive)
             .SelectFacets<TestUserResponse>()
@@ -118,7 +103,6 @@ public class GenerateDtosExtensionIntegrationTests
             .OrderBy(dto => dto.LastName)
             .ToList();
 
-        // Assert
         activeUserDtos.Should().HaveCount(2);
         activeUserDtos[0].LastName.Should().Be("User1");
         activeUserDtos[1].LastName.Should().Be("User3");
@@ -128,17 +112,14 @@ public class GenerateDtosExtensionIntegrationTests
     [Fact]
     public void GeneratedDtos_ShouldWork_WithProjectionProperty()
     {
-        // Arrange
         var users = new List<TestUser>
         {
             CreateTestUser(1, "Projection", "Test1"),
             CreateTestUser(2, "Projection", "Test2")
         }.AsQueryable();
 
-        // Act - Using static Projection property
         var results = users.Select(TestUserResponse.Projection).ToList();
 
-        // Assert
         results.Should().HaveCount(2);
         results.Should().AllBeOfType<TestUserResponse>();
         results[0].FirstName.Should().Be("Projection");
@@ -150,18 +131,15 @@ public class GenerateDtosExtensionIntegrationTests
     [Fact]
     public void GeneratedDtos_ShouldWork_WithAsyncExtensions()
     {
-        // Arrange
         var users = new List<TestUser>
         {
             CreateTestUser(1, "Async", "Test1"),
             CreateTestUser(2, "Async", "Test2")
         };
 
-        // Act - Simulate async operation
         var task = Task.FromResult(users.SelectFacets<TestUserResponse>().ToList());
         var results = task.Result;
 
-        // Assert
         results.Should().HaveCount(2);
         results[0].FirstName.Should().Be("Async");
         results[1].FirstName.Should().Be("Async");
@@ -170,17 +148,13 @@ public class GenerateDtosExtensionIntegrationTests
     [Fact]
     public void GeneratedDtos_ShouldMaintain_TypeSafety()
     {
-        // Arrange
         var user = CreateTestUser();
 
-        // Act & Assert - Compile-time type safety
         TestUserResponse responseDto = user.ToFacet<TestUserResponse>();
         responseDto.Should().NotBeNull();
         
-        // Verify that we get strongly typed objects
         responseDto.Should().BeOfType<TestUserResponse>();
         
-        // Properties should be accessible with IntelliSense
         string firstName = responseDto.FirstName;
         int id = responseDto.Id;
         bool isActive = responseDto.IsActive;

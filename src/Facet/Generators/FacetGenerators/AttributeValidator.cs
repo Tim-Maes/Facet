@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using System;
 using System.Linq;
@@ -45,10 +45,9 @@ internal static class AttributeValidator
         if (string.IsNullOrWhiteSpace(configurationTypeName))
         {
             errorMessage = null;
-            return true; // No configuration type is valid
+            return true; 
         }
 
-        // Try to find the configuration type
         var configurationType = compilation.GetTypeByMetadataName(configurationTypeName);
         if (configurationType == null)
         {
@@ -57,7 +56,6 @@ internal static class AttributeValidator
             return false;
         }
 
-        // Check if it has a static Map method with the expected signature
         var mapMethod = configurationType.GetMembers("Map")
             .OfType<IMethodSymbol>()
             .FirstOrDefault(m => m.IsStatic &&
@@ -93,7 +91,6 @@ internal static class AttributeValidator
             return false;
         }
 
-        // Check if the nested facet has a valid source type
         if (facetAttribute.ConstructorArguments.Length == 0 ||
             facetAttribute.ConstructorArguments[0].Value is not INamedTypeSymbol)
         {
@@ -137,19 +134,17 @@ internal static class AttributeValidator
     {
         warningMessage = null;
 
-        // If there are no nested facets, circular reference settings don't matter
         if (!hasNestedFacets)
         {
             return true;
         }
 
-        // If PreserveReferences is false and MaxDepth is 0, warn about potential stack overflow
         if (!preserveReferences && maxDepth == 0)
         {
             warningMessage = "PreserveReferences is disabled and MaxDepth is set to 0 (unlimited). " +
                             "This configuration may cause stack overflow exceptions with circular references. " +
                             "Consider enabling PreserveReferences or setting a MaxDepth limit.";
-            return true; // This is a warning, not an error
+            return true; 
         }
 
         return true;

@@ -1,8 +1,7 @@
-using System.Linq.Expressions;
+﻿using System.Linq.Expressions;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
 
-// Entities with circular references: Project <-> Task
 public class ProjectEntityCR
 {
     public int Id { get; set; }
@@ -17,7 +16,6 @@ public class TaskEntityCR
     public ProjectEntityCR? Project { get; set; }
 }
 
-// Facets with Configuration (triggers lazy projection path) and circular nested facets
 [Facet(typeof(ProjectEntityCR),
        Configuration = typeof(ProjectDtoCRMapConfig),
        NestedFacets = [typeof(TaskDtoCR)],
@@ -59,15 +57,8 @@ public class CircularReferenceLazyProjectionTests
     [Fact]
     public void Projection_WithCircularNestedFacets_ShouldNotStackOverflow()
     {
-        // This test verifies that accessing Projection on facets with circular
-        // nested references does not cause a StackOverflowException.
-        // Before the fix, ProjectDtoCR.Projection would trigger TaskDtoCR.Projection
-        // which would trigger ProjectDtoCR.Projection again, causing infinite recursion.
-
-        // Act - should not throw StackOverflowException
         var projection = ProjectDtoCR.Projection;
 
-        // Assert - projection was built successfully
         projection.Should().NotBeNull();
         projection.Should().BeAssignableTo<Expression<Func<ProjectEntityCR, ProjectDtoCR>>>();
     }
@@ -75,7 +66,6 @@ public class CircularReferenceLazyProjectionTests
     [Fact]
     public void Projection_WithCircularNestedFacets_ShouldMapScalarProperties()
     {
-        // Arrange
         var entity = new ProjectEntityCR
         {
             Id = 1,
@@ -86,11 +76,9 @@ public class CircularReferenceLazyProjectionTests
             }
         };
 
-        // Act
         var compiled = ProjectDtoCR.Projection.Compile();
         var dto = compiled(entity);
 
-        // Assert - scalar properties and ConfigureProjection overrides should work
         dto.Id.Should().Be(1);
         dto.Name.Should().Be("PRJ-Alpha");
     }
@@ -98,7 +86,6 @@ public class CircularReferenceLazyProjectionTests
     [Fact]
     public void Projection_WithCircularNestedFacets_BothDirections_ShouldNotStackOverflow()
     {
-        // Access projection from the other direction too
         var taskProjection = TaskDtoCR.Projection;
 
         taskProjection.Should().NotBeNull();

@@ -1,4 +1,4 @@
-using Facet.Tests.ExternalLib;
+﻿using Facet.Tests.ExternalLib;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
 
@@ -7,7 +7,6 @@ public class CrossAssemblyCopyDocsTests
     [Fact]
     public void Facet_ShouldCopyXmlDocs_FromExternalAssembly()
     {
-        // Arrange & Act - verify the generated code contains docs from external assembly
         var source = LoadGeneratedSource(typeof(FacetOfExternal).FullName!);
         source.Should().NotBeEmpty("generated file should exist");
         source.Should().Contain("This is an external property.");
@@ -17,7 +16,6 @@ public class CrossAssemblyCopyDocsTests
     [Fact]
     public void Facet_ShouldCopyXmlDocs_FromBothInternalAndExternal()
     {
-        // Arrange & Act - verify docs from both internal and external sources
         var source = LoadGeneratedSource(typeof(FacetOfBoth).FullName!);
         source.Should().NotBeEmpty("generated file should exist");
         source.Should().Contain("This is an external property.");
@@ -27,7 +25,6 @@ public class CrossAssemblyCopyDocsTests
     [Fact]
     public void Facet_ShouldCopyXmlDocs_FromInternalSource()
     {
-        // Arrange & Act - internal source docs should always work (regression test)
         var source = LoadGeneratedSource(typeof(FacetOfInternal).FullName!);
         source.Should().NotBeEmpty("generated file should exist");
         source.Should().Contain("This is an internal property.");
@@ -41,8 +38,6 @@ public class CrossAssemblyCopyDocsTests
         catch (FileNotFoundException) { return string.Empty; }
     }
 }
-
-// ---- Test models for cross-assembly CopyDocs ----
 
 public class InternalSource
 {

@@ -1,4 +1,4 @@
-using Facet.Tests.TestModels;
+﻿using Facet.Tests.TestModels;
 using Facet.Tests.Utilities;
 
 namespace Facet.Tests.UnitTests.Features;
@@ -8,7 +8,6 @@ public class ToSourceRequiredFieldsTests
     [Fact]
     public void ToSource_ShouldWork_WithExcludedRequiredFields()
     {
-        // Arrange
         var eventLog = new EventLog
         {
             Id = "test-event",
@@ -21,10 +20,8 @@ public class ToSourceRequiredFieldsTests
 
         var facet = eventLog.ToFacet<EventLog, EventLogDto>();
 
-        // Act
         var result = facet.ToSource<EventLog>();
 
-        // Assert
         result.Should().NotBeNull();
         result.Id.Should().Be("test-event");
         result.EventType.Should().Be("TestEvent");
@@ -37,7 +34,6 @@ public class ToSourceRequiredFieldsTests
     [Fact]
     public void ToSource_ShouldProvideDefaultValues_ForExcludedRequiredFields()
     {
-        // Arrange
         var originalEventLog = new EventLog
         {
             Id = "event-123",
@@ -50,10 +46,8 @@ public class ToSourceRequiredFieldsTests
 
         var eventLogDto = originalEventLog.ToFacet<EventLog, EventLogDto>();
 
-        // Act
         var mappedEventLog = eventLogDto.ToSource<EventLog>();
 
-        // Assert
         mappedEventLog.Should().NotBeNull();
         mappedEventLog.Id.Should().Be("event-123");
         mappedEventLog.EventType.Should().Be("UserLogin");
@@ -61,13 +55,12 @@ public class ToSourceRequiredFieldsTests
         mappedEventLog.Message.Should().Be("User logged in successfully");
         mappedEventLog.UserId.Should().Be("user-456");
 
-        mappedEventLog.Source.Should().Be(string.Empty); // String default value
+        mappedEventLog.Source.Should().Be(string.Empty); 
     }
 
     [Fact]
     public void ToSource_ShouldProvideDefaultStruct_ForExcludedRequiredStructFields()
     {
-        // Arrange
         var entity = new LocationEntity
         {
             Name = "Office",
@@ -77,13 +70,11 @@ public class ToSourceRequiredFieldsTests
 
         var dto = entity.ToFacet<LocationEntity, LocationDto>();
 
-        // Act
         var result = dto.ToSource<LocationEntity>();
 
-        // Assert
         result.Should().NotBeNull();
         result.Name.Should().Be("Office");
         result.Description.Should().Be("Main office");
-        result.Location.Should().Be(default(GeoLocation)); // Struct default, not null
+        result.Location.Should().Be(default(GeoLocation)); 
     }
 }

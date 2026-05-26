@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using Facet.Generators;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -31,7 +31,6 @@ internal static class FlattenModelBuilder
         var sourceType = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
         if (sourceType == null) return null;
 
-        // Extract attribute parameters
         var excludedPaths = ExtractExcludedPaths(attribute, context);
         var maxDepth = GetNamedArg(attribute.NamedArguments, "MaxDepth", 3);
         var namingStrategy = GetNamedArg(attribute.NamedArguments, "NamingStrategy", FlattenNamingStrategy.Prefix);
@@ -43,16 +42,12 @@ internal static class FlattenModelBuilder
         var ignoreForeignKeyClashes = GetNamedArg(attribute.NamedArguments, "IgnoreForeignKeyClashes", false);
         var includeCollections = GetNamedArg(attribute.NamedArguments, "IncludeCollections", false);
 
-        // Infer the type kind from the target type declaration
         var (typeKind, isRecord) = TypeAnalyzer.InferTypeKind(targetSymbol);
 
-        // Create external XML doc provider for cross-assembly documentation resolution
         var externalDocProvider = new ExternalXmlDocProvider(context.SemanticModel.Compilation);
 
-        // Extract type-level XML documentation
         var typeXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(sourceType, false, externalDocProvider);
 
-        // Discover flattened properties
         var properties = DiscoverFlattenedProperties(
             sourceType,
             excludedPaths,
@@ -65,7 +60,6 @@ internal static class FlattenModelBuilder
             externalDocProvider,
             token);
 
-        // Determine full name
         string fullName = useFullName
             ? targetSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).GetSafeName()
             : targetSymbol.Name;
@@ -74,7 +68,6 @@ internal static class FlattenModelBuilder
             ? null
             : targetSymbol.ContainingNamespace.ToDisplayString();
 
-        // Get containing types for nested classes
         var containingTypes = TypeAnalyzer.GetContainingTypes(targetSymbol);
 
         return new FlattenTargetModel(
@@ -98,11 +91,9 @@ internal static class FlattenModelBuilder
     {
         var excluded = new HashSet<string>();
 
-        // Get the source type name for stripping from full nameof paths
         var sourceType = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
         var sourceTypeName = sourceType?.Name ?? string.Empty;
 
-        // Helper to process a single expression and add to set
         void ProcessExpression(ExpressionSyntax expr)
         {
             if (expr == null) return;
@@ -112,8 +103,6 @@ internal static class FlattenModelBuilder
                 var (resolved, hadLeadingAt) = NameOfResolver.ResolveExpression(expr);
                 if (!string.IsNullOrEmpty(resolved))
                 {
-                    // If @ was used, the path includes the source type name, so strip it
-                    // e.g., @Company.HeadquartersAddress.ZipCode -> HeadquartersAddress.ZipCode
                     var path = resolved!;
                     if (hadLeadingAt && !string.IsNullOrEmpty(sourceTypeName) && path.StartsWith(sourceTypeName + "."))
                     {
@@ -125,10 +114,8 @@ internal static class FlattenModelBuilder
             }
             catch
             {
-                // ignore and fallback
             }
 
-            // Prefer literal extraction for string literals
             if (expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
             {
                 var val = lit.Token.ValueText;
@@ -136,7 +123,6 @@ internal static class FlattenModelBuilder
                 return;
             }
 
-            // Handle array/initializer or other expressions by textual fallback (strip quotes)
             var text = expr.ToString().Trim();
             if (text.Length == 0) return;
 
@@ -152,14 +138,11 @@ internal static class FlattenModelBuilder
             if (!string.IsNullOrEmpty(text)) excluded.Add(text);
         }
 
-        // Try to resolve from syntax if context is available
         if (context != null && attribute.ApplicationSyntaxReference?.GetSyntax() is AttributeSyntax attrSyntax)
         {
-            // Try positional argument first (constructor params)
             var positionalArgs = attrSyntax.ArgumentList?.Arguments.Where(a => a.NameEquals == null && a.NameColon == null).ToList();
             if (positionalArgs != null && positionalArgs.Count > 1)
             {
-                // Second positional argument is the exclude array
                 var excludeArg = positionalArgs[1];
                 var expr = excludeArg.Expression;
                 InitializerExpressionSyntax? initializer = null;
@@ -184,7 +167,6 @@ internal static class FlattenModelBuilder
                 }
             }
 
-            // Try named argument (Exclude = ...)
             var excludeNamed = attrSyntax.ArgumentList?.Arguments.FirstOrDefault(a => (a.NameEquals?.Name.Identifier.ValueText == "Exclude") || (a.NameColon?.Name.Identifier.ValueText == "Exclude"));
             if (excludeNamed != null)
             {
@@ -203,7 +185,7 @@ internal static class FlattenModelBuilder
                         initializer = directInit;
                         break;
                     case CollectionExpressionSyntax collectionExpr:
-                        // Handle C# 12 collection expression syntax: [item1, item2, ...]
+                        
                         foreach (var element in collectionExpr.Elements)
                         {
                             if (element is ExpressionElementSyntax exprElem)
@@ -224,8 +206,6 @@ internal static class FlattenModelBuilder
 
         }
 
-        // Fallback to compiled attribute data
-        // Check constructor argument (params string[] exclude)
         if (attribute.ConstructorArguments.Length > 1)
         {
             var excludeArg = attribute.ConstructorArguments[1];
@@ -241,7 +221,6 @@ internal static class FlattenModelBuilder
             }
         }
 
-        // Check named argument
         foreach (var namedArg in attribute.NamedArguments)
         {
             if (namedArg.Key == "Exclude" && namedArg.Value.Kind == TypedConstantKind.Array)
@@ -276,12 +255,10 @@ internal static class FlattenModelBuilder
         var collectionTypeCache = new Dictionary<ITypeSymbol, bool>(SymbolEqualityComparer.Default);
         var leafTypeCache = new Dictionary<ITypeSymbol, bool>(SymbolEqualityComparer.Default);
 
-        // Collect potential foreign keys and their navigation properties for clash detection
         var foreignKeyPaths = ignoreForeignKeyClashes
             ? CollectAllForeignKeyPaths(sourceType, includeFields, namingStrategy, new List<string>(), new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default), collectionTypeCache, 0, maxDepth)
             : new HashSet<string>();
 
-        // For SmartLeaf, we need to identify collisions first
         var collidingLeafNames = new HashSet<string>();
         if (namingStrategy == FlattenNamingStrategy.SmartLeaf)
         {
@@ -299,7 +276,6 @@ internal static class FlattenModelBuilder
                 token);
         }
 
-        // Start recursive discovery
         DiscoverPropertiesRecursive(
             sourceType,
             "",
@@ -358,7 +334,6 @@ internal static class FlattenModelBuilder
             leafTypeCache,
             token);
 
-        // Return only names that appear more than once
         return new HashSet<string>(leafNameCounts
             .Where(kvp => kvp.Value > 1)
             .Select(kvp => kvp.Key));
@@ -432,7 +407,6 @@ internal static class FlattenModelBuilder
             var newPathSegments = new List<string>(pathSegments) { memberName };
             var leafName = memberName;
 
-            // For SmartLeaf, use LeafOnly naming to identify collisions
             var flattenedName = GenerateFlattenedName(newPathSegments, FlattenNamingStrategy.LeafOnly);
 
             if (ignoreForeignKeyClashes && depth > 0 && foreignKeyPaths.Contains(flattenedName))
@@ -442,7 +416,6 @@ internal static class FlattenModelBuilder
 
             if (IsCollectionType(memberType, collectionTypeCache))
             {
-                // If includeCollections is true, count it as a leaf for collision detection
                 if (includeCollections)
                 {
                     if (leafNameCounts.ContainsKey(leafName))
@@ -505,11 +478,9 @@ internal static class FlattenModelBuilder
     {
         var foreignKeyPaths = new HashSet<string>();
 
-        // Check depth limits
         if (maxDepth > 0 && depth >= maxDepth) return foreignKeyPaths;
-        if (depth >= 10) return foreignKeyPaths; // Safety limit
+        if (depth >= 10) return foreignKeyPaths; 
 
-        // Prevent infinite recursion
         if (!visitedTypes.Add(currentType)) return foreignKeyPaths;
 
         var members = includeFields
@@ -548,7 +519,6 @@ internal static class FlattenModelBuilder
             var memberName = member.Name;
             var memberType = propertyTypes[memberName];
 
-            // Check if this is a FK pattern
             if (memberName.EndsWith("Id") && memberName.Length > 2)
             {
                 var underlyingType = memberType;
@@ -560,11 +530,9 @@ internal static class FlattenModelBuilder
 
                 if (underlyingType.IsValueType)
                 {
-                    // Check if there's a matching navigation property
                     var potentialNavProp = memberName.Substring(0, memberName.Length - 2);
                     if (allPropertyNames.Contains(potentialNavProp))
                     {
-                        // This is a forein key!
                         var fkPath = new List<string>(currentPath) { memberName };
                         var flattenedFkName = GenerateFlattenedName(fkPath, namingStrategy);
                         foreignKeyPaths.Add(flattenedFkName);
@@ -574,7 +542,7 @@ internal static class FlattenModelBuilder
 
             if (IsCollectionType(memberType, collectionTypeCache))
             {
-                continue; // Skip collections
+                continue; 
             }
 
             if (memberType.TypeKind == TypeKind.Class && memberType.SpecialType == SpecialType.None)
@@ -622,16 +590,13 @@ internal static class FlattenModelBuilder
     {
         token.ThrowIfCancellationRequested();
 
-        // Check max depth (0 means unlimited, but we cap at 10 for safety)
         if (maxDepth > 0 && depth >= maxDepth) return;
-        if (depth >= 10) return; // Safety limit
+        if (depth >= 10) return; 
 
-        // Prevent infinite recursion
         if (!visitedTypes.Add(currentType)) return;
 
         if (currentType is not INamedTypeSymbol namedType) return;
 
-        // Get all members
         var members = includeFields
             ? namedType.GetMembers().Where(m => m is IPropertySymbol or IFieldSymbol)
             : namedType.GetMembers().OfType<IPropertySymbol>();
@@ -658,17 +623,12 @@ internal static class FlattenModelBuilder
                 continue;
             }
 
-            // Build the path for this member
             var newPath = string.IsNullOrEmpty(currentPath) ? memberName : $"{currentPath}.{memberName}";
 
-            // Check if excluded
             if (IsExcluded(newPath, excludedPaths)) continue;
 
-            // Check if this is an ID property that should be ignored
             if (ignoreNestedIds && IsIdProperty(memberName))
             {
-                // At root level (depth == 0): only keep the exact "Id" property, exclude foreign keys (e.g., "CustomerId")
-                // At nested levels (depth > 0): exclude all ID properties
                 if (depth > 0 || memberName != "Id")
                 {
                     continue;
@@ -681,15 +641,12 @@ internal static class FlattenModelBuilder
 
             if (ignoreForeignKeyClashes && depth > 0 && foreignKeyPaths.Contains(flattenedName))
             {
-                // This property would clash with a fk property
-                // Skip it to avoid duplication
                 continue;
             }
 
             bool isCollection = IsCollectionType(memberType, collectionTypeCache);
             if (isCollection)
             {
-                // If includeCollections is enabled, add collection properties as-is
                 if (includeCollections)
                 {
                     if (seenNames.Contains(flattenedName))
@@ -707,21 +664,18 @@ internal static class FlattenModelBuilder
 
                     seenNames.Add(flattenedName);
 
-                    // Get XML documentation
                     var xmlDoc = CodeGenerationHelpers.ExtractXmlDocumentation(member, false, externalDocProvider);
 
-                    // Use the exact type name from the source - collections are included as-is
                     var typeName = GeneratorUtilities.GetTypeNameWithNullability(memberType);
 
-                    // Create flattened property for the collection
                     properties.Add(new FlattenProperty(
                         flattenedName,
                         typeName,
                         newPath,
                         newPathSegments.ToImmutableArray(),
-                        false, // Collections are reference types
+                        false, 
                         xmlDoc,
-                        true)); // Mark as collection
+                        true)); 
                 }
                 continue;
             }
@@ -743,14 +697,11 @@ internal static class FlattenModelBuilder
 
                 seenNames.Add(flattenedName);
 
-                // Get XML documentation
                 var xmlDoc = CodeGenerationHelpers.ExtractXmlDocumentation(member, false, externalDocProvider);
 
-                // Determine the type name - nested value types need to be nullable because of ?. operators
                 string typeName;
                 if (depth > 0 && memberType.IsValueType && memberType.NullableAnnotation != NullableAnnotation.Annotated)
                 {
-                    // Make nested value types nullable (e.g., Customer.Id becomes int? not int)
                     typeName = $"{GeneratorUtilities.GetTypeNameWithNullability(memberType)}?";
                 }
                 else
@@ -758,7 +709,6 @@ internal static class FlattenModelBuilder
                     typeName = GeneratorUtilities.GetTypeNameWithNullability(memberType);
                 }
 
-                // Create flattened property
                 properties.Add(new FlattenProperty(
                     flattenedName,
                     typeName,
@@ -766,11 +716,10 @@ internal static class FlattenModelBuilder
                     newPathSegments.ToImmutableArray(),
                     memberType.IsValueType,
                     xmlDoc,
-                    false)); // Not a collection
+                    false)); 
             }
             else
             {
-                // Recurse into complex type (reuse visitedTypes for better performance)
                 DiscoverPropertiesRecursive(
                     memberType,
                     newPath,
@@ -800,7 +749,6 @@ internal static class FlattenModelBuilder
 
     private static bool ShouldFlattenAsLeaf(ITypeSymbol type, Dictionary<ITypeSymbol, bool> cache)
     {
-        // Check cache first
         if (cache.TryGetValue(type, out var cachedResult))
         {
             return cachedResult;
@@ -813,25 +761,19 @@ internal static class FlattenModelBuilder
 
     private static bool ShouldFlattenAsLeafCore(ITypeSymbol type)
     {
-        // Special types - fast path for primitives
         var specialType = type.SpecialType;
         if (specialType != SpecialType.None && specialType != SpecialType.System_Object)
         {
-            return true; // string, int, bool, etc.
+            return true; 
         }
 
-        // Enums - fast path
         if (type.TypeKind == TypeKind.Enum)
         {
             return true;
         }
 
-        // Note: Collections are already filtered out before this method is called
-
-        // Value types (struct, DateTime, Guid, etc.) but not complex nested structs
         if (type.IsValueType)
         {
-            // Check for common value types by namespace and name (faster than ToDisplayString)
             var ns = type.ContainingNamespace;
             if (ns?.Name == "System" && ns.ContainingNamespace?.IsGlobalNamespace == true)
             {
@@ -846,25 +788,21 @@ internal static class FlattenModelBuilder
                 }
             }
 
-            // For other value types, check if they're simple (few properties)
-            // This is expensive, so only do it if necessary
             if (type is INamedTypeSymbol namedValueType)
             {
-                // Quick check: if it has no members, it's simple
                 var members = namedValueType.GetMembers();
                 if (members.Length == 0)
                 {
                     return true;
                 }
 
-                // Count properties (cached by Roslyn)
                 var propertyCount = 0;
                 foreach (var member in members)
                 {
                     if (member is IPropertySymbol)
                     {
                         propertyCount++;
-                        if (propertyCount > 2) // Early exit
+                        if (propertyCount > 2) 
                         {
                             return false;
                         }
@@ -879,7 +817,6 @@ internal static class FlattenModelBuilder
 
     private static bool IsCollectionType(ITypeSymbol type, Dictionary<ITypeSymbol, bool> cache)
     {
-        // Check cache first
         if (cache.TryGetValue(type, out var cachedResult))
         {
             return cachedResult;
@@ -892,20 +829,16 @@ internal static class FlattenModelBuilder
 
     private static bool IsCollectionTypeCore(ITypeSymbol type)
     {
-        // Quick check: string is not a collection even though it's IEnumerable<char>
         if (type.SpecialType == SpecialType.System_String)
         {
             return false;
         }
 
-        // Arrays are collections
         if (type.TypeKind == TypeKind.Array)
         {
             return true;
         }
 
-        // Check the type name itself first (e.g., List<T>, IEnumerable<T>)
-        // This is much faster than checking namespace or interfaces
         var typeName = type.Name;
         if (typeName.StartsWith("IEnumerable") ||
             typeName.StartsWith("ICollection") ||
@@ -920,7 +853,6 @@ internal static class FlattenModelBuilder
             return true;
         }
 
-        // Check namespace - most collections are in System.Collections
         var ns = type.ContainingNamespace;
         while (ns != null && !ns.IsGlobalNamespace)
         {
@@ -931,8 +863,7 @@ internal static class FlattenModelBuilder
             ns = ns.ContainingNamespace;
         }
 
-        // Only check interfaces as absolute last resort - this is very expensive
-        // Only do this for types we haven't already identified
+        // Checking interfaces is the expensive fallback.
         if (type is INamedTypeSymbol namedType && namedType.AllInterfaces.Length > 0)
         {
             foreach (var iface in namedType.AllInterfaces)
@@ -952,17 +883,14 @@ internal static class FlattenModelBuilder
 
     private static bool IsIdProperty(string propertyName)
     {
-        // Check if property is named "Id" or ends with "Id"
-        // Note: This includes both the entity's own Id and foreign keys like CustomerId, CompanyId, etc.
+        // Treat foreign keys like CustomerId as Id properties too.
         return propertyName == "Id" || propertyName.EndsWith("Id");
     }
 
     private static bool IsExcluded(string path, HashSet<string> excludedPaths)
     {
-        // Check exact match
         if (excludedPaths.Contains(path)) return true;
 
-        // Check if any parent path is excluded
         foreach (var excludedPath in excludedPaths)
         {
             if (path.StartsWith(excludedPath + ".")) return true;
@@ -982,19 +910,15 @@ internal static class FlattenModelBuilder
         {
             var leafName = pathSegments.Last();
 
-            // If this leaf name collides with another, use parent + leaf
             if (collidingLeafNames != null && collidingLeafNames.Contains(leafName) && pathSegments.Count >= 2)
             {
-                // Use immediate parent + leaf name
                 var parentName = pathSegments[pathSegments.Count - 2];
                 return parentName + leafName;
             }
 
-            // No collision, use leaf only
             return leafName;
         }
 
-        // Prefix strategy (default)
         return string.Join("", pathSegments);
     }
 
@@ -1006,7 +930,6 @@ internal static class FlattenModelBuilder
         var value = arg.Value.Value;
         if (value is T typedValue) return typedValue;
 
-        // Handle enum types - Roslyn returns enums as their underlying int value
         if (typeof(T).IsEnum && value is int intValue)
         {
             return (T)(object)intValue;

@@ -1,4 +1,4 @@
-using Facet.Tests.TestModels;
+﻿using Facet.Tests.TestModels;
 
 namespace Facet.Tests.UnitTests.Core.GenerateDtos;
 
@@ -11,7 +11,6 @@ public class GenerateDtosPatchTests
     [Fact]
     public void PatchDto_ApplyTo_ShouldOnlyUpdateSpecifiedProperties()
     {
-        // Arrange
         var entity = new PatchTestEntity
         {
             Id = 1,
@@ -25,13 +24,11 @@ public class GenerateDtosPatchTests
         {
             Name = new Optional<string>("Updated"),
             Price = new Optional<decimal>(200m)
-            // Email, IsActive, and Id are not set (unspecified)
+            
         };
 
-        // Act
         patch.ApplyTo(entity);
 
-        // Assert
         entity.Name.Should().Be("Updated", "Name was specified in patch");
         entity.Price.Should().Be(200m, "Price was specified in patch");
         entity.Email.Should().Be("original@example.com", "Email was not specified in patch");
@@ -42,7 +39,6 @@ public class GenerateDtosPatchTests
     [Fact]
     public void PatchDto_ApplyTo_ShouldHandleExplicitNullValues()
     {
-        // Arrange
         var entity = new PatchTestEntity
         {
             Id = 1,
@@ -53,14 +49,12 @@ public class GenerateDtosPatchTests
 
         var patch = new PatchTestEntityPatch
         {
-            Email = new Optional<string?>(null),  // Explicitly set to null
-            LastLoginAt = new Optional<DateTime?>(null)  // Explicitly set to null
+            Email = new Optional<string?>(null),  
+            LastLoginAt = new Optional<DateTime?>(null)  
         };
 
-        // Act
         patch.ApplyTo(entity);
 
-        // Assert
         entity.Email.Should().BeNull("Email was explicitly set to null");
         entity.LastLoginAt.Should().BeNull("LastLoginAt was explicitly set to null");
         entity.Name.Should().Be("Test", "Name was not modified");
@@ -69,7 +63,6 @@ public class GenerateDtosPatchTests
     [Fact]
     public void PatchDto_ApplyTo_ShouldNotUpdateUnspecifiedProperties()
     {
-        // Arrange
         var originalDate = DateTime.Now;
         var entity = new PatchTestEntity
         {
@@ -82,12 +75,9 @@ public class GenerateDtosPatchTests
         };
 
         var patch = new PatchTestEntityPatch();
-        // All properties are unspecified (default Optional<T> values)
-
-        // Act
+        
         patch.ApplyTo(entity);
 
-        // Assert - Nothing should have changed
         entity.Id.Should().Be(1);
         entity.Name.Should().Be("Original");
         entity.Email.Should().Be("original@example.com");
@@ -99,7 +89,6 @@ public class GenerateDtosPatchTests
     [Fact]
     public void PatchDto_ApplyTo_ShouldHandleValueTypes()
     {
-        // Arrange
         var entity = new PatchTestEntity
         {
             Id = 1,
@@ -114,10 +103,8 @@ public class GenerateDtosPatchTests
             Id = new Optional<int>(42)
         };
 
-        // Act
         patch.ApplyTo(entity);
 
-        // Assert
         entity.IsActive.Should().BeTrue("IsActive was updated to true");
         entity.Price.Should().Be(250.50m, "Price was updated");
         entity.Id.Should().Be(42, "Id was updated");
@@ -126,23 +113,19 @@ public class GenerateDtosPatchTests
     [Fact]
     public void PatchDto_ApplyTo_WithNullTarget_ShouldThrow()
     {
-        // Arrange
         var patch = new PatchTestEntityPatch
         {
             Name = new Optional<string>("Test")
         };
 
-        // Act
         Action act = () => patch.ApplyTo(null!);
 
-        // Assert
         act.Should().Throw<ArgumentNullException>();
     }
 
     [Fact]
     public void PatchDto_ApplyTo_ShouldHandleAllPropertyUpdatesInSingleCall()
     {
-        // Arrange
         var entity = new PatchTestEntity
         {
             Id = 1,
@@ -164,10 +147,8 @@ public class GenerateDtosPatchTests
             LastLoginAt = new Optional<DateTime?>(newLoginDate)
         };
 
-        // Act
         patch.ApplyTo(entity);
 
-        // Assert
         entity.Id.Should().Be(42);
         entity.Name.Should().Be("New");
         entity.Email.Should().Be("new@example.com");
@@ -179,7 +160,6 @@ public class GenerateDtosPatchTests
     [Fact]
     public void PatchDto_ApplyTo_ShouldDistinguishBetweenNullAndUnspecified()
     {
-        // Arrange
         var entity1 = new PatchTestEntity
         {
             Id = 1,
@@ -196,18 +176,15 @@ public class GenerateDtosPatchTests
 
         var patchWithNull = new PatchTestEntityPatch
         {
-            Email = new Optional<string?>(null),  // Explicitly null
-            LastLoginAt = new Optional<DateTime?>(null)  // Explicitly null
+            Email = new Optional<string?>(null),  
+            LastLoginAt = new Optional<DateTime?>(null)  
         };
 
         var patchWithUnspecified = new PatchTestEntityPatch();
-        // Email and LastLoginAt are unspecified (default Optional values)
-
-        // Act
+        
         patchWithNull.ApplyTo(entity1);
         patchWithUnspecified.ApplyTo(entity2);
 
-        // Assert
         entity1.Email.Should().BeNull("Email was explicitly set to null");
         entity1.LastLoginAt.Should().BeNull("LastLoginAt was explicitly set to null");
 
@@ -218,30 +195,25 @@ public class GenerateDtosPatchTests
     [Fact]
     public void PatchDto_ImplicitConversion_ShouldWork()
     {
-        // Arrange
         var entity = new PatchTestEntity
         {
             Name = "Original"
         };
 
-        // Act - Use implicit conversion
         var patch = new PatchTestEntityPatch
         {
-            Name = "Updated"  // Implicitly converted to Optional<string>
+            Name = "Updated"  
         };
         patch.ApplyTo(entity);
 
-        // Assert
         entity.Name.Should().Be("Updated");
     }
 
     [Fact]
     public void PatchDto_Properties_ShouldBeOptionalType()
     {
-        // Arrange & Act
         var patch = new PatchTestEntityPatch();
 
-        // Assert - Verify properties are Optional<T>
         patch.Id.Should().BeOfType<Optional<int>>();
         patch.Name.Should().BeOfType<Optional<string>>();
         patch.Email.Should().BeOfType<Optional<string?>>();
@@ -253,10 +225,8 @@ public class GenerateDtosPatchTests
     [Fact]
     public void PatchDto_DefaultState_ShouldHaveNoValues()
     {
-        // Arrange & Act
         var patch = new PatchTestEntityPatch();
 
-        // Assert - All properties should have no value by default
         patch.Id.HasValue.Should().BeFalse();
         patch.Name.HasValue.Should().BeFalse();
         patch.Email.HasValue.Should().BeFalse();
@@ -268,7 +238,6 @@ public class GenerateDtosPatchTests
     [Fact]
     public void PatchDto_PartialUpdate_RealWorldScenario()
     {
-        // Arrange - Simulate a real API PATCH scenario
         var existingUser = new PatchTestEntity
         {
             Id = 123,
@@ -279,17 +248,15 @@ public class GenerateDtosPatchTests
             Price = 99.99m
         };
 
-        // Act - Client only wants to update name and deactivate
         var patchFromClient = new PatchTestEntityPatch
         {
             Name = "Jane Doe",
             IsActive = false
-            // Other properties intentionally not set
+            
         };
 
         patchFromClient.ApplyTo(existingUser);
 
-        // Assert
         existingUser.Id.Should().Be(123, "Id unchanged");
         existingUser.Name.Should().Be("Jane Doe", "Name updated");
         existingUser.Email.Should().Be("john@example.com", "Email unchanged");

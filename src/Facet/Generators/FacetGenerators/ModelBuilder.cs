@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -66,11 +66,9 @@ internal static class ModelBuilder
         var sourceType = attribute.ConstructorArguments[0].Value as INamedTypeSymbol;
         if (sourceType == null) return null;
 
-        // Parse attribute arguments
         var excluded = AttributeParser.ExtractExcludedMembers(attribute);
         var (included, isIncludeMode) = AttributeParser.ExtractIncludedMembers(attribute);
 
-        // Extract configuration settings - use global defaults when not explicitly set on the attribute
         var includeFields = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.IncludeFields, globalDefaults.IncludeFields);
         var generateConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateConstructor, globalDefaults.GenerateConstructor);
         var generateParameterlessConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateParameterlessConstructor, globalDefaults.GenerateParameterlessConstructor);
@@ -81,10 +79,8 @@ internal static class ModelBuilder
         var beforeMapConfigurationTypeName = AttributeParser.ExtractBeforeMapConfigurationTypeName(attribute);
         var afterMapConfigurationTypeName = AttributeParser.ExtractAfterMapConfigurationTypeName(attribute);
 
-        // Infer the type kind and whether it's a record from the target type declaration
         var (typeKind, isRecord) = TypeAnalyzer.InferTypeKind(targetSymbol);
 
-        // Get the accessibility modifier
         var accessibility = targetSymbol.DeclaredAccessibility switch
         {
             Accessibility.Public => "public",
@@ -96,8 +92,6 @@ internal static class ModelBuilder
             _ => "public"
         };
 
-        // For record types, default to preserving init-only and required modifiers
-        // unless explicitly overridden by the user
         var preserveInitOnlyDefault = isRecord;
         var preserveRequiredDefault = isRecord;
 
@@ -111,21 +105,15 @@ internal static class ModelBuilder
         var preserveReferences = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.PreserveReferences, globalDefaults.PreserveReferences);
         var maxDepthToSource = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.MaxDepthToSource, globalDefaults.MaxDepthToSource);
 
-        // Extract ConvertEnumsTo parameter
         var convertEnumsTo = AttributeParser.ExtractConvertEnumsTo(attribute);
 
-        // Extract SetAccessor parameter
         var setAccessor = (PropertySetAccessor)AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.SetAccessor, (int)PropertySetAccessor.Preserve);
 
-        // Extract GenerateCopyConstructor and GenerateEquality parameters - use global defaults
         var generateCopyConstructor = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateCopyConstructor, globalDefaults.GenerateCopyConstructor);
         var generateEquality = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.GenerateEquality, globalDefaults.GenerateEquality);
 
-        // Extract ToSourceConfiguration parameter
         var toSourceConfigurationTypeName = AttributeParser.ExtractToSourceConfigurationTypeName(attribute);
 
-        // Detect if the configuration type implements IFacetProjectionMapConfiguration<TSource, TTarget>
-        // and/or IFacetMapConfiguration<TSource, TTarget>
         var configTypeSymbol = AttributeParser.ExtractConfigurationTypeSymbol(attribute);
         var hasProjectionMapConfiguration = false;
         var hasMapConfiguration = false;
@@ -154,26 +142,16 @@ internal static class ModelBuilder
         var expressionMembers = new List<FacetMember>();
         var mapFromMappings = ExtractMapFromMappings(targetSymbol, expressionMembers, nullableProperties);
 
-        // Extract MapWhen attribute mappings from target type properties
         var mapWhenMappings = ExtractMapWhenMappings(targetSymbol);
 
-        // Create external XML doc provider for cross-assembly documentation resolution
         var externalDocProvider = copyDocs ? new ExternalXmlDocProvider(context.SemanticModel.Compilation) : null;
 
-        // Extract type-level XML documentation from the source type
         var typeXmlDocumentation = CodeGenerationHelpers.ExtractXmlDocumentation(sourceType, inheritDocs, externalDocProvider);
 
-        // Collect base class member names early, needed by ExtractMembers to auto-include
         var baseClassMemberNames = GetBaseClassMemberNames(targetSymbol);
 
-        // Get base Facet info early so we can merge Include properties from the base Facet
         var baseFacetInfo = GetBaseFacetInfo(targetSymbol, sourceType, context.SemanticModel.Compilation);
 
-        // If the target inherits from another Facet that has Include properties, merge them
-        // into the derived included set (so they appear in projections/constructors) and also
-        // add them to baseClassMemberNames so MemberGenerator won't re-declare properties that
-        // the base Facet already generates (source generators can't see their own output, so
-        // GetBaseClassMemberNames misses these generated properties, causing CS0108 warnings).
         if (baseFacetInfo != null && !baseFacetInfo.IncludedMembers.IsDefaultOrEmpty)
         {
             var extraBaseNames = new List<string>();
@@ -191,12 +169,10 @@ internal static class ModelBuilder
             }
         }
 
-        // If the target inherits from another Facet that has NestedFacets, merge them
         if (baseFacetInfo != null && !baseFacetInfo.NestedFacetMappings.IsEmpty)
         {
             foreach (var baseNestedMapping in baseFacetInfo.NestedFacetMappings)
             {
-                // Only add if not already defined in derived Facet (derived takes precedence)
                 if (!nestedFacetMappings.ContainsKey(baseNestedMapping.Key))
                 {
                     nestedFacetMappings[baseNestedMapping.Key] = baseNestedMapping.Value;
@@ -204,7 +180,6 @@ internal static class ModelBuilder
             }
         }
 
-        // Build members
         var (members, excludedRequiredMembers) = ExtractMembers(
             sourceType,
             excluded,
@@ -227,25 +202,19 @@ internal static class ModelBuilder
             token,
             setAccessor);
 
-        // Add expression-based members (from MapFrom with expressions)
         if (expressionMembers.Count > 0)
         {
             members = members.AddRange(expressionMembers);
         }
 
-        // Get the namespace early
         var ns = targetSymbol.ContainingNamespace.IsGlobalNamespace
             ? null
             : targetSymbol.ContainingNamespace.ToDisplayString();
 
-        // Determine full name - use global default
         var useFullName = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.UseFullName, globalDefaults.UseFullName);
 
-        // Get containing types for nested classes
         var containingTypes = TypeAnalyzer.GetContainingTypes(targetSymbol);
 
-        // For nested classes, automatically use hierarchical name to avoid collisions
-        // even if UseFullName is false
         string fullName;
         if (useFullName)
         {
@@ -253,12 +222,10 @@ internal static class ModelBuilder
         }
         else if (containingTypes.Length > 0)
         {
-            // Build hierarchical name: ParentClass.NestedClass
             fullName = string.Join(".", containingTypes) + "." + targetSymbol.Name;
         }
         else if (ns != null)
         {
-            // Include namespace to avoid collisions for types with the same name in different namespaces
             fullName = ns + "." + targetSymbol.Name;
         }
         else
@@ -266,45 +233,33 @@ internal static class ModelBuilder
             fullName = targetSymbol.Name;
         }
 
-        // Get containing types for the source type (to detect nesting in static classes)
         var sourceContainingTypes = TypeAnalyzer.GetContainingTypes(sourceType);
 
-        // Check if the target type already has a primary constructor
         var hasExistingPrimaryConstructor = TypeAnalyzer.HasExistingPrimaryConstructor(targetSymbol);
 
-        // Check if the source type has a positional constructor
         var hasPositionalConstructor = TypeAnalyzer.HasPositionalConstructor(sourceType);
 
-        // Check if ToSource can actually be generated
-        // If the source type doesn't have an accessible parameterless constructor or has inaccessible setters,
-        // skip ToSource generation to avoid compilation errors
         if (generateToSource && !hasPositionalConstructor)
         {
-            // Nested types in C# have access to all members of their containing type, including private
+            // Nested facets can access private members on the containing source type.
             var isNestedInSource = TypeAnalyzer.IsNestedInsideType(targetSymbol, sourceType);
-
-            // For non-positional types, we need a parameterless constructor and accessible setters
             var hasAccessibleConstructor = TypeAnalyzer.HasAccessibleParameterlessConstructor(sourceType, context.SemanticModel.Compilation.Assembly, isNestedInSource);
             var hasAccessibleSetters = TypeAnalyzer.AllPropertiesHaveAccessibleSetters(sourceType, members, isNestedInSource, context.SemanticModel.Compilation.Assembly);
 
             if (!hasAccessibleConstructor || !hasAccessibleSetters)
             {
-                // Cannot generate ToSource - disable it silently
-                // Note: Users can still manually write their own ToSource method if needed
+                // Users can still provide their own ToSource implementation.
                 generateToSource = false;
             }
         }
 
-        // Extract FlattenTo types for generating collection flattening methods
         var flattenToTypes = AttributeParser.ExtractFlattenToTypes(attribute);
 
-        // Check if the base class already declares any of the generated members
         var sourceTypeFullName = sourceType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var baseHidesFacetMembers = BaseHidesFacetMembers(targetSymbol);
         var baseHidesFromSource = BaseHidesFromSource(targetSymbol, sourceTypeFullName);
         var baseHidesToSource = BaseHidesToSourceMembers(targetSymbol);
 
-        // Collect source type member names for MapFrom expression disambiguation
         var sourcePropertyNames = CollectSourcePropertyNames(sourceType);
 
         return new FacetTargetModel(
@@ -392,9 +347,6 @@ internal static class ModelBuilder
                 ? included.Contains(member.Name)
                 : !excluded.Contains(member.Name);
 
-            // In Include mode, also include source properties that match properties inherited
-            // by the facet from its base class. These properties won't be generated (MemberGenerator
-            // skips them) but need to be in the model for ToSource/FromSource/projection mappings.
             if (!shouldIncludeMember && isIncludeMode && baseClassMemberNames.Contains(member.Name))
             {
                 shouldIncludeMember = true;
@@ -469,12 +421,10 @@ internal static class ModelBuilder
     {
         var memberXmlDocumentation = copyDocs ? CodeGenerationHelpers.ExtractXmlDocumentation(property, inheritDocs, externalDocProvider) : null;
 
-        // Check if this source property has a MapFrom attribute pointing to it
         var hasMapFrom = mapFromMappings.TryGetValue(property.Name, out var mapFromInfo);
 
         if (!shouldIncludeMember && !hasMapFrom)
         {
-            // If this is a required member that was excluded, track it for ToSource generation
             if (isRequired)
             {
                 excludedRequiredMembers.Add(new FacetMember(
@@ -484,7 +434,7 @@ internal static class ModelBuilder
                     property.Type.IsValueType,
                     isInitOnly,
                     isRequired,
-                    false, // Properties are not readonly
+                    false, 
                     memberXmlDocumentation));
             }
             return;
@@ -496,7 +446,7 @@ internal static class ModelBuilder
             PropertySetAccessor.Set => false,
             _ => preserveInitOnly && isInitOnly,
         };
-        // Honor the target property's own 'required' modifier when it maps from a non-required source property.
+        
         var shouldPreserveRequired = (preserveRequired && isRequired) || (hasMapFrom && mapFromInfo.isTargetRequired);
 
         var typeName = GeneratorUtilities.GetTypeNameWithNullability(property.Type);
@@ -507,43 +457,33 @@ internal static class ModelBuilder
         string? collectionWrapper = null;
         string? sourceCollectionWrapper = null;
 
-        // Detect if the property type is a nested type (has a containing type)
-        // This is needed to generate 'using static' instead of 'using' for the containing type
         bool isNestedType = GeneratorUtilities.IsNestedType(property.Type);
 
-        // Check if the property type is nullable (reference types)
         bool isNullableReferenceType = property.Type.NullableAnnotation == NullableAnnotation.Annotated;
         bool shouldTreatAsNullable = isNullableReferenceType;
 
         if (!shouldTreatAsNullable && !property.Type.IsValueType)
         {
-            // NotAnnotated means the property is in a #nullable enable context and the
-            // type is explicitly declared as non-nullable. Respect the author's intent.
-            // None means nullable annotations are not enabled — treat as nullable for safety.
+            // Treat missing nullable annotations as nullable for safety.
             if (property.Type.NullableAnnotation != NullableAnnotation.NotAnnotated)
             {
                 shouldTreatAsNullable = true;
             }
         }
 
-        // Check if this property's type is a collection
         if (GeneratorUtilities.TryGetCollectionElementType(property.Type, out var elementType, out var wrapper))
         {
-            // Mark as collection regardless of whether it's a nested facet or not
             isCollection = true;
             collectionWrapper = wrapper;
 
-            // Check if the collection element type matches a child facet source type
             var elementTypeName = elementType!.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             if (nestedFacetMappings.TryGetValue(elementTypeName, out var nestedMapping))
             {
-                // Apply CollectionTargetType override if set, otherwise preserve the source wrapper
                 var effectiveWrapper = collectionTargetType ?? wrapper!;
                 var sourceWrapper = (collectionTargetType != null && collectionTargetType != wrapper) ? wrapper : null;
 
-                // Wrap the child facet type in the target collection type
                 var wrappedType = GeneratorUtilities.WrapInCollectionType(nestedMapping.childFacetTypeName, effectiveWrapper);
-                // Preserve nullability if the collection itself was nullable
+                
                 typeName = shouldTreatAsNullable ? wrappedType + "?" : wrappedType;
                 isNestedFacet = true;
                 collectionWrapper = effectiveWrapper;
@@ -551,10 +491,9 @@ internal static class ModelBuilder
                 nestedFacetSourceTypeName = nestedMapping.sourceTypeName;
             }
         }
-        // Check if this property's type matches a child facet source type (non-collection)
+        
         else if (nestedFacetMappings.TryGetValue(propertyTypeName, out var nestedMapping))
         {
-            // Preserve nullability when assigning nested facet type name
             typeName = shouldTreatAsNullable
                 ? nestedMapping.childFacetTypeName + "?"
                 : nestedMapping.childFacetTypeName;
@@ -562,16 +501,13 @@ internal static class ModelBuilder
             nestedFacetSourceTypeName = nestedMapping.sourceTypeName;
         }
 
-        // Store the source type name before applying NullableProperties
         var sourceMemberTypeName = typeName;
 
-        // Apply NullableProperties setting to all properties, including nested facets
         if (nullableProperties)
         {
             typeName = GeneratorUtilities.MakeNullable(typeName);
         }
 
-        // Extract copiable attributes and their namespaces if requested
         List<string> attributes;
         List<string> attributeNamespaces;
         if (copyAttributes)
@@ -586,40 +522,28 @@ internal static class ModelBuilder
             attributeNamespaces = new List<string>();
         }
 
-        // Detect if the source property is a partial defining declaration (C# 13+).
-        // We detect this to properly handle initializer extraction (partial defining declarations
-        // cannot have initializers in C# 13+), but we do NOT propagate the partial modifier
-        // to the generated target type. Generating a partial defining declaration would require
-        // the user to provide an implementing declaration, which breaks the DTO use case.
-        // It also doesn't work with other source generators (e.g., CommunityToolkit.Mvvm)
-        // because source generators don't chain.
         var isSourcePartial = IsPartialDefiningProperty(property);
 
-        // Extract property initializer/default value from source
         string? defaultValue = null;
         if (!isNestedFacet && !nullableProperties && !isSourcePartial)
         {
             defaultValue = ExtractPropertyInitializer(property);
         }
 
-        // Determine final member name and mapping properties
         var memberName = hasMapFrom ? mapFromInfo.targetName : property.Name;
         var mapFromSource = hasMapFrom ? mapFromInfo.source : null;
         var mapFromReversible = hasMapFrom ? mapFromInfo.reversible : true;
         var mapFromIncludeInProjection = hasMapFrom ? mapFromInfo.includeInProjection : true;
         var mapFromAsCollection = hasMapFrom ? mapFromInfo.asCollection : null;
-        var sourcePropertyName = property.Name; // Always use the actual source property name
+        var sourcePropertyName = property.Name; 
 
-        // Get MapWhen conditions for this property (keyed by target property name)
         var hasMapWhen = mapWhenMappings.TryGetValue(memberName, out var mapWhenInfo);
 
-        // User declared the property with [MapFrom] or [MapWhen]
         var isUserDeclared = hasMapFrom || hasMapWhen;
         var mapWhenConditions = hasMapWhen ? mapWhenInfo.conditions : null;
         var mapWhenDefault = hasMapWhen ? mapWhenInfo.defaultValue : null;
         var mapWhenIncludeInProjection = hasMapWhen ? mapWhenInfo.includeInProjection : true;
 
-        // If user declared, use their type name instead
         if (hasMapFrom && !string.IsNullOrEmpty(mapFromInfo.typeName))
         {
             typeName = mapFromInfo.typeName;
@@ -629,7 +553,6 @@ internal static class ModelBuilder
             }
         }
 
-        // Apply AsCollection override from MapFrom attribute
         if (mapFromAsCollection != null && isCollection)
         {
             var originalWrapper = collectionWrapper;
@@ -638,15 +561,12 @@ internal static class ModelBuilder
                 sourceCollectionWrapper = originalWrapper;
         }
 
-        // Enum conversion: if ConvertEnumsTo is set and this property is an enum type (or collection of enums), convert it
         bool isEnumConversion = false;
         string? originalEnumTypeName = null;
         if (convertEnumsTo != null && !isNestedFacet && !isUserDeclared)
         {
-            // Check if this is a collection of enums
             if (isCollection && elementType != null)
             {
-                // Get the underlying element type (strip nullable wrapper if present)
                 var underlyingElementType = elementType;
                 bool isNullableEnumElement = false;
                 if (underlyingElementType is INamedTypeSymbol namedElementType &&
@@ -675,28 +595,22 @@ internal static class ModelBuilder
                         convertedElementType = isNullableEnumElement ? "string?" : "string";
                     }
 
-                    // Wrap the converted element type in the collection type
                     var wrappedType = GeneratorUtilities.WrapInCollectionType(convertedElementType, collectionWrapper!);
-                    // Preserve nullability if the collection itself was nullable
+                    
                     typeName = shouldTreatAsNullable ? wrappedType + "?" : wrappedType;
 
-                    // Update sourceMemberTypeName to reflect the original type before conversion
                     sourceMemberTypeName = GeneratorUtilities.GetTypeNameWithNullability(property.Type);
 
-                    // Apply NullableProperties if needed
                     if (nullableProperties)
                     {
                         typeName = GeneratorUtilities.MakeNullable(typeName);
                     }
 
-                    // Clear default value since it's an enum initializer and won't match the new type
                     defaultValue = null;
                 }
             }
             else if (!isCollection)
             {
-                // Original logic for non-collection enum properties
-                // Get the underlying type (strip nullable wrapper if present)
                 var underlyingType = property.Type;
                 bool isNullableEnum = false;
                 if (underlyingType is INamedTypeSymbol namedType && namedType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
@@ -719,16 +633,13 @@ internal static class ModelBuilder
                         typeName = isNullableEnum ? "int?" : "int";
                     }
 
-                    // Update sourceMemberTypeName to reflect the original type before conversion
                     sourceMemberTypeName = GeneratorUtilities.GetTypeNameWithNullability(property.Type);
 
-                    // Apply NullableProperties if needed
                     if (nullableProperties)
                     {
                         typeName = GeneratorUtilities.MakeNullable(typeName);
                     }
 
-                    // Clear default value since it's an enum initializer and won't match the new type
                     defaultValue = null;
                 }
             }
@@ -741,7 +652,7 @@ internal static class ModelBuilder
             property.Type.IsValueType,
             shouldPreserveInitOnly,
             shouldPreserveRequired,
-            false, // Properties are not readonly
+            false, 
             memberXmlDocumentation,
             isNestedFacet,
             nestedFacetSourceTypeName,
@@ -763,8 +674,8 @@ internal static class ModelBuilder
             isEnumConversion,
             originalEnumTypeName,
             isNestedType,
-            isPartial: false, // Never propagate partial from source
-            isSourceInitOnly: isInitOnly)); // Raw source accessor 
+            isPartial: false, 
+            isSourceInitOnly: isInitOnly)); 
         addedMembers.Add(memberName);
     }
 
@@ -781,7 +692,6 @@ internal static class ModelBuilder
                 var hasPartial = propSyntax.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword));
                 if (!hasPartial) continue;
 
-                // Defining declaration: partial modifier present and no accessor has a body
                 var hasAccessorBody = propSyntax.AccessorList?.Accessors
                     .Any(a => a.Body != null || a.ExpressionBody != null) == true;
 
@@ -798,13 +708,11 @@ internal static class ModelBuilder
     /// </summary>
     private static string? ExtractPropertyInitializer(IPropertySymbol property)
     {
-        // Try to get the syntax for the property declaration
         foreach (var syntaxRef in property.DeclaringSyntaxReferences)
         {
             var syntax = syntaxRef.GetSyntax();
             if (syntax is PropertyDeclarationSyntax propSyntax && propSyntax.Initializer != null)
             {
-                // Return the initializer value (the part after the '=')
                 return propSyntax.Initializer.Value.ToFullString().Trim();
             }
         }
@@ -829,7 +737,6 @@ internal static class ModelBuilder
 
         if (!shouldIncludeMember)
         {
-            // If this is a required field that was excluded, track it for ToSource generation
             if (isRequired)
             {
                 excludedRequiredMembers.Add(new FacetMember(
@@ -837,9 +744,9 @@ internal static class ModelBuilder
                     GeneratorUtilities.GetTypeNameWithNullability(field.Type),
                     FacetMemberKind.Field,
                     field.Type.IsValueType,
-                    false, // Fields don't have init-only
+                    false, 
                     isRequired,
-                    field.IsReadOnly, // Fields can be readonly
+                    field.IsReadOnly, 
                     memberXmlDocumentation));
             }
             return;
@@ -848,13 +755,12 @@ internal static class ModelBuilder
         var shouldPreserveRequired = preserveRequired && isRequired;
 
         var typeName = GeneratorUtilities.GetTypeNameWithNullability(field.Type);
-        var sourceMemberTypeName = typeName; // Store source type before applying NullableProperties
+        var sourceMemberTypeName = typeName; 
         if (nullableProperties)
         {
             typeName = GeneratorUtilities.MakeNullable(typeName);
         }
 
-        // Extract copiable attributes and their namespaces if requested
         List<string> attributes;
         List<string> attributeNamespaces;
         if (copyAttributes)
@@ -869,8 +775,6 @@ internal static class ModelBuilder
             attributeNamespaces = new List<string>();
         }
 
-        // Extract field initializer/default value from source
-        // Skip initializers when NullableProperties = true (query DTOs should default to null)
         string? defaultValue = null;
         if (!nullableProperties)
         {
@@ -882,25 +786,25 @@ internal static class ModelBuilder
             typeName,
             FacetMemberKind.Field,
             field.Type.IsValueType,
-            false, // Fields don't have init-only
+            false, 
             shouldPreserveRequired,
-            field.IsReadOnly, // Fields can be readonly
+            field.IsReadOnly, 
             memberXmlDocumentation,
-            false, // Fields don't support nested facets
+            false, 
             null,
             attributes,
-            false, // Fields are not collections
-            null,  // No collection wrapper for fields
-            null,  // sourceCollectionWrapper
+            false, 
+            null,  // Fields never use collection wrappers.
+            null,  
             sourceMemberTypeName,
-            null,  // mapFromSource
-            false, // mapFromReversible
-            true,  // mapFromIncludeInProjection
-            null,  // sourcePropertyName
-            false, // isUserDeclared
-            null,  // mapWhenConditions
-            null,  // mapWhenDefault
-            true,  // mapWhenIncludeInProjection
+            null,  
+            false, 
+            true,  
+            null,  
+            false, 
+            null,  
+            null,  
+            true,  
             attributeNamespaces,
             defaultValue));
         addedMembers.Add(field.Name);
@@ -912,13 +816,11 @@ internal static class ModelBuilder
     /// </summary>
     private static string? ExtractFieldInitializer(IFieldSymbol field)
     {
-        // Try to get the syntax for the field declaration
         foreach (var syntaxRef in field.DeclaringSyntaxReferences)
         {
             var syntax = syntaxRef.GetSyntax();
             if (syntax is VariableDeclaratorSyntax varSyntax && varSyntax.Initializer != null)
             {
-                // Return the initializer value (the part after the '=')
                 return varSyntax.Initializer.Value.ToFullString().Trim();
             }
         }
@@ -939,8 +841,6 @@ private static Dictionary<string, (string targetName, string source, bool revers
 {
     var mappings = new Dictionary<string, (string targetName, string source, bool reversible, bool includeInProjection, string typeName, string? asCollection, bool isTargetRequired)>();
 
-    // Build the type chain from the most-base class up to (and including) the direct target.
-    // Processing in this order means derived-class declarations overwrite base-class ones.
     var typeChain = new List<INamedTypeSymbol>();
     var ancestor = targetSymbol.BaseType;
     while (ancestor != null && ancestor.SpecialType != SpecialType.System_Object)
@@ -948,11 +848,10 @@ private static Dictionary<string, (string targetName, string source, bool revers
         typeChain.Add(ancestor);
         ancestor = ancestor.BaseType;
     }
-    typeChain.Reverse();       // most-base first
-    typeChain.Add(targetSymbol); // direct target last (highest priority)
+    typeChain.Reverse();       
+    typeChain.Add(targetSymbol); 
 
-    // Track expression-member target names already added so we don't duplicate.
-    // Using a dict here so the derived-class declaration (processed last) overwrites the base.
+    // Let derived [MapFrom] declarations overwrite base ones.
     var pendingExpressionMembers = new Dictionary<string, FacetMember>();
 
     foreach (var typeToProcess in typeChain)
@@ -961,19 +860,16 @@ private static Dictionary<string, (string targetName, string source, bool revers
         {
         if (member is not IPropertySymbol property) continue;
 
-        // Look for MapFrom attribute
         foreach (var attr in property.GetAttributes())
         {
             if (attr.AttributeClass?.ToDisplayString() == FacetConstants.MapFromAttributeFullName)
             {
-                // Try to obtain the source string from the compiled attribute data first
                 string? sourceFromData = null;
                 if (attr.ConstructorArguments.Length > 0 && attr.ConstructorArguments[0].Value is string s)
                 {
                     sourceFromData = s;
                 }
 
-                // Try to resolve original syntax (to detect `@` in nameof, etc.)
                 string? source = sourceFromData;
                 bool hadLeadingAt = false;
                 if (attr.ApplicationSyntaxReference?.GetSyntax() is AttributeSyntax attrSyntax)
@@ -982,16 +878,12 @@ private static Dictionary<string, (string targetName, string source, bool revers
                     if (firstArgExpr != null)
                     {
                         var (resolved, hadAt) = NameOfResolver.ResolveExpression(firstArgExpr);
-                        // Only use the resolved value if it came from a nameof() expression with @ prefix
-                        // For string literals, stick with the compiled data to avoid including quotes
+                        
                         if (!string.IsNullOrEmpty(resolved) && hadAt && IsNameOfExpression(firstArgExpr))
                         {
-                            // When using @nameof(TypeName.PropertyPath), extract just the property path
-                            // by removing the first segment (the source type name)
                             var segments = resolved.Split('.');
                             if (segments.Length > 1)
                             {
-                                // Skip the first segment (type name) and rebuild the path
                                 source = string.Join(".", segments.Skip(1));
                             }
                             else
@@ -1005,11 +897,9 @@ private static Dictionary<string, (string targetName, string source, bool revers
 
                 if (string.IsNullOrEmpty(source))
                 {
-                    // nothing meaningful to do
                     break;
                 }
 
-                // Get named arguments
                 var reversible = false;
                 var includeInProjection = true;
                 string? asCollection = null;
@@ -1030,45 +920,38 @@ private static Dictionary<string, (string targetName, string source, bool revers
                     }
                 }
 
-                // Get the property type name
                 var typeName = GeneratorUtilities.GetTypeNameWithNullability(property.Type);
                 if (nullableProperties)
                 {
                     typeName = GeneratorUtilities.MakeNullable(typeName);
                 }
 
-                // If the argument is an expression, a nested path, or was written with @nameof(...) to force a full path,
-                // treat it as an expression-based member / nested path.
                 if (IsExpression(source) || source.Contains(".") || hadLeadingAt)
                 {
-                    // Store in dict — derived-class entry (processed last) overwrites base-class entry.
                     pendingExpressionMembers[property.Name] = new FacetMember(
                         property.Name,
                         typeName,
                         FacetMemberKind.Property,
                         property.Type.IsValueType,
-                        false, // isInitOnly
-                        false, // isRequired
-                        false, // isReadOnly
-                        null,  // xmlDocumentation
-                        false, // isNestedFacet
-                        null,  // nestedFacetSourceTypeName
-                        null,  // attributes
-                        false, // isCollection
-                        null,  // collectionWrapper
-                        null,  // sourceCollectionWrapper
-                        null,  // sourceMemberTypeName
-                        source, // mapFromSource
+                        false, 
+                        false, 
+                        false, 
+                        null,  
+                        false, 
+                        null,  
+                        null,  
+                        false, 
+                        null,  
+                        null,  
+                        null,  
+                        source, 
                         reversible,
                         includeInProjection,
-                        property.Name, // sourcePropertyName (use target name as placeholder)
-                        true); // isUserDeclared
+                        property.Name, 
+                        true); 
                 }
                 else
                 {
-                    // Simple property rename - map to source property.
-                    // Derived-class declaration overwrites base-class (last write wins since
-                    // typeChain is ordered most-base first, direct target last).
                     mappings[source] = (property.Name, source, reversible, includeInProjection, typeName, asCollection, property.IsRequired);
                 }
             }
@@ -1076,7 +959,6 @@ private static Dictionary<string, (string targetName, string source, bool revers
         }
     }
 
-    // Flush expression members collected from the whole type chain
     foreach (var em in pendingExpressionMembers.Values)
         expressionMembers.Add(em);
 
@@ -1108,7 +990,6 @@ private static Dictionary<string, (string targetName, string source, bool revers
     {
         var memberNames = new List<string>();
 
-        // Walk up the inheritance chain
         var baseType = targetSymbol.BaseType;
         while (baseType != null && baseType.SpecialType != SpecialType.System_Object)
         {
@@ -1124,9 +1005,6 @@ private static Dictionary<string, (string targetName, string source, bool revers
                 }
             }
 
-            // If this base type is itself a Facet, infer the property names it will generate.
-            // Source generators can't see generated output from sibling invocations, so these
-            // properties are invisible to GetMembers() but will exist at compile time.
             var facetAttrs = baseType.GetAttributes()
                 .Where(a => a.AttributeClass?.ToDisplayString() == FacetConstants.FacetAttributeFullName)
                 .ToList();
@@ -1177,9 +1055,7 @@ private static Dictionary<string, (string targetName, string source, bool revers
     /// </summary>
     private static bool BaseHidesFacetMembers(INamedTypeSymbol targetSymbol)
     {
-        // Members hidden purely by name (properties and parameterless methods).
-        // FromSource is NOT included because it takes a source-type parameter and
-        // only hides when the parameter types match — handled by BaseHidesFromSource.
+        // FromSource only hides when the parameter type matches; BaseHidesFromSource handles that.
         var nameHiddenMembers = new System.Collections.Generic.HashSet<string>
         {
             "ToSource", "BackTo", "Projection"
@@ -1188,22 +1064,15 @@ private static Dictionary<string, (string targetName, string source, bool revers
         var baseType = targetSymbol.BaseType;
         while (baseType != null && baseType.SpecialType != SpecialType.System_Object)
         {
-            // If the base class is itself a Facet, its Projection/ToSource/BackTo members are
-            // generated by this same source generator and therefore not yet visible in the
-            // semantic model. We must still emit 'new' to suppress CS0108.
-            // However, when the base has MULTIPLE [Facet] attributes, it generates custom-named
-            // members (e.g. ProjectionFromX, ToX) instead of the default names, so there's
-            // nothing to hide.
             var baseFacetAttrs = baseType.GetAttributes()
                 .Where(a => a.AttributeClass?.ToDisplayString() == FacetConstants.FacetAttributeFullName)
                 .ToArray();
 
+            // Single-source base facets use the default member names; multi-source facets do not.
             if (baseFacetAttrs.Length == 1)
             {
-                // Single-source base Facet generates default names: Projection, ToSource, BackTo
                 return true;
             }
-            // Multi-source base Facet (> 1) generates custom names — default names are not hidden
 
             foreach (var member in baseType.GetMembers())
             {
@@ -1229,8 +1098,7 @@ private static Dictionary<string, (string targetName, string source, bool revers
         var baseType = targetSymbol.BaseType;
         while (baseType != null && baseType.SpecialType != SpecialType.System_Object)
         {
-            // If the base class is itself a Facet, check whether it maps the same source type.
-            // Only then will its generated FromSource have a matching parameter type.
+            // A base facet only hides FromSource when it maps the same source type.
             foreach (var attr in baseType.GetAttributes())
             {
                 if (attr.AttributeClass?.ToDisplayString() == FacetConstants.FacetAttributeFullName &&
@@ -1243,7 +1111,6 @@ private static Dictionary<string, (string targetName, string source, bool revers
                 }
             }
 
-            // Also check for manually declared FromSource methods with matching parameter type
             foreach (var member in baseType.GetMembers("FromSource"))
             {
                 if (member is IMethodSymbol method &&
@@ -1276,7 +1143,7 @@ private static Dictionary<string, (string targetName, string source, bool revers
                 .Where(a => a.AttributeClass?.ToDisplayString() == FacetConstants.FacetAttributeFullName)
                 .ToArray();
 
-            // Only single-source facets generate default-named ToSource/BackTo/ApplyToSource
+            // Only single-source facets use the default ToSource/BackTo/ApplyToSource names.
             if (baseFacetAttrs.Length == 1)
             {
                 var generateToSource = baseFacetAttrs[0].NamedArguments
@@ -1287,7 +1154,6 @@ private static Dictionary<string, (string targetName, string source, bool revers
                     return true;
             }
 
-            // Also check for manually declared ToSource/BackTo members
             foreach (var member in baseType.GetMembers())
             {
                 if ((member.Name == "ToSource" || member.Name == "BackTo" || member.Name == "ApplyToSource") &&
@@ -1307,8 +1173,6 @@ private static Dictionary<string, (string targetName, string source, bool revers
     /// </summary>
     private static BaseFacetInfo? GetBaseFacetInfo(INamedTypeSymbol targetSymbol, INamedTypeSymbol derivedSourceType, Compilation compilation)
     {
-        // Walk the full ancestor chain to accumulate IncludedMembers, NestedFacetMappings, and ALL
-        // projection configurations. The nearest ancestor provides BaseTypeName and BaseSourceTypeName.
         string? nearestBaseTypeName = null;
         string? nearestBaseSourceTypeName = null;
         string? nearestBaseConfigurationTypeName = null;
@@ -1323,8 +1187,6 @@ private static Dictionary<string, (string targetName, string source, bool revers
         var baseType = targetSymbol.BaseType;
         while (baseType != null && baseType.SpecialType != SpecialType.System_Object)
         {
-            // A base Facet can have multiple [Facet] attributes (multi-source).
-            // Select the attribute whose source type best matches the current derived source type.
             var facetAttrs = baseType.GetAttributes()
                 .Where(a => a.AttributeClass?.ToDisplayString() == FacetConstants.FacetAttributeFullName)
                 .ToList();
@@ -1355,8 +1217,6 @@ private static Dictionary<string, (string targetName, string source, bool revers
                         continue;
                     }
 
-                    // Tie-breaker for same source-distance:
-                    // prefer the attribute with an explicit Configuration when the current best does not have one.
                     if (distance.Value == bestDistance &&
                         bestFacetAttr != null &&
                         !bestFacetAttr.NamedArguments.Any(arg => arg.Key == "Configuration") &&
@@ -1369,7 +1229,6 @@ private static Dictionary<string, (string targetName, string source, bool revers
 
                 if (bestFacetAttr != null && bestBaseSourceType != null)
                 {
-                    // Use the nearest ancestor for type name and configuration
                     if (!foundAny)
                     {
                         nearestBaseTypeName = baseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -1379,9 +1238,6 @@ private static Dictionary<string, (string targetName, string source, bool revers
                         nearestBaseFacetCount = facetAttrs.Count;
                     }
 
-                    // Collect ALL Configuration types from the full ancestor chain (nearest first).
-                    // This fixes the gap where an intermediate ancestor without a config was causing
-                    // grandparent configs to be silently dropped.
                     {
                         var configArg = bestFacetAttr.NamedArguments.FirstOrDefault(arg => arg.Key == "Configuration");
                         if (!configArg.Equals(default(KeyValuePair<string, TypedConstant>)))
@@ -1408,7 +1264,6 @@ private static Dictionary<string, (string targetName, string source, bool revers
 
                                         allBaseProjectionConfigs.Add((cfgTypeName, cfgSourceTypeName, cfgTargetTypeName));
 
-                                        // Track nearest config separately for backward-compat properties.
                                         if (nearestBaseConfigurationTypeName == null)
                                         {
                                             nearestBaseConfigurationTypeName = cfgTypeName;
@@ -1421,7 +1276,6 @@ private static Dictionary<string, (string targetName, string source, bool revers
                         }
                     }
 
-                    // Accumulate Include members from all ancestor facets
                     var (baseIncludedMembers, _) = AttributeParser.ExtractIncludedMembers(bestFacetAttr);
                     if (baseIncludedMembers.Count > 0)
                     {
@@ -1434,7 +1288,6 @@ private static Dictionary<string, (string targetName, string source, bool revers
                         }
                     }
 
-                    // Accumulate NestedFacetMappings from all ancestor facets (nearer ancestors take precedence)
                     var baseNestedFacetMappings = AttributeParser.ExtractNestedFacetMappings(bestFacetAttr);
                     foreach (var mapping in baseNestedFacetMappings)
                     {
@@ -1494,7 +1347,6 @@ private static Dictionary<string, (string targetName, string source, bool revers
     {
         var mappings = new Dictionary<string, (List<string> conditions, string? defaultValue, bool includeInProjection)>();
 
-        // Get all members from the target type (user-declared properties)
         foreach (var member in targetSymbol.GetMembers())
         {
             if (member is not IPropertySymbol property) continue;
@@ -1503,22 +1355,18 @@ private static Dictionary<string, (string targetName, string source, bool revers
             string? defaultValue = null;
             bool includeInProjection = true;
 
-            // Look for MapWhen attributes (can have multiple)
             foreach (var attr in property.GetAttributes())
             {
                 if (attr.AttributeClass?.ToDisplayString() == FacetConstants.MapWhenAttributeFullName)
                 {
-                    // Get the Condition constructor argument
                     if (attr.ConstructorArguments.Length > 0 && attr.ConstructorArguments[0].Value is string condition)
                     {
                         conditions.Add(condition);
 
-                        // Get named arguments
                         foreach (var namedArg in attr.NamedArguments)
                         {
                             if (namedArg.Key == "Default" && namedArg.Value.Value != null)
                             {
-                                // Convert the default value to a string representation
                                 defaultValue = ConvertDefaultValueToString(namedArg.Value);
                             }
                             else if (namedArg.Key == "IncludeInProjection" && namedArg.Value.Value is bool incProj)

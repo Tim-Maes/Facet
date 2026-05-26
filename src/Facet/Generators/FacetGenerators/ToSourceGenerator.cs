@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -26,13 +26,11 @@ internal static class ToSourceGenerator
     {
         var methodName = toSourceMethodName ?? "ToSource";
         var isCustomName = toSourceMethodName != null;
-        // Only emit 'new' when the base facet actually generates ToSource/BackTo (GenerateToSource=true).
-        // Using BaseHidesFacetMembers alone causes CS0109 when the base facet has GenerateToSource=false.
+        // Emit new only when the base facet actually defines the same default members.
         var newMod = model.BaseHidesToSource && !isCustomName ? "new " : "";
 
         bool hasDepthLimit = model.MaxDepthToSource > 0;
 
-        // Generate the main public ToSource method
         sb.AppendLine();
         sb.AppendLine("    /// <summary>");
         sb.AppendLine($"    /// Converts this instance of <see cref=\"{model.Name}\"/> to an instance of <see cref=\"{CodeGenerationHelpers.GetSimpleTypeName(model.SourceTypeName)}\"/>.");
@@ -41,7 +39,6 @@ internal static class ToSourceGenerator
 
         if (hasDepthLimit)
         {
-            // Public entry-point delegates to the depth-aware overload, starting at depth 0
             sb.AppendLine($"    public {newMod}{model.SourceTypeName} {methodName}() => {methodName}(0);");
         }
         else
@@ -57,7 +54,6 @@ internal static class ToSourceGenerator
             sb.AppendLine("    }");
         }
 
-        // Generate the deprecated BackTo method only for the default (single-source) naming
         if (!isCustomName)
         {
             sb.AppendLine();
@@ -69,7 +65,6 @@ internal static class ToSourceGenerator
             sb.AppendLine($"    public {newMod}{model.SourceTypeName} BackTo() => {methodName}();");
         }
 
-        // Generate the internal depth-aware overload when MaxDepthToSource > 0
         if (hasDepthLimit)
         {
             sb.AppendLine();
@@ -98,14 +93,12 @@ internal static class ToSourceGenerator
     /// </param>
     public static void GenerateApplyToSource(StringBuilder sb, FacetTargetModel model, Dictionary<string, List<FacetTargetModel>>? facetLookup, string? methodName = null)
     {
-        // Positional (record) sources cannot have individual properties set after construction.
+        // Positional sources cannot be mutated property by property.
         if (model.SourceHasPositionalConstructor)
             return;
 
         var applyMethodName = methodName ?? "ApplyToSource";
-        // ApplyToSource(TSource) takes a source-specific parameter. It only hides a base
-        // class method when the base facet also has GenerateToSource=true AND maps the same
-        // source type. Using "new" when these conditions are not met causes CS0109.
+        
         var baseSrcName = model.BaseFacetInfo?.BaseSourceTypeName;
         var newMod = model.BaseHidesToSource && methodName == null
                      && baseSrcName != null && baseSrcName == model.SourceTypeName
@@ -128,7 +121,6 @@ internal static class ToSourceGenerator
             if (!member.MapFromReversible)
                 continue;
 
-            // Cannot assign to init-only source properties outside of a constructor or object initializer
             if (member.IsSourceInitOnly)
                 continue;
 

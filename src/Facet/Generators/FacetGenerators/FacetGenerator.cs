@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
@@ -13,7 +13,6 @@ public sealed class FacetGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        // Read global configuration defaults from MSBuild properties
         var globalOptions = context.AnalyzerConfigOptionsProvider
             .Select(static (provider, _) => GlobalConfigurationDefaults.FromOptions(provider.GlobalOptions));
 
@@ -23,11 +22,10 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 predicate: static (node, _) => node is TypeDeclarationSyntax,
                 transform: static (ctx, token) => (ctx, token))
             .Combine(globalOptions)
-            // Each context may carry multiple [Facet] attributes; build one model per attribute.
+            
             .SelectMany(static (combined, token) => ModelBuilder.BuildModels(combined.Left.ctx, combined.Right, combined.Left.token))
             .Where(static m => m is not null);
 
-        // Collect all facet models to enable nested facet lookup during generation
         var allFacets = facets.Collect();
 
         context.RegisterSourceOutput(allFacets, static (spc, models) =>
@@ -39,8 +37,6 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 .GroupBy(m => m!.FullName)
                 .ToList();
 
-            // Build a lookup dictionary for nested facet resolution.
-            // Groups all models by FullName to support multi-source facets (multiple [Facet] attributes on the same target).
             var facetLookup = modelsByTarget.ToDictionary(g => g.Key, g => g.Select(m => m!).ToList());
 
             foreach (var group in modelsByTarget)

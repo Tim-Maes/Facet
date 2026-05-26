@@ -1,4 +1,4 @@
-namespace Facet.Tests.TestModels.ProjectionForNewKeyword;
+﻿namespace Facet.Tests.TestModels.ProjectionForNewKeyword;
 
 public class TagEntity409
 {

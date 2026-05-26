@@ -1,4 +1,4 @@
-using Facet.Tests.TestModels;
+﻿using Facet.Tests.TestModels;
 using Facet.Tests.Utilities;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,12 +20,10 @@ public class LinqProjectionTests : IDisposable
     [Fact]
     public void Select_ShouldProjectToFacet_InLinqQueries()
     {
-        // Arrange & Act
         var userDtos = _context.Set<User>()
             .Select(u => u.ToFacet<User, UserDto>())
             .ToList();
 
-        // Assert
         userDtos.Should().NotBeEmpty();
         userDtos.Should().HaveCount(3);
         userDtos.All(dto => !string.IsNullOrEmpty(dto.FirstName)).Should().BeTrue();
@@ -39,13 +37,11 @@ public class LinqProjectionTests : IDisposable
     [Fact]
     public void Where_ThenSelect_ShouldFilterAndProjectToFacet()
     {
-        // Arrange & Act
         var activeDtos = _context.Set<User>()
             .Where(u => u.IsActive)
             .Select(u => u.ToFacet<User, UserDto>())
             .ToList();
 
-        // Assert
         activeDtos.Should().HaveCount(2);
         activeDtos.All(dto => dto.IsActive).Should().BeTrue();
         activeDtos.Select(dto => dto.FirstName).Should().BeEquivalentTo(new[] { "Alice", "Bob" });
@@ -54,13 +50,11 @@ public class LinqProjectionTests : IDisposable
     [Fact]
     public void OrderBy_ThenSelect_ShouldOrderAndProjectToFacet()
     {
-        // Arrange & Act
         var orderedDtos = _context.Set<User>()
             .OrderBy(u => u.FirstName)
             .Select(u => u.ToFacet<User, UserDto>())
             .ToList();
 
-        // Assert
         orderedDtos.Should().HaveCount(3);
         orderedDtos[0].FirstName.Should().Be("Alice");
         orderedDtos[1].FirstName.Should().Be("Bob");
@@ -70,21 +64,18 @@ public class LinqProjectionTests : IDisposable
     [Fact]
     public void Take_ThenSelect_ShouldLimitAndProjectToFacet()
     {
-        // Arrange & Act
         var limitedDtos = _context.Set<User>()
             .OrderBy(u => u.Id)
             .Take(2)
             .Select(u => u.ToFacet<User, UserDto>())
             .ToList();
 
-        // Assert
         limitedDtos.Should().HaveCount(2);
     }
 
     [Fact]
     public void GroupBy_ThenSelect_ShouldGroupAndProjectToFacet()
     {
-        // Arrange & Act
         var groupedResults = _context.Set<User>()
             .GroupBy(u => u.IsActive)
             .Select(g => new
@@ -95,7 +86,6 @@ public class LinqProjectionTests : IDisposable
             })
             .ToList();
 
-        // Assert
         groupedResults.Should().HaveCount(2);
         
         var activeGroup = groupedResults.First(g => g.IsActive);
@@ -113,7 +103,6 @@ public class LinqProjectionTests : IDisposable
     [Fact]
     public void Join_ThenSelect_ShouldJoinAndProjectToFacet()
     {
-        // Arrange & Act
         var joinResults = _context.Set<User>()
             .Join(_context.Set<Product>(),
                 user => user.Id,
@@ -125,7 +114,6 @@ public class LinqProjectionTests : IDisposable
                 })
             .ToList();
 
-        // Assert
         joinResults.Should().NotBeEmpty();
         joinResults.All(r => r.User != null).Should().BeTrue();
         joinResults.All(r => r.Product != null).Should().BeTrue();
@@ -136,7 +124,6 @@ public class LinqProjectionTests : IDisposable
     [Fact]
     public void ComplexQuery_WithMultipleOperations_ShouldProjectToFacetCorrectly()
     {
-        // Arrange & Act
         var complexResults = _context.Set<User>()
             .Where(u => u.Email.Contains("@"))
             .OrderByDescending(u => u.DateOfBirth)
@@ -145,7 +132,6 @@ public class LinqProjectionTests : IDisposable
             .Select(u => u.ToFacet<User, UserDto>())
             .ToList();
 
-        // Assert
         complexResults.Should().HaveCount(1);
         complexResults.First().Email.Should().Contain("@");
     }
@@ -153,12 +139,10 @@ public class LinqProjectionTests : IDisposable
     [Fact]
     public async Task SelectAsync_ShouldProjectToFacet_InAsyncQueries()
     {
-        // Arrange & Act
         var userDtos = await _context.Set<User>()
             .Select(u => u.ToFacet<User, UserDto>())
             .ToListAsync();
 
-        // Assert
         userDtos.Should().NotBeEmpty();
         userDtos.Should().HaveCount(3);
         userDtos.All(dto => !string.IsNullOrEmpty(dto.FirstName)).Should().BeTrue();
@@ -167,13 +151,11 @@ public class LinqProjectionTests : IDisposable
     [Fact]
     public async Task FirstOrDefaultAsync_ShouldProjectToFacet()
     {
-        // Arrange & Act
         var firstDto = await _context.Set<User>()
             .Where(u => u.FirstName == "Alice")
             .Select(u => u.ToFacet<User, UserDto>())
             .FirstOrDefaultAsync();
 
-        // Assert
         firstDto.Should().NotBeNull();
         firstDto!.FirstName.Should().Be("Alice");
         firstDto.GetType().GetProperty("Password").Should().BeNull();
@@ -203,7 +185,6 @@ public class LinqProjectionTests : IDisposable
             TestDataFactory.CreateProduct("Product 3")
         };
         
-        // Ensure unique product IDs and link to users
         for (int i = 0; i < products.Count && i < users.Count; i++)
         {
             products[i].Id = baseId + 100 + i;
@@ -217,7 +198,6 @@ public class LinqProjectionTests : IDisposable
     [Fact]
     public void Projection_WithNestedFacets_ShouldLoadNavigationPropertiesWithoutInclude()
     {
-        // Arrange
         var address = new AddressEntity
         {
             Street = "123 Main St",
@@ -239,22 +219,18 @@ public class LinqProjectionTests : IDisposable
         _context.Set<CompanyEntity>().Add(company);
         _context.SaveChanges();
 
-        // Clear the context to ensure we're not using cached entities
         _context.ChangeTracker.Clear();
 
-        // Act - Use projection WITHOUT .Include()
         var companyDto = _context.Set<CompanyEntity>()
             .Where(c => c.Id == 1)
             .Select(CompanyFacet.Projection)
             .FirstOrDefault();
 
-        // Assert
         companyDto.Should().NotBeNull();
         companyDto!.Id.Should().Be(1);
         companyDto.Name.Should().Be("Test Company");
         companyDto.Industry.Should().Be("Technology");
 
-        // The nested facet should be loaded and mapped
         companyDto.HeadquartersAddress.Should().NotBeNull();
         companyDto.HeadquartersAddress.Street.Should().Be("123 Main St");
         companyDto.HeadquartersAddress.City.Should().Be("Test City");
@@ -266,7 +242,6 @@ public class LinqProjectionTests : IDisposable
     [Fact]
     public void SelectFacet_WithNestedFacets_ShouldLoadNavigationPropertiesWithoutInclude()
     {
-        // Arrange
         var address = new AddressEntity
         {
             Street = "789 SelectFacet Ave",
@@ -289,17 +264,14 @@ public class LinqProjectionTests : IDisposable
         _context.SaveChanges();
         _context.ChangeTracker.Clear();
 
-        // Act
         var companyDto = _context.Set<CompanyEntity>()
             .Where(c => c.Id == 2)
             .SelectFacet<CompanyEntity, CompanyFacet>()
             .FirstOrDefault();
 
-        // Assert
         companyDto.Should().NotBeNull();
         companyDto!.Name.Should().Be("SelectFacet Company");
 
-        // The nested facet should be loaded via SelectFacet
         companyDto.HeadquartersAddress.Should().NotBeNull();
         companyDto.HeadquartersAddress.Street.Should().Be("789 SelectFacet Ave");
         companyDto.HeadquartersAddress.City.Should().Be("SelectFacet City");
@@ -308,7 +280,6 @@ public class LinqProjectionTests : IDisposable
     [Fact]
     public void SelectFacet_NonGeneric_WithNestedFacets_ShouldLoadNavigationPropertiesWithoutInclude()
     {
-        // Arrange
         var address = new AddressEntity
         {
             Street = "456 NonGeneric St",
@@ -331,17 +302,14 @@ public class LinqProjectionTests : IDisposable
         _context.SaveChanges();
         _context.ChangeTracker.Clear();
 
-        // Act
         IQueryable nonTypedQuery = _context.Set<CompanyEntity>().Where(c => c.Id == 3);
         var companyDto = nonTypedQuery
             .SelectFacet<CompanyFacet>()
             .FirstOrDefault();
 
-        // Assert
         companyDto.Should().NotBeNull();
         companyDto!.Name.Should().Be("NonGeneric Company");
 
-        // The nested facet should be loaded
         companyDto.HeadquartersAddress.Should().NotBeNull();
         companyDto.HeadquartersAddress.Street.Should().Be("456 NonGeneric St");
         companyDto.HeadquartersAddress.City.Should().Be("NonGeneric City");
@@ -350,7 +318,6 @@ public class LinqProjectionTests : IDisposable
     [Fact]
     public void Projection_WithCollectionNestedFacets_ShouldLoadCollectionWithoutInclude()
     {
-        // Arrange
         var order = new OrderEntity
         {
             Id = 1,
@@ -375,24 +342,20 @@ public class LinqProjectionTests : IDisposable
         _context.SaveChanges();
         _context.ChangeTracker.Clear();
 
-        // Act
         var orderDto = _context.Set<OrderEntity>()
             .Where(o => o.Id == 1)
             .Select(OrderFacet.Projection)
             .FirstOrDefault();
 
-        // Assert
         orderDto.Should().NotBeNull();
         orderDto!.Id.Should().Be(1);
         orderDto.OrderNumber.Should().Be("ORD-001");
 
-        // Collection nested facets should be loaded
         orderDto.Items.Should().NotBeNull();
         orderDto.Items.Should().HaveCount(2);
         orderDto.Items.Should().Contain(i => i.ProductName == "Item 1");
         orderDto.Items.Should().Contain(i => i.ProductName == "Item 2");
 
-        // Single nested facet should also be loaded
         orderDto.ShippingAddress.Should().NotBeNull();
         orderDto.ShippingAddress.City.Should().Be("Ship City");
     }
@@ -416,7 +379,6 @@ public class TestDbContext : DbContext
         modelBuilder.Entity<Employee>().HasBaseType<User>();
         modelBuilder.Entity<Manager>().HasBaseType<Employee>();
 
-        // Add entities for nested facet tests
         modelBuilder.Entity<AddressEntity>().HasKey(a => new { a.Street, a.City, a.State });
         modelBuilder.Entity<CompanyEntity>().HasKey(c => c.Id);
         modelBuilder.Entity<OrderEntity>().HasKey(o => o.Id);

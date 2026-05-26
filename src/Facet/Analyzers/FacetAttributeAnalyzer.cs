@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -19,7 +19,6 @@ namespace Facet.Analyzers;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public class FacetAttributeAnalyzer : DiagnosticAnalyzer
 {
-    // FAC003: Missing partial keyword
     public static readonly DiagnosticDescriptor MissingPartialKeywordRule = new DiagnosticDescriptor(
         "FAC003",
         "Type with [Facet] attribute must be declared as partial",
@@ -29,7 +28,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "Types marked with [Facet] must be partial to allow the source generator to add generated members.");
 
-    // FAC004: Invalid Exclude/Include property names
     public static readonly DiagnosticDescriptor InvalidPropertyNameRule = new DiagnosticDescriptor(
         "FAC004",
         "Property name does not exist in source type",
@@ -39,7 +37,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "Property names in Exclude or Include parameters must match properties in the source type.");
 
-    // FAC005: Invalid source type
     public static readonly DiagnosticDescriptor InvalidSourceTypeRule = new DiagnosticDescriptor(
         "FAC005",
         "Source type is not accessible or does not exist",
@@ -49,7 +46,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "The source type specified in the [Facet] attribute must be a valid, accessible type.");
 
-    // FAC006: Invalid Configuration type
     public static readonly DiagnosticDescriptor InvalidConfigurationTypeRule = new DiagnosticDescriptor(
         "FAC006",
         "Configuration type does not implement required interface",
@@ -59,7 +55,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "Configuration types must implement IFacetMapConfiguration, IFacetProjectionMapConfiguration, or provide a static Map method.");
 
-    // FAC007: Invalid NestedFacets type
     public static readonly DiagnosticDescriptor InvalidNestedFacetRule = new DiagnosticDescriptor(
         "FAC007",
         "Nested facet type is not marked with [Facet] attribute",
@@ -69,7 +64,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "All types specified in the NestedFacets array must be marked with the [Facet] attribute.");
 
-    // FAC008: Circular reference warning
     public static readonly DiagnosticDescriptor CircularReferenceWarningRule = new DiagnosticDescriptor(
         "FAC008",
         "Potential stack overflow with circular references",
@@ -79,7 +73,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "When working with nested facets, either MaxDepth or PreserveReferences should be enabled to prevent stack overflow.");
 
-    // FAC009: Both Include and Exclude specified
     public static readonly DiagnosticDescriptor IncludeAndExcludeBothSpecifiedRule = new DiagnosticDescriptor(
         "FAC009",
         "Cannot specify both Include and Exclude",
@@ -89,7 +82,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "The Include and Exclude parameters are mutually exclusive.");
 
-    // FAC010: MaxDepth warning
     public static readonly DiagnosticDescriptor MaxDepthWarningRule = new DiagnosticDescriptor(
         "FAC010",
         "MaxDepth value is unusual",
@@ -99,7 +91,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "MaxDepth values should typically be between 1 and 10 for most scenarios.");
 
-    // FAC025: MaxDepthToSource warning
     public static readonly DiagnosticDescriptor MaxDepthToSourceWarningRule = new DiagnosticDescriptor(
         "FAC025",
         "MaxDepthToSource value is unusual",
@@ -109,7 +100,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "MaxDepthToSource values should typically be between 1 and 10 for most scenarios.");
 
-    // FAC024: MapFrom references a non-existing source property
     public static readonly DiagnosticDescriptor InvalidMapFromPropertyRule = new DiagnosticDescriptor(
         "FAC024",
         "MapFrom source property does not exist in source type",
@@ -119,7 +109,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "The property name specified in [MapFrom] must match a property or field that exists in the source type. Expression-based mappings and dotted-path navigation are excluded from this check.");
 
-    // FAC023: GenerateToSource cannot be generated
     public static readonly DiagnosticDescriptor GenerateToSourceNotPossibleRule = new DiagnosticDescriptor(
         "FAC023",
         "ToSource method cannot be generated",
@@ -129,7 +118,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "ToSource method requires either a positional constructor or both an accessible parameterless constructor and accessible setters on all mapped properties.");
 
-    // FAC022: Source signature mismatch
     public static readonly DiagnosticDescriptor SourceSignatureMismatchRule = new DiagnosticDescriptor(
         "FAC022",
         "Source entity structure changed",
@@ -164,7 +152,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
     {
         var namedType = (INamedTypeSymbol)context.Symbol;
 
-        // Find all [Facet] attributes on this type
         var facetAttributes = namedType.GetAttributes()
             .Where(attr => attr.AttributeClass?.ToDisplayString() == "Facet.FacetAttribute")
             .ToList();
@@ -172,7 +159,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         if (!facetAttributes.Any())
             return;
 
-        // Check if type is partial
         if (!IsPartialType(namedType))
         {
             var diagnostic = Diagnostic.Create(
@@ -182,7 +168,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
             context.ReportDiagnostic(diagnostic);
         }
 
-        // Analyze each [Facet] attribute
         foreach (var facetAttr in facetAttributes)
         {
             AnalyzeFacetAttribute(context, namedType, facetAttr);
@@ -191,17 +176,13 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeFacetAttribute(SymbolAnalysisContext context, INamedTypeSymbol targetType, AttributeData facetAttr)
     {
-        // Validate and get source type
         if (!TryGetSourceType(context, facetAttr, out var sourceType))
             return;
 
-        // Get all public properties/fields from source type (including inherited)
         var sourceMembers = new HashSet<string>(GetAllPublicMembers(sourceType).Select(m => m.Name));
 
-        // Extract named arguments
         var namedArgs = new FacetNamedArguments(facetAttr.NamedArguments);
 
-        // Validate all parameters
         ValidateExcludeParameter(context, facetAttr, sourceType, sourceMembers);
         ValidateIncludeParameter(context, facetAttr, sourceType, sourceMembers, namedArgs.Include);
         ValidateConfigurationType(context, facetAttr, sourceType, targetType, namedArgs.Configuration);
@@ -294,7 +275,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         if (includeArg.Equals(default) || includeArg.Value.IsNull || includeArg.Value.Kind != TypedConstantKind.Array)
             return;
 
-        // Check if both Include and Exclude are specified
         bool hasExclude = facetAttr.ConstructorArguments.Length > 1 &&
                          !facetAttr.ConstructorArguments[1].IsNull &&
                          facetAttr.ConstructorArguments[1].Values.Length > 0;
@@ -350,14 +330,13 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
 
     private static void ValidateCircularReferenceSafety(SymbolAnalysisContext context, AttributeData facetAttr, FacetNamedArguments namedArgs)
     {
-        int maxDepth = 10; // default
-        bool preserveReferences = true; // default
+        int maxDepth = 10; 
+        bool preserveReferences = true; 
 
         if (!namedArgs.MaxDepth.Equals(default) && namedArgs.MaxDepth.Value.Value is int maxDepthValue)
         {
             maxDepth = maxDepthValue;
 
-            // Validate MaxDepth range
             if (maxDepthValue < 0)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
@@ -381,7 +360,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
             preserveReferences = preserveReferencesValue;
         }
 
-        // Validate MaxDepthToSource range
         if (!namedArgs.MaxDepthToSource.Equals(default) && namedArgs.MaxDepthToSource.Value.Value is int maxDepthToSourceValue)
         {
             if (maxDepthToSourceValue < 0)
@@ -402,7 +380,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
             }
         }
 
-        // Check for circular reference risk
         bool hasNestedFacets = !namedArgs.NestedFacets.Equals(default) &&
                               !namedArgs.NestedFacets.Value.IsNull &&
                               namedArgs.NestedFacets.Value.Kind == TypedConstantKind.Array &&
@@ -424,23 +401,18 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         if (namedArgs.SourceSignature.Value.Value is not string expectedSignature || string.IsNullOrEmpty(expectedSignature))
             return;
 
-        // Get IncludeFields value
         bool includeFields = !namedArgs.IncludeFields.Equals(default) &&
                             namedArgs.IncludeFields.Value.Value is bool includeFieldsValue &&
                             includeFieldsValue;
 
-        // Get exclude values from constructor
         var excludeValues = facetAttr.ConstructorArguments.Length > 1
             ? facetAttr.ConstructorArguments[1].Values
             : ImmutableArray<TypedConstant>.Empty;
 
-        // Get include value
         var includeValue = !namedArgs.Include.Equals(default) ? namedArgs.Include.Value : default;
 
-        // Compute actual signature
         var actualSignature = ComputeSourceSignature(sourceType, excludeValues, includeValue, includeFields);
 
-        // Compare signatures
         if (!string.Equals(expectedSignature, actualSignature, StringComparison.OrdinalIgnoreCase))
         {
             context.ReportDiagnostic(Diagnostic.Create(
@@ -453,26 +425,20 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
 
     private static void ValidateGenerateToSource(SymbolAnalysisContext context, AttributeData facetAttr, INamedTypeSymbol sourceType, INamedTypeSymbol targetType, FacetNamedArguments namedArgs)
     {
-        // Check if GenerateToSource is set to true
         if (namedArgs.GenerateToSource.Key == null || namedArgs.GenerateToSource.Value.IsNull)
             return;
 
         if (namedArgs.GenerateToSource.Value.Value is not bool generateToSource || !generateToSource)
             return;
 
-        // Check if the source type has a positional constructor
         var hasPositionalConstructor = HasPositionalConstructor(sourceType);
 
         if (hasPositionalConstructor)
         {
-            // Positional constructors can always generate ToSource
             return;
         }
 
-        // Nested types in C# have access to all members of their containing type, including private
         var isNestedInSource = IsNestedInsideType(targetType, sourceType);
-
-        // For non-positional types, we need a parameterless constructor and accessible setters
         var hasAccessibleConstructor = HasAccessibleParameterlessConstructor(sourceType, context.Compilation.Assembly, isNestedInSource);
 
         if (!hasAccessibleConstructor)
@@ -484,8 +450,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        // Check if all properties that would be mapped have accessible setters
-        // We need to extract the members to check this
         var excluded = ExtractExcludedMembers(facetAttr);
         var (included, isIncludeMode) = ExtractIncludedMembers(facetAttr);
         var includeFields = !namedArgs.IncludeFields.Equals(default) &&
@@ -536,9 +500,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
                 if (string.IsNullOrEmpty(sourcePropertyName))
                     continue;
 
-                // Skip @nameof(...) expressions: the generator resolves these to full navigation
-                // paths at syntax level (e.g. @nameof(T.A.B) -> "A.B"), so the compiled string
-                // value alone is not sufficient for validation.
                 if (attr.ApplicationSyntaxReference?.GetSyntax() is AttributeSyntax attrSyntax)
                 {
                     var firstArgExpr = attrSyntax.ArgumentList?.Arguments.FirstOrDefault()?.Expression;
@@ -550,8 +511,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
                     }
                 }
 
-                // Skip expression-based values (contains operators/spaces) and dotted-path navigation.
-                // These are complex mappings that cannot be validated with a simple member lookup.
                 if (sourcePropertyName.Contains(" ") ||
                     sourcePropertyName.Contains("+") ||
                     sourcePropertyName.Contains("-") ||
@@ -622,13 +581,11 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
             {
                 var syntax = syntaxRef.GetSyntax();
 
-                // Check for record with parameter list
                 if (syntax is RecordDeclarationSyntax recordDecl && recordDecl.ParameterList != null && recordDecl.ParameterList.Parameters.Count > 0)
                 {
                     return true;
                 }
 
-                // Check for regular class/struct with primary constructor (C# 12+)
                 if ((syntax is ClassDeclarationSyntax classDecl && classDecl.ParameterList != null && classDecl.ParameterList.Parameters.Count > 0) ||
                     (syntax is StructDeclarationSyntax structDecl && structDecl.ParameterList != null && structDecl.ParameterList.Parameters.Count > 0))
                 {
@@ -644,8 +601,7 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
     {
         var constructors = sourceType.InstanceConstructors;
 
-        // Note: For classes without explicit constructors, the compiler provides an implicit
-        // parameterless constructor which will be marked as IsImplicitlyDeclared = true
+        // Implicit parameterless constructors are marked IsImplicitlyDeclared.
         foreach (var constructor in constructors)
         {
             if (constructor.Parameters.Length == 0)
@@ -653,11 +609,10 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
                 if (constructor.DeclaredAccessibility == Accessibility.Public)
                     return true;
 
-                // Nested types have access to all members of their containing type, including private
+                // Nested facets can access private constructors on the containing source type.
                 if (isNestedInSourceType)
                     return true;
 
-                // Internal constructors are accessible in same assembly or via [InternalsVisibleTo]
                 if (constructor.DeclaredAccessibility == Accessibility.Internal &&
                     compilationAssembly != null &&
                     TypeAnalyzer.IsInternalAccessible(sourceType.ContainingAssembly, compilationAssembly))
@@ -681,7 +636,7 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
     {
         var inaccessibleProperties = new List<string>();
 
-        // Nested types have access to all members of their containing type
+        // Nested facets can access private setters on the containing source type.
         if (isNestedInSourceType)
             return inaccessibleProperties;
 
@@ -689,7 +644,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
 
         foreach (var member in members)
         {
-            // Apply include/exclude filters
             if (isIncludeMode)
             {
                 if (!included.Contains(member.Name))
@@ -701,26 +655,22 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
                     continue;
             }
 
-            // Skip fields unless includeFields is true
             if (member.Kind == SymbolKind.Field && !includeFields)
                 continue;
 
-            // Check properties for accessible setters
             if (member is IPropertySymbol property)
             {
-                // Check if the property has a setter and if it's accessible
                 if (property.SetMethod == null)
                 {
                     inaccessibleProperties.Add(property.Name);
                     continue;
                 }
 
-                // Check setter accessibility
                 var setterAccessibility = property.SetMethod.DeclaredAccessibility;
                 if (setterAccessibility == Accessibility.Public)
                     continue;
 
-                // Internal setters are accessible in same assembly or via [InternalsVisibleTo]
+                // InternalsVisibleTo also makes internal setters assignable.
                 if (setterAccessibility == Accessibility.Internal &&
                     compilationAssembly != null &&
                     TypeAnalyzer.IsInternalAccessible(sourceType.ContainingAssembly, compilationAssembly))
@@ -754,7 +704,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
 
     private static bool IsPartialType(INamedTypeSymbol type)
     {
-        // A type is partial if any of its declarations has the partial modifier
         foreach (var syntaxRef in type.DeclaringSyntaxReferences)
         {
             var syntax = syntaxRef.GetSyntax();
@@ -793,7 +742,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
 
     private static bool ImplementsConfigurationInterface(INamedTypeSymbol configurationType, INamedTypeSymbol sourceType, INamedTypeSymbol targetType)
     {
-        // Check for IFacetMapConfiguration<TSource, TTarget>
         var syncInterface = configurationType.AllInterfaces.FirstOrDefault(i =>
             i.IsGenericType &&
             i.ConstructedFrom.ToDisplayString() == "Facet.Mapping.IFacetMapConfiguration<TSource, TTarget>" &&
@@ -803,7 +751,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         if (syncInterface != null)
             return true;
 
-        // Check for IFacetMapConfigurationAsync<TSource, TTarget>
         var asyncInterface = configurationType.AllInterfaces.FirstOrDefault(i =>
             i.IsGenericType &&
             i.ConstructedFrom.ToDisplayString() == "Facet.Mapping.IFacetMapConfigurationAsync<TSource, TTarget>" &&
@@ -813,7 +760,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         if (asyncInterface != null)
             return true;
 
-        // Also check for static Map method (alternative approach without interface)
         var mapMethod = configurationType.GetMembers("Map")
             .OfType<IMethodSymbol>()
             .FirstOrDefault(m => m.IsStatic &&
@@ -824,7 +770,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         if (mapMethod != null)
             return true;
 
-        // Check for IFacetProjectionMapConfiguration<TSource, TTarget> (projection-only config)
         var projectionInterface = configurationType.AllInterfaces.FirstOrDefault(i =>
             i.IsGenericType &&
             i.ConstructedFrom.ToDisplayString() == "Facet.Mapping.IFacetProjectionMapConfiguration<TSource, TTarget>" &&
@@ -865,10 +810,8 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
         TypedConstant includeValue,
         bool includeFields)
     {
-        // Get all public members from source type
         var allMembers = GetAllPublicMembers(sourceType).ToList();
 
-        // Build exclude set
         var excludeSet = new HashSet<string>();
         foreach (var item in excludeValues)
         {
@@ -876,7 +819,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
                 excludeSet.Add(name);
         }
 
-        // Build include set if specified
         HashSet<string>? includeSet = null;
         if (!includeValue.IsNull && includeValue.Kind == TypedConstantKind.Array)
         {
@@ -888,7 +830,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
             }
         }
 
-        // Filter and format members
         var filteredMembers = allMembers
             .Where(m =>
             {
@@ -914,7 +855,6 @@ public class FacetAttributeAnalyzer : DiagnosticAnalyzer
 
         var combined = string.Join("|", filteredMembers);
 
-        // Compute short hash
         using var sha256 = SHA256.Create();
         var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(combined));
         return BitConverter.ToString(hashBytes).Replace("-", "").Substring(0, 8).ToLowerInvariant();

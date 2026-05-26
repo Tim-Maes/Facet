@@ -1,4 +1,4 @@
-using Facet.Tests.TestModels;
+﻿using Facet.Tests.TestModels;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
 
@@ -7,7 +7,6 @@ public class FlattenToTests
     [Fact]
     public void FlattenTo_ShouldCombineParentAndCollectionItemProperties()
     {
-        // Arrange
         var data = new DataEntity
         {
             Id = 1,
@@ -23,28 +22,23 @@ public class FlattenToTests
 
         var facet = new DataFacet(data);
 
-        // Act
         var flattened = facet.FlattenTo();
 
-        // Assert
         Assert.NotNull(flattened);
         Assert.Equal(3, flattened.Count);
 
-        // First flattened row
-        Assert.Equal(1, flattened[0].Id);                    // From parent
-        Assert.Equal("Parent Data", flattened[0].Name);      // From parent
-        Assert.Equal("Parent Description", flattened[0].Description); // From parent
-        Assert.Equal(100, flattened[0].DataValue);           // From collection item
-        Assert.Equal("Extended 1", flattened[0].ExtendedName); // From collection item
+        Assert.Equal(1, flattened[0].Id);                    
+        Assert.Equal("Parent Data", flattened[0].Name);      
+        Assert.Equal("Parent Description", flattened[0].Description); 
+        Assert.Equal(100, flattened[0].DataValue);           
+        Assert.Equal("Extended 1", flattened[0].ExtendedName); 
 
-        // Second flattened row
         Assert.Equal(1, flattened[1].Id);
         Assert.Equal("Parent Data", flattened[1].Name);
         Assert.Equal("Parent Description", flattened[1].Description);
         Assert.Equal(200, flattened[1].DataValue);
         Assert.Equal("Extended 2", flattened[1].ExtendedName);
 
-        // Third flattened row
         Assert.Equal(1, flattened[2].Id);
         Assert.Equal("Parent Data", flattened[2].Name);
         Assert.Equal("Parent Description", flattened[2].Description);
@@ -55,7 +49,6 @@ public class FlattenToTests
     [Fact]
     public void FlattenTo_WithNullCollection_ShouldReturnEmptyList()
     {
-        // Arrange
         var data = new DataEntity
         {
             Id = 1,
@@ -66,10 +59,8 @@ public class FlattenToTests
 
         var facet = new DataFacet(data);
 
-        // Act
         var flattened = facet.FlattenTo();
 
-        // Assert
         Assert.NotNull(flattened);
         Assert.Empty(flattened);
     }
@@ -77,7 +68,6 @@ public class FlattenToTests
     [Fact]
     public void FlattenTo_WithEmptyCollection_ShouldReturnEmptyList()
     {
-        // Arrange
         var data = new DataEntity
         {
             Id = 1,
@@ -88,10 +78,8 @@ public class FlattenToTests
 
         var facet = new DataFacet(data);
 
-        // Act
         var flattened = facet.FlattenTo();
 
-        // Assert
         Assert.NotNull(flattened);
         Assert.Empty(flattened);
     }
@@ -99,7 +87,6 @@ public class FlattenToTests
     [Fact]
     public void FlattenTo_WithSingleCollectionItem_ShouldReturnSingleRow()
     {
-        // Arrange
         var data = new DataEntity
         {
             Id = 42,
@@ -113,10 +100,8 @@ public class FlattenToTests
 
         var facet = new DataFacet(data);
 
-        // Act
         var flattened = facet.FlattenTo();
 
-        // Assert
         Assert.NotNull(flattened);
         Assert.Single(flattened);
         Assert.Equal(42, flattened[0].Id);
@@ -129,7 +114,6 @@ public class FlattenToTests
     [Fact]
     public void FlattenTo_ShouldReplicateParentDataForEachCollectionItem()
     {
-        // Arrange
         var data = new DataEntity
         {
             Id = 5,
@@ -144,13 +128,10 @@ public class FlattenToTests
 
         var facet = new DataFacet(data);
 
-        // Act
         var flattened = facet.FlattenTo();
 
-        // Assert
         Assert.Equal(2, flattened.Count);
         
-        // Both rows should have the same parent data
         foreach (var row in flattened)
         {
             Assert.Equal(5, row.Id);
@@ -158,7 +139,6 @@ public class FlattenToTests
             Assert.Equal("Shared Description", row.Description);
         }
 
-        // But different collection item data
         Assert.Equal(10, flattened[0].DataValue);
         Assert.Equal(20, flattened[1].DataValue);
     }
@@ -166,7 +146,6 @@ public class FlattenToTests
     [Fact]
     public void FlattenTo_WithNestedFacetsInLookupTable_ShouldFlattenThroughNestedNavigation()
     {
-        // Arrange - This tests the GitHub issue scenario with lookup tables
         var data = new TestModels.DataTableEntity
         {
             Id = 1,
@@ -202,25 +181,19 @@ public class FlattenToTests
 
         var facet = new TestModels.DataTableFacet(data);
 
-        // Act
         var flattened = facet.FlattenTo();
 
-        // Assert
         Assert.NotNull(flattened);
         Assert.Equal(2, flattened.Count);
 
-        // First flattened row
-        Assert.Equal(1, flattened[0].Id);                    // From parent DataTableEntity
-        Assert.Equal("Main Data", flattened[0].Name);        // From parent DataTableEntity
-        Assert.Equal(1, flattened[0].DataId);                // From lookup DataExtendedLookupEntity
-        Assert.Equal(100, flattened[0].ExtendedId);          // From lookup DataExtendedLookupEntity
+        Assert.Equal(1, flattened[0].Id);                    
+        Assert.Equal("Main Data", flattened[0].Name);        
+        Assert.Equal(1, flattened[0].DataId);                
+        Assert.Equal(100, flattened[0].ExtendedId);          
 
-        // CRITICAL: These should come from the nested Extended navigation property
-        // This is the bug - ExtendedValue and NumericValue are not populated
-        Assert.Equal("First Extended Value", flattened[0].ExtendedValue);  // From nested DataExtendedEntity
-        Assert.Equal(42, flattened[0].NumericValue);                        // From nested DataExtendedEntity
+        Assert.Equal("First Extended Value", flattened[0].ExtendedValue);  
+        Assert.Equal(42, flattened[0].NumericValue);                        
 
-        // Second flattened row
         Assert.Equal(1, flattened[1].Id);
         Assert.Equal("Main Data", flattened[1].Name);
         Assert.Equal(1, flattened[1].DataId);
@@ -232,8 +205,6 @@ public class FlattenToTests
     [Fact]
     public void FlattenTo_WithMultipleNameCollisions_ShouldUseSmartLeafNaming()
     {
-        // Arrange - Test case for Issue #196
-        // Multiple nested entities with "Name" properties should be prefixed with parent name
         var catalog = new TestModels.ProductCatalogEntity
         {
             Id = 1,
@@ -289,24 +260,20 @@ public class FlattenToTests
 
         var facet = new TestModels.ProductCatalogFacet(catalog);
 
-        // Act
         var flattened = facet.FlattenTo();
 
-        // Assert
         Assert.NotNull(flattened);
         Assert.Equal(2, flattened.Count);
 
-        // First row - verify SmartLeaf naming resolved all "Name" collisions
         Assert.Equal(1, flattened[0].Id);
-        Assert.Equal("Main Catalog", flattened[0].Name);           // Parent Name (no prefix needed)
-        Assert.Equal("Electronics", flattened[0].CategoryName);     // Category.Name (prefixed to avoid collision)
-        Assert.Equal("ELEC", flattened[0].Code);                    // Category.Code (no collision, no prefix)
-        Assert.Equal("TechCorp", flattened[0].SupplierName);        // Supplier.Name (prefixed to avoid collision)
-        Assert.Equal("contact@techcorp.com", flattened[0].ContactEmail); // Supplier.ContactEmail (no collision, no prefix)
-        Assert.Equal("Samsung", flattened[0].BrandName);            // Brand.Name (prefixed to avoid collision)
-        Assert.Equal("South Korea", flattened[0].Country);          // Brand.Country (no collision, no prefix)
+        Assert.Equal("Main Catalog", flattened[0].Name);           
+        Assert.Equal("Electronics", flattened[0].CategoryName);     
+        Assert.Equal("ELEC", flattened[0].Code);                    
+        Assert.Equal("TechCorp", flattened[0].SupplierName);        
+        Assert.Equal("contact@techcorp.com", flattened[0].ContactEmail); 
+        Assert.Equal("Samsung", flattened[0].BrandName);            
+        Assert.Equal("South Korea", flattened[0].Country);          
 
-        // Second row
         Assert.Equal(1, flattened[1].Id);
         Assert.Equal("Main Catalog", flattened[1].Name);
         Assert.Equal("Furniture", flattened[1].CategoryName);

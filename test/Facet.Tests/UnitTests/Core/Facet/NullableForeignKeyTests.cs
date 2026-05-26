@@ -1,7 +1,5 @@
-namespace Facet.Tests.UnitTests.Core.Facet;
+﻿namespace Facet.Tests.UnitTests.Core.Facet;
 
-// Test entities that mimic EF Core entities with nullable foreign keys
-// When the FK is nullable, the navigation property should also be nullable
 public class DataExampleEntity
 {
     public int Id { get; set; }
@@ -26,7 +24,6 @@ public class ExtendedDataEntity
     public string Metadata { get; set; } = string.Empty;
 }
 
-// Facet DTOs
 [Facet(typeof(StringResourceEntity))]
 public partial class StringResourceDto;
 
@@ -43,7 +40,6 @@ public class NullableForeignKeyTests
     [Fact]
     public void Projection_ShouldHandleNullNavigationProperty_WhenForeignKeyIsNull()
     {
-        // Arrange
         var dataExamples = new[]
         {
             new DataExampleEntity
@@ -66,19 +62,15 @@ public class NullableForeignKeyTests
             }
         }.AsQueryable();
 
-        // Act
         var dtos = dataExamples.Select(DataExampleFacet.Projection).ToList();
 
-        // Assert
         dtos.Should().HaveCount(2);
 
-        // First item has null navigation properties
         dtos[0].Id.Should().Be(1);
         dtos[0].Code.Should().Be("TEST001");
         dtos[0].StringResource.Should().BeNull();
         dtos[0].ExtendedData.Should().BeNull();
 
-        // Second item has populated navigation properties
         dtos[1].Id.Should().Be(2);
         dtos[1].Code.Should().Be("TEST002");
         dtos[1].StringResource.Should().NotBeNull();
@@ -90,7 +82,6 @@ public class NullableForeignKeyTests
     [Fact]
     public void Constructor_ShouldHandleNullNavigationProperty_WhenForeignKeyIsNull()
     {
-        // Arrange
         var dataExample = new DataExampleEntity
         {
             Id = 1,
@@ -101,10 +92,8 @@ public class NullableForeignKeyTests
             ExtendedData = null!
         };
 
-        // Act - This should not throw
         var dto = new DataExampleFacet(dataExample);
 
-        // Assert
         dto.Id.Should().Be(1);
         dto.StringResource.Should().BeNull();
         dto.ExtendedData.Should().BeNull();

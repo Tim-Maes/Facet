@@ -1,4 +1,4 @@
-namespace Facet.Tests.TestModels.NonFacetBaseNewKeyword;
+﻿namespace Facet.Tests.TestModels.NonFacetBaseNewKeyword;
 
 public interface IModifiedByBase
 {

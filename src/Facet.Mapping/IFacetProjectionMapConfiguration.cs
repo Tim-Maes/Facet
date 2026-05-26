@@ -1,4 +1,4 @@
-namespace Facet.Mapping;
+﻿namespace Facet.Mapping;
 
 /// <summary>
 /// Allows declaring custom property mappings that are inlined into the generated

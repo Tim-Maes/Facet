@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using System.Text;
 
 namespace Facet.Generators;
@@ -28,29 +28,24 @@ internal static class MemberGenerator
         System.Collections.Generic.IReadOnlyList<FacetMember>? membersOverride = null,
         bool usePropertyNameAsInitializer = false)
     {
-        // Create a HashSet for efficient lookup of base class member names
         var baseClassMembers = new System.Collections.Generic.HashSet<string>(model.BaseClassMemberNames);
 
         var members = membersOverride ?? (System.Collections.Generic.IReadOnlyList<FacetMember>)model.Members;
 
         foreach (var m in members)
         {
-            // Skip user-declared properties (those with [MapFrom] or [MapWhen] attribute)
             if (m.IsUserDeclared)
                 continue;
 
-            // Skip properties that already exist in base classes to avoid "hides inherited member" warning
             if (baseClassMembers.Contains(m.Name))
                 continue;
 
-            // Generate member XML documentation if available
             if (!string.IsNullOrWhiteSpace(m.XmlDocumentation))
             {
                 var indentedDocumentation = m.XmlDocumentation!.Replace("\n", $"\n{memberIndent}");
                 sb.AppendLine($"{memberIndent}{indentedDocumentation}");
             }
 
-            // Generate attributes if any
             foreach (var attribute in m.Attributes)
             {
                 sb.AppendLine($"{memberIndent}{attribute}");
@@ -80,7 +75,6 @@ internal static class MemberGenerator
             propDef += " { get; set; }";
         }
 
-        // Add a default value or the "= default!" null-suppression for non-nullable reference types.
         if (usePropertyNameAsInitializer)
         {
             propDef += $" = {member.Name};";
@@ -91,8 +85,7 @@ internal static class MemberGenerator
         }
         else if (!member.IsValueType && !member.IsRequired && !NullabilityAnalyzer.IsNullableTypeName(member.TypeName))
         {
-            // For non-nullable reference type properties without an initializer and not marked as required,
-            // add "= default!" to suppress CS8618 warnings in the generated code
+            // Suppress CS8618 for generated non-nullable refs.
             propDef += " = default!;";
         }
 
@@ -108,15 +101,13 @@ internal static class MemberGenerator
     {
         var fieldDef = $"public {member.TypeName} {member.Name}";
         
-        // Add default value/initializer if present
         if (!string.IsNullOrEmpty(member.DefaultValue))
         {
             fieldDef += $" = {member.DefaultValue}";
         }
         else if (!member.IsValueType && !member.IsRequired && !NullabilityAnalyzer.IsNullableTypeName(member.TypeName))
         {
-            // For non-nullable reference type fields without an initializer and not marked as required,
-            // add "= default!" to suppress CS8618 warnings in the generated code
+            // Suppress CS8618 for generated non-nullable refs.
             fieldDef += " = default!";
         }
         

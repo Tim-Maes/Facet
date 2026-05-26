@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text;
 
 namespace Facet.Generators.Shared;
@@ -35,7 +35,6 @@ internal static class ExpressionHelper
         {
             char c = expression[i];
 
-            // Track string literals
             if ((c == '"' || c == '\'') && (i == 0 || expression[i - 1] != '\\'))
             {
                 if (!inString)
@@ -59,7 +58,6 @@ internal static class ExpressionHelper
                 continue;
             }
 
-            // Build identifiers
             if (char.IsLetterOrDigit(c) || c == '_')
             {
                 identifier.Append(c);
@@ -83,7 +81,7 @@ internal static class ExpressionHelper
         if (identifier.Length > 0)
         {
             var id = identifier.ToString();
-            // Don't prefix keywords, numbers, type names (followed by '.'), or member access (preceded by '.')
+            
             var identifierStartIndex = currentIndex - identifier.Length;
             var isPrecededByDot = identifierStartIndex > 0 && expression[identifierStartIndex - 1] == '.';
 
@@ -118,12 +116,10 @@ internal static class ExpressionHelper
     /// </summary>
     public static bool IsLikelyTypeName(string identifier, string expression, int identifierEndIndex, HashSet<string>? sourcePropertyNames = null)
     {
-        // If identifier starts with uppercase and is followed by '.', it's likely a type name
         if (identifier.Length > 0 && char.IsUpper(identifier[0]))
         {
             if (identifierEndIndex < expression.Length && expression[identifierEndIndex] == '.')
             {
-                // If the identifier is a known source property, it is NOT a type name
                 if (sourcePropertyNames != null && sourcePropertyNames.Contains(identifier))
                     return false;
                 return true;

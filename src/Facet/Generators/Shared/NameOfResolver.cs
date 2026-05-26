@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.CSharp;
 
@@ -6,12 +6,10 @@ namespace Facet.Generators.Shared
 {
     public static class NameOfResolver
     {
-        // Returns resolved name and whether the left-most identifier had a leading '@'
         public static (string? resolved, bool hadLeadingAt) ResolveExpression(ExpressionSyntax? expr)
         {
             if (expr == null) return (null, false);
 
-            // Handle invocation-based nameof: nameof(X.Y) -> unwrap argument
             if (expr is InvocationExpressionSyntax invocation)
             {
                 ExpressionSyntax invokedExpr = invocation.Expression;
@@ -61,7 +59,7 @@ namespace Facet.Generators.Shared
                 }
 
                 default:
-                    // Fallback: only remove a leading '@' from the first token if present
+                    
                     var text = expr.ToString();
                     var firstToken = expr.GetFirstToken();
                     var hadAt = !string.IsNullOrEmpty(firstToken.Text) && firstToken.Text.StartsWith("@");

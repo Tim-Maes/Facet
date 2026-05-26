@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -44,7 +44,6 @@ internal static class ProjectionGenerator
             var newMod = model.BaseHidesFacetMembers && propertyName == "Projection" ? "new " : "";
             sb.AppendLine($"{memberIndent}public static {newMod}Expression<Func<{model.SourceTypeName}, {model.Name}>> {propertyName} =>");
 
-            // Generate object initializer projection for EF Core compatibility
             GenerateProjectionExpression(sb, model, memberIndent, facetLookup);
         }
     }
@@ -66,25 +65,19 @@ internal static class ProjectionGenerator
         var src = model.SourceTypeName;
         var tgt = model.Name;
 
-        // Derive a unique backing-field name from the property name to avoid collisions in multi-source scenarios.
         var safeName = string.IsNullOrEmpty(propertyName) ? "Projection" : propertyName;
         var backingFieldName = "_" + char.ToLowerInvariant(safeName[0]) + safeName.Substring(1);
         var buildMethodName = "Build" + safeName;
 
-        // Check whether this model has nested facet members that could trigger circular references
         var nestedFacetMembers = model.Members
             .Where(m => m.MapFromIncludeInProjection && m.IsNestedFacet)
             .ToArray();
         bool hasNestedFacets = nestedFacetMembers.Length > 0;
 
-        // Single-source: the facet target has exactly one [Facet] attribute.
-        // Only single-source lazy DTOs with nested facets get ProjectionFor/BuildProjectionExcluding,
-        // because multi-source DTOs use ProjectionFromX instead of Projection and don't have a
-        // stable "Projection" property that ProjectionFor can return.
+        // Only single-source lazy DTOs with nested facets use ProjectionFor.
         bool isSingleSource = !facetLookup.TryGetValue(model.FullName, out var __modelSiblings)
             || __modelSiblings.Count <= 1;
 
-        // Backing fields: unlimited cache and (if MaxDepth > 0) a separate root-scoped depth-limited cache.
         var rootBackingFieldName = backingFieldName + "Root";
         if (model.MaxDepth > 0 && hasNestedFacets)
         {
@@ -95,29 +88,20 @@ internal static class ProjectionGenerator
 
         if (hasNestedFacets)
         {
-            // Thread-static build stack to detect circular references at runtime.
-            // When BuildProjection for type A accesses NestedDto.Projection and that
-            // eventually cycles back to A, the re-entrant call detects A is already on
-            // the stack and builds a shallow projection (scalar + ConfigureProjection
-            // only, no nested facets) to break the cycle.
             sb.AppendLine($"{memberIndent}[global::System.ThreadStatic]");
             sb.AppendLine($"{memberIndent}private static global::System.Collections.Generic.HashSet<string>? __projectionBuildStack;");
             sb.AppendLine();
 
-            // Projection property with re-entrance guard and depth tracking
             sb.AppendLine($"{memberIndent}public static {newModifier}global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> {propertyName}");
             sb.AppendLine($"{memberIndent}{{");
             sb.AppendLine($"{memberIndent}    get");
             sb.AppendLine($"{memberIndent}    {{");
-            // Outer try/finally tracks ProjectionDepth so every DTO in the chain
-            // knows how deep it is relative to the root, enabling MaxDepth enforcement.
+            
             sb.AppendLine($"{memberIndent}        global::Facet.Mapping.FacetProjectionContext.ProjectionDepth++;");
             sb.AppendLine($"{memberIndent}        try");
             sb.AppendLine($"{memberIndent}        {{");
             if (model.MaxDepth > 0)
             {
-                // When this DTO is the root (first entry, depth == 1), set ActiveMaxDepth
-                // so all nested DTOs in the chain respect it.
                 sb.AppendLine($"{memberIndent}            bool __isRoot = global::Facet.Mapping.FacetProjectionContext.ProjectionDepth == 1;");
                 sb.AppendLine($"{memberIndent}            if (__isRoot)");
                 sb.AppendLine($"{memberIndent}                global::Facet.Mapping.FacetProjectionContext.ActiveMaxDepth = {model.MaxDepth};");
@@ -128,8 +112,8 @@ internal static class ProjectionGenerator
                 sb.AppendLine($"{memberIndent}            }}");
                 sb.AppendLine();
             }
-            // Bypass the unlimited cache when an active MaxDepth constraint is in play;
-            // only write to it when there is no depth limit active.
+            
+            // Cache only when no depth limit is active.
             sb.AppendLine($"{memberIndent}            if (global::Facet.Mapping.FacetProjectionContext.ActiveMaxDepth == 0)");
             sb.AppendLine($"{memberIndent}            {{");
             sb.AppendLine($"{memberIndent}                var __cached = global::System.Threading.Volatile.Read(ref {backingFieldName});");
@@ -170,23 +154,20 @@ internal static class ProjectionGenerator
         }
         else
         {
-            // No nested facets — no risk of circular references; use simple lazy init
+            // Without nested facets, simple lazy init is enough.
             sb.AppendLine($"{memberIndent}public static {newModifier}global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> {propertyName}");
             sb.AppendLine($"{memberIndent}    => global::System.Threading.LazyInitializer.EnsureInitialized(ref {backingFieldName}, () => {buildMethodName}(true));");
         }
         sb.AppendLine();
 
-        // BuildProjection() method — accepts includeNestedFacets flag
         sb.AppendLine($"{memberIndent}private static global::System.Linq.Expressions.Expression<global::System.Func<{src}, {tgt}>> {buildMethodName}(bool __includeNestedFacets)");
         sb.AppendLine($"{memberIndent}{{");
 
         var bodyIndent = memberIndent + "    ";
 
-        // Source parameter
         sb.AppendLine($"{bodyIndent}var __p = global::System.Linq.Expressions.Expression.Parameter(typeof({src}), \"source\");");
         sb.AppendLine();
 
-        // Auto-generated bindings list
         sb.AppendLine($"{bodyIndent}var __bindings = new global::System.Collections.Generic.List<global::System.Linq.Expressions.MemberBinding>");
         sb.AppendLine($"{bodyIndent}{{");
 
@@ -207,11 +188,8 @@ internal static class ProjectionGenerator
         sb.AppendLine($"{bodyIndent}}};");
         sb.AppendLine();
 
-        // Generate bindings for nested facet members (guarded by __includeNestedFacets and depth limit)
         if (hasNestedFacets)
         {
-            // Also check the active MaxDepth limit: skip nested facets if the current
-            // ProjectionDepth exceeds ActiveMaxDepth (0 means unlimited).
             sb.AppendLine($"{bodyIndent}if (__includeNestedFacets && (global::Facet.Mapping.FacetProjectionContext.ActiveMaxDepth == 0 || global::Facet.Mapping.FacetProjectionContext.ProjectionDepth <= global::Facet.Mapping.FacetProjectionContext.ActiveMaxDepth))");
             sb.AppendLine($"{bodyIndent}{{");
 
@@ -226,7 +204,6 @@ internal static class ProjectionGenerator
             sb.AppendLine();
         }
 
-        // Apply all base Facet ConfigureProjection configs found in the ancestor chain
         if (model.BaseFacetInfo?.AllBaseProjectionConfigs.Length > 0)
         {
             sb.AppendLine($"{bodyIndent}// Apply base Facet projection mappings");
@@ -254,7 +231,6 @@ internal static class ProjectionGenerator
             }
         }
 
-        // Apply ConfigureProjection overrides from derived class (only if this model has its own configuration)
         if (model.ConfigurationTypeName != null)
         {
             sb.AppendLine($"{bodyIndent}var __builder = new global::Facet.Mapping.FacetProjectionBuilder<{src}, {tgt}>();");
@@ -271,7 +247,6 @@ internal static class ProjectionGenerator
             sb.AppendLine();
         }
 
-        // Build and return the final lambda
         sb.AppendLine($"{bodyIndent}return global::System.Linq.Expressions.Expression.Lambda<global::System.Func<{src}, {tgt}>>(");
         sb.AppendLine($"{bodyIndent}    global::System.Linq.Expressions.Expression.MemberInit(");
         sb.AppendLine($"{bodyIndent}        global::System.Linq.Expressions.Expression.New(typeof({tgt})),");
@@ -279,9 +254,6 @@ internal static class ProjectionGenerator
         sb.AppendLine($"{bodyIndent}    __p);");
         sb.AppendLine($"{memberIndent}}}");
 
-        // For single-source lazy DTOs with nested facets, generate ProjectionFor and BuildProjectionExcluding.
-        // These enable partial (non-fully-shallow) projections when a circular re-entry is detected,
-        // allowing second-level (and deeper) reverse navigation properties to be included.
         if (hasNestedFacets && isSingleSource)
         {
             var baseAlsoGeneratesProjectionFor = false;
@@ -356,7 +328,6 @@ internal static class ProjectionGenerator
         var nonNullableTypeName = member.TypeName.TrimEnd('?');
         bool isNullable = member.TypeName.EndsWith("?");
 
-        // Resolve the Projection property name on the nested DTO
         var projectionPropertyAccess = ResolveNestedProjectionPropertyAccess(
             nonNullableTypeName, member.NestedFacetSourceTypeName, facetLookup, currentModelFullName);
 
@@ -371,7 +342,6 @@ internal static class ProjectionGenerator
 
         if (isNullable)
         {
-            // Wrap with null check: source.Prop != null ? projected : default
             sb.AppendLine($"{innerIndent}__nfBody = global::System.Linq.Expressions.Expression.Condition(");
             sb.AppendLine($"{innerIndent}    global::System.Linq.Expressions.Expression.NotEqual(__nfProp, global::System.Linq.Expressions.Expression.Constant(null, __nfProp.Type)),");
             sb.AppendLine($"{innerIndent}    __nfBody,");
@@ -402,17 +372,14 @@ internal static class ProjectionGenerator
         var nonNullableElementType = elementTypeName.TrimEnd('?');
         bool isNullableCollection = member.TypeName.EndsWith("?");
 
-        // Determine source element type
         var sourceElementType = member.NestedFacetSourceTypeName ??
             (member.SourceMemberTypeName != null
                 ? ExpressionBuilder.ExtractElementTypeFromCollectionTypeName(member.SourceMemberTypeName)
                 : elementTypeName);
 
-        // Resolve the Projection property name on the nested DTO element type
         var projectionPropertyAccess = ResolveNestedProjectionPropertyAccess(
             nonNullableElementType, sourceElementType, facetLookup, currentModelFullName);
 
-        // Determine the ToList/ToArray wrapper method
         var collectionWrapper = member.CollectionWrapper ?? "List";
         var wrapperMethodCall = GetCollectionWrapperMethodCall(collectionWrapper, nonNullableElementType);
 
@@ -425,7 +392,6 @@ internal static class ProjectionGenerator
         sb.AppendLine($"{innerIndent}var __nfProjection = (global::System.Linq.Expressions.LambdaExpression){projectionPropertyAccess};");
         sb.AppendLine();
 
-        // Build Enumerable.Select call expression
         sb.AppendLine($"{innerIndent}// Build: source.{sourcePropName}.Select(projection){wrapperMethodCall}");
         sb.AppendLine($"{innerIndent}var __nfSelectMethod = typeof(global::System.Linq.Enumerable)");
         sb.AppendLine($"{innerIndent}    .GetMethods(global::System.Reflection.BindingFlags.Static | global::System.Reflection.BindingFlags.Public)");
@@ -437,7 +403,6 @@ internal static class ProjectionGenerator
         sb.AppendLine($"{innerIndent}var __nfSelectCall = global::System.Linq.Expressions.Expression.Call(null, __nfSelectMethod, __nfCollectionProp, __nfProjection);");
         sb.AppendLine();
 
-        // Build the wrapper call (ToList, ToArray, etc.)
         GenerateCollectionWrapperExpression(sb, innerIndent, collectionWrapper, nonNullableElementType);
 
         if (isNullableCollection)
@@ -479,11 +444,11 @@ internal static class ProjectionGenerator
                 sb.AppendLine($"{indent}var __nfWrapped = global::System.Linq.Expressions.Expression.Call(null, __nfWrapMethod, __nfSelectCall);");
                 break;
             case FacetConstants.CollectionWrappers.IEnumerable:
-                // No wrapper needed - Select already returns IEnumerable
+                
                 sb.AppendLine($"{indent}var __nfWrapped = (global::System.Linq.Expressions.Expression)__nfSelectCall;");
                 break;
             default:
-                // Default to ToList() for List, IList, ICollection, etc.
+                
                 sb.AppendLine($"{indent}var __nfWrapMethod = typeof(global::System.Linq.Enumerable).GetMethod(\"ToList\")!.MakeGenericMethod(typeof({elementTypeName}));");
                 sb.AppendLine($"{indent}var __nfWrapped = global::System.Linq.Expressions.Expression.Call(null, __nfWrapMethod, __nfSelectCall);");
                 break;
@@ -503,7 +468,6 @@ internal static class ProjectionGenerator
         Dictionary<string, List<FacetTargetModel>> facetLookup,
         string? currentModelFullName = null)
     {
-        // Strip "global::" prefix and extract simple name for lookup
         var lookupName = nestedDtoTypeName
             .Replace(Shared.GeneratorUtilities.GlobalPrefix, "")
             .Split('.', ':')
@@ -511,7 +475,6 @@ internal static class ProjectionGenerator
 
         List<FacetTargetModel>? models = null;
 
-        // Try exact match by FullName first, then by simple name
         if (!facetLookup.TryGetValue(lookupName, out models) || models == null || models.Count == 0)
         {
             foreach (var kvp in facetLookup)
@@ -531,8 +494,6 @@ internal static class ProjectionGenerator
 
         if (models == null || models.Count <= 1)
         {
-            // Single-source: use ProjectionFor when the nested DTO qualifies (lazy, has nested facets)
-            // so that it can provide a partial projection instead of fully-shallow on circular re-entry.
             if (currentModelFullName != null && models?.Count >= 1 &&
                 NestedDtoHasProjectionFor(models[0], models, facetLookup))
             {
@@ -542,7 +503,6 @@ internal static class ProjectionGenerator
             return $"{nestedDtoTypeName}.Projection";
         }
 
-        // Multi-source: find the matching model and use "ProjectionFrom{SourceSimpleName}"
         if (nestedSourceTypeName != null)
         {
             foreach (var model in models)
@@ -557,7 +517,6 @@ internal static class ProjectionGenerator
             }
         }
 
-        // Fallback to "Projection"
         return $"{nestedDtoTypeName}.Projection";
     }
 
@@ -584,14 +543,12 @@ internal static class ProjectionGenerator
         string paramName,
         string targetTypeName)
     {
-        // Skip members with computed expressions — user must declare them in ConfigureProjection
         if (member.MapFromSource != null && ExpressionHelper.IsExpression(member.MapFromSource))
             return null;
 
         string valueExpr;
         if (member.MapFromSource != null)
         {
-            // Build chained Expression.Property calls for dotted paths like "Company.Name"
             var parts = member.MapFromSource.Split('.');
             valueExpr = $"global::System.Linq.Expressions.Expression.Property({paramName}, \"{parts[0]}\")";
             for (int i = 1; i < parts.Length; i++)
@@ -607,16 +564,13 @@ internal static class ProjectionGenerator
 
     private static void GenerateProjectionNotSupportedComment(StringBuilder sb, FacetTargetModel model, string memberIndent)
     {
-        // For records with existing primary constructors, the projection can't use the standard constructor approach
         sb.AppendLine($"{memberIndent}// Note: Projection generation is not supported for records with existing primary constructors.");
         sb.AppendLine($"{memberIndent}// You must manually create projection expressions or use the FromSource factory method.");
         sb.AppendLine($"{memberIndent}// Example: source => new {model.Name}(defaultPrimaryConstructorValue) {{ PropA = source.PropA, PropB = source.PropB }}");
     }
 
-
     internal static void GenerateProjectionDocumentation(StringBuilder sb, FacetTargetModel model, string memberIndent, string propertyName = "Projection")
     {
-        // Generate projection XML documentation
         sb.AppendLine($"{memberIndent}/// <summary>");
         sb.AppendLine($"{memberIndent}/// Gets the projection expression for converting <see cref=\"{CodeGenerationHelpers.GetSimpleTypeName(model.SourceTypeName)}\"/> to <see cref=\"{model.Name}\"/>.");
         sb.AppendLine($"{memberIndent}/// Use this for LINQ and Entity Framework query projections.");
@@ -645,20 +599,16 @@ internal static class ProjectionGenerator
     {
         var indent = baseIndent + "    ";
         
-        // Check if this is a positional record without a parameterless constructor
-        // In this case, we need to use constructor syntax instead of object initializer
         var isPositionalWithoutParameterless = model.IsRecord && 
                                                 !model.HasExistingPrimaryConstructor && 
                                                 !model.GenerateParameterlessConstructor;
         
         if (isPositionalWithoutParameterless)
         {
-            // Use constructor invocation syntax for positional records
             GeneratePositionalRecordProjection(sb, model, indent, facetLookup);
         }
         else
         {
-            // Use object initializer syntax (standard approach)
             GenerateObjectInitializerProjection(sb, model, indent, facetLookup);
         }
     }
@@ -707,10 +657,8 @@ internal static class ProjectionGenerator
 
         var members = model.Members;
 
-        // Track which facet types we're currently processing to detect circular references
         var visitedTypes = new HashSet<string> { model.Name };
 
-        // Pre-filter included members to avoid O(n²) comma placement check
         var includedMembers = members.Where(m => m.MapFromIncludeInProjection).ToArray();
         var includedCount = includedMembers.Length;
         var sourceNames = model.SourcePropertyNames.Length > 0
@@ -722,11 +670,9 @@ internal static class ProjectionGenerator
             var member = includedMembers[i];
             var memberIndent = indent + "    ";
 
-            // Generate the property assignment
             var projectionValue = GetProjectionValueExpression(member, "source", memberIndent, facetLookup, visitedTypes, 0, model.MaxDepth, sourceNames);
             sb.Append($"{memberIndent}{member.Name} = {projectionValue}");
 
-            // Add comma if not the last member
             if (i < includedCount - 1)
                 sb.Append(",");
             sb.AppendLine();
@@ -760,7 +706,6 @@ internal static class ProjectionGenerator
             return BuildSingleNestedProjection(member, sourceVariableName, isNullable, indent, facetLookup, visitedTypes, currentDepth, maxDepth);
         }
 
-        // Check if this is a MapFrom expression (contains operators or spaces)
         string valueExpression;
         if (member.MapFromSource != null && IsExpression(member.MapFromSource))
         {
@@ -768,22 +713,18 @@ internal static class ProjectionGenerator
         }
         else if (member.MapFromSource != null)
         {
-            // Use the full MapFromSource path for nested property paths (e.g., "Company.Address")
             valueExpression = $"{sourceVariableName}.{member.MapFromSource}";
         }
         else
         {
-            // Regular property - direct assignment using SourcePropertyName
             valueExpression = $"{sourceVariableName}.{member.SourcePropertyName}";
         }
 
-        // Apply enum conversion if this member was converted from an enum type
         if (member.IsEnumConversion && member.OriginalEnumTypeName != null)
         {
             valueExpression = ApplyEnumProjectionConversion(valueExpression, member);
         }
 
-        // Apply MapWhen conditions if present and IncludeInProjection is true
         if (member.MapWhenConditions.Count > 0 && member.MapWhenIncludeInProjection)
         {
             valueExpression = WrapWithMapWhenCondition(member, valueExpression, sourceVariableName, sourcePropertyNames);
@@ -801,17 +742,14 @@ internal static class ProjectionGenerator
         int currentDepth,
         int maxDepth)
     {
-        // Check if we've reached max depth during code generation
-        // Note: maxDepth of 0 means unlimited
+        // MaxDepth 0 means unlimited.
         if (maxDepth > 0 && currentDepth + 1 > maxDepth)
         {
             return "null";
         }
 
-        // Use SourcePropertyName for accessing the source property (supports MapFrom)
         var sourcePropName = member.SourcePropertyName;
 
-        // For collection nested facets, use Select with nested projection
         var elementTypeName = ExpressionBuilder.ExtractElementTypeFromCollectionTypeName(member.TypeName);
         var nonNullableElementType = elementTypeName.TrimEnd('?');
 
@@ -843,27 +781,21 @@ internal static class ProjectionGenerator
         int currentDepth,
         int maxDepth)
     {
-        // Check if we've reached max depth during code generation
-        // Note: maxDepth of 0 means unlimited
+        // MaxDepth 0 means unlimited.
         if (maxDepth > 0 && currentDepth + 1 > maxDepth)
         {
             return "null";
         }
 
-        // Use SourcePropertyName for accessing the source property (supports MapFrom)
         var sourcePropName = member.SourcePropertyName;
 
-        // For single nested facets, inline expand the nested facet's members
         var nonNullableTypeName = member.TypeName.TrimEnd('?');
         var nestedSourceExpression = $"{sourceVariableName}.{sourcePropName}";
 
-        // Extract simple type name for circular reference check
         var simpleTypeName = nonNullableTypeName.Replace(Shared.GeneratorUtilities.GlobalPrefix, "").Split('.', ':').Last();
 
-        // Check for circular reference - if we're already processing this type, use constructor
         if (visitedTypes.Contains(simpleTypeName))
         {
-            // Circular reference detected - use constructor call to prevent infinite expansion
             var nestedProjection = $"new {nonNullableTypeName}({nestedSourceExpression})";
 
             if (isNullable)
@@ -873,18 +805,14 @@ internal static class ProjectionGenerator
             return nestedProjection;
         }
 
-        // Try to look up the nested facet model, preferring the model whose source type matches
-        // the member's source type so that multi-source facets use the correct property mappings.
         var nestedFacetModel = FindNestedFacetModel(nonNullableTypeName, facetLookup, member.NestedFacetSourceTypeName);
 
         string nestedProjectionResult;
         if (nestedFacetModel != null)
         {
-            // Add this type to visited set before recursing
             visitedTypes.Add(simpleTypeName);
             try
             {
-                // Recursively inline the nested facet's members
                 nestedProjectionResult = GenerateInlineNestedFacetInitializer(
                     nestedFacetModel,
                     nestedSourceExpression,
@@ -897,13 +825,11 @@ internal static class ProjectionGenerator
             }
             finally
             {
-                // Remove from visited set after recursion completes
                 visitedTypes.Remove(simpleTypeName);
             }
         }
         else
         {
-            // Fallback to constructor call if we can't find the nested facet model
             nestedProjectionResult = $"new {nonNullableTypeName}({nestedSourceExpression})";
         }
 
@@ -964,13 +890,10 @@ internal static class ProjectionGenerator
         int currentDepth = 0,
         int maxDepth = 0)
     {
-        // Extract simple type name for circular reference check
         var simpleTypeName = elementFacetTypeName.Replace(Shared.GeneratorUtilities.GlobalPrefix, "").Split('.', ':').Last();
 
-        // Check for circular reference
         if (visitedTypes.Contains(simpleTypeName))
         {
-            // Circular reference detected - use constructor call
             var circularProjection = $"{sourceCollectionExpression}.Select(x => new {elementFacetTypeName}(x))";
             return collectionWrapper switch
             {
@@ -992,31 +915,25 @@ internal static class ProjectionGenerator
             };
         }
 
-        // Try to find the nested facet model, preferring the model whose source type matches
-        // elementSourceTypeName so that multi-source facets use the correct property mappings.
         var nestedFacetModel = FindNestedFacetModel(elementFacetTypeName, facetLookup, elementSourceTypeName);
 
         string projection;
         if (nestedFacetModel != null)
         {
-            // Add this type to visited set before recursing
             visitedTypes.Add(simpleTypeName);
             try
             {
-                // Inline expand the nested facet
                 var inlineInitializer = GenerateInlineNestedFacetInitializer(
                     nestedFacetModel, "x", elementFacetTypeName, "", facetLookup, visitedTypes, currentDepth, maxDepth);
                 projection = $"{sourceCollectionExpression}.Select(x => {inlineInitializer})";
             }
             finally
             {
-                // Remove from visited set after recursion completes
                 visitedTypes.Remove(simpleTypeName);
             }
         }
         else
         {
-            // Fallback to constructor call
             projection = $"{sourceCollectionExpression}.Select(x => new {elementFacetTypeName}(x))";
         }
 
@@ -1059,8 +976,6 @@ internal static class ProjectionGenerator
 
         foreach (var member in nestedFacetMembers)
         {
-            // For collection members, the TypeName is e.g. "List<Foo>?" — we need the element
-            // type "Foo" to look up the nested facet model, not the collection wrapper type.
             var lookupTypeName = member.IsCollection
                 ? ExpressionBuilder.ExtractElementTypeFromCollectionTypeName(member.TypeName).TrimEnd('?')
                 : member.TypeName.TrimEnd('?');
@@ -1075,7 +990,6 @@ internal static class ProjectionGenerator
             if (nestedModel.BaseFacetInfo?.AllBaseProjectionConfigs.Length > 0)
                 return true;
 
-            // Recurse into the nested model's own nested facets
             if (RequiresLazyProjection(nestedModel, facetLookup, visited))
                 return true;
         }
@@ -1095,7 +1009,6 @@ internal static class ProjectionGenerator
         Dictionary<string, List<FacetTargetModel>> facetLookup,
         string? preferredSourceTypeName = null)
     {
-        // Strip "global::" prefix and extract simple name
         var lookupName = typeName
             .Replace(Shared.GeneratorUtilities.GlobalPrefix, "")
             .Split('.', ':')
@@ -1103,14 +1016,12 @@ internal static class ProjectionGenerator
 
         List<FacetTargetModel>? nestedFacetModels = null;
 
-        // First try exact match with the lookup name
         if (facetLookup.TryGetValue(lookupName, out var matched) && matched.Count > 0)
         {
             nestedFacetModels = matched;
         }
         else
         {
-            // Try matching by simple name or full name
             foreach (var kvp in facetLookup)
             {
                 if (kvp.Value.Count > 0)
@@ -1130,9 +1041,6 @@ internal static class ProjectionGenerator
         if (nestedFacetModels == null || nestedFacetModels.Count == 0)
             return null;
 
-        // For multi-source facets, prefer the model whose source type matches the expected source.
-        // This is critical when the first model has zero members (e.g. its source is itself a
-        // generated facet class whose properties are not visible to the source generator).
         if (preferredSourceTypeName != null && nestedFacetModels.Count > 1)
         {
             var preferredModel = nestedFacetModels.FirstOrDefault(m => m.SourceTypeName == preferredSourceTypeName);
@@ -1140,7 +1048,6 @@ internal static class ProjectionGenerator
                 return preferredModel;
         }
 
-        // Fall back to the first model with projection-eligible members, then to the first overall.
         if (preferredSourceTypeName != null && nestedFacetModels.Count > 1)
         {
             var modelWithMembers = nestedFacetModels.FirstOrDefault(
@@ -1152,7 +1059,6 @@ internal static class ProjectionGenerator
         return nestedFacetModels[0];
     }
 
-    // Expression parsing methods delegated to shared ExpressionHelper
     private static bool IsExpression(string source) => ExpressionHelper.IsExpression(source);
     private static string TransformExpression(string expression, string sourceVariableName, HashSet<string>? sourcePropertyNames = null) => ExpressionHelper.TransformExpression(expression, sourceVariableName, sourcePropertyNames);
 
@@ -1162,7 +1068,6 @@ internal static class ProjectionGenerator
     /// </summary>
     private static string ApplyEnumProjectionConversion(string valueExpression, FacetMember member)
     {
-        // Check if this is a collection of enums
         if (member.IsCollection && member.CollectionWrapper != null)
         {
             return ApplyEnumCollectionProjectionConversion(valueExpression, member);
@@ -1172,7 +1077,6 @@ internal static class ProjectionGenerator
 
         if (member.TypeName.TrimEnd('?') == "string")
         {
-            // For EF Core projections, .ToString() on enums translates to SQL
             if (isNullableEnum)
             {
                 return $"{valueExpression} != null ? {valueExpression}.Value.ToString() : null";
@@ -1181,7 +1085,6 @@ internal static class ProjectionGenerator
         }
         else if (member.TypeName.TrimEnd('?') == "int")
         {
-            // Cast enum to int - EF Core supports this in projections
             if (isNullableEnum)
             {
                 return $"(int?){valueExpression}";
@@ -1200,7 +1103,6 @@ internal static class ProjectionGenerator
         bool isCollectionNullable = member.TypeName.EndsWith("?");
         string targetElementType = member.TypeName.TrimEnd('?');
 
-        // Extract just the element type name from List<string> or List<int>
         if (targetElementType.Contains("<") && targetElementType.Contains(">"))
         {
             int startIdx = targetElementType.IndexOf('<') + 1;
@@ -1211,12 +1113,10 @@ internal static class ProjectionGenerator
         string conversionExpression;
         if (targetElementType.TrimEnd('?') == "string")
         {
-            // Convert each enum to string using ToString() - EF Core compatible
             conversionExpression = $"{valueExpression}.Select(x => x.ToString())";
         }
         else if (targetElementType.TrimEnd('?') == "int")
         {
-            // Convert each enum to int using cast - EF Core compatible
             conversionExpression = $"{valueExpression}.Select(x => (int)x)";
         }
         else
@@ -1224,7 +1124,6 @@ internal static class ProjectionGenerator
             return valueExpression;
         }
 
-        // Wrap in the appropriate collection type using the same pattern as GenerateNestedCollectionProjection
         var finalExpression = member.CollectionWrapper switch
         {
             FacetConstants.CollectionWrappers.Array => $"{conversionExpression}.ToArray()",
@@ -1243,7 +1142,6 @@ internal static class ProjectionGenerator
             _ => $"{conversionExpression}.ToList()"
         };
 
-        // Apply null check if collection is nullable
         if (isCollectionNullable)
         {
             return $"{valueExpression} != null ? {finalExpression} : null";
@@ -1257,11 +1155,9 @@ internal static class ProjectionGenerator
     /// </summary>
     private static string WrapWithMapWhenCondition(FacetMember member, string valueExpression, string sourceVariableName, HashSet<string>? sourcePropertyNames = null)
     {
-        // Combine multiple conditions with &&
         var combinedCondition = string.Join(" && ", member.MapWhenConditions.Select(c =>
             $"({TransformExpression(c, sourceVariableName, sourcePropertyNames)})"));
 
-        // Determine the default value
         var defaultValue = member.MapWhenDefault ?? Shared.GeneratorUtilities.GetDefaultValueForType(member.TypeName);
 
         return $"{combinedCondition} ? {valueExpression} : {defaultValue}";
@@ -1277,14 +1173,11 @@ internal static class ProjectionGenerator
         List<FacetTargetModel> modelSiblings,
         Dictionary<string, List<FacetTargetModel>> facetLookup)
     {
-        // Must be single-source
         if (modelSiblings.Count > 1) return false;
 
-        // Must have nested facets (ProjectionFor is only generated when hasNestedFacets == true)
         if (!nestedModel.Members.Any(m => m.MapFromIncludeInProjection && m.IsNestedFacet))
             return false;
 
-        // Must be lazy (uses GenerateLazyProjection path)
         if (nestedModel.HasProjectionMapConfiguration) return true;
         if (nestedModel.BaseFacetInfo?.AllBaseProjectionConfigs.Length > 0) return true;
         return RequiresLazyProjection(nestedModel, facetLookup);
@@ -1342,7 +1235,6 @@ internal static class ProjectionGenerator
         sb.AppendLine($"{bodyIndent}var __p = global::System.Linq.Expressions.Expression.Parameter(typeof({src}), \"source\");");
         sb.AppendLine();
 
-        // Scalar bindings (identical to BuildProjection)
         sb.AppendLine($"{bodyIndent}var __bindings = new global::System.Collections.Generic.List<global::System.Linq.Expressions.MemberBinding>");
         sb.AppendLine($"{bodyIndent}{{");
 
@@ -1362,11 +1254,9 @@ internal static class ProjectionGenerator
         sb.AppendLine($"{bodyIndent}}};");
         sb.AppendLine();
 
-        // Nested facet bindings, each guarded by an exclusion check
         var nestedIndent = bodyIndent + "    ";
         foreach (var member in nestedFacetMembers)
         {
-            // Determine the FullName of the nested model to use as the exclusion key
             string exclusionKey;
             if (member.IsCollection)
             {
@@ -1383,13 +1273,12 @@ internal static class ProjectionGenerator
 
             sb.AppendLine($"{bodyIndent}if (__excludeType != \"{exclusionKey}\" && (global::Facet.Mapping.FacetProjectionContext.ActiveMaxDepth == 0 || global::Facet.Mapping.FacetProjectionContext.ProjectionDepth <= global::Facet.Mapping.FacetProjectionContext.ActiveMaxDepth))");
             sb.AppendLine($"{bodyIndent}{{");
-            // Pass model.FullName as currentModelFullName so nested bindings also use ProjectionFor
+            // Preserve the current model name so nested bindings use ProjectionFor.
             GenerateNestedFacetBindingForLazyProjection(sb, member, tgt, nestedIndent, facetLookup, model.FullName);
             sb.AppendLine($"{bodyIndent}}}");
             sb.AppendLine();
         }
 
-        // Apply all base Facet ConfigureProjection configs found in the ancestor chain (same as BuildProjection)
         if (model.BaseFacetInfo?.AllBaseProjectionConfigs.Length > 0)
         {
             sb.AppendLine($"{bodyIndent}// Apply base Facet projection mappings");
@@ -1413,7 +1302,6 @@ internal static class ProjectionGenerator
             }
         }
 
-        // Apply own ConfigureProjection if present (same as BuildProjection)
         if (model.ConfigurationTypeName != null)
         {
             sb.AppendLine($"{bodyIndent}var __builder = new global::Facet.Mapping.FacetProjectionBuilder<{src}, {tgt}>();");
@@ -1427,7 +1315,6 @@ internal static class ProjectionGenerator
             sb.AppendLine();
         }
 
-        // Return without caching (result is cycle-context-dependent)
         sb.AppendLine($"{bodyIndent}return global::System.Linq.Expressions.Expression.Lambda<global::System.Func<{src}, {tgt}>>(");
         sb.AppendLine($"{bodyIndent}    global::System.Linq.Expressions.Expression.MemberInit(");
         sb.AppendLine($"{bodyIndent}        global::System.Linq.Expressions.Expression.New(typeof({tgt})),");

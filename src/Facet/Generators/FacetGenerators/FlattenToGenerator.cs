@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -17,7 +17,6 @@ internal static class FlattenToGenerator
     {
         if (model.FlattenToTypes.Length == 0) return;
 
-        // For each flatten target type, generate a FlattenTo method
         foreach (var flattenToType in model.FlattenToTypes)
         {
             GenerateFlattenToMethod(sb, model, flattenToType, indent, facetLookup);
@@ -26,7 +25,6 @@ internal static class FlattenToGenerator
 
     private static void GenerateFlattenToMethod(StringBuilder sb, FacetTargetModel model, string flattenToType, string indent, Dictionary<string, List<FacetTargetModel>> facetLookup)
     {
-        // Extract the simple name from the fully qualified type name
         var flattenToTypeName = ExtractSimpleName(flattenToType);
 
         sb.AppendLine();
@@ -38,19 +36,16 @@ internal static class FlattenToGenerator
         sb.AppendLine($"{indent}public global::System.Collections.Generic.List<{flattenToType}> FlattenTo()");
         sb.AppendLine($"{indent}{{");
 
-        // Find collection members in this facet that are nested facets
         var collectionMembers = model.Members
             .Where(m => m.IsCollection && m.IsNestedFacet && !string.IsNullOrEmpty(m.CollectionWrapper))
             .ToList();
 
         if (collectionMembers.Count == 0)
         {
-            // No collection properties - return empty list
             sb.AppendLine($"{indent}    return new global::System.Collections.Generic.List<{flattenToType}>();");
         }
         else
         {
-            // Use the first nested facet collection property
             var collectionMember = collectionMembers[0];
 
             sb.AppendLine($"{indent}    if ({collectionMember.Name} == null)");
@@ -61,7 +56,6 @@ internal static class FlattenToGenerator
             sb.AppendLine($"{indent}    return {collectionMember.Name}.Select(item => new {flattenToType}");
             sb.AppendLine($"{indent}    {{");
 
-            // Generate property mappings - copy all non-collection properties from the parent
             var nonCollectionMembers = model.Members
                 .Where(m => !m.IsCollection && !m.IsNestedFacet)
                 .ToList();
@@ -71,11 +65,8 @@ internal static class FlattenToGenerator
                 sb.AppendLine($"{indent}        {member.Name} = {member.Name},");
             }
 
-            // Now try to map properties from the collection item
-            // We need to look up the nested facet type to see what properties it has
             var nestedFacetTypeName = ExtractNestedTypeName(collectionMember.TypeName);
 
-            // Try to find the nested facet in the lookup - try multiple key variations
             FacetTargetModel? nestedFacet = null;
             if (!string.IsNullOrEmpty(nestedFacetTypeName))
             {
@@ -84,10 +75,8 @@ internal static class FlattenToGenerator
 
             if (nestedFacet != null)
             {
-                // Map properties from the nested facet using SmartLeaf-style collision detection
                 var collectionPropertyName = collectionMember.Name;
 
-                // First pass: Identify which leaf property names appear multiple times
                 var leafNameCounts = new Dictionary<string, int>();
                 CollectLeafNames(
                     nestedFacet,
@@ -97,11 +86,9 @@ internal static class FlattenToGenerator
                     leafNameCounts,
                     maxDepth: 5);
 
-                // Build set of colliding names (names that appear more than once)
                 var collidingLeafNames = new HashSet<string>(
                     leafNameCounts.Where(kvp => kvp.Value > 1).Select(kvp => kvp.Key));
 
-                // Second pass: Recursively collect all scalar properties with smart naming
                 CollectNestedProperties(
                     sb,
                     nestedFacet,
@@ -114,7 +101,6 @@ internal static class FlattenToGenerator
                     maxDepth: 5);
             }
 
-            // Close the object initializer
             sb.AppendLine($"{indent}    }}).ToList();");
         }
 
@@ -125,20 +111,17 @@ internal static class FlattenToGenerator
     {
         if (string.IsNullOrEmpty(typeName)) return null;
 
-        // Try the exact name first
         if (facetLookup.TryGetValue(typeName, out var facetModels) && facetModels.Count > 0)
         {
             return facetModels[0];
         }
 
-        // Try just the simple name
         var simpleName = ExtractSimpleName(typeName);
         if (facetLookup.TryGetValue(simpleName, out facetModels) && facetModels.Count > 0)
         {
             return facetModels[0];
         }
 
-        // Try without global:: prefix
         var withoutGlobal = typeName.Replace("global::", "");
         if (facetLookup.TryGetValue(withoutGlobal, out facetModels) && facetModels.Count > 0)
         {
@@ -171,7 +154,6 @@ internal static class FlattenToGenerator
 
             if (member.IsNestedFacet)
             {
-                // Recurse into nested facet
                 var nestedFacetTypeName = member.TypeName?.Replace("?", "").Trim();
                 if (!string.IsNullOrEmpty(nestedFacetTypeName))
                 {
@@ -192,19 +174,15 @@ internal static class FlattenToGenerator
             }
             else if (IsScalarType(member.TypeName))
             {
-                // This is a scalar leaf property
                 var leafName = member.Name;
 
-                // Always count the occurrence, even if it collides with parent
-                // Parent collisions need to be tracked so we can prefix them
+                // Track parent collisions so later names can be prefixed.
                 if (leafNameCounts.ContainsKey(leafName))
                 {
                     leafNameCounts[leafName]++;
                 }
                 else
                 {
-                    // Initialize count
-                    // If it also exists in parent, immediately mark as collision
                     int initialCount = parentMembers.Any(pm => pm.Name == leafName) ? 2 : 1;
                     leafNameCounts[leafName] = initialCount;
                 }
@@ -226,13 +204,11 @@ internal static class FlattenToGenerator
     {
         if (currentDepth >= maxDepth)
         {
-            // Prevent infinite recursion in circular reference scenarios
             return;
         }
 
         foreach (var member in facet.Members)
         {
-            // Skip collection properties - we only flatten scalar values
             if (member.IsCollection)
             {
                 continue;
@@ -240,7 +216,6 @@ internal static class FlattenToGenerator
 
             if (member.IsNestedFacet)
             {
-                // This is a nested facet - recurse into it to access its properties
                 var nestedFacetTypeName = member.TypeName?.Replace("?", "").Trim();
 
                 if (!string.IsNullOrEmpty(nestedFacetTypeName))
@@ -250,10 +225,8 @@ internal static class FlattenToGenerator
                     {
                         var newNavigationPath = $"{navigationPath}.{member.Name}";
 
-                        // Add this member to the path segments for SmartLeaf naming
                         var newPathSegments = new List<string>(pathSegments) { member.Name };
 
-                        // Recursively collect properties from this nested facet
                         CollectNestedProperties(
                             sb,
                             nestedFacet,
@@ -270,29 +243,21 @@ internal static class FlattenToGenerator
             }
             else
             {
-                // Check if this is actually a scalar property or a navigation property
-                // Navigation properties that aren't configured as nested facets should be skipped
+                // Skip non-scalar members unless they are nested facets.
                 if (!IsScalarType(member.TypeName))
                 {
-                    // This is likely a navigation property (reference type) that's not configured as a nested facet
-                    // Skip it - the user needs to explicitly configure it as a nested facet if they want it included
                     continue;
                 }
 
-                // This is a scalar property - add it to the flattened output
                 var leafName = member.Name;
                 var navigationExpression = $"{navigationPath}.{leafName}";
 
-                // Skip Id properties to avoid collision with parent Id
                 if (leafName.Equals("Id", System.StringComparison.Ordinal) &&
                     parentMembers.Any(pm => pm.Name == leafName))
                 {
-                    // Skip nested Id - it would conflict with parent Id
-                    // User can manually add a prefixed Id property if they need it
                     continue;
                 }
 
-                // Use SmartLeaf naming strategy for all properties
                 var propertyName = GenerateSmartLeafName(pathSegments, leafName, collidingLeafNames);
                 sb.AppendLine($"{indent}        {propertyName} = {navigationExpression},");
             }
@@ -301,24 +266,19 @@ internal static class FlattenToGenerator
 
     private static string GenerateSmartLeafName(List<string> pathSegments, string leafName, HashSet<string> collidingLeafNames)
     {
-        // If this leaf name collides with another, use parent + leaf
         if (collidingLeafNames.Contains(leafName) && pathSegments.Count >= 1)
         {
-            // Use immediate parent + leaf name
             var parentName = pathSegments[pathSegments.Count - 1];
             return parentName + leafName;
         }
 
-        // No collision, use leaf only
         return leafName;
     }
 
     private static string ExtractSimpleName(string fullyQualifiedName)
     {
-        // Remove global:: prefix if present
         var name = fullyQualifiedName.Replace("global::", "");
         
-        // Get the last part after the last dot
         var lastDot = name.LastIndexOf('.');
         if (lastDot >= 0)
         {
@@ -330,14 +290,11 @@ internal static class FlattenToGenerator
 
     private static string ExtractNestedTypeName(string collectionTypeName)
     {
-        // Remove nullable marker
         var typeName = collectionTypeName.Replace("?", "").Trim();
         
-        // Find the opening angle bracket for the generic type
         var startIndex = typeName.IndexOf('<');
         if (startIndex < 0) return string.Empty;
         
-        // Find the matching closing bracket by counting brackets
         var depth = 0;
         var endIndex = -1;
         for (var i = startIndex; i < typeName.Length; i++)
@@ -359,7 +316,6 @@ internal static class FlattenToGenerator
         
         if (endIndex < 0) return string.Empty;
         
-        // Extract the type between the brackets
         var innerType = typeName.Substring(startIndex + 1, endIndex - startIndex - 1).Trim();
 
         return innerType;
@@ -373,18 +329,14 @@ internal static class FlattenToGenerator
     {
         if (string.IsNullOrEmpty(typeName)) return false;
 
-        // Remove nullable marker and global:: prefix
         var cleanType = typeName.Replace("?", "").Replace("global::", "").Trim();
 
-        // Remove namespace qualifications to get just the type name
         var lastDot = cleanType.LastIndexOf('.');
         if (lastDot >= 0)
         {
             cleanType = cleanType.Substring(lastDot + 1);
         }
 
-        // Check for known scalar/value types
-        // Primitives
         if (cleanType == "int" || cleanType == "Int32" ||
             cleanType == "long" || cleanType == "Int64" ||
             cleanType == "short" || cleanType == "Int16" ||
@@ -402,7 +354,6 @@ internal static class FlattenToGenerator
             return true;
         }
 
-        // Common value types
         if (cleanType == "DateTime" || cleanType == "DateTimeOffset" ||
             cleanType == "TimeSpan" || cleanType == "Guid" ||
             cleanType == "DateOnly" || cleanType == "TimeOnly")
@@ -410,20 +361,17 @@ internal static class FlattenToGenerator
             return true;
         }
 
-        // String (reference type but treated as scalar for flattening purposes)
         if (cleanType == "string" || cleanType == "String")
         {
             return true;
         }
 
-        // If it's a generic Nullable<T>, check the inner type
         if (cleanType.StartsWith("Nullable<") || cleanType.StartsWith("Nullable`"))
         {
             var innerType = ExtractNestedTypeName(typeName);
             return IsScalarType(innerType);
         }
 
-        // Everything else is likely a reference type (navigation property)
         return false;
     }
 }

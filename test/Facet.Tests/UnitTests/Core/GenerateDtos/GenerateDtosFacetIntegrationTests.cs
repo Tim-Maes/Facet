@@ -1,4 +1,4 @@
-using Facet.Extensions;
+﻿using Facet.Extensions;
 using Facet.Tests.TestModels;
 using System.Reflection;
 
@@ -13,31 +13,25 @@ public class GenerateDtosFacetIntegrationTests
     [Fact]
     public void GeneratedDtos_ShouldExist()
     {
-        // Check which DTOs were actually generated
         var assembly = Assembly.GetAssembly(typeof(TestUser));
         
-        // Check for Response DTO (should exist)
         var responseType = assembly?.GetType("Facet.Tests.TestModels.TestUserResponse");
         responseType.Should().NotBeNull("TestUserResponse should be generated");
         
-        // Check for other possible DTO types
         var createType = assembly?.GetType("Facet.Tests.TestModels.TestUserCreateRequest") ??
                         assembly?.GetType("Facet.Tests.TestModels.TestUserCreate");
         var updateType = assembly?.GetType("Facet.Tests.TestModels.TestUserUpdateRequest") ??
                         assembly?.GetType("Facet.Tests.TestModels.TestUserUpdate");
         var queryType = assembly?.GetType("Facet.Tests.TestModels.TestUserQuery");
         
-        // At least response type should exist
         responseType.Should().NotBeNull();
     }
 
     [Fact]
     public void ToFacet_Should_Work_WithGeneratedResponseDto()
     {
-        // Arrange
         var user = CreateTestUser();
 
-        // Act & Assert - This should work since TestUserResponse exists
         var responseDto = user.ToFacet<TestUserResponse>();
         
         responseDto.Should().NotBeNull();
@@ -51,10 +45,8 @@ public class GenerateDtosFacetIntegrationTests
     [Fact]
     public void ToFacet_Should_Work_WithAuditableDto()
     {
-        // Arrange
         var product = CreateTestProduct();
 
-        // Act & Assert
         var responseDto = product.ToFacet<TestProductResponse>();
         
         responseDto.Should().NotBeNull();
@@ -62,13 +54,12 @@ public class GenerateDtosFacetIntegrationTests
         responseDto.Name.Should().Be("Test Product");
         responseDto.Description.Should().Be("Test Description");
         responseDto.Price.Should().Be(99.99m);
-        // Audit fields should be excluded
+        
     }
 
     [Fact]
     public void SelectFacets_Should_Work_WithGeneratedDtos()
     {
-        // Arrange
         var users = new List<TestUser>
         {
             CreateTestUser("Alice", "Smith"),
@@ -76,7 +67,6 @@ public class GenerateDtosFacetIntegrationTests
             CreateTestUser("Carol", "Williams")
         };
 
-        // Act & Assert
         var responseDtos = users.SelectFacets<TestUserResponse>().ToList();
         
         responseDtos.Should().HaveCount(3);
@@ -88,14 +78,12 @@ public class GenerateDtosFacetIntegrationTests
     [Fact]
     public void SelectFacets_Should_Work_WithQueryable()
     {
-        // Arrange
         var users = new List<TestUser>
         {
             CreateTestUser("Alice", "Smith"),
             CreateTestUser("Bob", "Johnson")
         }.AsQueryable();
 
-        // Act & Assert  
         var responseDtos = users.SelectFacet<TestUser, TestUserResponse>().ToList();
         
         responseDtos.Should().HaveCount(2);
@@ -106,14 +94,12 @@ public class GenerateDtosFacetIntegrationTests
     [Fact]
     public void Projection_Should_Be_Available_OnGeneratedDtos()
     {
-        // Arrange
         var users = new List<TestUser>
         {
             CreateTestUser("Alice", "Smith"),
             CreateTestUser("Bob", "Johnson")
         }.AsQueryable();
 
-        // Act & Assert - This tests that the Projection property exists and works
         var projectionExpression = TestUserResponse.Projection;
         projectionExpression.Should().NotBeNull();
 
@@ -126,13 +112,11 @@ public class GenerateDtosFacetIntegrationTests
     [Fact]
     public void Projection_Should_Work_WithLinqSelect()
     {
-        // Arrange
         var users = new List<TestUser>
         {
             CreateTestUser("Test", "User")
         }.AsQueryable();
 
-        // Act & Assert
         var results = users.Select(TestUserResponse.Projection).ToList();
         
         results.Should().HaveCount(1);
@@ -143,10 +127,8 @@ public class GenerateDtosFacetIntegrationTests
     [Fact]
     public void Constructor_Should_Work_WithSourceType()
     {
-        // Arrange
         var user = CreateTestUser();
 
-        // Act & Assert
         var responseDto = new TestUserResponse(user);
         
         responseDto.Should().NotBeNull();
@@ -159,7 +141,6 @@ public class GenerateDtosFacetIntegrationTests
     [Fact]
     public void ParameterlessConstructor_Should_Work()
     {
-        // Act & Assert
         var responseDto = new TestUserResponse();
         
         responseDto.Should().NotBeNull();
@@ -170,7 +151,6 @@ public class GenerateDtosFacetIntegrationTests
     [Fact]
     public void GeneratedDtos_Should_HaveFacetAttribute()
     {
-        // Act & Assert - Verify the generated DTOs have the [Facet] attribute
         var responseType = typeof(TestUserResponse);
         var facetAttributes = responseType.GetCustomAttributes(typeof(FacetAttribute), false);
 
@@ -183,7 +163,6 @@ public class GenerateDtosFacetIntegrationTests
     [Fact]
     public void ToSource_Should_Work_WithGeneratedDtos()
     {
-        // Arrange - Create a DTO with some values
         var responseDto = new TestUserResponse
         {
             Id = 42,
@@ -193,10 +172,8 @@ public class GenerateDtosFacetIntegrationTests
             IsActive = true
         };
 
-        // Act
         var user = responseDto.ToSource();
 
-        // Assert - Verify all properties are mapped correctly
         user.Should().NotBeNull();
         user.Id.Should().Be(42);
         user.FirstName.Should().Be("Jane");
@@ -208,7 +185,6 @@ public class GenerateDtosFacetIntegrationTests
     [Fact]
     public void ToSource_Extension_Should_Work_WithGeneratedDtos()
     {
-        // Arrange
         var responseDto = new TestUserResponse
         {
             Id = 123,
@@ -218,10 +194,8 @@ public class GenerateDtosFacetIntegrationTests
             IsActive = false
         };
 
-        // Act
         var user = responseDto.ToSource<TestUserResponse, TestUser>();
 
-        // Assert
         user.Should().NotBeNull();
         user.Id.Should().Be(123);
         user.FirstName.Should().Be("Bob");
@@ -233,7 +207,6 @@ public class GenerateDtosFacetIntegrationTests
     [Fact]
     public void ToSource_Should_Work_WithCreateRequest()
     {
-        // Arrange - Create a Create DTO (which excludes Id)
         var assembly = Assembly.GetAssembly(typeof(TestUser));
         var createRequestType = assembly?.GetType("Facet.Tests.TestModels.CreateTestUserRequest");
 
@@ -248,18 +221,16 @@ public class GenerateDtosFacetIntegrationTests
             lastNameProp?.SetValue(createRequest, "Williams");
             emailProp?.SetValue(createRequest, "alice@example.com");
 
-            // Act
             var toSourceMethod = createRequestType.GetMethod("ToSource");
             toSourceMethod.Should().NotBeNull("CreateTestUserRequest should have a ToSource method");
 
             var user = toSourceMethod!.Invoke(createRequest, null) as TestUser;
 
-            // Assert
             user.Should().NotBeNull();
             user.FirstName.Should().Be("Alice");
             user.LastName.Should().Be("Williams");
             user.Email.Should().Be("alice@example.com");
-            // Id should be default since it's excluded from Create DTOs
+            
             user.Id.Should().Be(default(int));
         }
     }

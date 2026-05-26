@@ -1,4 +1,4 @@
-using Facet.Tests.TestModels;
+﻿using Facet.Tests.TestModels;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
 
@@ -8,8 +8,6 @@ namespace Facet.Tests.UnitTests.Core.Facet;
 /// </summary>
 public class MultiSourceMappingTests
 {
-    // ── Construction from source A ────────────────────────────────────────────
-
     [Fact]
     public void Constructor_FromEntityA_MapsSharedProperties()
     {
@@ -32,8 +30,6 @@ public class MultiSourceMappingTests
         dto.Name.Should().Be("Beta");
     }
 
-    // ── FromSource factory methods ────────────────────────────────────────────
-
     [Fact]
     public void FromSource_WithEntityA_ReturnsCorrectlyMappedDto()
     {
@@ -55,8 +51,6 @@ public class MultiSourceMappingTests
         dto.Id.Should().Be(20);
         dto.Name.Should().Be("EntityB");
     }
-
-    // ── Projection expressions ────────────────────────────────────────────────
 
     [Fact]
     public void Projection_FromEntityA_CanProjectList()
@@ -89,8 +83,6 @@ public class MultiSourceMappingTests
         dtos[0].Name.Should().Be("Three");
     }
 
-    // ── ToSource methods ──────────────────────────────────────────────────────
-
     [Fact]
     public void ToMultiSourceEntityA_ReturnsEntityWithMappedProperties()
     {
@@ -102,12 +94,9 @@ public class MultiSourceMappingTests
         entity.Name.Should().Be("Five");
     }
 
-    // ── Union-of-members behaviour ────────────────────────────────────────────
-
     [Fact]
     public void UnionDto_ContainsMembersFromBothSources()
     {
-        // Verify that the union DTO exposes properties contributed by BOTH source types.
         var dtoType = typeof(MultiSourceUnionDto);
 
         dtoType.GetProperty(nameof(MultiSourceEntityA.Id)).Should().NotBeNull("Id is present in both sources");
@@ -143,7 +132,6 @@ public class MultiSourceMappingTests
     [Fact]
     public void NestedMultiSourceFacet_ToSource_ShouldCallCorrectSourceSpecificMethod()
     {
-        // Arrange: Create a parent DTO with a nested multi-source facet
         var orderLine = new OrderLineBaseEntity
         {
             Id = 1,
@@ -158,17 +146,13 @@ public class MultiSourceMappingTests
 
         var dto = new OrderLineBaseUpsertDto(orderLine);
 
-        // Verify the DTO was constructed correctly
         dto.Number.Should().Be("ORD-001");
         dto.AssignedToUnit.Should().NotBeNull();
         dto.AssignedToUnit!.Name.Should().Be("Production Unit");
         dto.AssignedToUnit.ValidationResult.Should().Be("Valid");
 
-        // Act: Call ToSource on the parent DTO
-        // This should internally call ToUnitEntity() on the nested multi-source facet
         var result = dto.ToSource();
 
-        // Assert: Verify the parent entity was reconstructed correctly
         result.Number.Should().Be("ORD-001");
         result.AssignedToUnit.Should().NotBeNull();
         result.AssignedToUnit!.Name.Should().Be("Production Unit");
@@ -178,17 +162,14 @@ public class MultiSourceMappingTests
     [Fact]
     public void NestedMultiSourceFacet_WithNullNestedProperty_ShouldHandleCorrectly()
     {
-        // Arrange: Create a parent DTO with null nested property
         var dto = new OrderLineBaseUpsertDto
         {
             Number = "ORD-002",
             AssignedToUnit = null
         };
 
-        // Act: Call ToSource on the parent DTO with null nested property
         var result = dto.ToSource();
 
-        // Assert: Verify null is preserved
         result.Number.Should().Be("ORD-002");
         result.AssignedToUnit.Should().BeNull();
     }
@@ -196,19 +177,16 @@ public class MultiSourceMappingTests
     [Fact]
     public void MultiSourceNestedFacet_ShouldGenerateSourceSpecificToSourceMethods()
     {
-        // Verify that UnitDropDownDto (multi-source facet) generates source-specific ToSource methods
         var unitDropDown = new UnitDropDownDto
         {
             Name = "Test Unit",
             ValidationResult = "Passed"
         };
 
-        // Should have ToUnitDto() method
         var unitDto = unitDropDown.ToUnitDto();
         unitDto.Name.Should().Be("Test Unit");
         unitDto.ValidationResult.Should().Be("Passed");
 
-        // Should have ToUnitEntity() method
         var unitEntity = unitDropDown.ToUnitEntity();
         unitEntity.Name.Should().Be("Test Unit");
         unitEntity.ValidationResult.Should().Be("Passed");

@@ -1,4 +1,4 @@
-using Facet.Tests.TestModels;
+﻿using Facet.Tests.TestModels;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
 
@@ -14,7 +14,6 @@ public class ApplyFacetWithChangesEqualityTests
         var seed = new TaggedItemFacet { Id = "1", Name = "Widget", Tags = ["a", "b"] };
         var item = seed.ToSource();
 
-        // Identical values but different collection instances
         var identical = new TaggedItemFacet { Id = "1", Name = "Widget", Tags = ["a", "b"] };
 
         var result = item.ApplyFacetWithChanges(identical);
@@ -70,13 +69,12 @@ public class ApplyFacetWithChangesEqualityTests
     {
         var seed = new TaggedItemFacet { Id = "1", Name = "Widget", Tags = ["a", "b"] };
         var item = seed.ToSource();
-        var originalTags = item.Tags; // Keep reference to original
+        var originalTags = item.Tags; 
 
         var identical = new TaggedItemFacet { Id = "1", Name = "Widget", Tags = ["a", "b"] };
 
         item.ApplyFacet(identical);
 
-        // The original collection should be preserved (not replaced) since values are equal
         item.Tags.Should().BeSameAs(originalTags);
     }
 }

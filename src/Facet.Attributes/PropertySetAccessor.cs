@@ -1,4 +1,4 @@
-namespace Facet;
+﻿namespace Facet;
 
 /// <summary>
 /// Controls the set accessor emitted on all generated properties of a facet.

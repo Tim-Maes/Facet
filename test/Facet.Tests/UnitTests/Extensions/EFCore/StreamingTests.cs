@@ -1,4 +1,4 @@
-using Facet.Tests.TestModels;
+﻿using Facet.Tests.TestModels;
 using Facet.Tests.Utilities;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,7 +20,6 @@ public class StreamingTests : IDisposable
     [Fact]
     public async Task AsAsyncEnumerable_WithSelectFacet_ShouldStreamResults()
     {
-        // Arrange & Act
         var userDtos = new List<UserDto>();
 
         await foreach (var dto in _context.Set<User>()
@@ -31,7 +30,6 @@ public class StreamingTests : IDisposable
             userDtos.Add(dto);
         }
 
-        // Assert
         userDtos.Should().HaveCount(2);
         userDtos.All(dto => dto.IsActive).Should().BeTrue();
         userDtos.Select(dto => dto.FirstName).Should().BeEquivalentTo(new[] { "Alice", "Bob" });
@@ -40,7 +38,6 @@ public class StreamingTests : IDisposable
     [Fact]
     public async Task AsAsyncEnumerable_WithNonGenericSelectFacet_ShouldStreamResults()
     {
-        // Arrange & Act
         var userDtos = new List<UserDto>();
 
         await foreach (var dto in _context.Set<User>()
@@ -51,7 +48,6 @@ public class StreamingTests : IDisposable
             userDtos.Add(dto);
         }
 
-        // Assert
         userDtos.Should().HaveCount(1);
         userDtos.First().FirstName.Should().Be("Alice");
     }
@@ -59,7 +55,6 @@ public class StreamingTests : IDisposable
     [Fact]
     public async Task AsAsyncEnumerable_WithComplexQuery_ShouldStreamResults()
     {
-        // Arrange & Act
         var userDtos = new List<UserDto>();
 
         await foreach (var dto in _context.Set<User>()
@@ -71,7 +66,6 @@ public class StreamingTests : IDisposable
             userDtos.Add(dto);
         }
 
-        // Assert
         userDtos.Should().HaveCount(3);
         userDtos[0].FirstName.Should().Be("Alice");
         userDtos[1].FirstName.Should().Be("Bob");
@@ -81,7 +75,6 @@ public class StreamingTests : IDisposable
     [Fact]
     public async Task AsAsyncEnumerable_WithNestedFacets_ShouldStreamResults()
     {
-        // Arrange
         var address = new AddressEntity
         {
             Street = "123 Stream St",
@@ -104,7 +97,6 @@ public class StreamingTests : IDisposable
         _context.SaveChanges();
         _context.ChangeTracker.Clear();
 
-        // Act
         var companyDtos = new List<CompanyFacet>();
 
         await foreach (var dto in _context.Set<CompanyEntity>()
@@ -115,7 +107,6 @@ public class StreamingTests : IDisposable
             companyDtos.Add(dto);
         }
 
-        // Assert
         companyDtos.Should().HaveCount(1);
         companyDtos.First().Name.Should().Be("Stream Company");
         companyDtos.First().HeadquartersAddress.Should().NotBeNull();
@@ -125,7 +116,6 @@ public class StreamingTests : IDisposable
     [Fact]
     public async Task AsAsyncEnumerable_WithTake_ShouldStreamLimitedResults()
     {
-        // Arrange & Act
         var userDtos = new List<UserDto>();
         var count = 0;
 
@@ -139,7 +129,6 @@ public class StreamingTests : IDisposable
             count++;
         }
 
-        // Assert
         count.Should().Be(2);
         userDtos.Should().HaveCount(2);
     }

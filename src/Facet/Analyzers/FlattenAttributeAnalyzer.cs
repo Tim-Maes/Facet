@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -13,7 +13,6 @@ namespace Facet.Analyzers;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public class FlattenAttributeAnalyzer : DiagnosticAnalyzer
 {
-    // FAC014: Missing partial keyword
     public static readonly DiagnosticDescriptor MissingPartialKeywordRule = new DiagnosticDescriptor(
         "FAC014",
         "Type with [Flatten] attribute must be declared as partial",
@@ -23,7 +22,6 @@ public class FlattenAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "Types marked with [Flatten] must be partial to allow the source generator to add generated members.");
 
-    // FAC015: Invalid source type
     public static readonly DiagnosticDescriptor InvalidSourceTypeRule = new DiagnosticDescriptor(
         "FAC015",
         "Source type is not accessible or does not exist",
@@ -33,7 +31,6 @@ public class FlattenAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "The source type specified in the [Flatten] attribute must be a valid, accessible type.");
 
-    // FAC016: MaxDepth warning
     public static readonly DiagnosticDescriptor MaxDepthWarningRule = new DiagnosticDescriptor(
         "FAC016",
         "MaxDepth value is unusual",
@@ -43,7 +40,6 @@ public class FlattenAttributeAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "MaxDepth values should typically be between 1 and 5 for flatten scenarios.");
 
-    // FAC017: LeafOnly naming collision warning
     public static readonly DiagnosticDescriptor LeafOnlyCollisionWarningRule = new DiagnosticDescriptor(
         "FAC017",
         "LeafOnly naming strategy may cause property name collisions",
@@ -70,7 +66,6 @@ public class FlattenAttributeAnalyzer : DiagnosticAnalyzer
     {
         var namedType = (INamedTypeSymbol)context.Symbol;
 
-        // Find [Flatten] attributes
         var flattenAttributes = namedType.GetAttributes()
             .Where(attr => attr.AttributeClass?.ToDisplayString() == "Facet.FlattenAttribute")
             .ToList();
@@ -78,7 +73,6 @@ public class FlattenAttributeAnalyzer : DiagnosticAnalyzer
         if (!flattenAttributes.Any())
             return;
 
-        // Check if type is partial
         if (!IsPartialType(namedType))
         {
             var diagnostic = Diagnostic.Create(
@@ -88,7 +82,6 @@ public class FlattenAttributeAnalyzer : DiagnosticAnalyzer
             context.ReportDiagnostic(diagnostic);
         }
 
-        // Analyze each [Flatten] attribute
         foreach (var flattenAttr in flattenAttributes)
         {
             AnalyzeFlattenAttribute(context, namedType, flattenAttr);
@@ -97,14 +90,12 @@ public class FlattenAttributeAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeFlattenAttribute(SymbolAnalysisContext context, INamedTypeSymbol targetType, AttributeData flattenAttr)
     {
-        // Get the source type (first constructor argument)
         if (flattenAttr.ConstructorArguments.Length == 0)
             return;
 
         var sourceTypeArg = flattenAttr.ConstructorArguments[0];
         if (sourceTypeArg.Value is not INamedTypeSymbol sourceType)
         {
-            // Invalid source type
             var diagnostic = Diagnostic.Create(
                 InvalidSourceTypeRule,
                 flattenAttr.ApplicationSyntaxReference?.GetSyntax().GetLocation(),
@@ -113,7 +104,6 @@ public class FlattenAttributeAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        // Check if source type is accessible
         if (sourceType.TypeKind == TypeKind.Error)
         {
             var diagnostic = Diagnostic.Create(
@@ -124,7 +114,6 @@ public class FlattenAttributeAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        // Check MaxDepth parameter
         var maxDepthArg = flattenAttr.NamedArguments.FirstOrDefault(a => a.Key == "MaxDepth");
         if (!maxDepthArg.Equals(default) && maxDepthArg.Value.Value is int maxDepthValue)
         {
@@ -148,11 +137,10 @@ public class FlattenAttributeAnalyzer : DiagnosticAnalyzer
             }
         }
 
-        // Check NamingStrategy parameter
         var namingStrategyArg = flattenAttr.NamedArguments.FirstOrDefault(a => a.Key == "NamingStrategy");
         if (!namingStrategyArg.Equals(default) && namingStrategyArg.Value.Value is int namingStrategyValue)
         {
-            if (namingStrategyValue == 1) // FlattenNamingStrategy.LeafOnly
+            if (namingStrategyValue == 1) 
             {
                 var diagnostic = Diagnostic.Create(
                     LeafOnlyCollisionWarningRule,
@@ -164,7 +152,6 @@ public class FlattenAttributeAnalyzer : DiagnosticAnalyzer
 
     private static bool IsPartialType(INamedTypeSymbol type)
     {
-        // A type is partial if any of its declarations has the partial modifier
         foreach (var syntaxRef in type.DeclaringSyntaxReferences)
         {
             var syntax = syntaxRef.GetSyntax();

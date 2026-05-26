@@ -1,4 +1,4 @@
-namespace Facet.Dashboard;
+﻿namespace Facet.Dashboard;
 
 /// <summary>
 /// Configuration options for the Facet Dashboard.

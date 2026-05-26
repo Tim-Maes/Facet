@@ -1,4 +1,4 @@
-namespace Facet.Tests.TestModels;
+﻿namespace Facet.Tests.TestModels;
 
 public class User
 {
@@ -93,7 +93,6 @@ public sealed class NullableTestEntity
     public string? Test4 { get; set; } = null;
 }
 
-// Test entity with fields for include functionality testing
 public class EntityWithFields
 {
     public int Id;
@@ -118,7 +117,6 @@ public class UserAddressForNestedFacet
     public string FormattedAddress => $"{Street}, {City}";
 }
 
-// Test entities for inherited property exclusion
 public abstract class BaseEntity<TPkKey>
 {
     public TPkKey Id { get; set; } = default!;
@@ -130,7 +128,6 @@ public class Category : BaseEntity<uint>
     public string? Description { get; set; }
 }
 
-// Test entity with static/const members that should be excluded from facets (issue #300)
 public class EntityWithStaticMembers
 {
     public const string AConst = "A";
@@ -139,7 +136,6 @@ public class EntityWithStaticMembers
     public static string AStaticProperty => "A";
 }
 
-// Entity with collection property for ApplyFacetWithChanges equality testing
 internal sealed class TaggedItem
 {
     public string Id { get; set; } = "";
@@ -150,7 +146,6 @@ internal sealed class TaggedItem
 [Facet(typeof(TaggedItem), GenerateEquality = true, GenerateToSource = true)]
 internal partial record TaggedItemFacet;
 
-// DDD-style entity with private constructor and non-public setters (issue #302)
 public partial class DDDSample
 {
     private DDDSample() { }
@@ -177,15 +172,12 @@ public partial class DDDSample
     public partial class InsideFacetClass;
 }
 
-// Outside facets cannot access private constructor, so ToSource cannot be generated
 [Facet(typeof(DDDSample))]
 public partial record OutsideFacetRecord;
 
 [Facet(typeof(DDDSample))]
 public partial class OutsideFacetClass;
 
-// DDD-style entity with internal constructor, outside facets in the same assembly can generate ToSource
-// but only for properties with public or internal setters
 public class DDDSampleInternal
 {
     internal DDDSampleInternal() { }
@@ -205,15 +197,12 @@ public class DDDSampleInternal
     public string AInternalSetterProperty { get; internal set; } = default!;
 }
 
-// Outside facet with internal constructor
 [Facet(typeof(DDDSampleInternal))]
 public partial class OutsideFacetInternalCtorClass;
 
-// Excluding the private-setter property allows ToSource to be generated
 [Facet(typeof(DDDSampleInternal), "APrivateSetterProperty", GenerateToSource = true)]
 public partial class OutsideFacetInternalCtorWithToSource;
 
-// Test entity with non-nullable reference type properties with initializers (GitHub issue)
 public class UserModel
 {
     public int Id { get; set; }
@@ -228,11 +217,9 @@ public class UserSettings
     public string Language { get; set; } = "en";
 }
 
-// Facet for testing property initializer preservation
 [Facet(typeof(UserModel))]
 public partial class UserModelDto;
 
-// Test with init only properties that have initializers
 public class InitOnlyWithInitializers
 {
     public string Id { get; init; } = Guid.NewGuid().ToString();
@@ -244,16 +231,10 @@ public class InitOnlyWithInitializers
 [Facet(typeof(InitOnlyWithInitializers))]
 public partial class InitOnlyWithInitializersDto;
 
-// When a model has a single reference type property like List<string>,
-// the generated record positional constructor can become ambiguous with
-// the compiler-generated copy constructor
 public class ModelWithListProperty
 {
     public List<string> Tags { get; set; } = [];
 }
-
-// These tests verify that the ambiguity is resolved by using typed default values
-// in the generated parameterless constructor
 
 [Facet(typeof(ModelWithListProperty))]
 public partial record RecordWithListDefault;
@@ -264,7 +245,6 @@ public partial record RecordWithListNoParameterless;
 [Facet(typeof(ModelWithListProperty), GenerateProjection = false)]
 public partial record RecordWithListNoProjection;
 
-// Test with multiple properties to ensure the fix doesn't break normal cases
 public class ModelWithMultipleProperties
 {
     public string Name { get; set; } = string.Empty;
@@ -275,7 +255,6 @@ public class ModelWithMultipleProperties
 [Facet(typeof(ModelWithMultipleProperties))]
 public partial record RecordWithMultipleProperties;
 
-// Test with nullable reference type property
 public class ModelWithNullableList
 {
     public List<string>? Tags { get; set; }
@@ -284,8 +263,6 @@ public class ModelWithNullableList
 [Facet(typeof(ModelWithNullableList))]
 public partial record RecordWithNullableList;
 
-// When user has initialization logic in their parameterless constructor,
-// the generated constructor should chain to it
 public class ModelTypeForChaining
 {
     public int MaxValue { get; set; }
@@ -300,13 +277,11 @@ public partial class ChainedConstructorDto
 
     public ChainedConstructorDto()
     {
-        // Custom initialization logic that should run when mapping
         Value = 100;
         Initialized = true;
     }
 }
 
-// Test without chaining (default behavior) for comparison
 [Facet(typeof(ModelTypeForChaining), GenerateParameterlessConstructor = false)]
 public partial class NonChainedConstructorDto
 {
@@ -320,7 +295,6 @@ public partial class NonChainedConstructorDto
     }
 }
 
-// Test chaining with generated parameterless constructor disabled but still using the user's
 [Facet(typeof(ModelTypeForChaining), GenerateParameterlessConstructor = false, ChainToParameterlessConstructor = true, MaxDepth = 0, PreserveReferences = false)]
 public partial class ChainedConstructorNoDepthDto
 {
@@ -334,8 +308,6 @@ public partial class ChainedConstructorNoDepthDto
     }
 }
 
-// When source has a required non-nullable nested property, 
-// the generated facet should respect that nullability
 public class UserModelWithRequiredSettings
 {
     public int Id { get; set; }
@@ -353,17 +325,12 @@ public class UserSettingsModelForNested
 [Facet(typeof(UserSettingsModelForNested), nameof(UserSettingsModelForNested.Id))]
 public partial class UserSettingsFacet;
 
-// This should generate a non-nullable Settings property because:
-// 1. Source property is marked as 'required'
-// 2. Source property type has NotAnnotated nullable annotation (non-nullable)
 [Facet(typeof(UserModelWithRequiredSettings), PreserveRequiredProperties = true, NestedFacets = [typeof(UserSettingsFacet)])]
 public partial class UserWithRequiredSettingsFacet
 {
     public int ProcessedTicks => Settings.StopTick - Settings.StartTick;
 }
 
-// Test without required, in a #nullable enable context, the non-annotated property
-// is explicitly non-nullable and should be treated as such in the generated facet
 public class UserModelWithOptionalSettings
 {
     public int Id { get; set; }
@@ -373,7 +340,6 @@ public class UserModelWithOptionalSettings
 [Facet(typeof(UserModelWithOptionalSettings), NestedFacets = [typeof(UserSettingsFacet)])]
 public partial class UserWithOptionalSettingsFacet;
 
-// When source has a required non-nullable collection nested property
 public class TeamModelWithRequiredMembers
 {
     public int Id { get; set; }
@@ -384,8 +350,6 @@ public class TeamModelWithRequiredMembers
 [Facet(typeof(TeamModelWithRequiredMembers), PreserveRequiredProperties = true, NestedFacets = [typeof(UserSettingsFacet)])]
 public partial class TeamWithRequiredMembersFacet;
 
-// This entity has non-nullable string properties WITHOUT initializers
-// The generated facet should not trigger CS8618 warnings
 public class EntityWithNonNullableProperties
 {
     public int Id { get; set; }
@@ -399,11 +363,9 @@ public class EntityWithNonNullableProperties
 [Facet(typeof(EntityWithNonNullableProperties))]
 public partial class NonNullablePropertyFacet;
 
-// Also test with a required property - should not get default!
 [Facet(typeof(EntityWithNonNullableProperties), PreserveRequiredProperties = false)]
 public partial class NonNullablePropertyFacetNoRequired;
 
-// Test entity for GenerateCopyConstructor and GenerateEquality
 public class PersonForCopyAndEquality
 {
     public int Id { get; set; }
@@ -413,42 +375,30 @@ public class PersonForCopyAndEquality
     public DateTime? BirthDate { get; set; }
 }
 
-// Facet with copy constructor
 [Facet(typeof(PersonForCopyAndEquality), GenerateCopyConstructor = true)]
 public partial class PersonWithCopyConstructorDto;
 
-// Facet with equality
 [Facet(typeof(PersonForCopyAndEquality), GenerateEquality = true)]
 public partial class PersonWithEqualityDto;
 
-// Facet with both copy constructor and equality
 [Facet(typeof(PersonForCopyAndEquality), GenerateCopyConstructor = true, GenerateEquality = true)]
 public partial class PersonWithCopyAndEqualityDto;
 
-// Facet with equality on a record � equality should be ignored since records already have it
 [Facet(typeof(PersonForCopyAndEquality), GenerateEquality = true)]
 public partial record PersonRecordWithEquality;
 
-// Facet with copy constructor on a struct
 [Facet(typeof(PersonForCopyAndEquality), GenerateCopyConstructor = true, GenerateEquality = true)]
 public partial struct PersonStructWithCopyAndEquality;
 
-// Facet with parameterless constructor
 [Facet(typeof(User))]
 public partial record UserRecordWithConstructor();
 
-// Entity for ToSourceConfiguration testing
 public class JsonStoredEntity
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string MetadataJson { get; set; } = "{}";
 }
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Multi-source mapping test entities (GitHub issue: map different source types
-// to the same target type).
-// ──────────────────────────────────────────────────────────────────────────────
 
 /// <summary>Source type A for multi-source facet tests.</summary>
 public class MultiSourceEntityA
@@ -512,7 +462,6 @@ public class LocationEntity
     public required string Description { get; set; }
 }
 
-    // Test entity with init-only properties for SetAccessor tests
     public class ImmutableEntity
     {
         public int Id { get; init; }

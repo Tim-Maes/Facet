@@ -1,4 +1,4 @@
-namespace Facet.Mapping;
+﻿namespace Facet.Mapping;
 
 /// <summary>
 /// Provides thread-local context used by source-generated lazy projection code.

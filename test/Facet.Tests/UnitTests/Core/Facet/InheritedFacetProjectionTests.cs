@@ -1,4 +1,4 @@
-using System.Linq.Expressions;
+﻿using System.Linq.Expressions;
 using Facet.Tests.TestModels;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
@@ -40,7 +40,6 @@ public class OrderLineBaseDto338MapConfig
     public static void ConfigureProjection(
         IFacetProjectionBuilder<OrderLineBaseEntity338, OrderLineBaseDto338> builder)
     {
-        // Map base properties (these should appear in derived projection too)
         builder.Map(d => d.Number, s => "ORD-" + s.Number);
         builder.Map(d => d.ExpectedStartTime, s => s.ExpectedStartTime.AddHours(1));
     }
@@ -63,7 +62,6 @@ public class OrderLineDispatchDto338MapConfig
     public static void ConfigureProjection(
         IFacetProjectionBuilder<OrderLineDispatchEntity338, OrderLineDispatchDto338> builder)
     {
-        // Map dispatch-specific properties
         builder.Map(d => d.DeliveryTime, s => s.DeliveryTime.AddHours(2));
         builder.Map(d => d.ShipmentTime, s => s.ShipmentTime.AddHours(3));
     }
@@ -74,7 +72,6 @@ public class InheritedFacetProjectionTests
     [Fact]
     public void Projection_WithInheritedFacetBase_ShouldMapAllProperties()
     {
-        // Arrange
         var baseTime = new DateTime(2024, 1, 1, 10, 0, 0);
         var entity = new OrderLineDispatchEntity338
         {
@@ -85,30 +82,25 @@ public class InheritedFacetProjectionTests
             ShipmentTime = baseTime.AddDays(2)
         };
 
-        // Act - Use projection
         var projection = OrderLineDispatchDto338.Projection.Compile();
         var dto = projection(entity);
 
-        // Assert - Properties from derived class should be mapped
         dto.DeliveryTime.Should().Be(baseTime.AddDays(1).AddHours(2),
             "DeliveryTime should be mapped with +2 hours from ConfigureProjection");
         dto.ShipmentTime.Should().Be(baseTime.AddDays(2).AddHours(3),
             "ShipmentTime should be mapped with +3 hours from ConfigureProjection");
 
-        // Assert - Properties from base FACET class should ALSO be mapped
         dto.Number.Should().Be("ORD-123",
             "Number should be mapped from base facet's ConfigureProjection with 'ORD-' prefix");
         dto.ExpectedStartTime.Should().Be(baseTime.AddHours(1),
             "ExpectedStartTime should be mapped from base facet's ConfigureProjection with +1 hour");
 
-        // Assert - Property from non-facet base should be mapped
         dto.Id.Should().Be(1, "Id from non-facet base should be mapped");
     }
 
     [Fact]
     public void Projection_WithInheritedFacetBase_ThroughQueryable_ShouldMapAllProperties()
     {
-        // Arrange
         var baseTime = new DateTime(2024, 1, 1, 10, 0, 0);
         var entities = new[]
         {
@@ -122,25 +114,20 @@ public class InheritedFacetProjectionTests
             }
         }.AsQueryable();
 
-        // Act - Use projection through IQueryable.Select (real projection path)
         var dto = entities.Select(OrderLineDispatchDto338.Projection).Single();
 
-        // Assert - Derived Facet mappings
         dto.DeliveryTime.Should().Be(baseTime.AddDays(1).AddHours(2));
         dto.ShipmentTime.Should().Be(baseTime.AddDays(2).AddHours(3));
 
-        // Assert - Base Facet mappings
         dto.Number.Should().Be("ORD-321");
         dto.ExpectedStartTime.Should().Be(baseTime.AddHours(1));
 
-        // Assert - Non-Facet base mapping
         dto.Id.Should().Be(11);
     }
 
     [Fact]
     public void Constructor_WithInheritedFacetBase_ShouldMapAllProperties()
     {
-        // Arrange
         var baseTime = new DateTime(2024, 1, 1, 10, 0, 0);
         var entity = new OrderLineDispatchEntity338
         {
@@ -151,10 +138,8 @@ public class InheritedFacetProjectionTests
             ShipmentTime = baseTime.AddDays(2)
         };
 
-        // Act - Use constructor
         var dto = new OrderLineDispatchDto338(entity);
 
-        // Assert - All properties should be mapped (constructor uses ConfigureMap)
         dto.Id.Should().Be(2);
         dto.Number.Should().Be("ORD-456");
         dto.ExpectedStartTime.Should().Be(baseTime.AddHours(1));
@@ -165,7 +150,6 @@ public class InheritedFacetProjectionTests
     [Fact]
     public void BaseProjection_ShouldMapBaseProperties()
     {
-        // Arrange
         var baseTime = new DateTime(2024, 1, 1, 10, 0, 0);
         var entity = new OrderLineBaseEntity338
         {
@@ -174,11 +158,9 @@ public class InheritedFacetProjectionTests
             ExpectedStartTime = baseTime
         };
 
-        // Act - Use base projection directly
         var projection = OrderLineBaseDto338.Projection.Compile();
         var dto = projection(entity);
 
-        // Assert
         dto.Id.Should().Be(3);
         dto.Number.Should().Be("ORD-789");
         dto.ExpectedStartTime.Should().Be(baseTime.AddHours(1));
@@ -187,7 +169,6 @@ public class InheritedFacetProjectionTests
     [Fact]
     public void InheritedFacet_WithBaseNestedFacets_ShouldMapNestedPropertiesCorrectly()
     {
-        // Arrange
         var baseTime = new DateTime(2024, 1, 1, 10, 0, 0);
         var entity = new OrderLineDispatchEntity338Nested
         {
@@ -200,10 +181,8 @@ public class InheritedFacetProjectionTests
             OrderHeader = new OrderHeaderEntity338 { Id = 200, OrderNumber = "HDR-001" }
         };
 
-        // Act
         var dto = new OrderLineDispatchDto338Nested(entity);
 
-        // Assert - Verify nested facets from base are mapped as DTOs, not entities
         dto.AssignedToUnit.Should().NotBeNull("AssignedToUnit should be mapped from base Facet");
         dto.AssignedToUnit.Should().BeOfType<UnitDto338>("AssignedToUnit should be mapped as UnitDto338, not UnitEntity338");
         dto.AssignedToUnit!.Name.Should().Be("Unit A");
@@ -212,7 +191,6 @@ public class InheritedFacetProjectionTests
         dto.OrderHeader.Should().BeOfType<OrderHeaderDto338>("OrderHeader should be mapped as OrderHeaderDto338, not OrderHeaderEntity338");
         dto.OrderHeader.OrderNumber.Should().Be("HDR-001");
 
-        // Verify other properties are also mapped correctly
         dto.Number.Should().Be("ORD-001");
         dto.ExpectedStartTime.Should().Be(baseTime);
         dto.DeliveryTime.Should().Be(baseTime.AddDays(1));
@@ -222,7 +200,6 @@ public class InheritedFacetProjectionTests
     [Fact]
     public void InheritedFacet_WithBaseNestedMultiSourceFacet_ToSource_ShouldCallCorrectMethod()
     {
-        // Arrange -> Test issue #340: inherited Facet with nested multi-source facet
         var entity = new OrderLineDispatchEntity340
         {
             Id = 1,
@@ -238,18 +215,14 @@ public class InheritedFacetProjectionTests
 
         var dto = new OrderLineDispatchDto340(entity);
 
-        // Verify the DTO was constructed correctly
         dto.Number.Should().Be("ORD-001");
         dto.AssignedToUnit.Should().NotBeNull();
         dto.AssignedToUnit.Should().BeOfType<UnitDropDownDto340>();
         dto.AssignedToUnit!.Name.Should().Be("Production Unit");
         dto.AssignedToUnit.ValidationResult.Should().Be("Valid");
 
-        // Act - Call ToSource on the derived Facet
-        // This should correctly call ToUnitEntity340() on the nested multi-source facet
         var result = dto.ToSource();
 
-        // Assert - Verify the entity was reconstructed correctly
         result.Number.Should().Be("ORD-001");
         result.AssignedToUnit.Should().NotBeNull();
         result.AssignedToUnit!.Name.Should().Be("Production Unit");
@@ -259,7 +232,6 @@ public class InheritedFacetProjectionTests
     [Fact]
     public void Projection_WithInheritedFacetBase_WhenBaseFacetHasMultipleSources_ShouldApplyMatchingBaseConfiguration()
     {
-        // Arrange
         var baseTime = new DateTime(2024, 2, 1, 9, 0, 0);
         var entity = new OrderLineDispatchEntity341
         {
@@ -269,13 +241,10 @@ public class InheritedFacetProjectionTests
             DeliveryTime = baseTime.AddDays(1)
         };
 
-        // Act
         var dto = OrderLineDispatchDto341.Projection.Compile()(entity);
 
-        // Assert - derived mapping
         dto.DeliveryTime.Should().Be(baseTime.AddDays(1).AddHours(2));
 
-        // Assert - matching base Facet source mapping should be applied
         dto.Number.Should().Be("ORD-ABC");
         dto.ExpectedStartTime.Should().Be(baseTime.AddHours(1));
         dto.Id.Should().Be(42);
@@ -284,7 +253,6 @@ public class InheritedFacetProjectionTests
     [Fact]
     public void Projection_WithInheritedNestedFacets_ShouldProjectAllNestedTypesCorrectly()
     {
-        // Arrange - Regression test for issue #338: derived DTO inheriting base DTO with NestedFacets
         var entity = new OrderLineWithPackingEntity345
         {
             Id = 1,
@@ -299,16 +267,13 @@ public class InheritedFacetProjectionTests
             }
         };
 
-        // Act - Use projection (EF Core path)
         var dto = OrderLineWithPackingDto345.Projection.Compile()(entity);
 
-        // Assert - Properties from derived DTO's own NestedFacets should be projected
         dto.InventoryItems.Should().HaveCount(1);
         dto.InventoryItems[0].Should().BeOfType<InventoryItemDto345>();
         dto.InventoryItems[0].Identifier.Should().Be("INV-001");
         dto.Description.Should().Be("Test");
 
-        // Assert - Properties from BASE DTO's NestedFacets should ALSO be projected
         dto.AssignedToUnit.Should().NotBeNull();
         dto.AssignedToUnit.Should().BeOfType<UnitDto345>("AssignedToUnit should be projected as UnitDto345, not UnitEntity345");
         dto.AssignedToUnit!.Name.Should().Be("Unit A");
@@ -317,17 +282,12 @@ public class InheritedFacetProjectionTests
         dto.OrderHeader.Should().BeOfType<OrderHeaderDto345>("OrderHeader should be projected as OrderHeaderDto345, not OrderHeaderEntity345");
         dto.OrderHeader.OrderNumber.Should().Be("HDR-001");
 
-        // Assert - Simple properties from base
         dto.Number.Should().Be("ORD-001");
     }
 
     [Fact]
     public void Projection_WithMultiSourceBase_NestedFacets_ShouldProjectCorrectly()
     {
-        // Arrange - Multi-source base Facet where the matching attribute has NestedFacets
-        // but another (non-matching) attribute also includes properties.
-        // This tests the scenario where GetBaseClassMemberNames sees ALL attributes
-        // but GetBaseFacetInfo only selects the best-matching one.
         var entity = new DerivedMultiSrcEntity345
         {
             Id = 1,
@@ -336,15 +296,12 @@ public class InheritedFacetProjectionTests
             ExtraInfo = "extra"
         };
 
-        // Act - Use projection
         var dto = DerivedMultiSrcDto345.Projection.Compile()(entity);
 
-        // Assert - NestedFacets from the matching base [Facet] attribute should be projected
         dto.AssignedToUnit.Should().NotBeNull();
         dto.AssignedToUnit.Should().BeOfType<UnitDto345>("AssignedToUnit should be projected as UnitDto345");
         dto.AssignedToUnit!.Name.Should().Be("Unit A");
 
-        // Assert - Simple properties
         dto.Number.Should().Be("ORD-001");
         dto.ExtraInfo.Should().Be("extra");
     }
@@ -352,9 +309,6 @@ public class InheritedFacetProjectionTests
     [Fact]
     public void Projection_WithConfiguredDerivedFacet_InheritedNestedFacets_ShouldProjectCorrectly()
     {
-        // Arrange - Derived Facet has IFacetProjectionMapConfiguration (triggers GenerateLazyProjection)
-        // Base Facet has NestedFacets.
-        // This tests that GenerateLazyProjection includes nested facet bindings.
         var entity = new DerivedConfiguredEntity345
         {
             Id = 1,
@@ -363,44 +317,33 @@ public class InheritedFacetProjectionTests
             ExtraTime = new DateTime(2024, 6, 15, 10, 0, 0)
         };
 
-        // Act
         var dto = DerivedConfiguredDto345.Projection.Compile()(entity);
 
-        // Assert - Derived Configuration mapping
         dto.ExtraTime.Should().Be(new DateTime(2024, 6, 15, 10, 0, 0).AddHours(5),
             "ExtraTime should be mapped with +5 hours from ConfigureProjection");
 
-        // Assert - NestedFacets from base should be projected correctly
         dto.AssignedToUnit.Should().NotBeNull();
         dto.AssignedToUnit.Should().BeOfType<UnitDto345>("AssignedToUnit should be UnitDto345, not UnitEntity345");
         dto.AssignedToUnit!.Name.Should().Be("Unit A");
 
-        // Assert - Simple properties from base
         dto.Number.Should().Be("ORD-001");
     }
 
     [Fact]
     public void MultiSource_InheritedFacet_ShouldNotRequireNewKeyword_And_MembersWork()
     {
-        // Arrange - UnitMultiSourceInheritedFacet inherits from UnitBaseFacet (single source)
-        // and has two [Facet] attributes (multi source).
-        // Generated members should be ProjectionFromUnitDto, ProjectionFromUnitEntity,
-        // ToUnitDto, ToUnitEntity — none of which hide base members.
         var unitDto = new UnitDto { Id = 1, Name = "TestUnit", ValidationResult = "Valid" };
         var unitEntity = new UnitEntity { Id = 2, Name = "EntityUnit", ValidationResult = "OK" };
 
-        // Act — constructor from both sources
         var fromDto = new UnitMultiSourceInheritedFacet(unitDto);
         var fromEntity = new UnitMultiSourceInheritedFacet(unitEntity);
 
-        // Assert — values mapped correctly from both sources
         fromDto.Name.Should().Be("TestUnit");
         fromDto.ValidationResult.Should().Be("Valid");
 
         fromEntity.Name.Should().Be("EntityUnit");
         fromEntity.ValidationResult.Should().Be("OK");
 
-        // Assert — ToSource methods work (multi-source names)
         var backToDto = fromDto.ToUnitDto();
         backToDto.Should().NotBeNull();
         backToDto.Name.Should().Be("TestUnit");
@@ -413,7 +356,6 @@ public class InheritedFacetProjectionTests
     [Fact]
     public void Projection_WithChildWithoutConfiguration_ShouldIncludeBaseConfigurationMappings()
     {
-        // Arrange
         var entity = new OrderLineWithWeightEntity381
         {
             Id = 1,
@@ -424,14 +366,11 @@ public class InheritedFacetProjectionTests
             AssignedToUnit = new Unit381 { Name = "Unit A" }
         };
 
-        // Act
         var dto = OrderLineWithWeightDto381.Projection.Compile()(entity);
 
-        // Assert
         dto.OrderedWeightInKg.Should().Be(10.5m);
         dto.OrderedCount.Should().Be(5);
 
-        // Assert
         dto.Number.Should().Be("ORD-001");
 
         dto.OrderHeaderNumber.Should().Be("HDR-001",
@@ -443,9 +382,6 @@ public class InheritedFacetProjectionTests
     [Fact]
     public void Projection_WithGrandchildWithoutConfiguration_ShouldIncludeGrandparentConfigurationMappings()
     {
-        // Arrange - Regression test: grandchild Facet WITHOUT Configuration, inheriting from
-        // intermediate Facet (also no config), which inherits from grandparent Facet WITH Configuration.
-        // This is the exact "Production" scenario reported by the user.
         var entity = new OrderLineProductionEntity381
         {
             Id = 1,
@@ -457,17 +393,13 @@ public class InheritedFacetProjectionTests
             AssignedToUnit = new Unit381 { Name = "Unit B" }
         };
 
-        // Act
         var dto = OrderLineProductionDto381.Projection.Compile()(entity);
 
-        // Assert - Grandchild's own properties
         dto.ProductionDate.Should().Be(new DateTime(2024, 6, 15));
 
-        // Assert - Intermediate's properties
         dto.OrderedWeightInKg.Should().Be(25.0m);
         dto.OrderedCount.Should().Be(10);
 
-        // Assert - Grandparent's Configuration-mapped properties MUST be included
         dto.OrderHeaderNumber.Should().Be("HDR-002",
             "OrderHeaderNumber should be mapped from grandparent Configuration's builder.Map()");
         dto.AssignedToUnitName.Should().Be("Unit B",
@@ -477,10 +409,7 @@ public class InheritedFacetProjectionTests
     [Fact]
     public void Projection_WithMultipleConfigsInChain_ShouldApplyAllAncestorConfigs()
     {
-        // Regression test for Allan Michaelsen's report: deep inheritance chain where TWO
-        // ancestors each have their own Configuration. Previously only the nearest config
-        // was applied; configs from deeper ancestors were silently dropped.
-        // Chain: GrandChildDto (no cfg) → ParentDto (config B) → GapDto (no cfg) → BaseDto (config A)
+        // Regression test for a deep inheritance chain with two ConfigureProjection overrides.
         var entity = new MultiConfigGrandChildEntity381
         {
             Id = 7,
@@ -492,15 +421,12 @@ public class InheritedFacetProjectionTests
 
         var dto = MultiConfigGrandChildDto381.Projection.Compile()(entity);
 
-        // BaseDto's ConfigureProjection must be applied (config A: "BASE-" prefix)
         dto.BaseTag.Should().Be("BASE-alpha",
             "BaseDto's ConfigureProjection must run even though GapDto has no config");
 
-        // ParentDto's ConfigureProjection must also be applied (config B: "PARENT-" prefix)
         dto.ParentTag.Should().Be("PARENT-beta",
             "ParentDto's ConfigureProjection must run");
 
-        // Simple properties must be mapped normally
         dto.GapField.Should().Be("gap");
         dto.GrandChildTag.Should().Be("gamma");
         dto.Id.Should().Be(7);
@@ -570,8 +496,6 @@ public class OrderLineDispatchEntity338Nested : OrderLineBaseEntity338Nested
 public partial class OrderLineDispatchDto338Nested : OrderLineBaseDto338Nested
 {
 }
-
-// --- Test models for inherited Facets with nested multi-source facets and ToSource (issue #340) ---
 
 public class UnitEntity340
 {
@@ -791,8 +715,6 @@ public partial class OrderLineWithPackingDto345 : OrderLineBaseDto345
 {
 }
 
-// --- Test models for multi-source base Facet with NestedFacets (issue #338 regression) ---
-
 /// <summary>Unrelated source entity for the second [Facet] attribute.</summary>
 public class OtherSourceEntity345
 {
@@ -838,8 +760,6 @@ public partial class BaseMultiSrcDto345
 public partial class DerivedMultiSrcDto345 : BaseMultiSrcDto345
 {
 }
-
-// --- Test models for IFacetProjectionMapConfiguration + inherited NestedFacets ---
 
 /// <summary>Base entity with navigation property for configured projection test.</summary>
 public class BaseConfiguredEntity345
@@ -889,8 +809,6 @@ public class DerivedConfiguredDto345MapConfig
         builder.Map(d => d.ExtraTime, s => s.ExtraTime.AddHours(5));
     }
 }
-
-// Below tests are reproduction of the actual issue:
 
 public class UnitEntity345_18
 {
@@ -946,7 +864,6 @@ public class OrderLineBaseDto345_18MapConfig
     public static void ConfigureProjection(
         IFacetProjectionBuilder<OrderLineBaseEntity345_18, OrderLineBaseDto345_18> builder)
     {
-        // Map base properties (these should appear in derived projection too)
         builder.Map(d => d.Number, s => "ORD-" + s.Number);
         builder.Map(d => d.ExpectedStartTime, s => s.ExpectedStartTime.AddHours(1));
     }
@@ -966,7 +883,6 @@ public class OrderLineDispatchDto345_18MapConfig
     public static void ConfigureProjection(
         IFacetProjectionBuilder<OrderLineDispatchEntity345_18, OrderLineDispatchDto345_18> builder)
     {
-        // Map dispatch-specific properties
         builder.Map(d => d.DeliveryTime, s => s.DeliveryTime.AddHours(2));
         builder.Map(d => d.ShipmentTime, s => s.ShipmentTime.AddHours(3));
     }
@@ -1060,10 +976,6 @@ public class OrderLineProductionEntity381 : OrderLineWithWeightEntity381
 public partial class OrderLineProductionDto381 : OrderLineWithWeightDto381
 {
 }
-
-// --- Multi-config chain test models (Allan Michaelsen scenario) ---
-// Tests that ALL configs in the ancestor chain are applied, not just the nearest one.
-// Chain: GrandChildDto (config C) → ParentDto (config B) → GapDto (no config) → BaseDto (config A)
 
 public class MultiConfigBaseEntity381
 {

@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Immutable;
@@ -22,7 +22,7 @@ internal static class TypeAnalyzer
 
         while (current != null)
         {
-            containingTypes.Insert(0, current.Name); // Insert at beginning to maintain order
+            containingTypes.Insert(0, current.Name); 
             current = current.ContainingType;
         }
 
@@ -35,22 +35,18 @@ internal static class TypeAnalyzer
     /// </summary>
     public static bool HasExistingPrimaryConstructor(INamedTypeSymbol targetSymbol)
     {
-        // Check if this is a record type with an existing primary constructor
         if (targetSymbol.TypeKind == TypeKind.Class || targetSymbol.TypeKind == TypeKind.Struct)
         {
-            // Look at the syntax to see if it has primary constructor parameters
             var syntaxRef = targetSymbol.DeclaringSyntaxReferences.FirstOrDefault();
             if (syntaxRef != null)
             {
                 var syntax = syntaxRef.GetSyntax();
 
-                // Check for record with parameter list
                 if (syntax is RecordDeclarationSyntax recordDecl && recordDecl.ParameterList != null)
                 {
                     return true;
                 }
 
-                // Check for regular class/struct with primary constructor (C# 12+)
                 if ((syntax is ClassDeclarationSyntax classDecl && classDecl.ParameterList != null) ||
                     (syntax is StructDeclarationSyntax structDecl && structDecl.ParameterList != null))
                 {
@@ -69,19 +65,16 @@ internal static class TypeAnalyzer
     {
         if (sourceType.TypeKind == TypeKind.Class || sourceType.TypeKind == TypeKind.Struct)
         {
-            // Look at the syntax to see if it has primary constructor parameters
             var syntaxRef = sourceType.DeclaringSyntaxReferences.FirstOrDefault();
             if (syntaxRef != null)
             {
                 var syntax = syntaxRef.GetSyntax();
 
-                // Check for record with parameter list
                 if (syntax is RecordDeclarationSyntax recordDecl && recordDecl.ParameterList != null && recordDecl.ParameterList.Parameters.Count > 0)
                 {
                     return true;
                 }
 
-                // Check for regular class/struct with primary constructor (C# 12+)
                 if ((syntax is ClassDeclarationSyntax classDecl && classDecl.ParameterList != null && classDecl.ParameterList.Parameters.Count > 0) ||
                     (syntax is StructDeclarationSyntax structDecl && structDecl.ParameterList != null && structDecl.ParameterList.Parameters.Count > 0))
                 {
@@ -110,7 +103,6 @@ internal static class TypeAnalyzer
                 isRecord = true;
             }
 
-            // Additional check for records by looking for the compiler-generated Clone method
             if (!isRecord && typeKind == TypeKind.Class)
             {
                 if (targetSymbol.GetMembers().Any(m => m.Name.Contains("Clone") && m.IsImplicitlyDeclared))
@@ -130,29 +122,22 @@ internal static class TypeAnalyzer
     /// </summary>
     public static bool HasAccessibleParameterlessConstructor(INamedTypeSymbol sourceType, IAssemblySymbol? compilationAssembly = null, bool isNestedInSourceType = false)
     {
-        // Check for implicit parameterless constructor (when no constructors are defined)
         var constructors = sourceType.InstanceConstructors;
 
-        // If no constructors are explicitly defined, there's an implicit public parameterless constructor
         if (!constructors.Any())
             return true;
 
-        // Check if there's an explicitly defined parameterless constructor that's accessible
         foreach (var constructor in constructors)
         {
             if (constructor.Parameters.Length == 0)
             {
-                // Public constructors are always accessible
                 if (constructor.DeclaredAccessibility == Accessibility.Public)
                     return true;
 
-                // Nested types have access to all members of their containing type, including private
+                // Nested facets can access private constructors on the containing source type.
                 if (isNestedInSourceType)
                     return true;
 
-                // Internal constructors are accessible when the source type is in the same assembly
-                // as the generated code (which is always the case for types in the user's project),
-                // or when the source assembly grants access via [InternalsVisibleTo]
                 if (constructor.DeclaredAccessibility == Accessibility.Internal &&
                     compilationAssembly != null &&
                     IsInternalAccessible(sourceType.ContainingAssembly, compilationAssembly))
@@ -178,32 +163,28 @@ internal static class TypeAnalyzer
     {
         foreach (var member in members)
         {
-            // Skip members that aren't reversible
             if (!member.MapFromReversible)
                 continue;
 
-            // Find the corresponding property in the source type
             var sourceProperty = sourceType.GetMembers(member.SourcePropertyName)
                 .OfType<IPropertySymbol>()
                 .FirstOrDefault();
 
             if (sourceProperty == null)
-                continue; // Skip if property doesn't exist
+                continue; 
 
-            // Check if the property has a setter and if it's accessible
             if (sourceProperty.SetMethod == null)
-                return false; // No setter at all
+                return false; 
 
-            // Nested types have access to all members of their containing type
+            // Nested facets can access private setters on the containing source type.
             if (isNestedInSourceType)
                 continue;
 
-            // Check setter accessibility
             var setterAccessibility = sourceProperty.SetMethod.DeclaredAccessibility;
             if (setterAccessibility == Accessibility.Public)
                 continue;
 
-            // Internal setters are accessible in same assembly or via [InternalsVisibleTo]
+            // InternalsVisibleTo also makes internal setters assignable.
             if (setterAccessibility == Accessibility.Internal &&
                 compilationAssembly != null &&
                 IsInternalAccessible(sourceType.ContainingAssembly, compilationAssembly))
@@ -211,7 +192,7 @@ internal static class TypeAnalyzer
                 continue;
             }
 
-            return false; // Setter is private, protected, or otherwise inaccessible
+            return false; 
         }
 
         return true;
@@ -240,11 +221,9 @@ internal static class TypeAnalyzer
     /// </summary>
     public static bool IsInternalAccessible(IAssemblySymbol sourceAssembly, IAssemblySymbol compilationAssembly)
     {
-        // Same assembly — always accessible
         if (SymbolEqualityComparer.Default.Equals(sourceAssembly, compilationAssembly))
             return true;
 
-        // Check [InternalsVisibleTo] on the source assembly
         var compilationAssemblyName = compilationAssembly.Name;
         foreach (var attr in sourceAssembly.GetAttributes())
         {
@@ -253,7 +232,6 @@ internal static class TypeAnalyzer
                 attr.ConstructorArguments.Length > 0 &&
                 attr.ConstructorArguments[0].Value is string assemblyName)
             {
-                // Handle assembly names with public key tokens (e.g. "MyAssembly, PublicKey=...")
                 var commaIndex = assemblyName.IndexOf(',');
                 var name = commaIndex >= 0 ? assemblyName.Substring(0, commaIndex).Trim() : assemblyName.Trim();
 

@@ -1,4 +1,4 @@
-using System.Linq.Expressions;
+﻿using System.Linq.Expressions;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
 
@@ -13,14 +13,12 @@ public class PersonDto325MapConfig
     : IFacetMapConfiguration<PersonEntity325, PersonDto325>,
       IFacetProjectionMapConfiguration<PersonEntity325, PersonDto325>
 {
-    // Imperative mapping
     public static void Map(PersonEntity325 source, PersonDto325 target)
     {
         target.FullName = source.FirstName + " " + source.LastName;
-        target.AuditNote = "SET_BY_SERVICE"; // simulates DI-dependent work
+        target.AuditNote = "SET_BY_SERVICE"; 
     }
 
-    // Expression mapping
     public static void ConfigureProjection(IFacetProjectionBuilder<PersonEntity325, PersonDto325> builder)
     {
         builder.Map(d => d.FullName, s => s.FirstName + " " + s.LastName);
@@ -93,7 +91,6 @@ public class ProjectionMapConfigTests
     [Fact]
     public void Projection_ShouldReturnPureMemberInitExpression()
     {
-        // Verifies the expression tree contains no Invoke nodes
         var expr = PersonDto325.Projection;
 
         expr.Body.NodeType.Should().Be(ExpressionType.MemberInit,
@@ -103,7 +100,6 @@ public class ProjectionMapConfigTests
     [Fact]
     public void Projection_ShouldBeLazyAndReturnSameInstance()
     {
-        // LazyInitializer guarantees at-most-one build; same reference on repeated access.
         var first = PersonDto325.Projection;
         var second = PersonDto325.Projection;
 

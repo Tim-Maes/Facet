@@ -1,4 +1,4 @@
-using Facet.Tests.TestModels;
+﻿using Facet.Tests.TestModels;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
 
@@ -33,7 +33,6 @@ public class DDDNestedFacetTests
     [Fact]
     public void NestedRecordFacet_ShouldGenerateToSource()
     {
-        // ToSource should be generated because the nested facet can access the private constructor
         var source = DDDSample.Create("pub", "priv", "intern");
         var dto = source.ToFacet<DDDSample, DDDSample.InsideFacetRecord>();
 
@@ -64,7 +63,6 @@ public class DDDNestedFacetTests
     [Fact]
     public void OutsideFacet_ShouldMapAllProperties()
     {
-        // Outside facets can still read all public properties
         var source = DDDSample.Create("pub", "priv", "intern");
         var dto = source.ToFacet<DDDSample, OutsideFacetRecord>();
 
@@ -84,7 +82,6 @@ public class DDDNestedFacetTests
     [Fact]
     public void OutsideFacet_WithInternalCtor_ShouldMapAllProperties()
     {
-        // Outside facets in the same assembly can read all public properties
         var source = DDDSampleInternal.Create("pub", "priv", "intern");
         var dto = source.ToFacet<DDDSampleInternal, OutsideFacetInternalCtorClass>();
 
@@ -96,9 +93,6 @@ public class DDDNestedFacetTests
     [Fact]
     public void OutsideFacet_WithInternalCtor_ExcludingPrivateSetter_ShouldGenerateToSource()
     {
-        // Internal constructor is accessible from same assembly.
-        // Excluding APrivateSetterProperty (private setter) allows ToSource to work
-        // because the remaining properties have public or internal setters.
         var source = DDDSampleInternal.Create("pub", "priv", "intern");
         var dto = source.ToFacet<DDDSampleInternal, OutsideFacetInternalCtorWithToSource>();
 

@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Facet.Tests.TestModels;
 
 namespace Facet.Tests.UnitTests.Features;

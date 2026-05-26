@@ -1,4 +1,4 @@
-using Facet.Tests.TestModels;
+﻿using Facet.Tests.TestModels;
 using Facet.Tests.Utilities;
 
 namespace Facet.Tests.UnitTests.Features;
@@ -8,7 +8,6 @@ public class NullableHandlingTests
     [Fact]
     public void ToFacet_ShouldPreserveNullableStringTypes_WhenMappingToFacet()
     {
-        // Arrange
         var testEntity = new NullableTestEntity
         {
             Test1 = true,
@@ -17,10 +16,8 @@ public class NullableHandlingTests
             Test4 = null
         };
 
-        // Act
         var dto = testEntity.ToFacet<NullableTestEntity, NullableTestDto>();
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Test1.Should().Be(true);
         dto.Test2.Should().Be(false);
@@ -31,10 +28,8 @@ public class NullableHandlingTests
     [Fact]
     public void NullableTestDto_ShouldHaveCorrectPropertyTypes()
     {
-        // Arrange & Act
         var dtoType = typeof(NullableTestDto);
         
-        // Assert
         var test1Property = dtoType.GetProperty("Test1");
         var test2Property = dtoType.GetProperty("Test2");
         var test3Property = dtoType.GetProperty("Test3");
@@ -52,12 +47,9 @@ public class NullableHandlingTests
         test4Property.Should().NotBeNull();
         test4Property!.PropertyType.Should().Be<string>();
         
-        // In C# 8+ with nullable reference types enabled, 
-        // we need to check the nullable annotation context
         var nullabilityContext = new System.Reflection.NullabilityInfoContext();
         var test4NullabilityInfo = nullabilityContext.Create(test4Property);
         
-        // Test4 should allow null values
         test4NullabilityInfo.ReadState.Should().Be(System.Reflection.NullabilityState.Nullable);
     }
 
@@ -66,7 +58,6 @@ public class NullableHandlingTests
     [InlineData("Some value")]
     public void ToFacet_ShouldHandleNullableStringAssignment_Correctly(string? testValue)
     {
-        // Arrange
         var testEntity = new NullableTestEntity
         {
             Test1 = false,
@@ -75,10 +66,8 @@ public class NullableHandlingTests
             Test4 = testValue
         };
 
-        // Act
         var dto = testEntity.ToFacet<NullableTestEntity, NullableTestDto>();
 
-        // Assert
         dto.Test4.Should().Be(testValue);
     }
 }

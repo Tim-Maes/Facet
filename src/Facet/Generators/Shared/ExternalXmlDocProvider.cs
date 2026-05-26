@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -36,7 +36,6 @@ internal sealed class ExternalXmlDocProvider
         if (containingAssembly == null)
             return null;
 
-        // Only look up external assemblies (not the current compilation's assembly)
         if (SymbolEqualityComparer.Default.Equals(containingAssembly, _compilation.Assembly))
             return null;
 
@@ -64,18 +63,14 @@ internal sealed class ExternalXmlDocProvider
 
     private Dictionary<string, string>? TryLoadDocsForAssembly(IAssemblySymbol assembly)
     {
-        // Find the metadata reference for this assembly
         var reference = _compilation.GetMetadataReference(assembly) as PortableExecutableReference;
         if (reference?.FilePath == null)
             return null;
 
-        // Look for an XML documentation file alongside the DLL
         var xmlPath = Path.ChangeExtension(reference.FilePath, ".xml");
         if (File.Exists(xmlPath))
             return ParseXmlDocFile(xmlPath);
 
-        // When reference assemblies are used, the DLL is in a ref/ subdirectory
-        // but the XML documentation file is in the parent directory
         var directory = Path.GetDirectoryName(reference.FilePath);
         if (directory != null)
         {
@@ -111,7 +106,6 @@ internal sealed class ExternalXmlDocProvider
                 if (name == null)
                     continue;
 
-                // Reconstruct the full <member> XML that GetDocumentationCommentXml() would return
                 docs[name] = member.ToString();
             }
 
@@ -119,7 +113,6 @@ internal sealed class ExternalXmlDocProvider
         }
         catch (Exception)
         {
-            // If we can't parse the XML file, return null gracefully
             return null;
         }
     }

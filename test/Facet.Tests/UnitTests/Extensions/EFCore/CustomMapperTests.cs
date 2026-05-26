@@ -1,4 +1,4 @@
-using Facet.Extensions.EFCore.Mapping;
+﻿using Facet.Extensions.EFCore.Mapping;
 using Facet.Mapping;
 using Facet.Tests.TestModels;
 using Facet.Tests.Utilities;
@@ -22,15 +22,12 @@ public class CustomMapperTests : IDisposable
     [Fact]
     public async Task ToFacetsAsync_WithInstanceMapper_ShouldApplyCustomMapping()
     {
-        // Arrange
         var mapper = new TestUserDtoAsyncMapper();
 
-        // Act
         var users = await _context.Set<User>()
             .Where(u => u.IsActive)
             .ToFacetsAsync<User, TestUserDto>(mapper);
 
-        // Assert
         users.Should().NotBeNull();
         users.Should().HaveCount(2);
         users.All(u => u.FullName.Contains(" ")).Should().BeTrue();
@@ -40,12 +37,10 @@ public class CustomMapperTests : IDisposable
     [Fact]
     public async Task ToFacetsAsync_WithStaticMapper_ShouldApplyCustomMapping()
     {
-        // Arrange & Act
         var users = await _context.Set<User>()
             .Where(u => u.IsActive)
             .ToFacetsAsync<User, TestUserDto, TestUserDtoStaticMapper>();
 
-        // Assert
         users.Should().NotBeNull();
         users.Should().HaveCount(2);
         users.All(u => u.FullName.Contains(" ")).Should().BeTrue();
@@ -55,14 +50,11 @@ public class CustomMapperTests : IDisposable
     [Fact]
     public async Task ToFacetsAsync_WithInstanceMapper_ShouldAutoMapPropertiesFirst()
     {
-        // Arrange
         var mapper = new TestUserDtoAsyncMapper();
 
-        // Act
         var users = await _context.Set<User>()
             .ToFacetsAsync<User, TestUserDto>(mapper);
 
-        // Assert
         users.Should().HaveCount(3);
         users.All(u => !string.IsNullOrEmpty(u.FirstName)).Should().BeTrue();
         users.All(u => !string.IsNullOrEmpty(u.Email)).Should().BeTrue();
@@ -72,15 +64,12 @@ public class CustomMapperTests : IDisposable
     [Fact]
     public async Task FirstFacetAsync_WithInstanceMapper_ShouldApplyCustomMapping()
     {
-        // Arrange
         var mapper = new TestUserDtoAsyncMapper();
 
-        // Act
         var user = await _context.Set<User>()
             .Where(u => u.FirstName == "Alice")
             .FirstFacetAsync<User, TestUserDto>(mapper);
 
-        // Assert
         user.Should().NotBeNull();
         user!.FirstName.Should().Be("Alice");
         user.FullName.Should().Be("Alice Johnson [Custom]");
@@ -89,12 +78,10 @@ public class CustomMapperTests : IDisposable
     [Fact]
     public async Task FirstFacetAsync_WithStaticMapper_ShouldApplyCustomMapping()
     {
-        // Arrange & Act
         var user = await _context.Set<User>()
             .Where(u => u.FirstName == "Bob")
             .FirstFacetAsync<User, TestUserDto, TestUserDtoStaticMapper>();
 
-        // Assert
         user.Should().NotBeNull();
         user!.FirstName.Should().Be("Bob");
         user.FullName.Should().Be("Bob Smith [Static]");
@@ -103,42 +90,34 @@ public class CustomMapperTests : IDisposable
     [Fact]
     public async Task FirstFacetAsync_WithInstanceMapper_WhenNoMatch_ShouldReturnNull()
     {
-        // Arrange
         var mapper = new TestUserDtoAsyncMapper();
 
-        // Act
         var user = await _context.Set<User>()
             .Where(u => u.FirstName == "NonExistent")
             .FirstFacetAsync<User, TestUserDto>(mapper);
 
-        // Assert
         user.Should().BeNull();
     }
 
     [Fact]
     public async Task FirstFacetAsync_WithStaticMapper_WhenNoMatch_ShouldReturnNull()
     {
-        // Arrange & Act
         var user = await _context.Set<User>()
             .Where(u => u.FirstName == "NonExistent")
             .FirstFacetAsync<User, TestUserDto, TestUserDtoStaticMapper>();
 
-        // Assert
         user.Should().BeNull();
     }
 
     [Fact]
     public async Task SingleFacetAsync_WithInstanceMapper_ShouldApplyCustomMapping()
     {
-        // Arrange
         var mapper = new TestUserDtoAsyncMapper();
 
-        // Act
         var user = await _context.Set<User>()
             .Where(u => u.FirstName == "Charlie")
             .SingleFacetAsync<User, TestUserDto>(mapper);
 
-        // Assert
         user.Should().NotBeNull();
         user.FirstName.Should().Be("Charlie");
         user.FullName.Should().Be("Charlie Brown [Custom]");
@@ -147,12 +126,10 @@ public class CustomMapperTests : IDisposable
     [Fact]
     public async Task SingleFacetAsync_WithStaticMapper_ShouldApplyCustomMapping()
     {
-        // Arrange & Act
         var user = await _context.Set<User>()
             .Where(u => u.FirstName == "Alice")
             .SingleFacetAsync<User, TestUserDto, TestUserDtoStaticMapper>();
 
-        // Assert
         user.Should().NotBeNull();
         user.FirstName.Should().Be("Alice");
         user.FullName.Should().Be("Alice Johnson [Static]");
@@ -161,29 +138,23 @@ public class CustomMapperTests : IDisposable
     [Fact]
     public async Task SingleFacetAsync_WithInstanceMapper_WhenMultipleMatches_ShouldThrow()
     {
-        // Arrange
         var mapper = new TestUserDtoAsyncMapper();
 
-        // Act
         var act = async () => await _context.Set<User>()
             .Where(u => u.IsActive)
             .SingleFacetAsync<User, TestUserDto>(mapper);
 
-        // Assert
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]
     public async Task ToFacetsAsync_WithNullMapper_ShouldThrowArgumentNullException()
     {
-        // Arrange
         IFacetMapConfigurationAsyncInstance<User, TestUserDto> mapper = null!;
 
-        // Act
         var act = async () => await _context.Set<User>()
             .ToFacetsAsync<User, TestUserDto>(mapper);
 
-        // Assert
         await act.Should().ThrowAsync<ArgumentNullException>()
             .WithMessage("*mapper*");
     }
@@ -191,14 +162,11 @@ public class CustomMapperTests : IDisposable
     [Fact]
     public async Task FirstFacetAsync_WithNullMapper_ShouldThrowArgumentNullException()
     {
-        // Arrange
         IFacetMapConfigurationAsyncInstance<User, TestUserDto> mapper = null!;
 
-        // Act
         var act = async () => await _context.Set<User>()
             .FirstFacetAsync<User, TestUserDto>(mapper);
 
-        // Assert
         await act.Should().ThrowAsync<ArgumentNullException>()
             .WithMessage("*mapper*");
     }
@@ -206,14 +174,11 @@ public class CustomMapperTests : IDisposable
     [Fact]
     public async Task SingleFacetAsync_WithNullMapper_ShouldThrowArgumentNullException()
     {
-        // Arrange
         IFacetMapConfigurationAsyncInstance<User, TestUserDto> mapper = null!;
 
-        // Act
         var act = async () => await _context.Set<User>()
             .SingleFacetAsync<User, TestUserDto>(mapper);
 
-        // Assert
         await act.Should().ThrowAsync<ArgumentNullException>()
             .WithMessage("*mapper*");
     }
@@ -221,32 +186,26 @@ public class CustomMapperTests : IDisposable
     [Fact]
     public async Task ToFacetsAsync_WithInstanceMapper_ShouldRespectCancellationToken()
     {
-        // Arrange
         var mapper = new TestUserDtoAsyncMapper();
         var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        // Act
         var act = async () => await _context.Set<User>()
             .ToFacetsAsync<User, TestUserDto>(mapper, cts.Token);
 
-        // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
     [Fact]
     public async Task FirstFacetAsync_WithInstanceMapper_ShouldRespectCancellationToken()
     {
-        // Arrange
         var mapper = new TestUserDtoAsyncMapper();
         var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        // Act
         var act = async () => await _context.Set<User>()
             .FirstFacetAsync<User, TestUserDto>(mapper, cts.Token);
 
-        // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
 

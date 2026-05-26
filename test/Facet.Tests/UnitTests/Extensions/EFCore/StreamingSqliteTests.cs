@@ -1,4 +1,4 @@
-using Facet.Tests.TestModels;
+﻿using Facet.Tests.TestModels;
 using Facet.Tests.Utilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
@@ -12,7 +12,6 @@ public class StreamingSqliteTests : IDisposable
 
     public StreamingSqliteTests()
     {
-        // SQLite in-memory requires keeping the connection open
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
 
@@ -38,7 +37,6 @@ public class StreamingSqliteTests : IDisposable
             userDtos.Add(dto);
         }
 
-        // Assert
         userDtos.Should().HaveCount(2);
         userDtos.All(dto => dto.IsActive).Should().BeTrue();
         userDtos.Select(dto => dto.FirstName).Should().BeEquivalentTo(new[] { "Alice", "Bob" });
@@ -57,7 +55,6 @@ public class StreamingSqliteTests : IDisposable
             userDtos.Add(dto);
         }
 
-        // Assert
         userDtos.Should().HaveCount(1);
         userDtos.First().FirstName.Should().Be("Alice");
     }
@@ -76,7 +73,6 @@ public class StreamingSqliteTests : IDisposable
             userDtos.Add(dto);
         }
 
-        // Assert
         userDtos.Should().HaveCount(3);
         userDtos[0].FirstName.Should().Be("Alice");
         userDtos[1].FirstName.Should().Be("Bob");
@@ -86,7 +82,6 @@ public class StreamingSqliteTests : IDisposable
     [Fact]
     public async Task SqliteProvider_AsAsyncEnumerable_WithNestedFacets_ShouldStreamResults()
     {
-        // Arrange
         var address = new AddressEntity
         {
             Street = "123 SQLite St",
@@ -109,7 +104,6 @@ public class StreamingSqliteTests : IDisposable
         _context.SaveChanges();
         _context.ChangeTracker.Clear();
 
-        // Act
         var companyDtos = new List<CompanyFacet>();
 
         await foreach (var dto in _context.Set<CompanyEntity>()
@@ -120,7 +114,6 @@ public class StreamingSqliteTests : IDisposable
             companyDtos.Add(dto);
         }
 
-        // Assert
         companyDtos.Should().HaveCount(1);
         companyDtos.First().Name.Should().Be("SQLite Company");
         companyDtos.First().HeadquartersAddress.Should().NotBeNull();
@@ -142,14 +135,12 @@ public class StreamingSqliteTests : IDisposable
             currentInMemory++;
             maxSimultaneous = Math.Max(maxSimultaneous, currentInMemory);
 
-            // Simulate processing
             await Task.Delay(1);
 
             processedCount++;
             currentInMemory--;
         }
 
-        // Assert - we processed all items
         processedCount.Should().Be(3);
 
         maxSimultaneous.Should().BeLessThan(3);

@@ -1,6 +1,4 @@
-// Test entities for GitHub issue #249
-// Generator issue when DTOs with the same name are under different namespaces
-
+﻿
 namespace Facet.Tests.TestModels.NamespaceCollision.N1
 {
     public class Employee

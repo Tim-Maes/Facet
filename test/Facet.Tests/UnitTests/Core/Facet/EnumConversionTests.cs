@@ -1,4 +1,4 @@
-using Facet.Tests.TestModels;
+﻿using Facet.Tests.TestModels;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
 
@@ -7,7 +7,6 @@ public class EnumConversionTests
     [Fact]
     public void ConvertEnumsTo_String_ShouldGenerateStringProperty()
     {
-        // Arrange
         var entity = new UserWithEnum
         {
             Id = 1,
@@ -16,10 +15,8 @@ public class EnumConversionTests
             Email = "john@example.com"
         };
 
-        // Act
         var dto = new UserWithEnumToStringDto(entity);
 
-        // Assert
         dto.Id.Should().Be(1);
         dto.Name.Should().Be("John");
         dto.Status.Should().Be("Active");
@@ -33,20 +30,16 @@ public class EnumConversionTests
     [InlineData(UserStatus.Suspended, "Suspended")]
     public void ConvertEnumsTo_String_ShouldMapAllEnumValues(UserStatus status, string expected)
     {
-        // Arrange
         var entity = new UserWithEnum { Status = status };
 
-        // Act
         var dto = new UserWithEnumToStringDto(entity);
 
-        // Assert
         dto.Status.Should().Be(expected);
     }
 
     [Fact]
     public void ConvertEnumsTo_String_PropertyType_ShouldBeString()
     {
-        // Assert that the generated property type is string, not the enum
         var statusProperty = typeof(UserWithEnumToStringDto).GetProperty("Status");
         statusProperty.Should().NotBeNull();
         statusProperty!.PropertyType.Should().Be(typeof(string));
@@ -55,7 +48,6 @@ public class EnumConversionTests
     [Fact]
     public void ConvertEnumsTo_String_NonEnumProperties_ShouldBeUnchanged()
     {
-        // Verify non-enum properties are not affected
         var idProperty = typeof(UserWithEnumToStringDto).GetProperty("Id");
         idProperty!.PropertyType.Should().Be(typeof(int));
 
@@ -66,20 +58,16 @@ public class EnumConversionTests
     [Fact]
     public void ConvertEnumsTo_String_FromSource_ShouldWork()
     {
-        // Arrange
         var entity = new UserWithEnum { Status = UserStatus.Pending };
 
-        // Act
         var dto = UserWithEnumToStringDto.FromSource(entity);
 
-        // Assert
         dto.Status.Should().Be("Pending");
     }
 
     [Fact]
     public void ConvertEnumsTo_String_ToSource_ShouldConvertBack()
     {
-        // Arrange
         var dto = new UserWithEnumToStringDto
         {
             Id = 1,
@@ -88,10 +76,8 @@ public class EnumConversionTests
             Email = "john@example.com"
         };
 
-        // Act
         var entity = dto.ToSource();
 
-        // Assert
         entity.Status.Should().Be(UserStatus.Active);
         entity.Id.Should().Be(1);
         entity.Name.Should().Be("John");
@@ -100,7 +86,6 @@ public class EnumConversionTests
     [Fact]
     public void ConvertEnumsTo_Int_ShouldGenerateIntProperty()
     {
-        // Arrange
         var entity = new UserWithEnum
         {
             Id = 1,
@@ -109,13 +94,11 @@ public class EnumConversionTests
             Email = "john@example.com"
         };
 
-        // Act
         var dto = new UserWithEnumToIntDto(entity);
 
-        // Assert
         dto.Id.Should().Be(1);
         dto.Name.Should().Be("John");
-        dto.Status.Should().Be(0); // Active = 0
+        dto.Status.Should().Be(0); 
         dto.Email.Should().Be("john@example.com");
     }
 
@@ -126,13 +109,10 @@ public class EnumConversionTests
     [InlineData(UserStatus.Suspended, 3)]
     public void ConvertEnumsTo_Int_ShouldMapAllEnumValues(UserStatus status, int expected)
     {
-        // Arrange
         var entity = new UserWithEnum { Status = status };
 
-        // Act
         var dto = new UserWithEnumToIntDto(entity);
 
-        // Assert
         dto.Status.Should().Be(expected);
     }
 
@@ -147,26 +127,22 @@ public class EnumConversionTests
     [Fact]
     public void ConvertEnumsTo_Int_ToSource_ShouldConvertBack()
     {
-        // Arrange
         var dto = new UserWithEnumToIntDto
         {
             Id = 1,
             Name = "John",
-            Status = 2, // Pending
+            Status = 2, 
             Email = "john@example.com"
         };
 
-        // Act
         var entity = dto.ToSource();
 
-        // Assert
         entity.Status.Should().Be(UserStatus.Pending);
     }
 
     [Fact]
     public void ConvertEnumsTo_String_NullableEnum_ShouldHandleNonNullValue()
     {
-        // Arrange
         var entity = new EntityWithNullableEnum
         {
             Id = 1,
@@ -175,10 +151,8 @@ public class EnumConversionTests
             NonNullableStatus = UserStatus.Pending
         };
 
-        // Act
         var dto = new NullableEnumToStringDto(entity);
 
-        // Assert
         dto.Status.Should().Be("Active");
         dto.NonNullableStatus.Should().Be("Pending");
     }
@@ -186,7 +160,6 @@ public class EnumConversionTests
     [Fact]
     public void ConvertEnumsTo_String_NullableEnum_ShouldHandleNullValue()
     {
-        // Arrange
         var entity = new EntityWithNullableEnum
         {
             Id = 1,
@@ -195,10 +168,8 @@ public class EnumConversionTests
             NonNullableStatus = UserStatus.Active
         };
 
-        // Act
         var dto = new NullableEnumToStringDto(entity);
 
-        // Assert
         dto.Status.Should().BeNull();
         dto.NonNullableStatus.Should().Be("Active");
     }
@@ -214,7 +185,6 @@ public class EnumConversionTests
     [Fact]
     public void ConvertEnumsTo_Int_NullableEnum_ShouldHandleNonNullValue()
     {
-        // Arrange
         var entity = new EntityWithNullableEnum
         {
             Id = 1,
@@ -223,18 +193,15 @@ public class EnumConversionTests
             NonNullableStatus = UserStatus.Active
         };
 
-        // Act
         var dto = new NullableEnumToIntDto(entity);
 
-        // Assert
-        dto.Status.Should().Be(3); // Suspended = 3
-        dto.NonNullableStatus.Should().Be(0); // Active = 0
+        dto.Status.Should().Be(3); 
+        dto.NonNullableStatus.Should().Be(0); 
     }
 
     [Fact]
     public void ConvertEnumsTo_Int_NullableEnum_ShouldHandleNullValue()
     {
-        // Arrange
         var entity = new EntityWithNullableEnum
         {
             Id = 1,
@@ -243,10 +210,8 @@ public class EnumConversionTests
             NonNullableStatus = UserStatus.Active
         };
 
-        // Act
         var dto = new NullableEnumToIntDto(entity);
 
-        // Assert
         dto.Status.Should().BeNull();
         dto.NonNullableStatus.Should().Be(0);
     }
@@ -262,7 +227,6 @@ public class EnumConversionTests
     [Fact]
     public void ConvertEnumsTo_String_WithNullableProperties_ShouldMakeAllNullable()
     {
-        // Arrange
         var entity = new UserWithEnum
         {
             Id = 1,
@@ -271,22 +235,18 @@ public class EnumConversionTests
             Email = "john@example.com"
         };
 
-        // Act
         var dto = new UserWithEnumToStringNullableDto(entity);
 
-        // Assert
         dto.Status.Should().Be("Active");
 
-        // Verify the property is nullable string
         var statusProperty = typeof(UserWithEnumToStringNullableDto).GetProperty("Status");
         statusProperty.Should().NotBeNull();
-        statusProperty!.PropertyType.Should().Be(typeof(string)); // string is already nullable ref type
+        statusProperty!.PropertyType.Should().Be(typeof(string)); 
     }
 
     [Fact]
     public void ConvertEnumsTo_String_Projection_ShouldExist()
     {
-        // Verify the Projection property exists and is not null
         var projection = UserWithEnumToStringDto.Projection;
         projection.Should().NotBeNull();
     }
@@ -294,19 +254,16 @@ public class EnumConversionTests
     [Fact]
     public void ConvertEnumsTo_String_Projection_ShouldMapCorrectly()
     {
-        // Arrange
         var entities = new List<UserWithEnum>
         {
             new() { Id = 1, Name = "Alice", Status = UserStatus.Active, Email = "alice@test.com" },
             new() { Id = 2, Name = "Bob", Status = UserStatus.Pending, Email = "bob@test.com" }
         };
 
-        // Act
         var dtos = entities.AsQueryable()
             .Select(UserWithEnumToStringDto.Projection)
             .ToList();
 
-        // Assert
         dtos.Should().HaveCount(2);
         dtos[0].Status.Should().Be("Active");
         dtos[1].Status.Should().Be("Pending");
@@ -315,22 +272,19 @@ public class EnumConversionTests
     [Fact]
     public void ConvertEnumsTo_Int_Projection_ShouldMapCorrectly()
     {
-        // Arrange
         var entities = new List<UserWithEnum>
         {
             new() { Id = 1, Name = "Alice", Status = UserStatus.Active, Email = "alice@test.com" },
             new() { Id = 2, Name = "Bob", Status = UserStatus.Suspended, Email = "bob@test.com" }
         };
 
-        // Act
         var dtos = entities.AsQueryable()
             .Select(UserWithEnumToIntDto.Projection)
             .ToList();
 
-        // Assert
         dtos.Should().HaveCount(2);
-        dtos[0].Status.Should().Be(0); // Active
-        dtos[1].Status.Should().Be(3); // Suspended
+        dtos[0].Status.Should().Be(0); 
+        dtos[1].Status.Should().Be(3); 
     }
 
     [Theory]
@@ -340,7 +294,6 @@ public class EnumConversionTests
     [InlineData(UserStatus.Suspended)]
     public void ConvertEnumsTo_String_RoundTrip_ShouldPreserveValue(UserStatus status)
     {
-        // Arrange
         var original = new UserWithEnum
         {
             Id = 42,
@@ -349,13 +302,10 @@ public class EnumConversionTests
             Email = "test@test.com"
         };
 
-        // Act - forward mapping
         var dto = new UserWithEnumToStringDto(original);
 
-        // Act - reverse mapping
         var result = dto.ToSource();
 
-        // Assert
         result.Status.Should().Be(status);
         result.Id.Should().Be(42);
         result.Name.Should().Be("Test");
@@ -368,7 +318,6 @@ public class EnumConversionTests
     [InlineData(UserStatus.Suspended)]
     public void ConvertEnumsTo_Int_RoundTrip_ShouldPreserveValue(UserStatus status)
     {
-        // Arrange
         var original = new UserWithEnum
         {
             Id = 42,
@@ -377,20 +326,16 @@ public class EnumConversionTests
             Email = "test@test.com"
         };
 
-        // Act - forward mapping
         var dto = new UserWithEnumToIntDto(original);
 
-        // Act - reverse mapping
         var result = dto.ToSource();
 
-        // Assert
         result.Status.Should().Be(status);
     }
 
     [Fact]
     public void ConvertEnumsTo_String_EnumCollection_ShouldConvertToStringCollection()
     {
-        // Arrange
         var entity = new EntityWithEnumCollection
         {
             Id = 1,
@@ -398,10 +343,8 @@ public class EnumConversionTests
             Statuses = new List<UserStatus> { UserStatus.Active, UserStatus.Pending, UserStatus.Inactive }
         };
 
-        // Act
         var dto = new EntityWithEnumCollectionToStringDto(entity);
 
-        // Assert
         dto.Id.Should().Be(1);
         dto.Name.Should().Be("Test");
         dto.Statuses.Should().NotBeNull();
@@ -412,7 +355,6 @@ public class EnumConversionTests
     [Fact]
     public void ConvertEnumsTo_String_EnumCollection_PropertyType_ShouldBeStringCollection()
     {
-        // Assert that the generated property type is List<string>, not List<UserStatus>
         var statusesProperty = typeof(EntityWithEnumCollectionToStringDto).GetProperty("Statuses");
         statusesProperty.Should().NotBeNull();
         statusesProperty!.PropertyType.Should().Be(typeof(List<string>));
@@ -421,7 +363,6 @@ public class EnumConversionTests
     [Fact]
     public void ConvertEnumsTo_Int_EnumCollection_ShouldConvertToIntCollection()
     {
-        // Arrange
         var entity = new EntityWithEnumCollection
         {
             Id = 1,
@@ -429,21 +370,18 @@ public class EnumConversionTests
             Statuses = new List<UserStatus> { UserStatus.Active, UserStatus.Suspended, UserStatus.Pending }
         };
 
-        // Act
         var dto = new EntityWithEnumCollectionToIntDto(entity);
 
-        // Assert
         dto.Id.Should().Be(1);
         dto.Name.Should().Be("Test");
         dto.Statuses.Should().NotBeNull();
         dto.Statuses.Should().HaveCount(3);
-        dto.Statuses.Should().Equal(0, 3, 2); // Active=0, Suspended=3, Pending=2
+        dto.Statuses.Should().Equal(0, 3, 2); 
     }
 
     [Fact]
     public void ConvertEnumsTo_Int_EnumCollection_PropertyType_ShouldBeIntCollection()
     {
-        // Assert that the generated property type is List<int>, not List<UserStatus>
         var statusesProperty = typeof(EntityWithEnumCollectionToIntDto).GetProperty("Statuses");
         statusesProperty.Should().NotBeNull();
         statusesProperty!.PropertyType.Should().Be(typeof(List<int>));
@@ -452,7 +390,6 @@ public class EnumConversionTests
     [Fact]
     public void ConvertEnumsTo_String_EnumCollection_ToSource_ShouldConvertBack()
     {
-        // Arrange
         var dto = new EntityWithEnumCollectionToStringDto
         {
             Id = 1,
@@ -460,10 +397,8 @@ public class EnumConversionTests
             Statuses = new List<string> { "Active", "Pending", "Inactive" }
         };
 
-        // Act
         var entity = dto.ToSource();
 
-        // Assert
         entity.Statuses.Should().NotBeNull();
         entity.Statuses.Should().HaveCount(3);
         entity.Statuses.Should().Equal(UserStatus.Active, UserStatus.Pending, UserStatus.Inactive);
@@ -472,18 +407,15 @@ public class EnumConversionTests
     [Fact]
     public void ConvertEnumsTo_Int_EnumCollection_ToSource_ShouldConvertBack()
     {
-        // Arrange
         var dto = new EntityWithEnumCollectionToIntDto
         {
             Id = 1,
             Name = "Test",
-            Statuses = new List<int> { 0, 3, 2 } // Active=0, Suspended=3, Pending=2
+            Statuses = new List<int> { 0, 3, 2 } 
         };
 
-        // Act
         var entity = dto.ToSource();
 
-        // Assert
         entity.Statuses.Should().NotBeNull();
         entity.Statuses.Should().HaveCount(3);
         entity.Statuses.Should().Equal(UserStatus.Active, UserStatus.Suspended, UserStatus.Pending);
@@ -492,19 +424,16 @@ public class EnumConversionTests
     [Fact]
     public void ConvertEnumsTo_String_EnumCollection_Projection_ShouldMapCorrectly()
     {
-        // Arrange
         var entities = new List<EntityWithEnumCollection>
         {
             new() { Id = 1, Name = "Test1", Statuses = new List<UserStatus> { UserStatus.Active, UserStatus.Pending } },
             new() { Id = 2, Name = "Test2", Statuses = new List<UserStatus> { UserStatus.Inactive } }
         };
 
-        // Act
         var dtos = entities.AsQueryable()
             .Select(EntityWithEnumCollectionToStringDto.Projection)
             .ToList();
 
-        // Assert
         dtos.Should().HaveCount(2);
         dtos[0].Statuses.Should().Equal("Active", "Pending");
         dtos[1].Statuses.Should().Equal("Inactive");

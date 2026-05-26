@@ -1,4 +1,4 @@
-using Facet.Mapping;
+﻿using Facet.Mapping;
 
 namespace Facet.Tests.UnitTests.Core.Facet;
 
@@ -454,23 +454,12 @@ public class FiveLevelProjectionRegressionTests
     }
 }
 
-// ─── Bug regression: multi-source concrete nested facet in inherited DTO ───────
-// Scenario: UnitFacet590 has two concrete sources (UnitEntity590 and UnitDto590).
-// The UnitEntity590 source has no ConfigureProjection, so it would normally use the
-// inline projection path. BaseFacetDto590 includes Unit as a NestedFacet.
-// DerivedFacetDto590 inherits from BaseFacetDto590 without its own NestedFacets.
-// ParentDto590 has DerivedFacetDto590 as a nested facet.
-// Level 1 (DerivedFacetDto590.Projection) should correctly map Unit.
-// Level 2 (ParentDto590.Projection) should also correctly map Item.Unit.
-
 public class UnitEntity590
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
 }
 
-// A second source that is a generated/Facet class (simulates the scenario where
-// the second source may have no visible members to the source generator)
 public class UnitDto590
 {
     public int Id { get; set; }

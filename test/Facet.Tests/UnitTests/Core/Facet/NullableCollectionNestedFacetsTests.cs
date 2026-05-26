@@ -1,4 +1,4 @@
-namespace Facet.Tests.UnitTests.Core.Facet;
+﻿namespace Facet.Tests.UnitTests.Core.Facet;
 
 public class StringLookup
 {
@@ -14,7 +14,6 @@ public class StringIdentifier
     public List<StringLookup> StringLookups { get; set; } = new();
 }
 
-// Facet DTOs
 [Facet(typeof(StringLookup), NullableProperties = true, GenerateToSource = true)]
 public partial class StringLookupDto;
 
@@ -30,7 +29,6 @@ public class NullableCollectionNestedFacetsTests
     [Fact]
     public void Constructor_ShouldHandleCollectionNestedFacet_WithNullableProperties()
     {
-        // Arrange
         var stringIdentifier = new StringIdentifier
         {
             Id = 1,
@@ -42,10 +40,8 @@ public class NullableCollectionNestedFacetsTests
             }
         };
 
-        // Act
         var dto = new StringIdentifierLookupDto(stringIdentifier);
 
-        // Assert
         dto.Should().NotBeNull();
         dto.Id.Should().Be(1);
         dto.Name.Should().Be("Test Identifier");
@@ -56,7 +52,6 @@ public class NullableCollectionNestedFacetsTests
     [Fact]
     public void Projection_ShouldHandleCollectionNestedFacet_WithNullableProperties()
     {
-        // Arrange
         var identifiers = new[]
         {
             new StringIdentifier
@@ -70,10 +65,8 @@ public class NullableCollectionNestedFacetsTests
             }
         }.AsQueryable();
 
-        // Act
         var dtos = identifiers.Select(StringIdentifierLookupDto.Projection).ToList();
 
-        // Assert
         dtos.Should().HaveCount(1);
         dtos[0].Id.Should().Be(1);
         dtos[0].StringLookups.Should().NotBeNull();
@@ -83,7 +76,6 @@ public class NullableCollectionNestedFacetsTests
     [Fact]
     public void ToSource_ShouldHandleCollectionNestedFacet_WithNullableProperties()
     {
-        // Arrange
         var dto = new StringIdentifierLookupDto
         {
             Id = 1,
@@ -95,10 +87,8 @@ public class NullableCollectionNestedFacetsTests
             }
         };
 
-        // Act
         var entity = dto.ToSource();
 
-        // Assert
         entity.Should().NotBeNull();
         entity.Id.Should().Be(1);
         entity.Name.Should().Be("Test Identifier");

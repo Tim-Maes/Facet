@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -37,7 +37,6 @@ internal static class ExpressionBuilder
                 member, sourceVariableName, isNullable, maxDepth, useDepthParameter, preserveReferences);
         }
 
-        // Check if this is a MapFrom expression (contains operators or spaces)
         string valueExpression;
         if (member.MapFromSource != null && IsExpression(member.MapFromSource))
         {
@@ -45,22 +44,18 @@ internal static class ExpressionBuilder
         }
         else if (member.MapFromSource != null)
         {
-            // Use the full MapFromSource path for nested property paths (e.g., "Company.Address")
             valueExpression = $"{sourceVariableName}.{member.MapFromSource}";
         }
         else
         {
-            // Use SourcePropertyName for regular properties
             valueExpression = $"{sourceVariableName}.{member.SourcePropertyName}";
         }
 
-        // Apply enum conversion if this member was converted from an enum type
         if (member.IsEnumConversion && member.OriginalEnumTypeName != null)
         {
             valueExpression = ApplyEnumToTargetConversion(valueExpression, member);
         }
 
-        // Apply MapWhen conditions if present
         if (member.MapWhenConditions.Count > 0)
         {
             valueExpression = WrapWithMapWhenCondition(member, valueExpression, sourceVariableName, sourcePropertyNames);
@@ -86,7 +81,6 @@ internal static class ExpressionBuilder
         int maxDepthToSource = 0,
         bool useDepthParameter = false)
     {
-        // Check if the member type is nullable (ends with ?)
         bool facetTypeIsNullable = member.TypeName.EndsWith("?");
 
         bool sourceTypeIsNullable = member.SourceMemberTypeName?.EndsWith("?") ?? facetTypeIsNullable;
@@ -100,25 +94,19 @@ internal static class ExpressionBuilder
             return BuildSingleToSourceExpression(member, facetTypeIsNullable, facetLookup, parentSourceTypeName, maxDepthToSource, useDepthParameter);
         }
 
-        // Handle enum conversion (reverse: string/int back to enum)
         if (member.IsEnumConversion && member.OriginalEnumTypeName != null)
         {
             return ApplyTargetToEnumConversion(member);
         }
 
-        // For regular properties/fields:
-        // If the facet type is nullable but the source type is not, we need to unwrap the nullable
         if (facetTypeIsNullable && !sourceTypeIsNullable)
         {
-            // Use null-coalescing with default value for value types, or null-forgiving for reference types
             if (member.IsValueType)
             {
-                // For value types like int?, use: this.Property ?? default
                 return $"this.{member.Name} ?? default";
             }
             else
             {
-                // For reference types, use null-forgiving operator since the source expects non-null
                 return $"this.{member.Name}!";
             }
         }
@@ -131,25 +119,22 @@ internal static class ExpressionBuilder
     /// </summary>
     public static string ExtractElementTypeFromCollectionTypeName(string collectionTypeName)
     {
-        // Strip nullable marker from collection first (e.g., "List<T>?" => "List<T>")
         var nonNullableCollectionType = collectionTypeName.TrimEnd('?');
 
-        // Handle array syntax (e.g., "MyType[]" => "MyType")
         if (nonNullableCollectionType.EndsWith("[]"))
         {
             var elementType = nonNullableCollectionType.Substring(0, nonNullableCollectionType.Length - 2);
-            // Remove any trailing nullable marker from the element type itself
+            
             return elementType.TrimEnd('?');
         }
 
-        // Handle generic collection syntax (e.g., "List<MyType>" => "MyType")
         var startIndex = nonNullableCollectionType.IndexOf('<');
         var endIndex = nonNullableCollectionType.LastIndexOf('>');
 
         if (startIndex > 0 && endIndex > startIndex)
         {
             var elementType = nonNullableCollectionType.Substring(startIndex + 1, endIndex - startIndex - 1);
-            // Remove any trailing nullable marker from the element type itself
+            
             return elementType.TrimEnd('?');
         }
 
@@ -163,11 +148,9 @@ internal static class ExpressionBuilder
     /// </summary>
     private static string WrapWithMapWhenCondition(FacetMember member, string valueExpression, string sourceVariableName, HashSet<string>? sourcePropertyNames = null)
     {
-        // Combine multiple conditions with &&
         var combinedCondition = string.Join(" && ", member.MapWhenConditions.Select(c =>
             $"({TransformExpression(c, sourceVariableName, sourcePropertyNames)})"));
 
-        // Determine the default value
         var defaultValue = member.MapWhenDefault ?? Shared.GeneratorUtilities.GetDefaultValueForType(member.TypeName);
 
         return $"{combinedCondition} ? {valueExpression} : {defaultValue}";
@@ -188,10 +171,8 @@ internal static class ExpressionBuilder
                 ? ExtractElementTypeFromCollectionTypeName(member.SourceMemberTypeName)
                 : elementTypeName);
 
-        // Use SourcePropertyName for accessing the source property (supports MapFrom)
         var sourcePropName = member.SourcePropertyName;
 
-        // Check if we should stop due to max depth
         if (useDepthParameter && maxDepth > 0)
         {
             var updatedProcessed = preserveReferences
@@ -206,7 +187,6 @@ internal static class ExpressionBuilder
                 ? $"{sourceCollection}.Select(x => __processed != null && __processed.Contains(x) ? null : new {elementTypeName}(x, __depth + 1, {updatedProcessed})).Where(x => x != null).OfType<{elementTypeName}>()"
                 : $"{sourceCollection}.Select(x => new {elementTypeName}(x, __depth + 1, {updatedProcessed}))";
 
-            // Convert back to the appropriate collection type
             var collectionExpression = WrapCollectionProjection(projection, member.CollectionWrapper!, elementTypeName);
 
             if (isNullable)
@@ -214,8 +194,6 @@ internal static class ExpressionBuilder
                 return $"__depth < {maxDepth} && {sourceVariableName}.{sourcePropName} != null ? {collectionExpression} : null";
             }
 
-            // For non-nullable collections, add null check with descriptive exception when within depth,
-            // and use appropriate default value when depth is exceeded
             var depthExceededDefault = GetCollectionDefaultValue(member.CollectionWrapper!, member.TypeName);
             return $"__depth < {maxDepth} ? ({sourceVariableName}.{sourcePropName} != null ? {collectionExpression} : throw new System.ArgumentNullException(\"{sourcePropName}\", \"Required nested facet collection property '{sourcePropName}' on source type was null. Ensure the source property is populated before mapping.\")) : {depthExceededDefault}";
         }
@@ -235,7 +213,6 @@ internal static class ExpressionBuilder
                     : $"{sourceCollection}.Select(x => new {elementTypeName}(x, __depth + 1, {updatedProcessed}))")
                 : $"{sourceCollection}.Select(x => new {elementTypeName}(x))";
 
-            // Convert back to the appropriate collection type
             var collectionExpression = WrapCollectionProjection(projection, member.CollectionWrapper!, elementTypeName);
 
             if (isNullable)
@@ -243,7 +220,6 @@ internal static class ExpressionBuilder
                 return $"{sourceVariableName}.{sourcePropName} != null ? {collectionExpression} : null";
             }
 
-            // For non-nullable collections without depth tracking, add null check with descriptive exception
             return $"{sourceVariableName}.{sourcePropName} != null ? {collectionExpression} : throw new System.ArgumentNullException(\"{sourcePropName}\", \"Required nested facet collection property '{sourcePropName}' on source type was null. Ensure the source property is populated before mapping.\")";
         }
     }
@@ -257,10 +233,9 @@ internal static class ExpressionBuilder
         bool preserveReferences)
     {
         var nonNullableTypeName = member.TypeName.TrimEnd('?');
-        // Use SourcePropertyName for accessing the source property (supports MapFrom)
+        
         var sourcePropName = member.SourcePropertyName;
 
-        // Build the constructor call with reference checking if needed
         string BuildConstructorCall(string sourceExpr)
         {
             var updatedProcessed = preserveReferences && useDepthParameter
@@ -273,8 +248,6 @@ internal static class ExpressionBuilder
 
             if (preserveReferences && useDepthParameter)
             {
-                // Check against __processed (not updatedProcessed) to detect if this exact object was already processed
-                // For non-nullable types, use null-forgiving operator to avoid CS8601 compiler warnings
                 var nullFallback = isNullable ? "null" : "null!";
                 return $"(__processed != null && __processed.Contains({sourceExpr}) ? {nullFallback} : {ctorCall})";
             }
@@ -282,7 +255,6 @@ internal static class ExpressionBuilder
             return ctorCall;
         }
 
-        // Check if we should stop due to max depth
         if (useDepthParameter && maxDepth > 0)
         {
             var constructorCall = BuildConstructorCall($"{sourceVariableName}.{sourcePropName}");
@@ -292,8 +264,6 @@ internal static class ExpressionBuilder
                 return $"__depth < {maxDepth} && {sourceVariableName}.{sourcePropName} != null ? {constructorCall} : null";
             }
 
-            // For non-nullable properties, add null check with descriptive exception
-            // This prevents NullReferenceException inside the nested constructor when source property is unexpectedly null
             return $"__depth < {maxDepth} ? ({sourceVariableName}.{sourcePropName} != null ? {constructorCall} : throw new System.ArgumentNullException(\"{sourcePropName}\", \"Required nested facet property '{sourcePropName}' on source type was null. Ensure the source property is populated before mapping.\")) : null!";
         }
         else
@@ -305,32 +275,23 @@ internal static class ExpressionBuilder
                 return $"{sourceVariableName}.{sourcePropName} != null ? {constructorCall} : null";
             }
 
-            // For non-nullable properties without depth tracking, add null check with descriptive exception
             return $"{sourceVariableName}.{sourcePropName} != null ? {constructorCall} : throw new System.ArgumentNullException(\"{sourcePropName}\", \"Required nested facet property '{sourcePropName}' on source type was null. Ensure the source property is populated before mapping.\")";
         }
     }
 
     private static string BuildCollectionToSourceExpression(FacetMember member, bool facetTypeIsNullable, Dictionary<string, List<FacetTargetModel>>? facetLookup, string? parentSourceTypeName, int maxDepthToSource = 0, bool useDepthParameter = false)
     {
-        // Determine the correct ToSource method name for the nested facet
         var toSourceMethodName = GetToSourceMethodName(member.TypeName, member.NestedFacetSourceTypeName, facetLookup, parentSourceTypeName);
 
-        // When inside a depth-aware method, pass __depth + 1 only if the child facet has a depth-aware overload.
-        // Use FindNestedFacetModels (via the 2-param overload) because member.TypeName includes the "global::"
-        // prefix which does not match the FullName-keyed facetLookup directly.
         var childToSourceCall = useDepthParameter && ChildHasDepthAwareToSource(member.TypeName, facetLookup)
             ? $"x.{toSourceMethodName}(__depth + 1)"
             : $"x.{toSourceMethodName}()";
 
-        // Use LINQ Select to map each element back
         var projection = $"this.{member.Name}.Select(x => {childToSourceCall})";
 
-        // Use the original source collection wrapper (before any CollectionTargetType override)
-        // so that the generated expression produces the correct source type.
         var toSourceWrapper = member.SourceCollectionWrapper ?? member.CollectionWrapper!;
         var collectionExpression = WrapCollectionProjection(projection, toSourceWrapper, member.NestedFacetSourceTypeName);
 
-        // When depth-limiting is active, guard nested calls with a depth check
         if (useDepthParameter && maxDepthToSource > 0)
         {
             if (facetTypeIsNullable)
@@ -342,7 +303,6 @@ internal static class ExpressionBuilder
             return $"__depth < {maxDepthToSource} ? (this.{member.Name} != null ? {collectionExpression} : {depthExceededDefault}) : {depthExceededDefault}";
         }
 
-        // Add null check for nullable collections
         if (facetTypeIsNullable)
         {
             return $"this.{member.Name} != null ? {collectionExpression} : null";
@@ -353,15 +313,12 @@ internal static class ExpressionBuilder
 
     private static string BuildSingleToSourceExpression(FacetMember member, bool facetTypeIsNullable, Dictionary<string, List<FacetTargetModel>>? facetLookup, string? parentSourceTypeName, int maxDepthToSource = 0, bool useDepthParameter = false)
     {
-        // Determine the correct ToSource method name for the nested facet
         var toSourceMethodName = GetToSourceMethodName(member.TypeName, member.NestedFacetSourceTypeName, facetLookup, parentSourceTypeName);
 
-        // When inside a depth-aware method, pass __depth + 1 if the child also has a depth-aware overload
         var childToSourceCall = useDepthParameter && ChildHasDepthAwareToSource(member.TypeName, facetLookup)
             ? $"this.{member.Name}.{toSourceMethodName}(__depth + 1)"
             : $"this.{member.Name}.{toSourceMethodName}()";
 
-        // When depth-limiting is active, guard the nested call with a depth check
         if (useDepthParameter && maxDepthToSource > 0)
         {
             if (facetTypeIsNullable)
@@ -372,13 +329,11 @@ internal static class ExpressionBuilder
             return $"__depth < {maxDepthToSource} ? (this.{member.Name} != null ? {childToSourceCall} : null!) : null!";
         }
 
-        // Add null check for nullable nested facets
         if (facetTypeIsNullable)
         {
             return $"this.{member.Name} != null ? this.{member.Name}.{toSourceMethodName}() : null";
         }
 
-        // Use the child facet's generated ToSource method
         return $"this.{member.Name} != null ? this.{member.Name}.{toSourceMethodName}() : default!";
     }
 
@@ -446,7 +401,6 @@ internal static class ExpressionBuilder
         };
     }
 
-    // Expression parsing methods delegated to shared ExpressionHelper
     private static bool IsExpression(string source) => ExpressionHelper.IsExpression(source);
     private static string TransformExpression(string expression, string sourceVariableName, HashSet<string>? sourcePropertyNames = null) => ExpressionHelper.TransformExpression(expression, sourceVariableName, sourcePropertyNames);
 
@@ -455,18 +409,15 @@ internal static class ExpressionBuilder
     /// </summary>
     private static string ApplyEnumToTargetConversion(string valueExpression, FacetMember member)
     {
-        // Check if this is a collection of enums
         if (member.IsCollection && member.CollectionWrapper != null)
         {
             return ApplyEnumCollectionToTargetConversion(valueExpression, member);
         }
 
-        // Determine if the source enum property is nullable
         bool isNullableEnum = member.SourceMemberTypeName?.EndsWith("?") ?? false;
 
         if (member.TypeName.TrimEnd('?') == "string")
         {
-            // Enum to string conversion
             if (isNullableEnum)
             {
                 return $"{valueExpression}?.ToString()";
@@ -475,7 +426,6 @@ internal static class ExpressionBuilder
         }
         else if (member.TypeName.TrimEnd('?') == "int")
         {
-            // Enum to int conversion
             if (isNullableEnum)
             {
                 return $"(int?){valueExpression}";
@@ -491,11 +441,9 @@ internal static class ExpressionBuilder
     /// </summary>
     private static string ApplyEnumCollectionToTargetConversion(string valueExpression, FacetMember member)
     {
-        // Check if the collection itself is nullable
         bool isCollectionNullable = member.TypeName.EndsWith("?");
         string targetElementType = member.TypeName.TrimEnd('?');
 
-        // Extract just the element type name from List<string> or List<int>
         if (targetElementType.Contains("<") && targetElementType.Contains(">"))
         {
             int startIdx = targetElementType.IndexOf('<') + 1;
@@ -506,12 +454,10 @@ internal static class ExpressionBuilder
         string conversionExpression;
         if (targetElementType.TrimEnd('?') == "string")
         {
-            // Convert each enum to string using ToString()
             conversionExpression = $"{valueExpression}.Select(x => x.ToString())";
         }
         else if (targetElementType.TrimEnd('?') == "int")
         {
-            // Convert each enum to int using cast
             conversionExpression = $"{valueExpression}.Select(x => (int)x)";
         }
         else
@@ -519,10 +465,8 @@ internal static class ExpressionBuilder
             return valueExpression;
         }
 
-        // Wrap in the appropriate collection type
         var finalExpression = WrapCollectionProjection(conversionExpression, member.CollectionWrapper);
 
-        // Apply null check if collection is nullable
         if (isCollectionNullable)
         {
             return $"{valueExpression} != null ? {finalExpression} : null";
@@ -536,7 +480,6 @@ internal static class ExpressionBuilder
     /// </summary>
     private static string ApplyTargetToEnumConversion(FacetMember member)
     {
-        // Check if this is a collection of enums
         if (member.IsCollection && member.CollectionWrapper != null)
         {
             return ApplyTargetCollectionToEnumConversion(member);
@@ -548,14 +491,12 @@ internal static class ExpressionBuilder
 
         if (member.TypeName.TrimEnd('?') == "string")
         {
-            // String to enum conversion
             if (facetTypeIsNullable && sourceTypeIsNullable)
             {
                 return $"this.{member.Name} != null ? ({enumTypeName}?)System.Enum.Parse<{enumTypeName}>(this.{member.Name}) : null";
             }
             else if (facetTypeIsNullable)
             {
-                // Facet is nullable string but source expects non-nullable enum
                 return $"System.Enum.Parse<{enumTypeName}>(this.{member.Name}!)";
             }
             else
@@ -565,14 +506,12 @@ internal static class ExpressionBuilder
         }
         else if (member.TypeName.TrimEnd('?') == "int")
         {
-            // Int to enum conversion
             if (facetTypeIsNullable && sourceTypeIsNullable)
             {
                 return $"this.{member.Name} != null ? ({enumTypeName}?)({enumTypeName})this.{member.Name}.Value : null";
             }
             else if (facetTypeIsNullable)
             {
-                // Facet is nullable int but source expects non-nullable enum
                 return $"({enumTypeName})(this.{member.Name} ?? default)";
             }
             else
@@ -595,7 +534,6 @@ internal static class ExpressionBuilder
 
         string targetElementType = member.TypeName.TrimEnd('?');
 
-        // Extract just the element type name from List<string> or List<int>
         if (targetElementType.Contains("<") && targetElementType.Contains(">"))
         {
             int startIdx = targetElementType.IndexOf('<') + 1;
@@ -606,12 +544,10 @@ internal static class ExpressionBuilder
         string conversionExpression;
         if (targetElementType.TrimEnd('?') == "string")
         {
-            // Convert each string to enum using Enum.Parse
             conversionExpression = $"this.{member.Name}.Select(x => System.Enum.Parse<{enumTypeName}>(x))";
         }
         else if (targetElementType.TrimEnd('?') == "int")
         {
-            // Convert each int to enum using cast
             conversionExpression = $"this.{member.Name}.Select(x => ({enumTypeName})x)";
         }
         else
@@ -619,20 +555,16 @@ internal static class ExpressionBuilder
             return $"this.{member.Name}";
         }
 
-        // Get the source collection wrapper (from SourceMemberTypeName or use CollectionWrapper)
         string sourceWrapper = member.SourceCollectionWrapper ?? member.CollectionWrapper!;
 
-        // Wrap in the appropriate collection type
         var finalExpression = WrapCollectionProjection(conversionExpression, sourceWrapper);
 
-        // Apply null check if collection is nullable
         if (facetCollectionIsNullable && sourceCollectionIsNullable)
         {
             return $"this.{member.Name} != null ? {finalExpression} : null";
         }
         else if (facetCollectionIsNullable)
         {
-            // Facet is nullable but source expects non-nullable - use null-forgiving
             return $"{finalExpression}!";
         }
 
@@ -646,7 +578,6 @@ internal static class ExpressionBuilder
     /// </summary>
     private static string GetCollectionDefaultValue(string collectionWrapper, string collectionTypeName)
     {
-        // Extract the element type from the collection type name for constructing empty collections
         var elementType = ExtractElementTypeFromCollectionTypeName(collectionTypeName);
 
         return collectionWrapper switch
@@ -683,20 +614,15 @@ internal static class ExpressionBuilder
         Dictionary<string, List<FacetTargetModel>>? facetLookup,
         string? parentSourceTypeName)
     {
-        // Default to "ToSource" if we don't have lookup information
         if (facetLookup == null || nestedFacetSourceTypeName == null)
             return "ToSource";
 
-        // Find the nested facet models in the lookup
         var nestedFacetModels = FindNestedFacetModels(nestedFacetTypeName, facetLookup);
         if (nestedFacetModels == null || nestedFacetModels.Count <= 1)
         {
-            // Single-source facet: use the default "ToSource" method
             return "ToSource";
         }
 
-        // Multi-source facet: determine which ToSource method to call
-        // The method name is "To" + simple source type name
         var sourceSimpleName = CodeGenerationHelpers.GetSimpleTypeName(nestedFacetSourceTypeName);
         var angleBracket = sourceSimpleName.IndexOf('<');
         if (angleBracket > 0)
@@ -710,29 +636,24 @@ internal static class ExpressionBuilder
     /// </summary>
     private static List<FacetTargetModel>? FindNestedFacetModels(string typeName, Dictionary<string, List<FacetTargetModel>> facetLookup)
     {
-        // Strip nullable marker and extract the non-nullable type name
         var nonNullableTypeName = typeName.TrimEnd('?');
 
-        // For collection types, extract the element type
         if (nonNullableTypeName.Contains('<'))
         {
             var elementType = ExtractElementTypeFromCollectionTypeName(nonNullableTypeName);
             nonNullableTypeName = elementType;
         }
 
-        // Strip "global::" prefix and extract simple name
         var lookupName = nonNullableTypeName
             .Replace(Shared.GeneratorUtilities.GlobalPrefix, "")
             .Split('.', ':')
             .Last();
 
-        // First try exact match with the lookup name
         if (facetLookup.TryGetValue(lookupName, out var nestedFacetModels))
         {
             return nestedFacetModels;
         }
 
-        // Try matching by simple name or full name
         foreach (var kvp in facetLookup)
         {
             if (kvp.Value.Count > 0)

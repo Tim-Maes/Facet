@@ -1,4 +1,4 @@
-using Facet.Generators.Shared;
+﻿using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using System;
 using System.Collections.Generic;
@@ -23,8 +23,6 @@ internal static class CodeGenerationHelpers
             "System.Linq.Expressions"
         };
 
-        // If the source type is nested in another type, don't add it as a regular namespace
-        // It will be handled by CollectStaticUsingTypes instead
         if (model.SourceContainingTypes.Length == 0)
         {
             var sourceTypeNamespace = ExtractNamespaceFromFullyQualifiedType(model.SourceTypeName);
@@ -34,11 +32,9 @@ internal static class CodeGenerationHelpers
             }
         }
 
-        // Single pass through members to collect namespaces
         bool hasImmutableCollections = false;
         foreach (var member in model.Members)
         {
-            // Collect attribute namespaces from each member
             foreach (var attrNamespace in member.AttributeNamespaces)
             {
                 if (!string.IsNullOrWhiteSpace(attrNamespace))
@@ -47,13 +43,11 @@ internal static class CodeGenerationHelpers
                 }
             }
 
-            // Check if this member uses an immutable collection
             if (member.CollectionWrapper != null && IsImmutableCollectionWrapper(member.CollectionWrapper))
             {
                 hasImmutableCollections = true;
             }
 
-            // Skip nested facets and nested types - they will be handled by CollectStaticUsingTypes
             if (member.IsNestedFacet || member.IsNestedType)
             {
                 continue;
@@ -66,7 +60,6 @@ internal static class CodeGenerationHelpers
             }
         }
 
-        // Add System.Collections.Immutable if any member uses immutable collections
         if (hasImmutableCollections)
         {
             namespaces.Add("System.Collections.Immutable");
@@ -98,33 +91,23 @@ internal static class CodeGenerationHelpers
     {
         var staticUsingTypes = new HashSet<string>();
 
-        // If the source type is nested within another type, we need 'using static' for the containing type
         if (model.SourceContainingTypes.Length > 0)
         {
-            // Build the fully qualified containing type path
-            // Example: if source is Application.Example1.Foo.Bar
-            // and SourceContainingTypes is ["Foo"]
-            // we need to extract "Application.Example1.Foo"
-
             var sourceTypeName = model.SourceTypeName;
 
-            // Remove global:: prefix if present
             sourceTypeName = GeneratorUtilities.StripGlobalPrefix(sourceTypeName);
 
-            // Remove generic parameters if present
             var genericIndex = sourceTypeName.IndexOf('<');
             if (genericIndex > 0)
             {
                 sourceTypeName = sourceTypeName.Substring(0, genericIndex);
             }
 
-            // Remove nullable marker if present
             if (sourceTypeName.EndsWith("?"))
             {
                 sourceTypeName = sourceTypeName.Substring(0, sourceTypeName.Length - 1);
             }
 
-            // Remove the last part (the nested type name itself) to get the containing type
             var lastDotIndex = sourceTypeName.LastIndexOf('.');
             if (lastDotIndex > 0)
             {
@@ -133,22 +116,14 @@ internal static class CodeGenerationHelpers
             }
         }
 
-        // Check for members whose type is a nested type (declared within another type)
-        // These need 'using static' for the containing type instead of a regular 'using' for the namespace
-        // Example: Application.Example1.Foo.Bar.Arr -> using static Application.Example1.Foo.Bar;
         foreach (var member in model.Members)
         {
             if (member.IsNestedType && !member.IsNestedFacet)
             {
                 var memberTypeName = member.TypeName;
 
-                // Remove global:: prefix if present
                 memberTypeName = GeneratorUtilities.StripGlobalPrefix(memberTypeName);
 
-                // When the type has generic parameters (e.g., ImmutableList<Ns.FooBar.BarFoo>),
-                // the nested type is the element inside the brackets, not the outer generic type.
-                // IsNestedType is set by checking the collection element type's ContainingType,
-                // so we must extract the element type to find the correct containing type.
                 var genericIndex = memberTypeName.IndexOf('<');
                 if (genericIndex > 0)
                 {
@@ -156,18 +131,16 @@ internal static class CodeGenerationHelpers
                     if (genericEnd > genericIndex)
                     {
                         memberTypeName = memberTypeName.Substring(genericIndex + 1, genericEnd - genericIndex - 1);
-                        // Strip global:: again for the element type
+                        
                         memberTypeName = GeneratorUtilities.StripGlobalPrefix(memberTypeName);
                     }
                 }
 
-                // Remove nullable marker if present
                 if (memberTypeName.EndsWith("?"))
                 {
                     memberTypeName = memberTypeName.Substring(0, memberTypeName.Length - 1);
                 }
 
-                // Extract the containing type (everything before the last dot)
                 var lastDotIndex = memberTypeName.LastIndexOf('.');
                 if (lastDotIndex > 0)
                 {
@@ -177,40 +150,30 @@ internal static class CodeGenerationHelpers
             }
         }
 
-        // Check for nested facets that are actually nested classes (not just types in the same namespace)
-        // Example: UserDetailResponse.UserAddressItem is a nested class
-        // vs OrderItemFacet which is a separate top-level type
         foreach (var member in model.Members)
         {
             if (member.IsNestedFacet)
             {
                 var memberTypeName = member.TypeName;
 
-                // Remove global:: prefix if present
                 memberTypeName = GeneratorUtilities.StripGlobalPrefix(memberTypeName);
 
-                // Remove generic parameters if present
                 var genericIndex = memberTypeName.IndexOf('<');
                 if (genericIndex > 0)
                 {
                     memberTypeName = memberTypeName.Substring(0, genericIndex);
                 }
 
-                // Remove nullable marker if present
                 if (memberTypeName.EndsWith("?"))
                 {
                     memberTypeName = memberTypeName.Substring(0, memberTypeName.Length - 1);
                 }
 
-                // Extract the namespace portion to determine if this is truly a nested type
                 var memberNamespace = ExtractNamespaceFromFullyQualifiedType(memberTypeName);
 
-                // If there's no namespace, or the member type has more segments than just namespace + typename,
-                // then it's a nested type and needs 'using static'
                 string typeNameWithoutNamespace;
                 if (!string.IsNullOrWhiteSpace(memberNamespace))
                 {
-                    // Remove the namespace prefix
                     typeNameWithoutNamespace = memberTypeName.Substring(memberNamespace.Length + 1);
                 }
                 else
@@ -218,11 +181,8 @@ internal static class CodeGenerationHelpers
                     typeNameWithoutNamespace = memberTypeName;
                 }
 
-                // If the type name (without namespace) contains a dot, it's a nested type
-                // Example: "UserDetailResponse.UserAddressItem" -> needs using static for UserDetailResponse
                 if (typeNameWithoutNamespace.Contains('.'))
                 {
-                    // This is a nested type - extract the containing type
                     var lastDotIndex = memberTypeName.LastIndexOf('.');
                     if (lastDotIndex > 0)
                     {
@@ -246,7 +206,6 @@ internal static class CodeGenerationHelpers
             "System"
         };
 
-        // Add the source type namespace
         if (model.SourceContainingTypes.Length == 0)
         {
             var sourceTypeNamespace = ExtractNamespaceFromFullyQualifiedType(model.SourceTypeName);
@@ -256,10 +215,8 @@ internal static class CodeGenerationHelpers
             }
         }
 
-        // Single pass through members to collect namespaces
         foreach (var member in model.Members)
         {
-            // Collect attribute namespaces from each member
             foreach (var attrNamespace in member.AttributeNamespaces)
             {
                 if (!string.IsNullOrWhiteSpace(attrNamespace))
@@ -275,7 +232,6 @@ internal static class CodeGenerationHelpers
             }
         }
 
-        // Remove the wrapper's own namespace
         if (!string.IsNullOrWhiteSpace(model.Namespace))
         {
             namespaces.Remove(model.Namespace!);
@@ -294,7 +250,6 @@ internal static class CodeGenerationHelpers
         if (string.IsNullOrWhiteSpace(fullyQualifiedTypeName))
             return null;
 
-        // Remove global:: prefix if present
         var typeName = GeneratorUtilities.StripGlobalPrefix(fullyQualifiedTypeName);
 
         var genericIndex = typeName.IndexOf('<');
@@ -335,7 +290,6 @@ internal static class CodeGenerationHelpers
             if (root == null)
                 return string.Empty;
 
-            // Process summary
             var summary = root.Element("summary");
             if (summary != null)
             {
@@ -351,7 +305,6 @@ internal static class CodeGenerationHelpers
                 lines.Add("/// </summary>");
             }
 
-            // Process value
             var value = root.Element("value");
             if (value != null)
             {
@@ -367,7 +320,6 @@ internal static class CodeGenerationHelpers
                 lines.Add("/// </value>");
             }
 
-            // Process remarks
             var remarks = root.Element("remarks");
             if (remarks != null)
             {
@@ -383,7 +335,6 @@ internal static class CodeGenerationHelpers
                 lines.Add("/// </remarks>");
             }
 
-            // Process example
             var example = root.Element("example");
             if (example != null)
             {
@@ -403,7 +354,6 @@ internal static class CodeGenerationHelpers
         }
         catch (System.Xml.XmlException)
         {
-            // If XML parsing fails, return empty string rather than crashing the generator
             return string.Empty;
         }
     }
@@ -437,7 +387,6 @@ internal static class CodeGenerationHelpers
         if (!string.IsNullOrWhiteSpace(formatted))
             return formatted;
 
-        // Fallback: try to get documentation from external assembly XML files
         if (externalDocProvider != null)
         {
             var externalXml = externalDocProvider.GetDocumentationForSymbol(symbol);
