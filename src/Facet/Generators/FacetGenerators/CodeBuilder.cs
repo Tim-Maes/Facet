@@ -177,6 +177,21 @@ internal static class CodeBuilder
     }
 
     /// <summary>
+    /// Split-output variant of <see cref="GenerateForGroup"/>.
+    /// Returns a Properties file (property declarations only) and a Mappings file
+    /// (constructors, projections, and conversion methods).
+    /// </summary>
+    public static (string propertiesCode, string mappingsCode) GenerateForGroupSplit(
+        IReadOnlyList<FacetTargetModel> models,
+        Dictionary<string, List<FacetTargetModel>> facetLookup)
+    {
+        if (models.Count == 1)
+            return GenerateSplit(models[0], facetLookup);
+
+        return GenerateCombinedSplit(models, facetLookup);
+    }
+
+    /// <summary>
     /// Generates a single partial-class file that combines mappings from multiple source types
     /// to the same target type.
     /// <para>
@@ -398,8 +413,272 @@ internal static class CodeBuilder
         return angleBracket > 0 ? simpleName.Substring(0, angleBracket) : simpleName;
     }
 
-    /// <summary>
-    /// Generates a lazily-compiled <c>Action&lt;TSource, TTarget&gt;</c> from
+    private static (string propertiesCode, string mappingsCode) GenerateSplit(
+        FacetTargetModel model,
+        Dictionary<string, List<FacetTargetModel>> facetLookup)
+    {
+        var namespacesToImport = CodeGenerationHelpers.CollectNamespaces(model);
+        var staticUsingTypes = CodeGenerationHelpers.CollectStaticUsingTypes(model);
+        var hasNullableRefTypeMembers = model.Members.Any(m => !m.IsValueType && m.TypeName.EndsWith("?"));
+        var needsNullable = hasNullableRefTypeMembers || model.MaxDepth > 0 || model.PreserveReferences;
+        var keyword = GetTypeKeyword(model);
+        var hasInitOnlyProperties = model.Members.Any(m => m.IsInitOnly);
+        var hasRequiredProperties = model.Members.Any(m => m.IsRequired);
+        var isPositional = model.IsRecord && !model.HasExistingPrimaryConstructor
+            && !(model.TypeKind == TypeKind.Class && hasRequiredProperties);
+        var hasCustomMapping = !string.IsNullOrWhiteSpace(model.ConfigurationTypeName);
+        var shouldGenerateEquality = model.GenerateEquality && !model.IsRecord;
+
+        // --- Properties file ---
+        var propsSb = new StringBuilder();
+        var propsIndent = WritePreamble(propsSb, model, namespacesToImport, staticUsingTypes, needsNullable, includeTypeDocs: true);
+
+        if (isPositional)
+            GeneratePositionalDeclaration(propsSb, model, keyword, propsIndent);
+
+        propsSb.AppendLine($"{propsIndent}{model.Accessibility} partial {keyword} {model.Name}");
+        propsSb.AppendLine($"{propsIndent}{{");
+
+        var propsMemberIndent = propsIndent + "    ";
+        if (!isPositional || model.HasExistingPrimaryConstructor)
+        {
+            MemberGenerator.GenerateMembers(propsSb, model, propsMemberIndent);
+        }
+        else
+        {
+            var membersWithDocs = model.Members
+                .Where(static m => !string.IsNullOrWhiteSpace(m.XmlDocumentation) && !m.IsUserDeclared)
+                .ToList();
+            MemberGenerator.GenerateMembers(propsSb, model, propsMemberIndent, membersWithDocs, usePropertyNameAsInitializer: true);
+        }
+
+        propsSb.AppendLine($"{propsIndent}}}");
+        CloseContainingTypeHierarchy(propsSb, model, propsIndent);
+
+        // --- Mappings file ---
+        var mapsSb = new StringBuilder();
+        var mapsIndent = WritePreamble(mapsSb, model, namespacesToImport, staticUsingTypes, needsNullable, includeTypeDocs: false);
+
+        if (shouldGenerateEquality)
+            mapsSb.AppendLine($"{mapsIndent}{model.Accessibility} partial {keyword} {model.Name} : {EqualityGenerator.GetEquatableInterface(model)}");
+        else
+            mapsSb.AppendLine($"{mapsIndent}{model.Accessibility} partial {keyword} {model.Name}");
+        mapsSb.AppendLine($"{mapsIndent}{{");
+
+        var mapsMemberIndent = mapsIndent + "    ";
+
+        if (model.GenerateParameterlessConstructor)
+            ConstructorGenerator.GenerateParameterlessConstructor(mapsSb, model, isPositional);
+
+        if (model.GenerateConstructor)
+            ConstructorGenerator.GenerateConstructor(mapsSb, model, isPositional, hasInitOnlyProperties, hasCustomMapping, hasRequiredProperties);
+
+        if (hasCustomMapping && !model.HasMapConfiguration && model.HasProjectionMapConfiguration)
+            GenerateProjectionMapAction(mapsSb, model, mapsMemberIndent);
+
+        if (model.GenerateCopyConstructor)
+            CopyConstructorGenerator.Generate(mapsSb, model, mapsMemberIndent);
+
+        if (model.GenerateExpressionProjection)
+        {
+            ProjectionGenerator.GenerateProjectionProperty(mapsSb, model, mapsMemberIndent, facetLookup);
+
+            if (!(model.HasExistingPrimaryConstructor && model.IsRecord))
+            {
+                var sourceSpecificName = "ProjectionFrom" + GetSourceSimpleName(model);
+                var baseSrcMatches = model.BaseHidesFacetMembers
+                    && model.BaseFacetInfo?.BaseSourceTypeName == model.SourceTypeName;
+                var aliasNewMod = baseSrcMatches ? "new " : "";
+                mapsSb.AppendLine();
+                ProjectionGenerator.GenerateProjectionDocumentation(mapsSb, model, mapsMemberIndent, sourceSpecificName);
+                mapsSb.AppendLine($"{mapsMemberIndent}public static {aliasNewMod}Expression<Func<{model.SourceTypeName}, {model.Name}>> {sourceSpecificName} => Projection;");
+            }
+        }
+
+        if (model.GenerateToSource)
+            ToSourceGenerator.Generate(mapsSb, model, facetLookup);
+
+        if (model.GenerateToSource && !model.SourceHasPositionalConstructor)
+            ToSourceGenerator.GenerateApplyToSource(mapsSb, model, facetLookup);
+
+        if (model.FlattenToTypes.Length > 0)
+            FlattenToGenerator.Generate(mapsSb, model, mapsMemberIndent, facetLookup);
+
+        if (shouldGenerateEquality)
+            EqualityGenerator.Generate(mapsSb, model, mapsMemberIndent);
+
+        mapsSb.AppendLine($"{mapsIndent}}}");
+        CloseContainingTypeHierarchy(mapsSb, model, mapsIndent);
+
+        return (propsSb.ToString(), mapsSb.ToString());
+    }
+
+    private static (string propertiesCode, string mappingsCode) GenerateCombinedSplit(
+        IReadOnlyList<FacetTargetModel> models,
+        Dictionary<string, List<FacetTargetModel>> facetLookup)
+    {
+        var primaryModel = models[0];
+
+        var namespacesToImport = new HashSet<string>();
+        var staticUsingTypes = new HashSet<string>();
+        foreach (var m in models)
+        {
+            foreach (var ns in CodeGenerationHelpers.CollectNamespaces(m))
+                namespacesToImport.Add(ns);
+            foreach (var su in CodeGenerationHelpers.CollectStaticUsingTypes(m))
+                staticUsingTypes.Add(su);
+        }
+
+        var needsNullable = models.Any(m =>
+            m.Members.Any(mem => !mem.IsValueType && mem.TypeName.EndsWith("?"))
+            || m.MaxDepth > 0
+            || m.PreserveReferences);
+
+        var keyword = GetTypeKeyword(primaryModel);
+
+        var seenMemberNames = new HashSet<string>();
+        var unionMembers = new System.Collections.Generic.List<FacetMember>();
+        foreach (var m in models)
+        {
+            foreach (var member in m.Members)
+            {
+                if (seenMemberNames.Add(member.Name))
+                    unionMembers.Add(member);
+            }
+        }
+
+        var hasRequiredUnion = unionMembers.Any(m => m.IsRequired);
+        var isPositional = primaryModel.IsRecord && !primaryModel.HasExistingPrimaryConstructor
+            && !(primaryModel.TypeKind == TypeKind.Class && hasRequiredUnion);
+        var shouldGenerateEquality = primaryModel.GenerateEquality && !primaryModel.IsRecord;
+
+        // --- Properties file ---
+        var propsSb = new StringBuilder();
+        var propsIndent = WritePreamble(propsSb, primaryModel, namespacesToImport, staticUsingTypes, needsNullable, includeTypeDocs: true);
+
+        if (isPositional)
+            GeneratePositionalDeclaration(propsSb, primaryModel, keyword, propsIndent);
+
+        propsSb.AppendLine($"{propsIndent}{primaryModel.Accessibility} partial {keyword} {primaryModel.Name}");
+        propsSb.AppendLine($"{propsIndent}{{");
+
+        if (!isPositional || primaryModel.HasExistingPrimaryConstructor)
+            MemberGenerator.GenerateMembers(propsSb, primaryModel, propsIndent + "    ", unionMembers);
+
+        propsSb.AppendLine($"{propsIndent}}}");
+        CloseContainingTypeHierarchy(propsSb, primaryModel, propsIndent);
+
+        // --- Mappings file ---
+        var mapsSb = new StringBuilder();
+        var mapsIndent = WritePreamble(mapsSb, primaryModel, namespacesToImport, staticUsingTypes, needsNullable, includeTypeDocs: false);
+
+        if (shouldGenerateEquality)
+            mapsSb.AppendLine($"{mapsIndent}{primaryModel.Accessibility} partial {keyword} {primaryModel.Name} : {EqualityGenerator.GetEquatableInterface(primaryModel)}");
+        else
+            mapsSb.AppendLine($"{mapsIndent}{primaryModel.Accessibility} partial {keyword} {primaryModel.Name}");
+        mapsSb.AppendLine($"{mapsIndent}{{");
+
+        var mapsMemberIndent = mapsIndent + "    ";
+
+        if (primaryModel.GenerateParameterlessConstructor)
+            ConstructorGenerator.GenerateParameterlessConstructor(mapsSb, primaryModel, isPositional);
+
+        foreach (var model in models)
+        {
+            if (!model.GenerateConstructor) continue;
+
+            var hasCustomMapping = !string.IsNullOrWhiteSpace(model.ConfigurationTypeName);
+            var modelHasInitOnly = model.Members.Any(mem => mem.IsInitOnly);
+            var modelHasRequired = model.Members.Any(mem => mem.IsRequired);
+
+            ConstructorGenerator.GenerateConstructor(
+                mapsSb, model, isPositional, modelHasInitOnly, hasCustomMapping, modelHasRequired);
+
+            if (hasCustomMapping && !model.HasMapConfiguration && model.HasProjectionMapConfiguration)
+                GenerateProjectionMapAction(mapsSb, model, mapsMemberIndent);
+        }
+
+        if (primaryModel.GenerateCopyConstructor)
+            CopyConstructorGenerator.Generate(mapsSb, primaryModel, mapsMemberIndent);
+
+        foreach (var model in models)
+        {
+            if (!model.GenerateExpressionProjection) continue;
+
+            var projectionName = GetProjectionName(model, models);
+            ProjectionGenerator.GenerateProjectionProperty(mapsSb, model, mapsMemberIndent, facetLookup, projectionName);
+        }
+
+        foreach (var model in models)
+        {
+            if (!model.GenerateToSource) continue;
+
+            var toSourceName = GetToSourceMethodName(model, models);
+            ToSourceGenerator.Generate(mapsSb, model, facetLookup, toSourceName);
+        }
+
+        foreach (var model in models)
+        {
+            if (!model.GenerateToSource || model.SourceHasPositionalConstructor) continue;
+
+            var applyMethodName = GetApplyToSourceMethodName(model, models);
+            ToSourceGenerator.GenerateApplyToSource(mapsSb, model, facetLookup, applyMethodName);
+        }
+
+        foreach (var model in models)
+        {
+            if (model.FlattenToTypes.Length > 0)
+                FlattenToGenerator.Generate(mapsSb, model, mapsMemberIndent, facetLookup);
+        }
+
+        if (shouldGenerateEquality)
+            EqualityGenerator.Generate(mapsSb, primaryModel, mapsMemberIndent);
+
+        mapsSb.AppendLine($"{mapsIndent}}}");
+        CloseContainingTypeHierarchy(mapsSb, primaryModel, mapsIndent);
+
+        return (propsSb.ToString(), mapsSb.ToString());
+    }
+
+    private static string WritePreamble(
+        StringBuilder sb,
+        FacetTargetModel model,
+        IEnumerable<string> namespacesToImport,
+        IEnumerable<string> staticUsingTypes,
+        bool needsNullable,
+        bool includeTypeDocs)
+    {
+        GenerateFileHeader(sb);
+
+        foreach (var ns in namespacesToImport.OrderBy(x => x))
+            sb.AppendLine($"using {ns};");
+
+        foreach (var type in staticUsingTypes.OrderBy(x => x))
+            sb.AppendLine($"using static {type};");
+
+        sb.AppendLine();
+
+        if (needsNullable)
+        {
+            sb.AppendLine("#nullable enable");
+            sb.AppendLine();
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.Namespace))
+            sb.AppendLine($"namespace {model.Namespace};");
+
+        var indent = GenerateContainingTypeHierarchy(sb, model);
+
+        if (includeTypeDocs && !string.IsNullOrWhiteSpace(model.TypeXmlDocumentation))
+        {
+            var indentedDoc = model.TypeXmlDocumentation!.Replace("\n", $"\n{indent}");
+            sb.AppendLine($"{indent}{indentedDoc}");
+        }
+
+        return indent;
+    }
+
+
     /// <c>ConfigureProjection</c> expressions. Called when the configuration type
     /// implements <c>IFacetProjectionMapConfiguration</c> but not <c>IFacetMapConfiguration</c>,
     /// allowing users to write mapping logic once as expressions and reuse it in both

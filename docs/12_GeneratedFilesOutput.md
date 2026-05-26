@@ -67,14 +67,16 @@ Generate files in a separate shared project:
 
 ## File Structure
 
-With the default configuration, generated files are organized by generator:
+By default, Facet emits **two files per type**: a `*.Properties.g.cs` file containing the property declarations (and XML doc comments) and a `*.Mappings.g.cs` file containing constructors, projections, and conversion methods. Generated files are organised by generator:
 
 ```
 Generated/
 ├── Facet/
 │   ├── Facet.Generators.FacetGenerator/
-│   │   ├── UserDto.g.cs
-│   │   ├── ProductDto.g.cs
+│   │   ├── UserDto.Properties.g.cs
+│   │   ├── UserDto.Mappings.g.cs
+│   │   ├── ProductDto.Properties.g.cs
+│   │   ├── ProductDto.Mappings.g.cs
 │   │   └── ...
 │   ├── Facet.Generators.FlattenGenerator/
 │   │   └── ...
@@ -83,6 +85,18 @@ Generated/
 └── OtherGenerator/
     └── ...
 ```
+
+### Opting Out of Split Output
+
+If you prefer the previous single-file output (`{Type}.g.cs`) you can opt out globally:
+
+```xml
+<PropertyGroup>
+  <Facet_SplitGeneratedFiles>false</Facet_SplitGeneratedFiles>
+</PropertyGroup>
+```
+
+With `false`, all generated code for a type is written to a single `{Type}.g.cs` file as in previous versions.
 
 ## Benefits of Visible Generated Files
 

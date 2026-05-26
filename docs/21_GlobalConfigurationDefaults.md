@@ -29,6 +29,14 @@ The following properties can be configured globally for the `[Facet]` attribute:
 | `MaxDepthToSource` | `0` | `Facet_MaxDepthToSource` |
 | `PreserveReferences` | `true` | `Facet_PreserveReferences` |
 
+The following property controls **generator-level** output behaviour (no per-type attribute equivalent):
+
+| Property | Default | MSBuild Property |
+|----------|---------|------------------|
+| *(generator)* Split output | `true` | `Facet_SplitGeneratedFiles` |
+
+When `Facet_SplitGeneratedFiles` is `true` (the default), each type emits two files: `*.Properties.g.cs` and `*.Mappings.g.cs`. Set it to `false` to restore single-file output. See [Generated Files Output](12_GeneratedFilesOutput.md) for details.
+
 ## How to Configure
 
 ### Option 1: Project File (.csproj)

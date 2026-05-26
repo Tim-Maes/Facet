@@ -77,8 +77,10 @@ public class InheritDocsTests
     private static string LoadGeneratedSource(string typeFullName)
     {
         var projectRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", ".."));
-        var path = Path.Combine(projectRoot, "obj", "Generated", "Facet", "Facet.Generators.FacetGenerator", $"{typeFullName}.g.cs");
-        try { return File.ReadAllText(path); }
+        var dir = Path.Combine(projectRoot, "obj", "Generated", "Facet", "Facet.Generators.FacetGenerator");
+        var propertiesPath = Path.Combine(dir, $"{typeFullName}.Properties.g.cs");
+        var combinedPath = Path.Combine(dir, $"{typeFullName}.g.cs");
+        try { return File.ReadAllText(File.Exists(propertiesPath) ? propertiesPath : combinedPath); }
         catch (FileNotFoundException) { return string.Empty; }
     }
 
