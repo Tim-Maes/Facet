@@ -105,6 +105,13 @@ internal sealed class GlobalConfigurationDefaults
     /// </summary>
     public bool PreserveReferences { get; }
 
+    /// <summary>
+    /// When true (default), generates two files per type: <c>{FullName}.Properties.g.cs</c> (properties only)
+    /// and <c>{FullName}.Mappings.g.cs</c> (constructors, projections, and conversion methods).
+    /// Set <c>Facet_SplitGeneratedFiles</c> to <c>false</c> to revert to a single combined file.
+    /// </summary>
+    public bool SplitGeneratedFiles { get; }
+
     private GlobalConfigurationDefaults(
         bool generateConstructor,
         bool generateParameterlessConstructor,
@@ -121,7 +128,8 @@ internal sealed class GlobalConfigurationDefaults
         bool generateEquality,
         int maxDepth,
         bool preserveReferences,
-        int maxDepthToSource)
+        int maxDepthToSource,
+        bool splitGeneratedFiles)
     {
         GenerateConstructor = generateConstructor;
         GenerateParameterlessConstructor = generateParameterlessConstructor;
@@ -139,6 +147,7 @@ internal sealed class GlobalConfigurationDefaults
         MaxDepth = maxDepth;
         PreserveReferences = preserveReferences;
         MaxDepthToSource = maxDepthToSource;
+        SplitGeneratedFiles = splitGeneratedFiles;
     }
 
     /// <summary>
@@ -163,7 +172,8 @@ internal sealed class GlobalConfigurationDefaults
             generateEquality: GetBoolOption(globalOptions, "build_property.Facet_GenerateEquality", defaultValue: false),
             maxDepth: GetIntOption(globalOptions, "build_property.Facet_MaxDepth", defaultValue: FacetConstants.DefaultMaxDepth),
             preserveReferences: GetBoolOption(globalOptions, "build_property.Facet_PreserveReferences", defaultValue: FacetConstants.DefaultPreserveReferences),
-            maxDepthToSource: GetIntOption(globalOptions, "build_property.Facet_MaxDepthToSource", defaultValue: 0));
+            maxDepthToSource: GetIntOption(globalOptions, "build_property.Facet_MaxDepthToSource", defaultValue: 0),
+            splitGeneratedFiles: GetBoolOption(globalOptions, "build_property.Facet_SplitGeneratedFiles", defaultValue: true));
     }
 
     private static bool GetBoolOption(AnalyzerConfigOptions? options, string key, bool defaultValue)

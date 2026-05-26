@@ -27,9 +27,11 @@ public sealed class FacetGenerator : IIncrementalGenerator
             .Where(static m => m is not null);
 
         var allFacets = facets.Collect();
+        var allFacetsWithConfig = allFacets.Combine(globalOptions);
 
-        context.RegisterSourceOutput(allFacets, static (spc, models) =>
+        context.RegisterSourceOutput(allFacetsWithConfig, static (spc, pair) =>
         {
+            var (models, globalConfig) = pair;
             spc.CancellationToken.ThrowIfCancellationRequested();
 
             var modelsByTarget = models
@@ -44,8 +46,18 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 spc.CancellationToken.ThrowIfCancellationRequested();
 
                 var modelsForTarget = group.Select(m => m!).ToList();
-                var code = CodeBuilder.GenerateForGroup(modelsForTarget, facetLookup);
-                spc.AddSource($"{group.Key}.g.cs", SourceText.From(code, Encoding.UTF8));
+
+                if (globalConfig.SplitGeneratedFiles)
+                {
+                    var (propsCode, mapsCode) = CodeBuilder.GenerateForGroupSplit(modelsForTarget, facetLookup);
+                    spc.AddSource($"{group.Key}.Properties.g.cs", SourceText.From(propsCode, Encoding.UTF8));
+                    spc.AddSource($"{group.Key}.Mappings.g.cs", SourceText.From(mapsCode, Encoding.UTF8));
+                }
+                else
+                {
+                    var code = CodeBuilder.GenerateForGroup(modelsForTarget, facetLookup);
+                    spc.AddSource($"{group.Key}.g.cs", SourceText.From(code, Encoding.UTF8));
+                }
             }
         });
     }
