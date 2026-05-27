@@ -10,8 +10,18 @@ public class SplitOutputEntity
     public string Description { get; set; } = string.Empty;
 }
 
+public interface ISplitOutputMarker { }
+
+public abstract class SplitOutputBase
+{
+    public string BaseProp { get; set; } = string.Empty;
+}
+
 [Facet(typeof(SplitOutputEntity))]
 public partial class SplitOutputDto;
+
+[Facet(typeof(SplitOutputEntity))]
+public partial class SplitOutputWithInheritanceDto : SplitOutputBase, ISplitOutputMarker;
 
 public class SplitOutputTests
 {
@@ -85,6 +95,52 @@ public class SplitOutputTests
 
         File.Exists(combinedFile).Should().BeFalse(
             "SplitOutput = true should not emit a combined .g.cs file");
+    }
+
+    [Fact]
+    public void SplitOutput_PropertiesFile_NoMappingUsings()
+    {
+        var generatedDir = GetGeneratedFilesDir();
+        var propsFile = Path.Combine(generatedDir, "Facet.Tests.UnitTests.Features.SplitOutputDto.Properties.g.cs");
+
+        if (!File.Exists(propsFile))
+            return;
+
+        var content = File.ReadAllText(propsFile);
+
+        content.Should().NotContain("using System.Linq;");
+        content.Should().NotContain("using System.Linq.Expressions;");
+    }
+
+    [Fact]
+    public void SplitOutput_PropertiesFile_ContainsInheritance()
+    {
+        var generatedDir = GetGeneratedFilesDir();
+        var propsFile = Path.Combine(generatedDir, "Facet.Tests.UnitTests.Features.SplitOutputWithInheritanceDto.Properties.g.cs");
+
+        if (!File.Exists(propsFile))
+            return;
+
+        var content = File.ReadAllText(propsFile);
+
+        content.Should().Contain("SplitOutputBase");
+        content.Should().Contain("ISplitOutputMarker");
+    }
+
+    [Fact]
+    public void SplitOutput_MappingsFile_NoInheritanceFromProperties()
+    {
+        var generatedDir = GetGeneratedFilesDir();
+        var mapsFile = Path.Combine(generatedDir, "Facet.Tests.UnitTests.Features.SplitOutputWithInheritanceDto.Mappings.g.cs");
+
+        if (!File.Exists(mapsFile))
+            return;
+
+        var content = File.ReadAllText(mapsFile);
+
+        // Base class and interface are in Properties file only
+        content.Should().NotContain("SplitOutputBase");
+        content.Should().NotContain("ISplitOutputMarker");
     }
 
     private static string GetGeneratedFilesDir()

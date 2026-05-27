@@ -127,6 +127,14 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
     public PropertySetAccessor SetAccessor { get; }
 
     /// <summary>
+    /// Fully-qualified names (with <c>global::</c> prefix) of the user-declared base class
+    /// and interfaces on the target type. Emitted in the <c>.Properties.g.cs</c> partial
+    /// declaration so that the type's inheritance chain is preserved even when the
+    /// <c>.Mappings.g.cs</c> file is excluded from compilation (e.g. to avoid back-end references).
+    /// </summary>
+    public ImmutableArray<string> DeclaredBaseTypeNames { get; }
+
+    /// <summary>
     /// The top-level property and field names of the source type (including inherited members).
     /// Used to disambiguate navigation properties from static type names in MapFrom expressions.
     /// </summary>
@@ -239,7 +247,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         int maxDepthToSource = 0,
         ImmutableArray<string> sourcePropertyNames = default,
         bool baseHidesToSource = false,
-        PropertySetAccessor setAccessor = PropertySetAccessor.Preserve)
+        PropertySetAccessor setAccessor = PropertySetAccessor.Preserve,
+        ImmutableArray<string> declaredBaseTypeNames = default)
     {
         Name = name;
         Namespace = @namespace;
@@ -283,6 +292,7 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
         SourcePropertyNames = sourcePropertyNames.IsDefault ? ImmutableArray<string>.Empty : sourcePropertyNames;
         BaseHidesToSource = baseHidesToSource;
         SetAccessor = setAccessor;
+        DeclaredBaseTypeNames = declaredBaseTypeNames.IsDefault ? ImmutableArray<string>.Empty : declaredBaseTypeNames;
     }
 
     public bool Equals(FacetTargetModel? other)
@@ -329,7 +339,8 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
             && HasMapConfiguration == other.HasMapConfiguration
             && BaseHidesFromSource == other.BaseHidesFromSource
             && SourcePropertyNames.SequenceEqual(other.SourcePropertyNames)
-            && SetAccessor == other.SetAccessor;
+            && SetAccessor == other.SetAccessor
+            && DeclaredBaseTypeNames.SequenceEqual(other.DeclaredBaseTypeNames);
     }
 
     public override bool Equals(object? obj) => obj is FacetTargetModel other && Equals(other);
@@ -392,6 +403,9 @@ internal sealed class FacetTargetModel : IEquatable<FacetTargetModel>
 
             foreach (var flattenToType in FlattenToTypes)
                 hash = hash * 31 + (flattenToType?.GetHashCode() ?? 0);
+
+            foreach (var baseTypeName in DeclaredBaseTypeNames)
+                hash = hash * 31 + (baseTypeName?.GetHashCode() ?? 0);
 
             return hash;
         }

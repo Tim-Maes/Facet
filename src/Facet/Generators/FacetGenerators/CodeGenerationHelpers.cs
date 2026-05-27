@@ -12,6 +12,107 @@ namespace Facet.Generators;
 internal static class CodeGenerationHelpers
 {
     /// <summary>
+    /// Collects namespaces needed only for the <c>.Properties.g.cs</c> split file.
+    /// Excludes mapping-only namespaces such as <c>System.Linq</c>,
+    /// <c>System.Linq.Expressions</c>, the source type's namespace, and the
+    /// configuration type's namespace — those are only required by the Mappings file.
+    /// </summary>
+    public static HashSet<string> CollectNamespacesForProperties(FacetTargetModel model)
+    {
+        var namespaces = new HashSet<string>();
+
+        bool hasImmutableCollections = false;
+        foreach (var member in model.Members)
+        {
+            foreach (var attrNamespace in member.AttributeNamespaces)
+                if (!string.IsNullOrWhiteSpace(attrNamespace))
+                    namespaces.Add(attrNamespace);
+
+            if (member.CollectionWrapper != null && IsImmutableCollectionWrapper(member.CollectionWrapper))
+                hasImmutableCollections = true;
+
+            if (member.IsNestedFacet || member.IsNestedType)
+                continue;
+
+            var memberTypeNamespace = ExtractNamespaceFromFullyQualifiedType(member.TypeName);
+            if (!string.IsNullOrWhiteSpace(memberTypeNamespace))
+                namespaces.Add(memberTypeNamespace!);
+        }
+
+        if (hasImmutableCollections)
+            namespaces.Add("System.Collections.Immutable");
+
+        if (!string.IsNullOrWhiteSpace(model.Namespace))
+            namespaces.Remove(model.Namespace!);
+
+        namespaces.Remove("");
+        return namespaces;
+    }
+
+    /// <summary>
+    /// Collects <c>using static</c> directives needed only for the <c>.Properties.g.cs</c>
+    /// split file. Excludes source-type containing-type entries (those are only needed by
+    /// the Mappings file for constructor parameters and projection expressions).
+    /// </summary>
+    public static HashSet<string> CollectStaticUsingTypesForProperties(FacetTargetModel model)
+    {
+        var staticUsingTypes = new HashSet<string>();
+
+        foreach (var member in model.Members)
+        {
+            if (member.IsNestedType && !member.IsNestedFacet)
+            {
+                var memberTypeName = GeneratorUtilities.StripGlobalPrefix(member.TypeName);
+
+                var genericIndex = memberTypeName.IndexOf('<');
+                if (genericIndex > 0)
+                {
+                    var genericEnd = memberTypeName.LastIndexOf('>');
+                    if (genericEnd > genericIndex)
+                        memberTypeName = GeneratorUtilities.StripGlobalPrefix(
+                            memberTypeName.Substring(genericIndex + 1, genericEnd - genericIndex - 1));
+                }
+
+                if (memberTypeName.EndsWith("?"))
+                    memberTypeName = memberTypeName.Substring(0, memberTypeName.Length - 1);
+
+                var lastDotIndex = memberTypeName.LastIndexOf('.');
+                if (lastDotIndex > 0)
+                    staticUsingTypes.Add(memberTypeName.Substring(0, lastDotIndex));
+            }
+        }
+
+        foreach (var member in model.Members)
+        {
+            if (member.IsNestedFacet)
+            {
+                var memberTypeName = GeneratorUtilities.StripGlobalPrefix(member.TypeName);
+
+                var genericIndex = memberTypeName.IndexOf('<');
+                if (genericIndex > 0)
+                    memberTypeName = memberTypeName.Substring(0, genericIndex);
+
+                if (memberTypeName.EndsWith("?"))
+                    memberTypeName = memberTypeName.Substring(0, memberTypeName.Length - 1);
+
+                var memberNamespace = ExtractNamespaceFromFullyQualifiedType(memberTypeName);
+                string typeNameWithoutNamespace = !string.IsNullOrWhiteSpace(memberNamespace)
+                    ? memberTypeName.Substring(memberNamespace.Length + 1)
+                    : memberTypeName;
+
+                if (typeNameWithoutNamespace.Contains('.'))
+                {
+                    var lastDotIndex = memberTypeName.LastIndexOf('.');
+                    if (lastDotIndex > 0)
+                        staticUsingTypes.Add(memberTypeName.Substring(0, lastDotIndex));
+                }
+            }
+        }
+
+        return staticUsingTypes;
+    }
+
+    /// <summary>
     /// Collects all namespaces that need to be imported based on the types used in the model.
     /// </summary>
     public static HashSet<string> CollectNamespaces(FacetTargetModel model)
