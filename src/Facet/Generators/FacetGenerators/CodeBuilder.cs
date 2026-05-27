@@ -1,6 +1,7 @@
 ﻿using Facet.Generators.Shared;
 using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 
@@ -417,10 +418,14 @@ internal static class CodeBuilder
         FacetTargetModel model,
         Dictionary<string, List<FacetTargetModel>> facetLookup)
     {
-        var namespacesToImport = CodeGenerationHelpers.CollectNamespaces(model);
-        var staticUsingTypes = CodeGenerationHelpers.CollectStaticUsingTypes(model);
+        var mapsNamespaces = CodeGenerationHelpers.CollectNamespaces(model);
+        var mapsStaticUsings = CodeGenerationHelpers.CollectStaticUsingTypes(model);
+        var propsNamespaces = CodeGenerationHelpers.CollectNamespacesForProperties(model);
+        var propsStaticUsings = CodeGenerationHelpers.CollectStaticUsingTypesForProperties(model);
         var hasNullableRefTypeMembers = model.Members.Any(m => !m.IsValueType && m.TypeName.EndsWith("?"));
         var needsNullable = hasNullableRefTypeMembers || model.MaxDepth > 0 || model.PreserveReferences;
+        var needsNullableInProps = needsNullable;
+        var needsNullableInMaps = needsNullable;
         var keyword = GetTypeKeyword(model);
         var hasInitOnlyProperties = model.Members.Any(m => m.IsInitOnly);
         var hasRequiredProperties = model.Members.Any(m => m.IsRequired);
@@ -431,12 +436,13 @@ internal static class CodeBuilder
 
         // --- Properties file ---
         var propsSb = new StringBuilder();
-        var propsIndent = WritePreamble(propsSb, model, namespacesToImport, staticUsingTypes, needsNullable, includeTypeDocs: true);
+        var propsIndent = WritePreamble(propsSb, model, propsNamespaces, propsStaticUsings, needsNullableInProps, includeTypeDocs: true);
 
         if (isPositional)
             GeneratePositionalDeclaration(propsSb, model, keyword, propsIndent);
 
-        propsSb.AppendLine($"{propsIndent}{model.Accessibility} partial {keyword} {model.Name}");
+        var propsBaseList = FormatBaseTypeList(model.DeclaredBaseTypeNames);
+        propsSb.AppendLine($"{propsIndent}{model.Accessibility} partial {keyword} {model.Name}{propsBaseList}");
         propsSb.AppendLine($"{propsIndent}{{");
 
         var propsMemberIndent = propsIndent + "    ";
@@ -457,7 +463,7 @@ internal static class CodeBuilder
 
         // --- Mappings file ---
         var mapsSb = new StringBuilder();
-        var mapsIndent = WritePreamble(mapsSb, model, namespacesToImport, staticUsingTypes, needsNullable, includeTypeDocs: false);
+        var mapsIndent = WritePreamble(mapsSb, model, mapsNamespaces, mapsStaticUsings, needsNullableInMaps, includeTypeDocs: false);
 
         if (shouldGenerateEquality)
             mapsSb.AppendLine($"{mapsIndent}{model.Accessibility} partial {keyword} {model.Name} : {EqualityGenerator.GetEquatableInterface(model)}");
@@ -519,20 +525,26 @@ internal static class CodeBuilder
     {
         var primaryModel = models[0];
 
-        var namespacesToImport = new HashSet<string>();
-        var staticUsingTypes = new HashSet<string>();
+        var mapsNamespaces = new HashSet<string>();
+        var mapsStaticUsings = new HashSet<string>();
+        var propsNamespaces = new HashSet<string>();
+        var propsStaticUsings = new HashSet<string>();
         foreach (var m in models)
         {
             foreach (var ns in CodeGenerationHelpers.CollectNamespaces(m))
-                namespacesToImport.Add(ns);
+                mapsNamespaces.Add(ns);
             foreach (var su in CodeGenerationHelpers.CollectStaticUsingTypes(m))
-                staticUsingTypes.Add(su);
+                mapsStaticUsings.Add(su);
+            foreach (var ns in CodeGenerationHelpers.CollectNamespacesForProperties(m))
+                propsNamespaces.Add(ns);
+            foreach (var su in CodeGenerationHelpers.CollectStaticUsingTypesForProperties(m))
+                propsStaticUsings.Add(su);
         }
 
-        var needsNullable = models.Any(m =>
-            m.Members.Any(mem => !mem.IsValueType && mem.TypeName.EndsWith("?"))
-            || m.MaxDepth > 0
-            || m.PreserveReferences);
+        var needsNullable = models.Any(m => m.Members.Any(mem => !mem.IsValueType && mem.TypeName.EndsWith("?")))
+            || models.Any(m => m.MaxDepth > 0 || m.PreserveReferences);
+        var needsNullableInProps = needsNullable;
+        var needsNullableInMaps = needsNullable;
 
         var keyword = GetTypeKeyword(primaryModel);
 
@@ -554,12 +566,13 @@ internal static class CodeBuilder
 
         // --- Properties file ---
         var propsSb = new StringBuilder();
-        var propsIndent = WritePreamble(propsSb, primaryModel, namespacesToImport, staticUsingTypes, needsNullable, includeTypeDocs: true);
+        var propsIndent = WritePreamble(propsSb, primaryModel, propsNamespaces, propsStaticUsings, needsNullableInProps, includeTypeDocs: true);
 
         if (isPositional)
             GeneratePositionalDeclaration(propsSb, primaryModel, keyword, propsIndent);
 
-        propsSb.AppendLine($"{propsIndent}{primaryModel.Accessibility} partial {keyword} {primaryModel.Name}");
+        var propsBaseList = FormatBaseTypeList(primaryModel.DeclaredBaseTypeNames);
+        propsSb.AppendLine($"{propsIndent}{primaryModel.Accessibility} partial {keyword} {primaryModel.Name}{propsBaseList}");
         propsSb.AppendLine($"{propsIndent}{{");
 
         if (!isPositional || primaryModel.HasExistingPrimaryConstructor)
@@ -570,7 +583,7 @@ internal static class CodeBuilder
 
         // --- Mappings file ---
         var mapsSb = new StringBuilder();
-        var mapsIndent = WritePreamble(mapsSb, primaryModel, namespacesToImport, staticUsingTypes, needsNullable, includeTypeDocs: false);
+        var mapsIndent = WritePreamble(mapsSb, primaryModel, mapsNamespaces, mapsStaticUsings, needsNullableInMaps, includeTypeDocs: false);
 
         if (shouldGenerateEquality)
             mapsSb.AppendLine($"{mapsIndent}{primaryModel.Accessibility} partial {keyword} {primaryModel.Name} : {EqualityGenerator.GetEquatableInterface(primaryModel)}");
@@ -756,6 +769,17 @@ internal static class CodeBuilder
         sb.AppendLine("//     the code is regenerated.");
         sb.AppendLine("// </auto-generated>");
         sb.AppendLine();
+    }
+
+    /// <summary>
+    /// Formats the base-type list for a class/struct/record declaration.
+    /// Returns an empty string when there are no declared base types,
+    /// otherwise returns <c>" : TypeA, TypeB"</c> (leading space included).
+    /// </summary>
+    private static string FormatBaseTypeList(ImmutableArray<string> baseTypeNames)
+    {
+        if (baseTypeNames.IsDefaultOrEmpty) return string.Empty;
+        return " : " + string.Join(", ", baseTypeNames);
     }
 
     private static string GenerateContainingTypeHierarchy(StringBuilder sb, FacetTargetModel model)

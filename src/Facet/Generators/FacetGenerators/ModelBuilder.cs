@@ -261,6 +261,7 @@ internal static class ModelBuilder
         var baseHidesToSource = BaseHidesToSourceMembers(targetSymbol);
 
         var sourcePropertyNames = CollectSourcePropertyNames(sourceType);
+        var declaredBaseTypeNames = GetDeclaredBaseTypeNames(targetSymbol, generateEquality);
 
         return new FacetTargetModel(
             targetSymbol.Name,
@@ -304,7 +305,8 @@ internal static class ModelBuilder
             maxDepthToSource,
             sourcePropertyNames,
             baseHidesToSource,
-            setAccessor);
+            setAccessor,
+            declaredBaseTypeNames);
     }
 
     #region Private Helper Methods
@@ -1444,6 +1446,34 @@ private static Dictionary<string, (string targetName, string source, bool revers
             current = current.BaseType;
         }
         return names.ToImmutableArray();
+    }
+
+    /// <summary>
+    /// Returns fully-qualified names (with <c>global::</c>) of the user-declared base class
+    /// and interfaces on <paramref name="targetSymbol"/>. Used to preserve the type's
+    /// inheritance chain in the <c>.Properties.g.cs</c> split file.
+    /// <para>
+    /// <c>IEquatable&lt;T&gt;</c> is excluded when <paramref name="generateEquality"/> is
+    /// <see langword="true"/> because Facet emits that interface itself on the Mappings partial.
+    /// </para>
+    /// </summary>
+    private static ImmutableArray<string> GetDeclaredBaseTypeNames(INamedTypeSymbol targetSymbol, bool generateEquality)
+    {
+        var result = ImmutableArray.CreateBuilder<string>();
+
+        if (targetSymbol.BaseType is { SpecialType: not SpecialType.System_Object and not SpecialType.System_ValueType })
+            result.Add(targetSymbol.BaseType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+
+        foreach (var iface in targetSymbol.Interfaces)
+        {
+            if (generateEquality &&
+                iface.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.IEquatable<T>")
+                continue;
+
+            result.Add(iface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+        }
+
+        return result.ToImmutable();
     }
 
     #endregion
