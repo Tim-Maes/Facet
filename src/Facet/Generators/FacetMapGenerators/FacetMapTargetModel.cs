@@ -22,6 +22,8 @@ internal sealed class FacetMapTargetModel : IEquatable<FacetMapTargetModel>
 
     public string? ConfigurationTypeName { get; }
     public string? ToSourceConfigurationTypeName { get; }
+    public string? BeforeMapConfigurationTypeName { get; }
+    public string? AfterMapConfigurationTypeName { get; }
 
     public bool SourceHasPositionalConstructor { get; }
     public bool TargetHasParameterlessConstructor { get; }
@@ -43,6 +45,8 @@ internal sealed class FacetMapTargetModel : IEquatable<FacetMapTargetModel>
         int maxDepth,
         string? configurationTypeName,
         string? toSourceConfigurationTypeName,
+        string? beforeMapConfigurationTypeName,
+        string? afterMapConfigurationTypeName,
         bool sourceHasPositionalConstructor,
         bool targetHasParameterlessConstructor,
         ImmutableArray<FacetMapMember> members,
@@ -61,6 +65,8 @@ internal sealed class FacetMapTargetModel : IEquatable<FacetMapTargetModel>
         MaxDepth = maxDepth;
         ConfigurationTypeName = configurationTypeName;
         ToSourceConfigurationTypeName = toSourceConfigurationTypeName;
+        BeforeMapConfigurationTypeName = beforeMapConfigurationTypeName;
+        AfterMapConfigurationTypeName = afterMapConfigurationTypeName;
         SourceHasPositionalConstructor = sourceHasPositionalConstructor;
         TargetHasParameterlessConstructor = targetHasParameterlessConstructor;
         Members = members;
@@ -83,6 +89,8 @@ internal sealed class FacetMapTargetModel : IEquatable<FacetMapTargetModel>
             && MaxDepth == other.MaxDepth
             && ConfigurationTypeName == other.ConfigurationTypeName
             && ToSourceConfigurationTypeName == other.ToSourceConfigurationTypeName
+            && BeforeMapConfigurationTypeName == other.BeforeMapConfigurationTypeName
+            && AfterMapConfigurationTypeName == other.AfterMapConfigurationTypeName
             && SourceHasPositionalConstructor == other.SourceHasPositionalConstructor
             && TargetHasParameterlessConstructor == other.TargetHasParameterlessConstructor
             && Members.SequenceEqual(other.Members)

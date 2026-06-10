@@ -88,3 +88,66 @@ public class SimpleDto
 
 [FacetMap(typeof(SimpleEntity), typeof(SimpleDto), Include = new[] { "Id", "Name" })]
 public static partial class SimpleMappings { }
+
+// Multiple FacetMap attributes on one class test
+public class UnitEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+}
+
+public class UnitDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+}
+
+public class UnitDropDownDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+[FacetMap(typeof(UnitEntity), typeof(UnitDto))]
+[FacetMap(typeof(UnitEntity), typeof(UnitDropDownDto), GenerateToSource = true)]
+public static partial class UnitMapper { }
+
+// BeforeMap/AfterMap configuration test
+public class ProductEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+}
+
+public class ProductDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+    public string MappedBy { get; set; } = string.Empty;
+    public bool WasValidated { get; set; }
+}
+
+public class ProductBeforeMapConfig : Facet.Mapping.IFacetBeforeMapConfiguration<ProductEntity, ProductDto>
+{
+    public static void BeforeMap(ProductEntity source, ProductDto target)
+    {
+        target.WasValidated = true;
+    }
+}
+
+public class ProductAfterMapConfig : Facet.Mapping.IFacetAfterMapConfiguration<ProductEntity, ProductDto>
+{
+    public static void AfterMap(ProductEntity source, ProductDto target)
+    {
+        target.MappedBy = "AfterMapConfig";
+    }
+}
+
+[FacetMap(typeof(ProductEntity), typeof(ProductDto),
+    BeforeMapConfiguration = typeof(ProductBeforeMapConfig),
+    AfterMapConfiguration = typeof(ProductAfterMapConfig))]
+public static partial class ProductMappings { }

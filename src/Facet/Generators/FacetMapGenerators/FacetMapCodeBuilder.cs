@@ -67,6 +67,12 @@ internal static class FacetMapCodeBuilder
         sb.AppendLine();
         sb.AppendLine($"{indent}    var target = new {model.TargetTypeName}();");
 
+        if (model.BeforeMapConfigurationTypeName != null)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"{indent}    {model.BeforeMapConfigurationTypeName}.BeforeMap({sourceParam}, target);");
+        }
+
         foreach (var member in model.Members)
         {
             var assignment = GeneratePropertyAssignment(member, sourceParam, "target", model);
@@ -77,6 +83,12 @@ internal static class FacetMapCodeBuilder
         {
             sb.AppendLine();
             sb.AppendLine($"{indent}    {model.ConfigurationTypeName}.Map({sourceParam}, target);");
+        }
+
+        if (model.AfterMapConfigurationTypeName != null)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"{indent}    {model.AfterMapConfigurationTypeName}.AfterMap({sourceParam}, target);");
         }
 
         sb.AppendLine();

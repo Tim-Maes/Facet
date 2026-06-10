@@ -71,6 +71,7 @@ public sealed class FacetMapAttribute : Attribute
 
     /// <summary>
     /// Optional type that provides custom mapping logic via a static Map(source, target) method.
+    /// Must match the signature defined in IFacetMapConfiguration&lt;TSource, TTarget&gt;.
     /// </summary>
     public Type? Configuration { get; set; }
 
@@ -78,6 +79,18 @@ public sealed class FacetMapAttribute : Attribute
     /// Optional type that provides custom reverse-mapping logic via a static Map(target, source) method.
     /// </summary>
     public Type? ToSourceConfiguration { get; set; }
+
+    /// <summary>
+    /// Optional type that provides custom logic to run BEFORE automatic property mapping.
+    /// Must implement IFacetBeforeMapConfiguration&lt;TSource, TTarget&gt; with a static BeforeMap method.
+    /// </summary>
+    public Type? BeforeMapConfiguration { get; set; }
+
+    /// <summary>
+    /// Optional type that provides custom logic to run AFTER automatic property mapping.
+    /// Must implement IFacetAfterMapConfiguration&lt;TSource, TTarget&gt; with a static AfterMap method.
+    /// </summary>
+    public Type? AfterMapConfiguration { get; set; }
 
     /// <summary>
     /// The maximum depth for nested object mapping to prevent infinite recursion.

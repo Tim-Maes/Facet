@@ -57,6 +57,8 @@ internal static class FacetMapModelBuilder
         int maxDepth = globalDefaults.MaxDepth;
         INamedTypeSymbol? configType = null;
         INamedTypeSymbol? toSourceConfigType = null;
+        INamedTypeSymbol? beforeMapConfigType = null;
+        INamedTypeSymbol? afterMapConfigType = null;
 
         foreach (var namedArg in attribute.NamedArguments)
         {
@@ -85,6 +87,12 @@ internal static class FacetMapModelBuilder
                     break;
                 case "ToSourceConfiguration":
                     toSourceConfigType = namedArg.Value.Value as INamedTypeSymbol;
+                    break;
+                case "BeforeMapConfiguration":
+                    beforeMapConfigType = namedArg.Value.Value as INamedTypeSymbol;
+                    break;
+                case "AfterMapConfiguration":
+                    afterMapConfigType = namedArg.Value.Value as INamedTypeSymbol;
                     break;
             }
         }
@@ -127,6 +135,8 @@ internal static class FacetMapModelBuilder
             maxDepth: maxDepth,
             configurationTypeName: configType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             toSourceConfigurationTypeName: toSourceConfigType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            beforeMapConfigurationTypeName: beforeMapConfigType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            afterMapConfigurationTypeName: afterMapConfigType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             sourceHasPositionalConstructor: sourceHasPositionalCtor,
             targetHasParameterlessConstructor: targetHasParameterlessCtor,
             members: members,
