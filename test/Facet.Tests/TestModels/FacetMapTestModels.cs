@@ -111,7 +111,6 @@ public class UnitDropDownDto
 }
 
 [FacetMap(typeof(UnitEntity), typeof(UnitDto))]
-[FacetMap(typeof(UnitEntity), typeof(UnitDropDownDto), GenerateToSource = true)]
 public static partial class UnitMapper { }
 
 // BeforeMap/AfterMap configuration test
@@ -151,3 +150,28 @@ public class ProductAfterMapConfig : Facet.Mapping.IFacetAfterMapConfiguration<P
     BeforeMapConfiguration = typeof(ProductBeforeMapConfig),
     AfterMapConfiguration = typeof(ProductAfterMapConfig))]
 public static partial class ProductMappings { }
+
+// Init-only properties test
+public class AddressEntity
+{
+    public string AddressLine1 { get; init; } = string.Empty;
+    public string City { get; init; } = string.Empty;
+    public string PostalCode { get; init; } = string.Empty;
+    public string Country { get; set; } = string.Empty;
+}
+
+public class AddressDto
+{
+    public string AddressLine1 { get; init; } = string.Empty;
+    public string City { get; init; } = string.Empty;
+    public string PostalCode { get; init; } = string.Empty;
+    public string Country { get; set; } = string.Empty;
+}
+
+[FacetMap(typeof(AddressEntity), typeof(AddressDto), GenerateToSource = true)]
+public static partial class AddressMappings { }
+
+// Same target from different sources (Allan's exact scenario)
+[FacetMap(typeof(UnitDto), typeof(UnitDropDownDto))]
+[FacetMap(typeof(UnitEntity), typeof(UnitDropDownDto), GenerateToSource = true)]
+public static partial class UnitDropDownMapper;

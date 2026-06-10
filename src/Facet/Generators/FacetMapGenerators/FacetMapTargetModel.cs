@@ -127,6 +127,8 @@ internal sealed class FacetMapMember : IEquatable<FacetMapMember>
     public string? CollectionWrapper { get; }
     public string? CollectionElementType { get; }
     public bool IsNullable { get; }
+    public bool IsTargetInitOnly { get; }
+    public bool IsSourceInitOnly { get; }
 
     public FacetMapMember(
         string name,
@@ -136,7 +138,9 @@ internal sealed class FacetMapMember : IEquatable<FacetMapMember>
         bool isCollection,
         string? collectionWrapper,
         string? collectionElementType,
-        bool isNullable)
+        bool isNullable,
+        bool isTargetInitOnly,
+        bool isSourceInitOnly)
     {
         Name = name;
         TypeName = typeName;
@@ -146,6 +150,8 @@ internal sealed class FacetMapMember : IEquatable<FacetMapMember>
         CollectionWrapper = collectionWrapper;
         CollectionElementType = collectionElementType;
         IsNullable = isNullable;
+        IsTargetInitOnly = isTargetInitOnly;
+        IsSourceInitOnly = isSourceInitOnly;
     }
 
     public bool Equals(FacetMapMember? other)
@@ -158,7 +164,9 @@ internal sealed class FacetMapMember : IEquatable<FacetMapMember>
             && IsCollection == other.IsCollection
             && CollectionWrapper == other.CollectionWrapper
             && CollectionElementType == other.CollectionElementType
-            && IsNullable == other.IsNullable;
+            && IsNullable == other.IsNullable
+            && IsTargetInitOnly == other.IsTargetInitOnly
+            && IsSourceInitOnly == other.IsSourceInitOnly;
     }
 
     public override bool Equals(object? obj) => obj is FacetMapMember other && Equals(other);

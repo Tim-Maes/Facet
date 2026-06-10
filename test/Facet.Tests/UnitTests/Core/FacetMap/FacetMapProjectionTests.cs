@@ -7,7 +7,7 @@ public class FacetMapProjectionTests
     [Fact]
     public void Projection_ShouldBeNonNull()
     {
-        var projection = OrderLineMappings.OrderLineDtoProjection;
+        var projection = OrderLineMappings.OrderLineToOrderLineDtoProjection;
 
         projection.Should().NotBeNull();
     }
@@ -15,7 +15,7 @@ public class FacetMapProjectionTests
     [Fact]
     public void Projection_ShouldCompileAndExecute()
     {
-        var projection = OrderLineMappings.OrderLineDtoProjection;
+        var projection = OrderLineMappings.OrderLineToOrderLineDtoProjection;
         var compiled = projection.Compile();
 
         var entity = new OrderLine
@@ -44,7 +44,7 @@ public class FacetMapProjectionTests
             new() { Id = 3, ProductName = "C", Quantity = 3, UnitPrice = 30m }
         };
 
-        var projection = OrderLineMappings.OrderLineDtoProjection;
+        var projection = OrderLineMappings.OrderLineToOrderLineDtoProjection;
         var dtos = entities.AsQueryable().Select(projection).ToList();
 
         dtos.Should().HaveCount(3);
@@ -56,7 +56,7 @@ public class FacetMapProjectionTests
     [Fact]
     public void CustomerProjection_ShouldExist()
     {
-        var projection = CustomerMappings.CustomerDtoProjection;
+        var projection = CustomerMappings.CustomerToCustomerDtoProjection;
 
         projection.Should().NotBeNull();
     }

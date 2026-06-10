@@ -65,18 +65,53 @@ internal static class FacetMapCodeBuilder
 
         sb.AppendLine($"{indent}    if ({sourceParam} == null) throw new ArgumentNullException(nameof({sourceParam}));");
         sb.AppendLine();
-        sb.AppendLine($"{indent}    var target = new {model.TargetTypeName}();");
 
-        if (model.BeforeMapConfigurationTypeName != null)
+        var hasInitOnlyMembers = model.Members.Any(m => m.IsTargetInitOnly);
+
+        if (hasInitOnlyMembers)
         {
-            sb.AppendLine();
-            sb.AppendLine($"{indent}    {model.BeforeMapConfigurationTypeName}.BeforeMap({sourceParam}, target);");
+            // Use object initializer for init-only properties
+            var initMembers = model.Members.Where(m => m.IsTargetInitOnly).ToList();
+            var mutableMembers = model.Members.Where(m => !m.IsTargetInitOnly).ToList();
+
+            sb.AppendLine($"{indent}    var target = new {model.TargetTypeName}");
+            sb.AppendLine($"{indent}    {{");
+            for (int i = 0; i < initMembers.Count; i++)
+            {
+                var member = initMembers[i];
+                var value = GeneratePropertyValue(member, sourceParam, model);
+                var trailing = i < initMembers.Count - 1 ? "," : "";
+                sb.AppendLine($"{indent}        {member.Name} = {value}{trailing}");
+            }
+            sb.AppendLine($"{indent}    }};");
+
+            if (model.BeforeMapConfigurationTypeName != null)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"{indent}    {model.BeforeMapConfigurationTypeName}.BeforeMap({sourceParam}, target);");
+            }
+
+            foreach (var member in mutableMembers)
+            {
+                var assignment = GeneratePropertyAssignment(member, sourceParam, "target", model);
+                sb.AppendLine($"{indent}    {assignment}");
+            }
         }
-
-        foreach (var member in model.Members)
+        else
         {
-            var assignment = GeneratePropertyAssignment(member, sourceParam, "target", model);
-            sb.AppendLine($"{indent}    {assignment}");
+            sb.AppendLine($"{indent}    var target = new {model.TargetTypeName}();");
+
+            if (model.BeforeMapConfigurationTypeName != null)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"{indent}    {model.BeforeMapConfigurationTypeName}.BeforeMap({sourceParam}, target);");
+            }
+
+            foreach (var member in model.Members)
+            {
+                var assignment = GeneratePropertyAssignment(member, sourceParam, "target", model);
+                sb.AppendLine($"{indent}    {assignment}");
+            }
         }
 
         if (model.ConfigurationTypeName != null)
@@ -112,20 +147,39 @@ internal static class FacetMapCodeBuilder
         sb.AppendLine($"{indent}    if ({sourceParam} == null) throw new ArgumentNullException(nameof({sourceParam}));");
         sb.AppendLine();
 
-        if (model.SourceHasPositionalConstructor)
+        var hasInitOnlyMembers = model.Members.Any(m => m.IsSourceInitOnly);
+
+        if (hasInitOnlyMembers)
         {
-            // For positional records, use object initializer (the record still has a parameterless-ish path via with{})
-            sb.AppendLine($"{indent}    var target = new {model.SourceTypeName}();");
+            var initMembers = model.Members.Where(m => m.IsSourceInitOnly).ToList();
+            var mutableMembers = model.Members.Where(m => !m.IsSourceInitOnly).ToList();
+
+            sb.AppendLine($"{indent}    var target = new {model.SourceTypeName}");
+            sb.AppendLine($"{indent}    {{");
+            for (int i = 0; i < initMembers.Count; i++)
+            {
+                var member = initMembers[i];
+                var value = GeneratePropertyValue(member, sourceParam, model, reverse: true);
+                var trailing = i < initMembers.Count - 1 ? "," : "";
+                sb.AppendLine($"{indent}        {member.SourcePropertyName} = {value}{trailing}");
+            }
+            sb.AppendLine($"{indent}    }};");
+
+            foreach (var mutableMember in mutableMembers)
+            {
+                var assignment = GeneratePropertyAssignment(mutableMember, sourceParam, "target", model, reverse: true);
+                sb.AppendLine($"{indent}    {assignment}");
+            }
         }
         else
         {
             sb.AppendLine($"{indent}    var target = new {model.SourceTypeName}();");
-        }
 
-        foreach (var member in model.Members)
-        {
-            var assignment = GeneratePropertyAssignment(member, sourceParam, "target", model, reverse: true);
-            sb.AppendLine($"{indent}    {assignment}");
+            foreach (var member in model.Members)
+            {
+                var assignment = GeneratePropertyAssignment(member, sourceParam, "target", model, reverse: true);
+                sb.AppendLine($"{indent}    {assignment}");
+            }
         }
 
         if (model.ToSourceConfigurationTypeName != null)
@@ -148,7 +202,7 @@ internal static class FacetMapCodeBuilder
         sb.AppendLine($"{indent}/// <summary>");
         sb.AppendLine($"{indent}/// LINQ projection expression for mapping <see cref=\"{sourceSimple}\"/> to <see cref=\"{targetSimple}\"/>.");
         sb.AppendLine($"{indent}/// </summary>");
-        sb.AppendLine($"{indent}public static Expression<Func<{model.SourceTypeName}, {model.TargetTypeName}>> {model.TargetTypeSimpleName}Projection =>");
+        sb.AppendLine($"{indent}public static Expression<Func<{model.SourceTypeName}, {model.TargetTypeName}>> {model.SourceTypeSimpleName}To{model.TargetTypeSimpleName}Projection =>");
         sb.AppendLine($"{indent}    source => new {model.TargetTypeName}");
         sb.AppendLine($"{indent}    {{");
 
@@ -191,6 +245,28 @@ internal static class FacetMapCodeBuilder
         }
 
         return $"{targetVar}.{targetProp} = {sourceVar}.{sourceProp};";
+    }
+
+    private static string GeneratePropertyValue(FacetMapMember member, string sourceVar, FacetMapTargetModel model, bool reverse = false)
+    {
+        var sourceProp = reverse ? member.Name : member.SourcePropertyName;
+
+        if (member.IsCollection && member.CollectionWrapper != null)
+        {
+            var nullCheck = member.IsNullable ? $"{sourceVar}.{sourceProp} != null ? " : "";
+            var nullEnd = member.IsNullable ? " : null" : "";
+
+            if (member.CollectionWrapper == "array")
+            {
+                return $"{nullCheck}{sourceVar}.{sourceProp}.ToArray(){nullEnd}";
+            }
+            else
+            {
+                return $"{nullCheck}{sourceVar}.{sourceProp}.ToList(){nullEnd}";
+            }
+        }
+
+        return $"{sourceVar}.{sourceProp}";
     }
 
     private static string GenerateContainingTypeHierarchy(StringBuilder sb, FacetMapTargetModel model)

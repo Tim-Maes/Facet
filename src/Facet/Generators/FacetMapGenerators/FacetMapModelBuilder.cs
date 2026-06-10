@@ -174,6 +174,9 @@ internal static class FacetMapModelBuilder
             var isNullable = targetProp.Type.NullableAnnotation == NullableAnnotation.Annotated
                 || (targetProp.Type is INamedTypeSymbol nts && nts.ConstructedFrom.SpecialType == SpecialType.System_Nullable_T);
 
+            var isTargetInitOnly = targetProp.SetMethod?.IsInitOnly == true;
+            var isSourceInitOnly = sourceProp.SetMethod?.IsInitOnly == true;
+
             // Detect collections
             bool isCollection = false;
             string? collectionWrapper = null;
@@ -196,7 +199,9 @@ internal static class FacetMapModelBuilder
                 isCollection: isCollection,
                 collectionWrapper: collectionWrapper,
                 collectionElementType: collectionElementType,
-                isNullable: isNullable));
+                isNullable: isNullable,
+                isTargetInitOnly: isTargetInitOnly,
+                isSourceInitOnly: isSourceInitOnly));
         }
 
         return builder.ToImmutable();
