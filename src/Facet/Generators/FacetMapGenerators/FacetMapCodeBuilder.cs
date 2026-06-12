@@ -37,6 +37,7 @@ internal static class FacetMapCodeBuilder
         if (model.GenerateToSource)
         {
             GenerateToSourceExtension(sb, model, memberIndent);
+            GenerateApplyToSourceExtension(sb, model, memberIndent);
         }
 
         if (model.GenerateProjection)
@@ -66,11 +67,16 @@ internal static class FacetMapCodeBuilder
         sb.AppendLine($"{indent}    if ({sourceParam} == null) throw new ArgumentNullException(nameof({sourceParam}));");
         sb.AppendLine();
 
+        var sourcePropertyNames = GetSourcePropertyNames(model);
         var hasInitOnlyMembers = model.Members.Any(m => m.IsTargetInitOnly);
+        var hasConfiguration = model.ConfigurationTypeName != null;
+        var hasBeforeMap = model.BeforeMapConfigurationTypeName != null;
+        var hasAfterMap = model.AfterMapConfigurationTypeName != null;
+        var needsTargetVariable = hasInitOnlyMembers || hasConfiguration || hasBeforeMap || hasAfterMap;
 
         if (hasInitOnlyMembers)
         {
-            // Use object initializer for init-only properties
+            // Mixed: use object initializer for init-only, then statements for mutable
             var initMembers = model.Members.Where(m => m.IsTargetInitOnly).ToList();
             var mutableMembers = model.Members.Where(m => !m.IsTargetInitOnly).ToList();
 
@@ -79,13 +85,13 @@ internal static class FacetMapCodeBuilder
             for (int i = 0; i < initMembers.Count; i++)
             {
                 var member = initMembers[i];
-                var value = GeneratePropertyValue(member, sourceParam, model);
+                var value = ExpressionBuilder.GetSourceValueExpression(member, sourceParam, 0, false, false, sourcePropertyNames);
                 var trailing = i < initMembers.Count - 1 ? "," : "";
                 sb.AppendLine($"{indent}        {member.Name} = {value}{trailing}");
             }
             sb.AppendLine($"{indent}    }};");
 
-            if (model.BeforeMapConfigurationTypeName != null)
+            if (hasBeforeMap)
             {
                 sb.AppendLine();
                 sb.AppendLine($"{indent}    {model.BeforeMapConfigurationTypeName}.BeforeMap({sourceParam}, target);");
@@ -93,15 +99,16 @@ internal static class FacetMapCodeBuilder
 
             foreach (var member in mutableMembers)
             {
-                var assignment = GeneratePropertyAssignment(member, sourceParam, "target", model);
-                sb.AppendLine($"{indent}    {assignment}");
+                var value = ExpressionBuilder.GetSourceValueExpression(member, sourceParam, 0, false, false, sourcePropertyNames);
+                sb.AppendLine($"{indent}    target.{member.Name} = {value};");
             }
         }
-        else
+        else if (needsTargetVariable)
         {
+            // Has configurations - need a variable to pass to Map/BeforeMap/AfterMap
             sb.AppendLine($"{indent}    var target = new {model.TargetTypeName}();");
 
-            if (model.BeforeMapConfigurationTypeName != null)
+            if (hasBeforeMap)
             {
                 sb.AppendLine();
                 sb.AppendLine($"{indent}    {model.BeforeMapConfigurationTypeName}.BeforeMap({sourceParam}, target);");
@@ -109,18 +116,35 @@ internal static class FacetMapCodeBuilder
 
             foreach (var member in model.Members)
             {
-                var assignment = GeneratePropertyAssignment(member, sourceParam, "target", model);
-                sb.AppendLine($"{indent}    {assignment}");
+                var value = ExpressionBuilder.GetSourceValueExpression(member, sourceParam, 0, false, false, sourcePropertyNames);
+                sb.AppendLine($"{indent}    target.{member.Name} = {value};");
             }
         }
+        else
+        {
+            // Simple case: use object initializer (same style as Facet's FromSource)
+            var propertyAssignments = new System.Collections.Generic.List<string>();
+            foreach (var member in model.Members)
+            {
+                var value = ExpressionBuilder.GetSourceValueExpression(member, sourceParam, 0, false, false, sourcePropertyNames);
+                propertyAssignments.Add($"{indent}        {member.Name} = {value}");
+            }
 
-        if (model.ConfigurationTypeName != null)
+            sb.AppendLine($"{indent}    return new {model.TargetTypeName}");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine(string.Join(",\n", propertyAssignments));
+            sb.AppendLine($"{indent}    }};");
+            sb.AppendLine($"{indent}}}");
+            return;
+        }
+
+        if (hasConfiguration)
         {
             sb.AppendLine();
             sb.AppendLine($"{indent}    {model.ConfigurationTypeName}.Map({sourceParam}, target);");
         }
 
-        if (model.AfterMapConfigurationTypeName != null)
+        if (hasAfterMap)
         {
             sb.AppendLine();
             sb.AppendLine($"{indent}    {model.AfterMapConfigurationTypeName}.AfterMap({sourceParam}, target);");
@@ -133,7 +157,7 @@ internal static class FacetMapCodeBuilder
 
     private static void GenerateToSourceExtension(StringBuilder sb, FacetMapTargetModel model, string indent)
     {
-        var sourceParam = "dto";
+        var dtoParam = "dto";
         var targetSimple = GetSimpleTypeName(model.TargetTypeName);
         var sourceSimple = GetSimpleTypeName(model.SourceTypeName);
 
@@ -141,16 +165,17 @@ internal static class FacetMapCodeBuilder
         sb.AppendLine($"{indent}/// <summary>");
         sb.AppendLine($"{indent}/// Maps a <see cref=\"{targetSimple}\"/> instance back to a new <see cref=\"{sourceSimple}\"/> instance.");
         sb.AppendLine($"{indent}/// </summary>");
-        sb.AppendLine($"{indent}public static {model.SourceTypeName} To{model.SourceTypeSimpleName}(this {model.TargetTypeName} {sourceParam})");
+        sb.AppendLine($"{indent}public static {model.SourceTypeName} To{model.SourceTypeSimpleName}(this {model.TargetTypeName} {dtoParam})");
         sb.AppendLine($"{indent}{{");
 
-        sb.AppendLine($"{indent}    if ({sourceParam} == null) throw new ArgumentNullException(nameof({sourceParam}));");
+        sb.AppendLine($"{indent}    if ({dtoParam} == null) throw new ArgumentNullException(nameof({dtoParam}));");
         sb.AppendLine();
 
         var hasInitOnlyMembers = model.Members.Any(m => m.IsSourceInitOnly);
 
         if (hasInitOnlyMembers)
         {
+            // Mixed init-only + mutable: use object initializer for init-only, then assign mutable
             var initMembers = model.Members.Where(m => m.IsSourceInitOnly).ToList();
             var mutableMembers = model.Members.Where(m => !m.IsSourceInitOnly).ToList();
 
@@ -159,7 +184,7 @@ internal static class FacetMapCodeBuilder
             for (int i = 0; i < initMembers.Count; i++)
             {
                 var member = initMembers[i];
-                var value = GeneratePropertyValue(member, sourceParam, model, reverse: true);
+                var value = GetToSourceValueExpression(member, dtoParam);
                 var trailing = i < initMembers.Count - 1 ? "," : "";
                 sb.AppendLine($"{indent}        {member.SourcePropertyName} = {value}{trailing}");
             }
@@ -167,29 +192,93 @@ internal static class FacetMapCodeBuilder
 
             foreach (var mutableMember in mutableMembers)
             {
-                var assignment = GeneratePropertyAssignment(mutableMember, sourceParam, "target", model, reverse: true);
-                sb.AppendLine($"{indent}    {assignment}");
+                var value = GetToSourceValueExpression(mutableMember, dtoParam);
+                sb.AppendLine($"{indent}    target.{mutableMember.SourcePropertyName} = {value};");
             }
         }
         else
         {
-            sb.AppendLine($"{indent}    var target = new {model.SourceTypeName}();");
-
+            // Use object initializer pattern (same as Facet's ToSource)
+            var propertyAssignments = new System.Collections.Generic.List<string>();
             foreach (var member in model.Members)
             {
-                var assignment = GeneratePropertyAssignment(member, sourceParam, "target", model, reverse: true);
-                sb.AppendLine($"{indent}    {assignment}");
+                var value = GetToSourceValueExpression(member, dtoParam);
+                propertyAssignments.Add($"{indent}        {member.SourcePropertyName} = {value}");
+            }
+
+            if (model.ToSourceConfigurationTypeName != null)
+            {
+                sb.AppendLine($"{indent}    var target = new {model.SourceTypeName}");
+                sb.AppendLine($"{indent}    {{");
+                sb.AppendLine(string.Join(",\n", propertyAssignments));
+                sb.AppendLine($"{indent}    }};");
+                sb.AppendLine();
+                sb.AppendLine($"{indent}    {model.ToSourceConfigurationTypeName}.Map({dtoParam}, target);");
+            }
+            else
+            {
+                sb.AppendLine($"{indent}    return new {model.SourceTypeName}");
+                sb.AppendLine($"{indent}    {{");
+                sb.AppendLine(string.Join(",\n", propertyAssignments));
+                sb.AppendLine($"{indent}    }};");
             }
         }
 
-        if (model.ToSourceConfigurationTypeName != null)
+        if (hasInitOnlyMembers && model.ToSourceConfigurationTypeName != null)
         {
             sb.AppendLine();
-            sb.AppendLine($"{indent}    {model.ToSourceConfigurationTypeName}.Map({sourceParam}, target);");
+            sb.AppendLine($"{indent}    {model.ToSourceConfigurationTypeName}.Map({dtoParam}, target);");
         }
 
+        // Return for cases where we need 'target' (init-only members or ToSourceConfiguration)
+        if (hasInitOnlyMembers || model.ToSourceConfigurationTypeName != null)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"{indent}    return target;");
+        }
+
+        sb.AppendLine($"{indent}}}");
+    }
+
+    private static void GenerateApplyToSourceExtension(StringBuilder sb, FacetMapTargetModel model, string indent)
+    {
+        var dtoParam = "dto";
+        var targetSimple = GetSimpleTypeName(model.TargetTypeName);
+        var sourceSimple = GetSimpleTypeName(model.SourceTypeName);
+
         sb.AppendLine();
-        sb.AppendLine($"{indent}    return target;");
+        sb.AppendLine($"{indent}/// <summary>");
+        sb.AppendLine($"{indent}/// Applies the mapped properties of a <see cref=\"{targetSimple}\"/> instance onto an existing");
+        sb.AppendLine($"{indent}/// <see cref=\"{sourceSimple}\"/> instance in place.");
+        sb.AppendLine($"{indent}/// Properties excluded from this mapping are left unchanged on the source.");
+        sb.AppendLine($"{indent}/// </summary>");
+        sb.AppendLine($"{indent}/// <param name=\"{dtoParam}\">The DTO instance containing the values to apply.</param>");
+        sb.AppendLine($"{indent}/// <param name=\"source\">The existing <see cref=\"{sourceSimple}\"/> instance to update.</param>");
+        sb.AppendLine($"{indent}public static void ApplyTo{model.SourceTypeSimpleName}(this {model.TargetTypeName} {dtoParam}, {model.SourceTypeName} source)");
+        sb.AppendLine($"{indent}{{");
+
+        sb.AppendLine($"{indent}    if ({dtoParam} == null) throw new ArgumentNullException(nameof({dtoParam}));");
+        sb.AppendLine($"{indent}    if (source == null) throw new ArgumentNullException(nameof(source));");
+
+        var hasMappable = false;
+        foreach (var member in model.Members)
+        {
+            if (member.IsSourceInitOnly)
+                continue;
+
+            var value = GetToSourceValueExpression(member, dtoParam);
+            sb.AppendLine($"{indent}    source.{member.SourcePropertyName} = {value};");
+            hasMappable = true;
+        }
+
+        if (!hasMappable)
+            sb.AppendLine($"{indent}    // No settable members configured for this mapping");
+
+        if (model.ToSourceConfigurationTypeName != null)
+        {
+            sb.AppendLine($"{indent}    {model.ToSourceConfigurationTypeName}.Map({dtoParam}, source);");
+        }
+
         sb.AppendLine($"{indent}}}");
     }
 
@@ -197,6 +286,7 @@ internal static class FacetMapCodeBuilder
     {
         var sourceSimple = GetSimpleTypeName(model.SourceTypeName);
         var targetSimple = GetSimpleTypeName(model.TargetTypeName);
+        var sourcePropertyNames = GetSourcePropertyNames(model);
 
         sb.AppendLine();
         sb.AppendLine($"{indent}/// <summary>");
@@ -211,62 +301,137 @@ internal static class FacetMapCodeBuilder
             var member = model.Members[i];
             var trailing = i < model.Members.Length - 1 ? "," : "";
 
-            if (member.IsCollection && member.CollectionElementType != null)
-            {
-                sb.AppendLine($"{indent}        {member.Name} = source.{member.SourcePropertyName}.Select(x => x).ToList(){trailing}");
-            }
-            else
-            {
-                sb.AppendLine($"{indent}        {member.Name} = source.{member.SourcePropertyName}{trailing}");
-            }
+            if (!member.MapFromIncludeInProjection)
+                continue;
+
+            var value = ExpressionBuilder.GetSourceValueExpression(member, "source", 0, false, false, sourcePropertyNames);
+            sb.AppendLine($"{indent}        {member.Name} = {value}{trailing}");
         }
 
         sb.AppendLine($"{indent}    }};");
     }
 
-    private static string GeneratePropertyAssignment(FacetMapMember member, string sourceVar, string targetVar, FacetMapTargetModel model, bool reverse = false)
+    /// <summary>
+    /// Gets the reverse mapping expression for a member (target/DTO back to source).
+    /// Uses ExpressionBuilder logic adapted for extension method context where "this" is replaced
+    /// by the dto parameter variable.
+    /// </summary>
+    private static string GetToSourceValueExpression(FacetMapMember member, string dtoParam)
     {
-        var sourceProp = reverse ? member.Name : member.SourcePropertyName;
-        var targetProp = reverse ? member.SourcePropertyName : member.Name;
+        bool facetTypeIsNullable = member.TypeName.EndsWith("?");
+        bool sourceTypeIsNullable = member.SourceMemberTypeName?.EndsWith("?") ?? facetTypeIsNullable;
 
+        // Handle enum conversions in reverse (facet string/int -> source enum)
+        if (member.IsEnumConversion && member.OriginalEnumTypeName != null)
+        {
+            return GetEnumToSourceExpression(member, dtoParam);
+        }
+
+        // Handle collections in reverse
         if (member.IsCollection && member.CollectionWrapper != null)
         {
-            var nullCheck = member.IsNullable ? $"{sourceVar}.{sourceProp} != null ? " : "";
-            var nullEnd = member.IsNullable ? " : null" : "";
+            var sourceWrapper = member.SourceCollectionWrapper ?? member.CollectionWrapper;
+            var projection = $"{dtoParam}.{member.Name}";
+            var collectionExpression = WrapCollectionProjection($"{projection}.Select(x => x)", sourceWrapper);
 
-            if (member.CollectionWrapper == "array")
+            if (facetTypeIsNullable)
             {
-                return $"{targetVar}.{targetProp} = {nullCheck}{sourceVar}.{sourceProp}.ToArray(){nullEnd};";
+                return $"{dtoParam}.{member.Name} != null ? {collectionExpression} : null";
+            }
+
+            return $"{dtoParam}.{member.Name} != null ? {collectionExpression} : default!";
+        }
+
+        // Handle nullable-to-non-nullable conversion
+        if (facetTypeIsNullable && !sourceTypeIsNullable)
+        {
+            if (member.IsValueType)
+            {
+                return $"{dtoParam}.{member.Name} ?? default";
             }
             else
             {
-                return $"{targetVar}.{targetProp} = {nullCheck}{sourceVar}.{sourceProp}.ToList(){nullEnd};";
+                return $"{dtoParam}.{member.Name}!";
             }
         }
 
-        return $"{targetVar}.{targetProp} = {sourceVar}.{sourceProp};";
+        return $"{dtoParam}.{member.Name}";
     }
 
-    private static string GeneratePropertyValue(FacetMapMember member, string sourceVar, FacetMapTargetModel model, bool reverse = false)
+    /// <summary>
+    /// Gets the enum-to-source conversion expression for reverse mapping.
+    /// </summary>
+    private static string GetEnumToSourceExpression(FacetMapMember member, string dtoParam)
     {
-        var sourceProp = reverse ? member.Name : member.SourcePropertyName;
+        var enumTypeName = member.OriginalEnumTypeName!;
+        bool facetTypeIsNullable = member.TypeName.EndsWith("?");
+        bool sourceTypeIsNullable = member.SourceMemberTypeName?.EndsWith("?") ?? false;
 
-        if (member.IsCollection && member.CollectionWrapper != null)
+        if (member.TypeName.TrimEnd('?') == "string")
         {
-            var nullCheck = member.IsNullable ? $"{sourceVar}.{sourceProp} != null ? " : "";
-            var nullEnd = member.IsNullable ? " : null" : "";
-
-            if (member.CollectionWrapper == "array")
+            if (facetTypeIsNullable && sourceTypeIsNullable)
             {
-                return $"{nullCheck}{sourceVar}.{sourceProp}.ToArray(){nullEnd}";
+                return $"{dtoParam}.{member.Name} != null ? ({enumTypeName}?)System.Enum.Parse<{enumTypeName}>({dtoParam}.{member.Name}) : null";
+            }
+            else if (facetTypeIsNullable)
+            {
+                return $"System.Enum.Parse<{enumTypeName}>({dtoParam}.{member.Name}!)";
             }
             else
             {
-                return $"{nullCheck}{sourceVar}.{sourceProp}.ToList(){nullEnd}";
+                return $"System.Enum.Parse<{enumTypeName}>({dtoParam}.{member.Name})";
+            }
+        }
+        else if (member.TypeName.TrimEnd('?') == "int")
+        {
+            if (facetTypeIsNullable && sourceTypeIsNullable)
+            {
+                return $"{dtoParam}.{member.Name} != null ? ({enumTypeName}?)({enumTypeName}){dtoParam}.{member.Name}.Value : null";
+            }
+            else if (facetTypeIsNullable)
+            {
+                return $"({enumTypeName})({dtoParam}.{member.Name} ?? default)";
+            }
+            else
+            {
+                return $"({enumTypeName}){dtoParam}.{member.Name}";
             }
         }
 
-        return $"{sourceVar}.{sourceProp}";
+        return $"{dtoParam}.{member.Name}";
+    }
+
+    private static string WrapCollectionProjection(string projection, string collectionWrapper)
+    {
+        return collectionWrapper switch
+        {
+            FacetConstants.CollectionWrappers.List => $"{projection}.ToList()",
+            FacetConstants.CollectionWrappers.IList => $"{projection}.ToList()",
+            FacetConstants.CollectionWrappers.ICollection => $"{projection}.ToList()",
+            FacetConstants.CollectionWrappers.IReadOnlyList => $"{projection}.ToList()",
+            FacetConstants.CollectionWrappers.IReadOnlyCollection => $"{projection}.ToList()",
+            FacetConstants.CollectionWrappers.IEnumerable => projection,
+            FacetConstants.CollectionWrappers.Array or "array" => $"{projection}.ToArray()",
+            FacetConstants.CollectionWrappers.Collection => $"{projection}.ToList()",
+            FacetConstants.CollectionWrappers.ImmutableArray => $"{projection}.ToImmutableArray()",
+            FacetConstants.CollectionWrappers.ImmutableList => $"{projection}.ToImmutableList()",
+            FacetConstants.CollectionWrappers.ImmutableHashSet => $"{projection}.ToImmutableHashSet()",
+            FacetConstants.CollectionWrappers.ImmutableSortedSet => $"{projection}.ToImmutableSortedSet()",
+            FacetConstants.CollectionWrappers.ImmutableQueue => $"global::System.Collections.Immutable.ImmutableQueue.CreateRange({projection})",
+            FacetConstants.CollectionWrappers.ImmutableStack => $"global::System.Collections.Immutable.ImmutableStack.CreateRange({projection})",
+            FacetConstants.CollectionWrappers.IImmutableList => $"{projection}.ToImmutableList()",
+            FacetConstants.CollectionWrappers.IImmutableSet => $"{projection}.ToImmutableHashSet()",
+            FacetConstants.CollectionWrappers.IImmutableQueue => $"global::System.Collections.Immutable.ImmutableQueue.CreateRange({projection})",
+            FacetConstants.CollectionWrappers.IImmutableStack => $"global::System.Collections.Immutable.ImmutableStack.CreateRange({projection})",
+            _ => projection
+        };
+    }
+
+    private static HashSet<string> GetSourcePropertyNames(FacetMapTargetModel model)
+    {
+        return new HashSet<string>(
+            model.Members.Select(m => m.SourcePropertyName),
+            System.StringComparer.Ordinal);
     }
 
     private static string GenerateContainingTypeHierarchy(StringBuilder sb, FacetMapTargetModel model)

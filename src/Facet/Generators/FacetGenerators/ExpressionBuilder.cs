@@ -17,7 +17,7 @@ internal static class ExpressionBuilder
     /// For regular members, returns "source.PropertyName".
     /// </summary>
     public static string GetSourceValueExpression(
-        FacetMember member,
+        IMappableMember member,
         string sourceVariableName,
         int maxDepth = 0,
         bool useDepthParameter = false,
@@ -75,7 +75,7 @@ internal static class ExpressionBuilder
     /// <param name="maxDepthToSource">When &gt; 0, depth-aware expressions are emitted that guard nested calls with a depth check.</param>
     /// <param name="useDepthParameter">When true the expression is being emitted inside a depth-aware <c>ToSource(int __depth)</c> overload.</param>
     public static string GetToSourceValueExpression(
-        FacetMember member,
+        IMappableMember member,
         Dictionary<string, List<FacetTargetModel>>? facetLookup = null,
         string? parentSourceTypeName = null,
         int maxDepthToSource = 0,
@@ -146,7 +146,7 @@ internal static class ExpressionBuilder
     /// <summary>
     /// Wraps a value expression with MapWhen condition(s), generating a ternary expression.
     /// </summary>
-    private static string WrapWithMapWhenCondition(FacetMember member, string valueExpression, string sourceVariableName, HashSet<string>? sourcePropertyNames = null)
+    private static string WrapWithMapWhenCondition(IMappableMember member, string valueExpression, string sourceVariableName, HashSet<string>? sourcePropertyNames = null)
     {
         var combinedCondition = string.Join(" && ", member.MapWhenConditions.Select(c =>
             $"({TransformExpression(c, sourceVariableName, sourcePropertyNames)})"));
@@ -157,7 +157,7 @@ internal static class ExpressionBuilder
     }
 
     private static string BuildCollectionNestedFacetExpression(
-        FacetMember member,
+        IMappableMember member,
         string sourceVariableName,
         bool isNullable,
         int maxDepth,
@@ -225,7 +225,7 @@ internal static class ExpressionBuilder
     }
 
     private static string BuildSingleNestedFacetExpression(
-        FacetMember member,
+        IMappableMember member,
         string sourceVariableName,
         bool isNullable,
         int maxDepth,
@@ -279,7 +279,7 @@ internal static class ExpressionBuilder
         }
     }
 
-    private static string BuildCollectionToSourceExpression(FacetMember member, bool facetTypeIsNullable, Dictionary<string, List<FacetTargetModel>>? facetLookup, string? parentSourceTypeName, int maxDepthToSource = 0, bool useDepthParameter = false)
+    private static string BuildCollectionToSourceExpression(IMappableMember member, bool facetTypeIsNullable, Dictionary<string, List<FacetTargetModel>>? facetLookup, string? parentSourceTypeName, int maxDepthToSource = 0, bool useDepthParameter = false)
     {
         var toSourceMethodName = GetToSourceMethodName(member.TypeName, member.NestedFacetSourceTypeName, facetLookup, parentSourceTypeName);
 
@@ -311,7 +311,7 @@ internal static class ExpressionBuilder
         return $"this.{member.Name} != null ? {collectionExpression} : default!";
     }
 
-    private static string BuildSingleToSourceExpression(FacetMember member, bool facetTypeIsNullable, Dictionary<string, List<FacetTargetModel>>? facetLookup, string? parentSourceTypeName, int maxDepthToSource = 0, bool useDepthParameter = false)
+    private static string BuildSingleToSourceExpression(IMappableMember member, bool facetTypeIsNullable, Dictionary<string, List<FacetTargetModel>>? facetLookup, string? parentSourceTypeName, int maxDepthToSource = 0, bool useDepthParameter = false)
     {
         var toSourceMethodName = GetToSourceMethodName(member.TypeName, member.NestedFacetSourceTypeName, facetLookup, parentSourceTypeName);
 
@@ -407,7 +407,7 @@ internal static class ExpressionBuilder
     /// <summary>
     /// Applies enum-to-target-type conversion (source enum ? facet string/int).
     /// </summary>
-    private static string ApplyEnumToTargetConversion(string valueExpression, FacetMember member)
+    private static string ApplyEnumToTargetConversion(string valueExpression, IMappableMember member)
     {
         if (member.IsCollection && member.CollectionWrapper != null)
         {
@@ -439,7 +439,7 @@ internal static class ExpressionBuilder
     /// <summary>
     /// Applies enum collection to target collection conversion (source List&lt;enum&gt; ? facet List&lt;string/int&gt;).
     /// </summary>
-    private static string ApplyEnumCollectionToTargetConversion(string valueExpression, FacetMember member)
+    private static string ApplyEnumCollectionToTargetConversion(string valueExpression, IMappableMember member)
     {
         bool isCollectionNullable = member.TypeName.EndsWith("?");
         string targetElementType = member.TypeName.TrimEnd('?');
@@ -465,7 +465,7 @@ internal static class ExpressionBuilder
             return valueExpression;
         }
 
-        var finalExpression = WrapCollectionProjection(conversionExpression, member.CollectionWrapper);
+        var finalExpression = WrapCollectionProjection(conversionExpression, member.CollectionWrapper!);
 
         if (isCollectionNullable)
         {
@@ -478,7 +478,7 @@ internal static class ExpressionBuilder
     /// <summary>
     /// Applies target-type-to-enum conversion (facet string/int ? source enum) for ToSource mapping.
     /// </summary>
-    private static string ApplyTargetToEnumConversion(FacetMember member)
+    private static string ApplyTargetToEnumConversion(IMappableMember member)
     {
         if (member.IsCollection && member.CollectionWrapper != null)
         {
@@ -526,7 +526,7 @@ internal static class ExpressionBuilder
     /// <summary>
     /// Applies target collection to enum collection conversion (facet List&lt;string/int&gt; ? source List&lt;enum&gt;) for ToSource mapping.
     /// </summary>
-    private static string ApplyTargetCollectionToEnumConversion(FacetMember member)
+    private static string ApplyTargetCollectionToEnumConversion(IMappableMember member)
     {
         var enumTypeName = member.OriginalEnumTypeName!;
         bool facetCollectionIsNullable = member.TypeName.EndsWith("?");

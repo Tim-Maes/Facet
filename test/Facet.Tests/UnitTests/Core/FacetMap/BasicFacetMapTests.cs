@@ -111,4 +111,64 @@ public class BasicFacetMapTests
 
         act.Should().Throw<ArgumentNullException>();
     }
+
+    [Fact]
+    public void ApplyToSource_ShouldUpdateExistingEntity()
+    {
+        var existingCustomer = new Customer
+        {
+            Id = 1,
+            FirstName = "Old",
+            LastName = "Name",
+            Email = "old@example.com",
+            PasswordHash = "original_hash",
+            CreatedAt = new DateTime(2020, 1, 1),
+            IsActive = false,
+            Balance = 0m
+        };
+
+        var dto = new CustomerDto
+        {
+            Id = 1,
+            FirstName = "New",
+            LastName = "Updated",
+            Email = "new@example.com",
+            IsActive = true,
+            Balance = 500.00m
+        };
+
+        dto.ApplyToCustomer(existingCustomer);
+
+        // Mapped properties should be updated
+        existingCustomer.FirstName.Should().Be("New");
+        existingCustomer.LastName.Should().Be("Updated");
+        existingCustomer.Email.Should().Be("new@example.com");
+        existingCustomer.IsActive.Should().BeTrue();
+        existingCustomer.Balance.Should().Be(500.00m);
+
+        // Excluded properties should remain unchanged
+        existingCustomer.PasswordHash.Should().Be("original_hash");
+        existingCustomer.CreatedAt.Should().Be(new DateTime(2020, 1, 1));
+    }
+
+    [Fact]
+    public void ApplyToSource_ShouldThrowOnNullDto()
+    {
+        CustomerDto? dto = null;
+        var customer = new Customer();
+
+        var act = () => dto!.ApplyToCustomer(customer);
+
+        act.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void ApplyToSource_ShouldThrowOnNullSource()
+    {
+        var dto = new CustomerDto { Id = 1 };
+
+        var act = () => dto.ApplyToCustomer(null!);
+
+        act.Should().Throw<ArgumentNullException>();
+    }
 }

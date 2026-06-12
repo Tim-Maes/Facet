@@ -180,6 +180,7 @@ internal static class FacetMapModelBuilder
             // Detect collections
             bool isCollection = false;
             string? collectionWrapper = null;
+            string? sourceCollectionWrapper = null;
             string? collectionElementType = null;
 
             if (IsCollectionType(targetProp.Type, out var elementType, out var wrapper))
@@ -189,7 +190,16 @@ internal static class FacetMapModelBuilder
                 collectionElementType = elementType != null
                     ? GeneratorUtilities.GetTypeNameWithNullability(elementType)
                     : null;
+
+                // Detect source collection wrapper if it differs from target
+                if (IsCollectionType(sourceProp.Type, out _, out var sourceWrapper) && sourceWrapper != wrapper)
+                {
+                    sourceCollectionWrapper = sourceWrapper;
+                }
             }
+
+            // Detect source member type name for nullable conversions
+            var sourceMemberTypeName = GeneratorUtilities.GetTypeNameWithNullability(sourceProp.Type);
 
             builder.Add(new FacetMapMember(
                 name: name,
@@ -198,10 +208,12 @@ internal static class FacetMapModelBuilder
                 isValueType: isValueType,
                 isCollection: isCollection,
                 collectionWrapper: collectionWrapper,
+                sourceCollectionWrapper: sourceCollectionWrapper,
                 collectionElementType: collectionElementType,
                 isNullable: isNullable,
                 isTargetInitOnly: isTargetInitOnly,
-                isSourceInitOnly: isSourceInitOnly));
+                isSourceInitOnly: isSourceInitOnly,
+                sourceMemberTypeName: sourceMemberTypeName));
         }
 
         return builder.ToImmutable();
