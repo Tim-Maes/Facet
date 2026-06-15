@@ -327,8 +327,8 @@ internal static class FacetMapCodeBuilder
             return GetEnumToSourceExpression(member, dtoParam);
         }
 
-        // Handle collections in reverse
-        if (member.IsCollection && member.CollectionWrapper != null)
+        // Handle nested facet collections in reverse (element types differ, need transformation)
+        if (member.IsNestedFacet && member.IsCollection && member.CollectionWrapper != null)
         {
             var sourceWrapper = member.SourceCollectionWrapper ?? member.CollectionWrapper;
             var projection = $"{dtoParam}.{member.Name}";
@@ -340,6 +340,21 @@ internal static class FacetMapCodeBuilder
             }
 
             return $"{dtoParam}.{member.Name} != null ? {collectionExpression} : default!";
+        }
+
+        // Handle plain collections where only the collection wrapper type differs
+        // (e.g., source is IList<T> but target is List<T>)
+        if (member.IsCollection && member.CollectionWrapper != null && member.SourceCollectionWrapper != null)
+        {
+            var projection = $"{dtoParam}.{member.Name}";
+            var collectionExpression = WrapCollectionProjection($"{projection}.Select(x => x)", member.SourceCollectionWrapper);
+
+            if (facetTypeIsNullable)
+            {
+                return $"{dtoParam}.{member.Name} != null ? {collectionExpression} : null";
+            }
+
+            return collectionExpression;
         }
 
         // Handle nullable-to-non-nullable conversion
