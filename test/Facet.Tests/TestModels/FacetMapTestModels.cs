@@ -175,3 +175,99 @@ public static partial class AddressMappings { }
 [FacetMap(typeof(UnitDto), typeof(UnitDropDownDto))]
 [FacetMap(typeof(UnitEntity), typeof(UnitDropDownDto), GenerateToSource = true)]
 public static partial class UnitDropDownMapper;
+
+// ========================================
+// Nested type mapping tests - different element types between source and target
+// ========================================
+
+// Nested entity types (source side)
+public class ContactEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public CultureInfoEntity? CultureInfo { get; set; }
+    public ICollection<ContactAddressEntity> Addresses { get; set; } = new List<ContactAddressEntity>();
+}
+
+public class CultureInfoEntity
+{
+    public int Id { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+}
+
+public class ContactAddressEntity
+{
+    public int Id { get; set; }
+    public string Street { get; set; } = string.Empty;
+    public string City { get; set; } = string.Empty;
+    public string PostalCode { get; set; } = string.Empty;
+}
+
+// Nested DTO types (target side) - same property names but different types
+public class ContactEntityDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public CultureInfoEntityDto? CultureInfo { get; set; }
+    public ICollection<ContactAddressEntityDto> Addresses { get; set; } = new List<ContactAddressEntityDto>();
+}
+
+public class CultureInfoEntityDto
+{
+    public int Id { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+}
+
+public class ContactAddressEntityDto
+{
+    public int Id { get; set; }
+    public string Street { get; set; } = string.Empty;
+    public string City { get; set; } = string.Empty;
+    public string PostalCode { get; set; } = string.Empty;
+}
+
+// Mappers for the nested types (these must exist for the extension method calls to resolve)
+[FacetMap(typeof(CultureInfoEntity), typeof(CultureInfoEntityDto), GenerateToSource = true)]
+public static partial class CultureInfoMapper;
+
+[FacetMap(typeof(ContactAddressEntity), typeof(ContactAddressEntityDto), GenerateToSource = true)]
+public static partial class ContactAddressMapper;
+
+// The parent mapper that has properties with different types on source vs target
+[FacetMap(typeof(ContactEntity), typeof(ContactEntityDto), GenerateToSource = true)]
+public static partial class ContactMapper;
+
+// ========================================
+// IFacetProjectionMapConfiguration test
+// ========================================
+public class InvoiceEntity
+{
+    public int Id { get; set; }
+    public string Number { get; set; } = string.Empty;
+    public decimal SubTotal { get; set; }
+    public decimal Tax { get; set; }
+}
+
+public class InvoiceDto
+{
+    public int Id { get; set; }
+    public string Number { get; set; } = string.Empty;
+    public decimal SubTotal { get; set; }
+    public decimal Tax { get; set; }
+    public decimal Total { get; set; }
+}
+
+public class InvoiceProjectionConfig : Facet.Mapping.IFacetProjectionMapConfiguration<InvoiceEntity, InvoiceDto>
+{
+    public static void ConfigureProjection(Facet.Mapping.IFacetProjectionBuilder<InvoiceEntity, InvoiceDto> builder)
+    {
+        builder.Map(target => target.Total, source => source.SubTotal + source.Tax);
+    }
+}
+
+[FacetMap(typeof(InvoiceEntity), typeof(InvoiceDto), Configuration = typeof(InvoiceProjectionConfig))]
+public static partial class InvoiceMappings;
