@@ -27,6 +27,9 @@ internal sealed class FacetMapTargetModel : IEquatable<FacetMapTargetModel>
     public string? BeforeMapConfigurationTypeName { get; }
     public string? AfterMapConfigurationTypeName { get; }
 
+    public bool HasMapConfiguration { get; }
+    public bool HasProjectionMapConfiguration { get; }
+
     public bool SourceHasPositionalConstructor { get; }
     public bool TargetHasParameterlessConstructor { get; }
 
@@ -49,6 +52,8 @@ internal sealed class FacetMapTargetModel : IEquatable<FacetMapTargetModel>
         string? toSourceConfigurationTypeName,
         string? beforeMapConfigurationTypeName,
         string? afterMapConfigurationTypeName,
+        bool hasMapConfiguration,
+        bool hasProjectionMapConfiguration,
         bool sourceHasPositionalConstructor,
         bool targetHasParameterlessConstructor,
         ImmutableArray<FacetMapMember> members,
@@ -69,6 +74,8 @@ internal sealed class FacetMapTargetModel : IEquatable<FacetMapTargetModel>
         ToSourceConfigurationTypeName = toSourceConfigurationTypeName;
         BeforeMapConfigurationTypeName = beforeMapConfigurationTypeName;
         AfterMapConfigurationTypeName = afterMapConfigurationTypeName;
+        HasMapConfiguration = hasMapConfiguration;
+        HasProjectionMapConfiguration = hasProjectionMapConfiguration;
         SourceHasPositionalConstructor = sourceHasPositionalConstructor;
         TargetHasParameterlessConstructor = targetHasParameterlessConstructor;
         Members = members;
@@ -93,6 +100,8 @@ internal sealed class FacetMapTargetModel : IEquatable<FacetMapTargetModel>
             && ToSourceConfigurationTypeName == other.ToSourceConfigurationTypeName
             && BeforeMapConfigurationTypeName == other.BeforeMapConfigurationTypeName
             && AfterMapConfigurationTypeName == other.AfterMapConfigurationTypeName
+            && HasMapConfiguration == other.HasMapConfiguration
+            && HasProjectionMapConfiguration == other.HasProjectionMapConfiguration
             && SourceHasPositionalConstructor == other.SourceHasPositionalConstructor
             && TargetHasParameterlessConstructor == other.TargetHasParameterlessConstructor
             && Members.SequenceEqual(other.Members)
@@ -137,6 +146,11 @@ internal sealed class FacetMapMember : IEquatable<FacetMapMember>, IMappableMemb
     public bool IsNestedFacet { get; }
     public string? NestedFacetSourceTypeName { get; }
     public string? SourceMemberTypeName { get; }
+
+    // FacetMap-specific: simple names for generating extension method calls
+    public string? NestedTargetTypeSimpleName { get; }
+    public string? NestedSourceTypeSimpleName { get; }
+
     public string? MapFromSource { get; }
     public bool MapFromReversible { get; }
     public bool MapFromIncludeInProjection { get; }
@@ -160,6 +174,8 @@ internal sealed class FacetMapMember : IEquatable<FacetMapMember>, IMappableMemb
         bool isNestedFacet = false,
         string? nestedFacetSourceTypeName = null,
         string? sourceMemberTypeName = null,
+        string? nestedTargetTypeSimpleName = null,
+        string? nestedSourceTypeSimpleName = null,
         string? mapFromSource = null,
         bool mapFromReversible = true,
         bool mapFromIncludeInProjection = true,
@@ -182,6 +198,8 @@ internal sealed class FacetMapMember : IEquatable<FacetMapMember>, IMappableMemb
         IsNestedFacet = isNestedFacet;
         NestedFacetSourceTypeName = nestedFacetSourceTypeName;
         SourceMemberTypeName = sourceMemberTypeName;
+        NestedTargetTypeSimpleName = nestedTargetTypeSimpleName;
+        NestedSourceTypeSimpleName = nestedSourceTypeSimpleName;
         MapFromSource = mapFromSource;
         MapFromReversible = mapFromReversible;
         MapFromIncludeInProjection = mapFromIncludeInProjection;
@@ -208,6 +226,8 @@ internal sealed class FacetMapMember : IEquatable<FacetMapMember>, IMappableMemb
             && IsNestedFacet == other.IsNestedFacet
             && NestedFacetSourceTypeName == other.NestedFacetSourceTypeName
             && SourceMemberTypeName == other.SourceMemberTypeName
+            && NestedTargetTypeSimpleName == other.NestedTargetTypeSimpleName
+            && NestedSourceTypeSimpleName == other.NestedSourceTypeSimpleName
             && MapFromSource == other.MapFromSource
             && MapFromReversible == other.MapFromReversible
             && MapFromIncludeInProjection == other.MapFromIncludeInProjection

@@ -45,6 +45,12 @@ internal static class FacetMapCodeBuilder
             GenerateProjectionProperty(sb, model, memberIndent);
         }
 
+        // Generate projection map action helper when configuration uses IFacetProjectionMapConfiguration
+        if (model.ConfigurationTypeName != null && !model.HasMapConfiguration && model.HasProjectionMapConfiguration)
+        {
+            GenerateProjectionMapAction(sb, model, memberIndent);
+        }
+
         sb.AppendLine($"{containingIndent}}}");
 
         CloseContainingTypeHierarchy(sb, model);
@@ -85,7 +91,7 @@ internal static class FacetMapCodeBuilder
             for (int i = 0; i < initMembers.Count; i++)
             {
                 var member = initMembers[i];
-                var value = ExpressionBuilder.GetSourceValueExpression(member, sourceParam, 0, false, false, sourcePropertyNames);
+                var value = GetForwardValueExpression(member, sourceParam, sourcePropertyNames);
                 var trailing = i < initMembers.Count - 1 ? "," : "";
                 sb.AppendLine($"{indent}        {member.Name} = {value}{trailing}");
             }
@@ -99,7 +105,7 @@ internal static class FacetMapCodeBuilder
 
             foreach (var member in mutableMembers)
             {
-                var value = ExpressionBuilder.GetSourceValueExpression(member, sourceParam, 0, false, false, sourcePropertyNames);
+                var value = GetForwardValueExpression(member, sourceParam, sourcePropertyNames);
                 sb.AppendLine($"{indent}    target.{member.Name} = {value};");
             }
         }
@@ -116,7 +122,7 @@ internal static class FacetMapCodeBuilder
 
             foreach (var member in model.Members)
             {
-                var value = ExpressionBuilder.GetSourceValueExpression(member, sourceParam, 0, false, false, sourcePropertyNames);
+                var value = GetForwardValueExpression(member, sourceParam, sourcePropertyNames);
                 sb.AppendLine($"{indent}    target.{member.Name} = {value};");
             }
         }
@@ -126,7 +132,7 @@ internal static class FacetMapCodeBuilder
             var propertyAssignments = new System.Collections.Generic.List<string>();
             foreach (var member in model.Members)
             {
-                var value = ExpressionBuilder.GetSourceValueExpression(member, sourceParam, 0, false, false, sourcePropertyNames);
+                var value = GetForwardValueExpression(member, sourceParam, sourcePropertyNames);
                 propertyAssignments.Add($"{indent}        {member.Name} = {value}");
             }
 
@@ -141,7 +147,7 @@ internal static class FacetMapCodeBuilder
         if (hasConfiguration)
         {
             sb.AppendLine();
-            sb.AppendLine($"{indent}    {model.ConfigurationTypeName}.Map({sourceParam}, target);");
+            sb.AppendLine($"{indent}    {GetMappingCall(model, sourceParam, "target")};");
         }
 
         if (hasAfterMap)
@@ -296,13 +302,14 @@ internal static class FacetMapCodeBuilder
         sb.AppendLine($"{indent}    source => new {model.TargetTypeName}");
         sb.AppendLine($"{indent}    {{");
 
-        for (int i = 0; i < model.Members.Length; i++)
-        {
-            var member = model.Members[i];
-            var trailing = i < model.Members.Length - 1 ? "," : "";
+        var projectionMembers = model.Members
+            .Where(m => m.MapFromIncludeInProjection && !m.IsNestedFacet)
+            .ToList();
 
-            if (!member.MapFromIncludeInProjection)
-                continue;
+        for (int i = 0; i < projectionMembers.Count; i++)
+        {
+            var member = projectionMembers[i];
+            var trailing = i < projectionMembers.Count - 1 ? "," : "";
 
             var value = ExpressionBuilder.GetSourceValueExpression(member, "source", 0, false, false, sourcePropertyNames);
             sb.AppendLine($"{indent}        {member.Name} = {value}{trailing}");
@@ -312,9 +319,50 @@ internal static class FacetMapCodeBuilder
     }
 
     /// <summary>
+    /// Gets the forward mapping expression for a member (source to target).
+    /// For nested FacetMap types, generates extension method calls (e.g., source.Address.ToAddressDto()).
+    /// For regular members, delegates to the shared ExpressionBuilder.
+    /// </summary>
+    private static string GetForwardValueExpression(FacetMapMember member, string sourceParam, HashSet<string> sourcePropertyNames)
+    {
+        if (member.IsNestedFacet && member.NestedTargetTypeSimpleName != null)
+        {
+            bool isNullable = member.TypeName.EndsWith("?");
+            var extensionMethod = $"To{member.NestedTargetTypeSimpleName}";
+
+            if (member.IsCollection && member.CollectionWrapper != null)
+            {
+                // Collection nested: source.Addresses.Select(x => x.ToAddressDto()).ToList()
+                var projection = $"{sourceParam}.{member.SourcePropertyName}.Select(x => x.{extensionMethod}())";
+                var collectionExpression = WrapCollectionProjection(projection, member.CollectionWrapper);
+
+                if (isNullable)
+                {
+                    return $"{sourceParam}.{member.SourcePropertyName} != null ? {collectionExpression} : null";
+                }
+
+                return $"{sourceParam}.{member.SourcePropertyName} != null ? {collectionExpression} : default!";
+            }
+            else
+            {
+                // Single nested: source.CultureInfo.ToCultureInfoDto()
+                if (isNullable)
+                {
+                    return $"{sourceParam}.{member.SourcePropertyName} != null ? {sourceParam}.{member.SourcePropertyName}.{extensionMethod}() : null";
+                }
+
+                return $"{sourceParam}.{member.SourcePropertyName} != null ? {sourceParam}.{member.SourcePropertyName}.{extensionMethod}() : default!";
+            }
+        }
+
+        // Non-nested: delegate to the shared expression builder
+        return ExpressionBuilder.GetSourceValueExpression(member, sourceParam, 0, false, false, sourcePropertyNames);
+    }
+
+    /// <summary>
     /// Gets the reverse mapping expression for a member (target/DTO back to source).
-    /// Uses ExpressionBuilder logic adapted for extension method context where "this" is replaced
-    /// by the dto parameter variable.
+    /// For nested FacetMap types, generates extension method calls (e.g., dto.Address.ToAddressEntity()).
+    /// For regular members, uses simple property access with type conversions as needed.
     /// </summary>
     private static string GetToSourceValueExpression(FacetMapMember member, string dtoParam)
     {
@@ -327,7 +375,39 @@ internal static class FacetMapCodeBuilder
             return GetEnumToSourceExpression(member, dtoParam);
         }
 
+        // Handle nested facet types in reverse via extension method calls
+        if (member.IsNestedFacet && member.NestedSourceTypeSimpleName != null)
+        {
+            var extensionMethod = $"To{member.NestedSourceTypeSimpleName}";
+
+            if (member.IsCollection && member.CollectionWrapper != null)
+            {
+                // Collection nested: dto.Addresses.Select(x => x.ToAddressEntity()).ToList()
+                var sourceWrapper = member.SourceCollectionWrapper ?? member.CollectionWrapper;
+                var projection = $"{dtoParam}.{member.Name}.Select(x => x.{extensionMethod}())";
+                var collectionExpression = WrapCollectionProjection(projection, sourceWrapper);
+
+                if (facetTypeIsNullable)
+                {
+                    return $"{dtoParam}.{member.Name} != null ? {collectionExpression} : null";
+                }
+
+                return $"{dtoParam}.{member.Name} != null ? {collectionExpression} : default!";
+            }
+            else
+            {
+                // Single nested: dto.CultureInfo.ToCultureInfoEntity()
+                if (facetTypeIsNullable)
+                {
+                    return $"{dtoParam}.{member.Name} != null ? {dtoParam}.{member.Name}.{extensionMethod}() : null";
+                }
+
+                return $"{dtoParam}.{member.Name} != null ? {dtoParam}.{member.Name}.{extensionMethod}() : default!";
+            }
+        }
+
         // Handle nested facet collections in reverse (element types differ, need transformation)
+        // This handles the case where IsNestedFacet is true but NestedSourceTypeSimpleName is null (shouldn't happen, but defensive)
         if (member.IsNestedFacet && member.IsCollection && member.CollectionWrapper != null)
         {
             var sourceWrapper = member.SourceCollectionWrapper ?? member.CollectionWrapper;
@@ -475,5 +555,65 @@ internal static class FacetMapCodeBuilder
         var name = fullyQualifiedName.Replace("global::", "");
         var lastDot = name.LastIndexOf('.');
         return lastDot >= 0 ? name.Substring(lastDot + 1) : name;
+    }
+
+    /// <summary>
+    /// Returns the appropriate mapping call for the configuration.
+    /// When the config only implements IFacetProjectionMapConfiguration (no Map method),
+    /// delegates to the compiled projection action. Otherwise calls Map() directly.
+    /// </summary>
+    private static string GetMappingCall(FacetMapTargetModel model, string sourceExpr, string targetExpr)
+    {
+        if (!model.HasMapConfiguration && model.HasProjectionMapConfiguration)
+        {
+            return $"__GetProjectionMapAction()({sourceExpr}, {targetExpr})";
+        }
+        return $"{model.ConfigurationTypeName}.Map({sourceExpr}, {targetExpr})";
+    }
+
+    /// <summary>
+    /// Generates a lazily-compiled Action that executes the projection-based
+    /// ConfigureProjection expressions. Called when the configuration type
+    /// implements IFacetProjectionMapConfiguration but not IFacetMapConfiguration.
+    /// </summary>
+    private static void GenerateProjectionMapAction(StringBuilder sb, FacetMapTargetModel model, string memberIndent)
+    {
+        var src = model.SourceTypeName;
+        var tgt = model.TargetTypeName;
+        var bodyIndent = memberIndent + "    ";
+
+        sb.AppendLine();
+        sb.AppendLine($"{memberIndent}private static global::System.Action<{src}, {tgt}>? __projectionMapAction;");
+        sb.AppendLine();
+        sb.AppendLine($"{memberIndent}private static global::System.Action<{src}, {tgt}> __GetProjectionMapAction()");
+        sb.AppendLine($"{memberIndent}{{");
+        sb.AppendLine($"{bodyIndent}return global::System.Threading.LazyInitializer.EnsureInitialized(ref __projectionMapAction, () =>");
+        sb.AppendLine($"{bodyIndent}{{");
+
+        var innerIndent = bodyIndent + "    ";
+
+        sb.AppendLine($"{innerIndent}var __sourceParam = global::System.Linq.Expressions.Expression.Parameter(typeof({src}), \"source\");");
+        sb.AppendLine($"{innerIndent}var __targetParam = global::System.Linq.Expressions.Expression.Parameter(typeof({tgt}), \"target\");");
+        sb.AppendLine($"{innerIndent}var __assignments = new global::System.Collections.Generic.List<global::System.Linq.Expressions.Expression>();");
+        sb.AppendLine();
+
+        sb.AppendLine($"{innerIndent}var __builder = new global::Facet.Mapping.FacetProjectionBuilder<{src}, {tgt}>();");
+        sb.AppendLine($"{innerIndent}{model.ConfigurationTypeName}.ConfigureProjection(__builder);");
+        sb.AppendLine($"{innerIndent}foreach (var (__member, __expr) in __builder.Mappings)");
+        sb.AppendLine($"{innerIndent}{{");
+        sb.AppendLine($"{innerIndent}    var __body = global::Facet.Mapping.ParameterReplacer.Replace(__expr, __sourceParam);");
+        sb.AppendLine($"{innerIndent}    __assignments.Add(global::System.Linq.Expressions.Expression.Assign(");
+        sb.AppendLine($"{innerIndent}        global::System.Linq.Expressions.Expression.MakeMemberAccess(__targetParam, __member), __body));");
+        sb.AppendLine($"{innerIndent}}}");
+        sb.AppendLine();
+        sb.AppendLine($"{innerIndent}if (__assignments.Count == 0)");
+        sb.AppendLine($"{innerIndent}    return (_, _) => {{ }};");
+        sb.AppendLine();
+        sb.AppendLine($"{innerIndent}var __block = global::System.Linq.Expressions.Expression.Block(__assignments);");
+        sb.AppendLine($"{innerIndent}return global::System.Linq.Expressions.Expression.Lambda<global::System.Action<{src}, {tgt}>>(");
+        sb.AppendLine($"{innerIndent}    __block, __sourceParam, __targetParam).Compile();");
+
+        sb.AppendLine($"{bodyIndent}}})!;");
+        sb.AppendLine($"{memberIndent}}}");
     }
 }

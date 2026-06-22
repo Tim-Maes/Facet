@@ -97,6 +97,26 @@ internal static class FacetMapModelBuilder
             }
         }
 
+        // Detect whether the configuration type implements IFacetMapConfiguration vs IFacetProjectionMapConfiguration
+        var hasMapConfiguration = false;
+        var hasProjectionMapConfiguration = false;
+        if (configType != null)
+        {
+            var compilation = markerSymbol.ContainingAssembly;
+            foreach (var iface in configType.AllInterfaces)
+            {
+                var ifaceName = iface.OriginalDefinition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                if (ifaceName.Contains("IFacetMapConfiguration"))
+                {
+                    hasMapConfiguration = true;
+                }
+                if (ifaceName.Contains("IFacetProjectionMapConfiguration"))
+                {
+                    hasProjectionMapConfiguration = true;
+                }
+            }
+        }
+
         // Resolve members by matching target properties to source properties
         var members = ResolveMappableMembers(sourceType, targetType, include, exclude);
 
@@ -137,6 +157,8 @@ internal static class FacetMapModelBuilder
             toSourceConfigurationTypeName: toSourceConfigType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             beforeMapConfigurationTypeName: beforeMapConfigType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             afterMapConfigurationTypeName: afterMapConfigType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            hasMapConfiguration: hasMapConfiguration,
+            hasProjectionMapConfiguration: hasProjectionMapConfiguration,
             sourceHasPositionalConstructor: sourceHasPositionalCtor,
             targetHasParameterlessConstructor: targetHasParameterlessCtor,
             members: members,
@@ -183,6 +205,12 @@ internal static class FacetMapModelBuilder
             string? sourceCollectionWrapper = null;
             string? collectionElementType = null;
 
+            // Detect nested type differences (source and target have different types for same property)
+            bool isNestedFacet = false;
+            string? nestedFacetSourceTypeName = null;
+            string? nestedTargetTypeSimpleName = null;
+            string? nestedSourceTypeSimpleName = null;
+
             if (IsCollectionType(targetProp.Type, out var elementType, out var wrapper))
             {
                 isCollection = true;
@@ -192,9 +220,39 @@ internal static class FacetMapModelBuilder
                     : null;
 
                 // Detect source collection wrapper if it differs from target
-                if (IsCollectionType(sourceProp.Type, out _, out var sourceWrapper) && sourceWrapper != wrapper)
+                if (IsCollectionType(sourceProp.Type, out var sourceElementType, out var sourceWrapper))
                 {
-                    sourceCollectionWrapper = sourceWrapper;
+                    if (sourceWrapper != wrapper)
+                    {
+                        sourceCollectionWrapper = sourceWrapper;
+                    }
+
+                    // Detect nested type mapping: source and target collection element types differ
+                    if (elementType != null && sourceElementType != null
+                        && !SymbolEqualityComparer.Default.Equals(elementType, sourceElementType))
+                    {
+                        isNestedFacet = true;
+                        nestedFacetSourceTypeName = sourceElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                        nestedTargetTypeSimpleName = elementType.Name;
+                        nestedSourceTypeSimpleName = sourceElementType.Name;
+                    }
+                }
+            }
+            else
+            {
+                // Detect nested type mapping for non-collection properties: source and target types differ
+                var targetPropTypeName = targetProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                var sourcePropTypeName = sourceProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+                if (targetPropTypeName != sourcePropTypeName
+                    && !targetProp.Type.IsValueType
+                    && targetProp.Type.SpecialType == SpecialType.None
+                    && sourceProp.Type.SpecialType == SpecialType.None)
+                {
+                    isNestedFacet = true;
+                    nestedFacetSourceTypeName = sourcePropTypeName;
+                    nestedTargetTypeSimpleName = (targetProp.Type as INamedTypeSymbol)?.Name ?? targetProp.Type.Name;
+                    nestedSourceTypeSimpleName = (sourceProp.Type as INamedTypeSymbol)?.Name ?? sourceProp.Type.Name;
                 }
             }
 
@@ -213,7 +271,11 @@ internal static class FacetMapModelBuilder
                 isNullable: isNullable,
                 isTargetInitOnly: isTargetInitOnly,
                 isSourceInitOnly: isSourceInitOnly,
-                sourceMemberTypeName: sourceMemberTypeName));
+                isNestedFacet: isNestedFacet,
+                nestedFacetSourceTypeName: nestedFacetSourceTypeName,
+                sourceMemberTypeName: sourceMemberTypeName,
+                nestedTargetTypeSimpleName: nestedTargetTypeSimpleName,
+                nestedSourceTypeSimpleName: nestedSourceTypeSimpleName));
         }
 
         return builder.ToImmutable();
