@@ -59,6 +59,7 @@ internal static class FacetMapModelBuilder
         INamedTypeSymbol? toSourceConfigType = null;
         INamedTypeSymbol? beforeMapConfigType = null;
         INamedTypeSymbol? afterMapConfigType = null;
+        INamedTypeSymbol? collectionTargetType = null;
 
         foreach (var namedArg in attribute.NamedArguments)
         {
@@ -94,6 +95,9 @@ internal static class FacetMapModelBuilder
                 case "AfterMapConfiguration":
                     afterMapConfigType = namedArg.Value.Value as INamedTypeSymbol;
                     break;
+                case "CollectionTargetType":
+                    collectionTargetType = namedArg.Value.Value as INamedTypeSymbol;
+                    break;
             }
         }
 
@@ -118,7 +122,8 @@ internal static class FacetMapModelBuilder
         }
 
         // Resolve members by matching target properties to source properties
-        var members = ResolveMappableMembers(sourceType, targetType, include, exclude);
+        var collectionTargetWrapper = ResolveCollectionTargetWrapper(collectionTargetType);
+        var members = ResolveMappableMembers(sourceType, targetType, include, exclude, collectionTargetWrapper);
 
         if (members.IsEmpty) return null;
 
@@ -169,7 +174,8 @@ internal static class FacetMapModelBuilder
         INamedTypeSymbol sourceType,
         INamedTypeSymbol targetType,
         ImmutableHashSet<string> include,
-        ImmutableHashSet<string> exclude)
+        ImmutableHashSet<string> exclude,
+        string? collectionTargetWrapper = null)
     {
         // Get all target properties (these define what we map TO)
         var targetProperties = GetPublicProperties(targetType);
@@ -188,8 +194,32 @@ internal static class FacetMapModelBuilder
             if (!include.IsEmpty && !include.Contains(name)) continue;
             if (exclude.Contains(name)) continue;
 
-            // Find matching source property
-            if (!sourceProperties.TryGetValue(name, out var sourceProp)) continue;
+            // Check for [MapFrom] attribute on target property to determine source property name
+            string? mapFromSource = null;
+            bool mapFromReversible = true;
+            bool mapFromIncludeInProjection = true;
+            var mapFromAttr = targetProp.GetAttributes()
+                .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == "Facet.MapFromAttribute");
+            if (mapFromAttr != null && mapFromAttr.ConstructorArguments.Length > 0)
+            {
+                mapFromSource = mapFromAttr.ConstructorArguments[0].Value as string;
+                foreach (var namedArg in mapFromAttr.NamedArguments)
+                {
+                    switch (namedArg.Key)
+                    {
+                        case "Reversible":
+                            mapFromReversible = namedArg.Value.Value is true;
+                            break;
+                        case "IncludeInProjection":
+                            mapFromIncludeInProjection = namedArg.Value.Value is not false;
+                            break;
+                    }
+                }
+            }
+
+            // Find matching source property (use MapFrom source if specified)
+            var sourcePropertyName = mapFromSource ?? name;
+            if (!sourceProperties.TryGetValue(sourcePropertyName, out var sourceProp)) continue;
 
             var typeName = GeneratorUtilities.GetTypeNameWithNullability(targetProp.Type);
             var isValueType = targetProp.Type.IsValueType;
@@ -211,10 +241,20 @@ internal static class FacetMapModelBuilder
             string? nestedTargetTypeSimpleName = null;
             string? nestedSourceTypeSimpleName = null;
 
+            // Detect enum conversion (source is enum, target is string/int or vice versa)
+            bool isEnumConversion = false;
+            string? originalEnumTypeName = null;
+
             if (IsCollectionType(targetProp.Type, out var elementType, out var wrapper))
             {
                 isCollection = true;
-                collectionWrapper = wrapper;
+                // Apply CollectionTargetType override if specified
+                var effectiveWrapper = collectionTargetWrapper ?? wrapper;
+                collectionWrapper = effectiveWrapper;
+                if (collectionTargetWrapper != null && collectionTargetWrapper != wrapper)
+                {
+                    sourceCollectionWrapper = wrapper; // original target wrapper becomes the "source" for reverse mapping
+                }
                 collectionElementType = elementType != null
                     ? GeneratorUtilities.GetTypeNameWithNullability(elementType)
                     : null;
@@ -231,28 +271,81 @@ internal static class FacetMapModelBuilder
                     if (elementType != null && sourceElementType != null
                         && !SymbolEqualityComparer.Default.Equals(elementType, sourceElementType))
                     {
-                        isNestedFacet = true;
-                        nestedFacetSourceTypeName = sourceElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                        nestedTargetTypeSimpleName = elementType.Name;
-                        nestedSourceTypeSimpleName = sourceElementType.Name;
+                        // Check if this is an enum conversion (source element is enum, target element is string/int)
+                        var sourceElem = UnwrapNullable(sourceElementType);
+                        var targetElem = UnwrapNullable(elementType);
+
+                        if (sourceElem.TypeKind == TypeKind.Enum && IsStringOrInt(targetElem))
+                        {
+                            isEnumConversion = true;
+                            originalEnumTypeName = sourceElem.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                        }
+                        else if (targetElem.TypeKind == TypeKind.Enum && IsStringOrInt(sourceElem))
+                        {
+                            // Reverse: target is enum, source is string/int (unusual but valid)
+                            isEnumConversion = true;
+                            originalEnumTypeName = targetElem.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                        }
+                        else
+                        {
+                            isNestedFacet = true;
+                            nestedFacetSourceTypeName = sourceElementType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                            nestedTargetTypeSimpleName = elementType.Name;
+                            nestedSourceTypeSimpleName = sourceElementType.Name;
+                        }
                     }
                 }
             }
             else
             {
-                // Detect nested type mapping for non-collection properties: source and target types differ
-                var targetPropTypeName = targetProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                var sourcePropTypeName = sourceProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                // Detect nested type mapping or enum conversion for non-collection properties
+                var sourceUnwrapped = UnwrapNullable(sourceProp.Type);
+                var targetUnwrapped = UnwrapNullable(targetProp.Type);
 
-                if (targetPropTypeName != sourcePropTypeName
-                    && !targetProp.Type.IsValueType
-                    && targetProp.Type.SpecialType == SpecialType.None
-                    && sourceProp.Type.SpecialType == SpecialType.None)
+                if (!SymbolEqualityComparer.Default.Equals(sourceUnwrapped, targetUnwrapped))
                 {
-                    isNestedFacet = true;
-                    nestedFacetSourceTypeName = sourcePropTypeName;
-                    nestedTargetTypeSimpleName = (targetProp.Type as INamedTypeSymbol)?.Name ?? targetProp.Type.Name;
-                    nestedSourceTypeSimpleName = (sourceProp.Type as INamedTypeSymbol)?.Name ?? sourceProp.Type.Name;
+                    // Check for enum conversion: source is enum -> target is string/int
+                    if (sourceUnwrapped.TypeKind == TypeKind.Enum && IsStringOrInt(targetUnwrapped))
+                    {
+                        isEnumConversion = true;
+                        originalEnumTypeName = sourceUnwrapped.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    }
+                    // Check for enum conversion: target is enum -> source is string/int (reverse scenario)
+                    else if (targetUnwrapped.TypeKind == TypeKind.Enum && IsStringOrInt(sourceUnwrapped))
+                    {
+                        isEnumConversion = true;
+                        originalEnumTypeName = targetUnwrapped.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    }
+                    // Otherwise it's a nested type mapping
+                    else if (!targetProp.Type.IsValueType
+                        && targetProp.Type.SpecialType == SpecialType.None
+                        && sourceProp.Type.SpecialType == SpecialType.None)
+                    {
+                        isNestedFacet = true;
+                        nestedFacetSourceTypeName = sourceProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                        nestedTargetTypeSimpleName = (targetProp.Type as INamedTypeSymbol)?.Name ?? targetProp.Type.Name;
+                        nestedSourceTypeSimpleName = (sourceProp.Type as INamedTypeSymbol)?.Name ?? sourceProp.Type.Name;
+                    }
+                }
+            }
+
+            // Detect MapWhen attributes on target property
+            var mapWhenConditions = new System.Collections.Generic.List<string>();
+            string? mapWhenDefault = null;
+            foreach (var attr in targetProp.GetAttributes())
+            {
+                if (attr.AttributeClass?.ToDisplayString() == "Facet.MapWhenAttribute"
+                    && attr.ConstructorArguments.Length > 0
+                    && attr.ConstructorArguments[0].Value is string condition)
+                {
+                    mapWhenConditions.Add(condition);
+                    foreach (var namedArg in attr.NamedArguments)
+                    {
+                        if (namedArg.Key == "Default" && namedArg.Value.Value != null)
+                        {
+                            mapWhenDefault = namedArg.Value.Value.ToString();
+                        }
+                    }
                 }
             }
 
@@ -262,7 +355,7 @@ internal static class FacetMapModelBuilder
             builder.Add(new FacetMapMember(
                 name: name,
                 typeName: typeName,
-                sourcePropertyName: name,
+                sourcePropertyName: mapFromSource ?? name,
                 isValueType: isValueType,
                 isCollection: isCollection,
                 collectionWrapper: collectionWrapper,
@@ -275,7 +368,14 @@ internal static class FacetMapModelBuilder
                 nestedFacetSourceTypeName: nestedFacetSourceTypeName,
                 sourceMemberTypeName: sourceMemberTypeName,
                 nestedTargetTypeSimpleName: nestedTargetTypeSimpleName,
-                nestedSourceTypeSimpleName: nestedSourceTypeSimpleName));
+                nestedSourceTypeSimpleName: nestedSourceTypeSimpleName,
+                mapFromSource: mapFromSource,
+                mapFromReversible: mapFromReversible,
+                mapFromIncludeInProjection: mapFromIncludeInProjection,
+                mapWhenConditions: mapWhenConditions.Count > 0 ? mapWhenConditions : null,
+                mapWhenDefault: mapWhenDefault,
+                isEnumConversion: isEnumConversion,
+                originalEnumTypeName: originalEnumTypeName));
         }
 
         return builder.ToImmutable();
@@ -355,5 +455,48 @@ internal static class FacetMapModelBuilder
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Unwraps Nullable&lt;T&gt; to get the underlying type. Returns the original type if not nullable.
+    /// </summary>
+    private static ITypeSymbol UnwrapNullable(ITypeSymbol type)
+    {
+        if (type is INamedTypeSymbol namedType
+            && namedType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+        {
+            return namedType.TypeArguments[0];
+        }
+        return type;
+    }
+
+    /// <summary>
+    /// Checks if a type is string or int (the two types enums can be converted to).
+    /// </summary>
+    private static bool IsStringOrInt(ITypeSymbol type)
+    {
+        return type.SpecialType == SpecialType.System_String
+            || type.SpecialType == SpecialType.System_Int32;
+    }
+
+    /// <summary>
+    /// Resolves the CollectionTargetType to a wrapper name string.
+    /// </summary>
+    private static string? ResolveCollectionTargetWrapper(INamedTypeSymbol? collectionTargetType)
+    {
+        if (collectionTargetType == null) return null;
+        return collectionTargetType.Name switch
+        {
+            "List" => "List",
+            "IList" => "IList",
+            "ICollection" => "ICollection",
+            "IEnumerable" => "IEnumerable",
+            "IReadOnlyList" => "IReadOnlyList",
+            "IReadOnlyCollection" => "IReadOnlyCollection",
+            "Collection" => "Collection",
+            "ImmutableArray" => "ImmutableArray",
+            "ImmutableList" => "ImmutableList",
+            _ => collectionTargetType.Name
+        };
     }
 }

@@ -311,7 +311,7 @@ internal static class FacetMapCodeBuilder
             var member = projectionMembers[i];
             var trailing = i < projectionMembers.Count - 1 ? "," : "";
 
-            var value = ExpressionBuilder.GetSourceValueExpression(member, "source", 0, false, false, sourcePropertyNames);
+            var value = GetProjectionValueExpression(member, "source", sourcePropertyNames);
             sb.AppendLine($"{indent}        {member.Name} = {value}{trailing}");
         }
 
@@ -356,6 +356,40 @@ internal static class FacetMapCodeBuilder
         }
 
         // Non-nested: delegate to the shared expression builder
+        return ExpressionBuilder.GetSourceValueExpression(member, sourceParam, 0, false, false, sourcePropertyNames);
+    }
+
+    /// <summary>
+    /// Gets a projection-safe value expression for a member.
+    /// Avoids null-propagating operators (?.) which are not allowed in expression trees.
+    /// </summary>
+    private static string GetProjectionValueExpression(FacetMapMember member, string sourceParam, HashSet<string> sourcePropertyNames)
+    {
+        // Handle enum conversions with expression-tree-safe expressions
+        if (member.IsEnumConversion && member.OriginalEnumTypeName != null)
+        {
+            bool isNullableSource = member.SourceMemberTypeName?.EndsWith("?") ?? false;
+
+            if (member.TypeName.TrimEnd('?') == "string")
+            {
+                if (isNullableSource)
+                {
+                    // Expression-tree safe: use ternary instead of ?.
+                    return $"{sourceParam}.{member.SourcePropertyName} != null ? {sourceParam}.{member.SourcePropertyName}.Value.ToString() : null";
+                }
+                return $"{sourceParam}.{member.SourcePropertyName}.ToString()";
+            }
+            else if (member.TypeName.TrimEnd('?') == "int")
+            {
+                if (isNullableSource)
+                {
+                    return $"{sourceParam}.{member.SourcePropertyName} != null ? (int?){sourceParam}.{member.SourcePropertyName}.Value : null";
+                }
+                return $"(int){sourceParam}.{member.SourcePropertyName}";
+            }
+        }
+
+        // For non-enum members, use the shared expression builder (safe for projections)
         return ExpressionBuilder.GetSourceValueExpression(member, sourceParam, 0, false, false, sourcePropertyNames);
     }
 

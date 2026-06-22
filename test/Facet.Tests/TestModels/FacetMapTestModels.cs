@@ -271,3 +271,92 @@ public class InvoiceProjectionConfig : Facet.Mapping.IFacetProjectionMapConfigur
 
 [FacetMap(typeof(InvoiceEntity), typeof(InvoiceDto), Configuration = typeof(InvoiceProjectionConfig))]
 public static partial class InvoiceMappings;
+
+// ========================================
+// Enum conversion tests - source has enum, target has string/int
+// ========================================
+public enum OrderStatus
+{
+    Pending = 0,
+    Processing = 1,
+    Shipped = 2,
+    Delivered = 3,
+    Cancelled = 4
+}
+
+public class OrderWithEnumEntity
+{
+    public int Id { get; set; }
+    public string OrderNumber { get; set; } = string.Empty;
+    public OrderStatus Status { get; set; }
+    public OrderStatus? NullableStatus { get; set; }
+}
+
+// Target with string representation of enum
+public class OrderWithEnumAsStringDto
+{
+    public int Id { get; set; }
+    public string OrderNumber { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string? NullableStatus { get; set; }
+}
+
+// Target with int representation of enum
+public class OrderWithEnumAsIntDto
+{
+    public int Id { get; set; }
+    public string OrderNumber { get; set; } = string.Empty;
+    public int Status { get; set; }
+    public int? NullableStatus { get; set; }
+}
+
+[FacetMap(typeof(OrderWithEnumEntity), typeof(OrderWithEnumAsStringDto), GenerateToSource = true)]
+public static partial class OrderEnumToStringMapper;
+
+[FacetMap(typeof(OrderWithEnumEntity), typeof(OrderWithEnumAsIntDto), GenerateToSource = true)]
+public static partial class OrderEnumToIntMapper;
+
+// ========================================
+// MapFrom tests - [MapFrom] on target property
+// ========================================
+public class PersonEntity
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; } = string.Empty;
+    public string LastName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+}
+
+public class PersonSummaryDto
+{
+    public int Id { get; set; }
+    [MapFrom("FirstName")]
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+}
+
+[FacetMap(typeof(PersonEntity), typeof(PersonSummaryDto))]
+public static partial class PersonSummaryMapper;
+
+// ========================================
+// MapWhen tests - [MapWhen] on target property
+// ========================================
+public class SensorEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public double Value { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public class SensorDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    [MapWhen("IsActive")]
+    public double Value { get; set; }
+    public bool IsActive { get; set; }
+}
+
+[FacetMap(typeof(SensorEntity), typeof(SensorDto))]
+public static partial class SensorMapper;
