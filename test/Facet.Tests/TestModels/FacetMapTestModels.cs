@@ -360,3 +360,110 @@ public class SensorDto
 
 [FacetMap(typeof(SensorEntity), typeof(SensorDto))]
 public static partial class SensorMapper;
+
+// ========================================
+// Nullable value type conversion tests - source has nullable, target has non-nullable (and vice versa)
+// ========================================
+public class NullableSourceEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public int? NullableCount { get; set; }
+    public decimal? NullableAmount { get; set; }
+    public DateTime? NullableDate { get; set; }
+    public bool? NullableFlag { get; set; }
+}
+
+public class NonNullableTargetDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public int NullableCount { get; set; }
+    public decimal NullableAmount { get; set; }
+    public DateTime NullableDate { get; set; }
+    public bool NullableFlag { get; set; }
+}
+
+// Reverse: source has non-nullable, target has nullable
+public class NonNullableSourceEntity
+{
+    public int Id { get; set; }
+    public int Count { get; set; }
+    public decimal Amount { get; set; }
+}
+
+public class NullableTargetDto
+{
+    public int Id { get; set; }
+    public int? Count { get; set; }
+    public decimal? Amount { get; set; }
+}
+
+[FacetMap(typeof(NullableSourceEntity), typeof(NonNullableTargetDto), GenerateToSource = true)]
+public static partial class NullableToNonNullableMapper;
+
+[FacetMap(typeof(NonNullableSourceEntity), typeof(NullableTargetDto), GenerateToSource = true)]
+public static partial class NonNullableToNullableMapper;
+
+// ========================================
+// Incompatible type tests - properties with same name but incompatible types should be skipped
+// ========================================
+public class PrinterSettingsType
+{
+    public string Format { get; set; } = string.Empty;
+    public int Copies { get; set; }
+}
+
+public class EntityWithStringProp
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string PrinterSettings { get; set; } = string.Empty;
+}
+
+public class DtoWithComplexProp
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public PrinterSettingsType PrinterSettings { get; set; } = new();
+}
+
+[FacetMap(typeof(EntityWithStringProp), typeof(DtoWithComplexProp), GenerateToSource = true)]
+public static partial class IncompatibleTypeMapper;
+
+// ========================================
+// Dictionary property tests - Dictionary properties should be handled correctly
+// ========================================
+public class EntityWithDictionary
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public Dictionary<string, int> Metadata { get; set; } = new();
+}
+
+public class DtoWithDictionary
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public Dictionary<string, int> Metadata { get; set; } = new();
+}
+
+// Same dictionary types should map fine
+[FacetMap(typeof(EntityWithDictionary), typeof(DtoWithDictionary), GenerateToSource = true)]
+public static partial class DictionaryMapper;
+
+// Different dictionary value types should be skipped
+public class EntityWithDifferentDict
+{
+    public int Id { get; set; }
+    public Dictionary<string, int> Scores { get; set; } = new();
+}
+
+public class DtoWithDifferentDict
+{
+    public int Id { get; set; }
+    public Dictionary<string, string> Scores { get; set; } = new();
+}
+
+[FacetMap(typeof(EntityWithDifferentDict), typeof(DtoWithDifferentDict))]
+public static partial class DifferentDictMapper;

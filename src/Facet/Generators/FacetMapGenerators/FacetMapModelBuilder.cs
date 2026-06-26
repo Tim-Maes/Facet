@@ -316,15 +316,23 @@ internal static class FacetMapModelBuilder
                         isEnumConversion = true;
                         originalEnumTypeName = targetUnwrapped.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     }
-                    // Otherwise it's a nested type mapping
+                    // Nested type mapping: both are non-primitive reference types with no special type,
+                    // and neither is a known collection type (e.g., Dictionary<K,V>)
                     else if (!targetProp.Type.IsValueType
                         && targetProp.Type.SpecialType == SpecialType.None
-                        && sourceProp.Type.SpecialType == SpecialType.None)
+                        && sourceProp.Type.SpecialType == SpecialType.None
+                        && !IsDictionaryType(targetProp.Type)
+                        && !IsDictionaryType(sourceProp.Type))
                     {
                         isNestedFacet = true;
                         nestedFacetSourceTypeName = sourceProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                         nestedTargetTypeSimpleName = (targetProp.Type as INamedTypeSymbol)?.Name ?? targetProp.Type.Name;
                         nestedSourceTypeSimpleName = (sourceProp.Type as INamedTypeSymbol)?.Name ?? sourceProp.Type.Name;
+                    }
+                    // Types are incompatible (e.g., string vs complex type, or Dictionary types that differ) - skip this property
+                    else
+                    {
+                        continue;
                     }
                 }
             }
@@ -468,6 +476,25 @@ internal static class FacetMapModelBuilder
             return namedType.TypeArguments[0];
         }
         return type;
+    }
+
+    /// <summary>
+    /// Checks if a type is a Dictionary or IDictionary type (multi-type-argument collections that cannot be auto-mapped).
+    /// </summary>
+    private static bool IsDictionaryType(ITypeSymbol type)
+    {
+        if (type is INamedTypeSymbol namedType && namedType.IsGenericType)
+        {
+            var name = namedType.Name;
+            if (name == "Dictionary" || name == "IDictionary"
+                || name == "IReadOnlyDictionary" || name == "ConcurrentDictionary"
+                || name == "SortedDictionary" || name == "ImmutableDictionary"
+                || name == "ImmutableSortedDictionary")
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>

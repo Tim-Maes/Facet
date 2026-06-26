@@ -356,7 +356,24 @@ internal static class FacetMapCodeBuilder
         }
 
         // Non-nested: delegate to the shared expression builder
-        return ExpressionBuilder.GetSourceValueExpression(member, sourceParam, 0, false, false, sourcePropertyNames);
+        var expression = ExpressionBuilder.GetSourceValueExpression(member, sourceParam, 0, false, false, sourcePropertyNames);
+
+        // Handle nullable-to-non-nullable conversion in forward mapping (source int? -> target int)
+        bool sourceIsNullable = member.SourceMemberTypeName?.EndsWith("?") ?? false;
+        bool targetIsNullable = member.TypeName.EndsWith("?");
+        if (sourceIsNullable && !targetIsNullable)
+        {
+            if (member.IsValueType)
+            {
+                return $"{expression} ?? default";
+            }
+            else
+            {
+                return $"{expression}!";
+            }
+        }
+
+        return expression;
     }
 
     /// <summary>
@@ -390,7 +407,25 @@ internal static class FacetMapCodeBuilder
         }
 
         // For non-enum members, use the shared expression builder (safe for projections)
-        return ExpressionBuilder.GetSourceValueExpression(member, sourceParam, 0, false, false, sourcePropertyNames);
+        var expression = ExpressionBuilder.GetSourceValueExpression(member, sourceParam, 0, false, false, sourcePropertyNames);
+
+        // Handle nullable-to-non-nullable conversion in projections (source int? -> target int)
+        bool sourceIsNullable = member.SourceMemberTypeName?.EndsWith("?") ?? false;
+        bool targetIsNullable = member.TypeName.EndsWith("?");
+        if (sourceIsNullable && !targetIsNullable)
+        {
+            if (member.IsValueType)
+            {
+                // Expression-tree safe: use ternary with .Value for nullable value types
+                return $"{sourceParam}.{member.SourcePropertyName} != null ? {sourceParam}.{member.SourcePropertyName}.Value : default";
+            }
+            else
+            {
+                return $"{expression}!";
+            }
+        }
+
+        return expression;
     }
 
     /// <summary>
