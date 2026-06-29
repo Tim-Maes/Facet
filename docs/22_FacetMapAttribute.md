@@ -84,9 +84,14 @@ var dto = customer.ToCustomerDto();
 // Target back to source
 var entity = dto.ToCustomer();
 
-// LINQ projection for EF Core
+// LINQ projection for EF Core (direct property access)
 var dtos = dbContext.Customers
-    .Select(CustomerMappings.CustomerDtoProjection)
+    .Select(CustomerMappings.CustomerToCustomerDtoProjection)
+    .ToListAsync();
+
+// Or via generic SelectFacet (automatic discovery)
+var dtos = dbContext.Customers
+    .SelectFacet<Customer, CustomerDto>()
     .ToListAsync();
 ```
 
@@ -149,7 +154,7 @@ public static partial class CustomerMappings
         return target;
     }
 
-    public static Expression<Func<Customer, CustomerDto>> CustomerDtoProjection =>
+    public static Expression<Func<Customer, CustomerDto>> CustomerToCustomerDtoProjection =>
         source => new CustomerDto
         {
             Id = source.Id,
@@ -363,7 +368,40 @@ public static partial class CustomerMappings { }
 |-----------------|--------------|
 | Source-to-target method | `To{TargetTypeName}` (e.g., `ToCustomerDto`) |
 | Target-to-source method | `To{SourceTypeName}` (e.g., `ToCustomer`) |
-| Projection property | `{TargetTypeName}Projection` (e.g., `CustomerDtoProjection`) |
+| Projection property | `{SourceTypeName}To{TargetTypeName}Projection` (e.g., `CustomerToCustomerDtoProjection`) |
+
+## Using SelectFacet with FacetMap Projections
+
+FacetMap projections are fully compatible with the generic `SelectFacet<TOut>()` extension method from `Facet.Extensions`. This enables generic patterns like:
+
+```csharp
+using Facet.Extensions;
+
+// Two-generic-parameter version (explicit source type)
+var dtos = dbContext.OrderLines
+    .SelectFacet<OrderLine, OrderLineDto>()
+    .ToListAsync();
+
+// Single-generic-parameter version (source inferred from IQueryable)
+var dtos = dbContext.OrderLines
+    .SelectFacet<OrderLineDto>()
+    .ToListAsync();
+```
+
+This works seamlessly with generic repository/service patterns:
+
+```csharp
+protected IAsyncEnumerable<TOut> ProjectOrCastAsyncEnumerable<TOut>(IQueryable<T> queryable) where TOut : class
+{
+    return typeof(TOut) == typeof(T)
+        ? queryable.Cast<TOut>()
+            .AsAsyncEnumerable()
+        : queryable.SelectFacet<T, TOut>()
+            .AsAsyncEnumerable();
+}
+```
+
+`SelectFacet` automatically discovers FacetMap-generated projections by scanning the loaded assemblies for marker classes with `[FacetMap]` attributes. No additional registration or configuration is needed.
 
 ## Comparison: [Facet] vs [FacetMap]
 
@@ -374,7 +412,8 @@ public static partial class CustomerMappings { }
 | Mapping style | Instance members (constructor, methods) | Extension methods |
 | Shared assembly support | Requires file-linking workarounds | Native support |
 | Facet dependency on DTO | Required | Not required |
-| Projection expression | `UserDto.Projection` | `UserMappings.UserDtoProjection` |
+| Projection expression | `UserDto.Projection` | `UserMappings.UserToUserDtoProjection` |
+| SelectFacet<TOut> support | Yes (via Projection on target) | Yes (via assembly scanning) |
 | Reverse mapping | `dto.ToSource()` | `dto.ToUser()` |
 | Nested type mapping | Via `NestedFacets` parameter | Auto-detected from type differences |
 | Enum conversion | Via `ConvertEnumsTo` parameter | Auto-detected from type differences |

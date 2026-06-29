@@ -78,7 +78,7 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 
 ### Advanced Features
 - **Multi-source mapping** — a single target class can carry multiple `[Facet]` attributes, each mapping from a different source type; produces per-source constructors, projections (`ProjectionFrom{Source}`), and reverse-mapping methods (`To{Source}()`)
-- **`[FacetMap]`** - generate extension methods for mapping to externally-defined DTOs in separate assemblies; ideal for DDD architectures with shared contracts projects
+- **`[FacetMap]`** - generate extension methods for mapping to externally-defined DTOs in separate assemblies; ideal for DDD architectures with shared contracts projects. Fully compatible with `SelectFacet<TOut>()` for generic projection patterns
 - **`[Flatten]`** - collapse nested object graphs into top-level properties
 - **`[Wrapper]`** - reference-based delegation for facades, ViewModels, and decorators
 - **`[GenerateDtos]`** - auto-generate full CRUD DTO sets (Create, Update, Response, Query, Upsert, Patch)
