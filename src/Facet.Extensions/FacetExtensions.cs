@@ -56,6 +56,27 @@ public static class FacetExtensions
         _adaptedProjectionByElementAndTarget = new();
 
     /// <summary>
+    /// Registers a projection expression for use with <see cref="SelectFacet{TSource, TTarget}(IQueryable{TSource})"/>
+    /// and <see cref="SelectFacet{TTarget}(IQueryable)"/>. Use this when automatic discovery doesn't
+    /// find your FacetMap projections (e.g., when the mapper assembly is loaded lazily).
+    /// </summary>
+    /// <typeparam name="TSource">The source entity type.</typeparam>
+    /// <typeparam name="TTarget">The target DTO type.</typeparam>
+    /// <param name="projection">The projection expression to register.</param>
+    /// <example>
+    /// <code>
+    /// // Register explicitly if auto-discovery doesn't work
+    /// FacetExtensions.RegisterProjection(OrderLineMappings.OrderLineToOrderLineDtoProjection);
+    /// </code>
+    /// </example>
+    public static void RegisterProjection<TSource, TTarget>(Expression<Func<TSource, TTarget>> projection)
+        where TTarget : class
+    {
+        if (projection is null) throw new ArgumentNullException(nameof(projection));
+        FacetProjectionRegistry.Register(projection);
+    }
+
+    /// <summary>
     /// Maps a single source instance to the specified facet type by invoking its generated constructor.
     /// If the constructor fails (e.g., due to required init-only properties), attempts to use a static FromSource factory method.
     /// </summary>

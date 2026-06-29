@@ -403,6 +403,13 @@ protected IAsyncEnumerable<TOut> ProjectOrCastAsyncEnumerable<TOut>(IQueryable<T
 
 `SelectFacet` automatically discovers FacetMap-generated projections by scanning the loaded assemblies for marker classes with `[FacetMap]` attributes. No additional registration or configuration is needed.
 
+If automatic discovery doesn't work in your environment (e.g., the mapper assembly is loaded lazily or the assembly scanning doesn't find your mapper), you can register projections explicitly:
+
+```csharp
+// Explicit registration (call once at startup)
+FacetExtensions.RegisterProjection(OrderLineMappings.OrderLineToOrderLineDtoProjection);
+```
+
 ## Comparison: [Facet] vs [FacetMap]
 
 | Feature | `[Facet]` | `[FacetMap]` |

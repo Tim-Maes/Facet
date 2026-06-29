@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -20,9 +21,6 @@ internal static class FacetProjectionRegistry
     // Track which assemblies have been scanned
     private static readonly ConcurrentDictionary<Assembly, bool> _scannedAssemblies = new();
 
-    // Whether a full AppDomain scan has been performed
-    private static volatile bool _fullScanDone;
-
     /// <summary>
     /// Attempts to find a FacetMap-registered projection for the given source and target types.
     /// Scans relevant assemblies for [FacetMap] marker classes with matching projection properties.
@@ -33,30 +31,36 @@ internal static class FacetProjectionRegistry
         if (_projections.TryGetValue(key, out projection))
             return projection != null;
 
-        // Try targeted scan first (source and target assemblies)
-        ScanAssembly(targetType.Assembly);
-        if (_projections.TryGetValue(key, out projection))
-            return projection != null;
-
-        ScanAssembly(sourceType.Assembly);
-        if (_projections.TryGetValue(key, out projection))
-            return projection != null;
-
-        // Full scan of all loaded assemblies as last resort
-        if (!_fullScanDone)
+        // Scan all currently loaded assemblies that could contain FacetMap marker classes.
+        // We always do a full scan because marker classes can live in ANY assembly
+        // (not just the source or target assembly - commonly in a separate "Mapper" project).
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
         {
-            _fullScanDone = true;
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                ScanAssembly(assembly);
-            }
-
-            if (_projections.TryGetValue(key, out projection))
-                return projection != null;
+            ScanAssembly(assembly);
         }
 
-        // Cache the miss so we don't scan again for this pair
-        _projections.TryAdd(key, null);
+        if (_projections.TryGetValue(key, out projection))
+            return projection != null;
+
+        // If not found, the mapper assembly might not be loaded yet (.NET loads assemblies lazily).
+        // Try to force-load assemblies referenced by loaded assemblies that reference Facet.
+        // This handles the common pattern where:
+        //   API project -> references Mapper project -> has [FacetMap]
+        //   but Mapper assembly isn't loaded until first code access
+        LoadFacetReferencingAssemblies();
+
+        // Scan any newly loaded assemblies
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            ScanAssembly(assembly);
+        }
+
+        if (_projections.TryGetValue(key, out projection))
+            return projection != null;
+
+        // Not found - don't cache the miss because the assembly might load later.
+        // The performance cost of re-scanning is minimal due to _scannedAssemblies tracking.
+        projection = null;
         return false;
     }
 
@@ -84,77 +88,213 @@ internal static class FacetProjectionRegistry
 
         try
         {
+            // Skip dynamic assemblies
+            if (assembly.IsDynamic)
+                return;
+
             // Skip known framework assemblies that can't contain FacetMap attributes
             var assemblyName = assembly.GetName().Name;
-            if (assemblyName != null && (
-                assemblyName.StartsWith("System", StringComparison.Ordinal) ||
-                assemblyName.StartsWith("Microsoft", StringComparison.Ordinal) ||
-                assemblyName.StartsWith("netstandard", StringComparison.Ordinal) ||
-                assemblyName.StartsWith("mscorlib", StringComparison.Ordinal)))
-            {
+            if (assemblyName != null && IsFrameworkAssembly(assemblyName))
                 return;
+
+            // Check if this assembly references Facet.Attributes (required to have [FacetMap])
+            if (!ReferencesFacetAttributes(assembly))
+                return;
+
+            Type[] types;
+            try
+            {
+                types = assembly.GetTypes();
+            }
+            catch (ReflectionTypeLoadException ex)
+            {
+                // Use whatever types we could load
+                types = ex.Types.Where(t => t != null).ToArray()!;
             }
 
-            var types = assembly.GetTypes();
             foreach (var type in types)
             {
+                if (type == null) continue;
+
                 // Static classes are abstract + sealed in IL
                 if (!type.IsAbstract || !type.IsSealed)
                     continue;
 
-                // Check if this type has [FacetMap] attributes
-                CustomAttributeData[]? facetMapAttrs = null;
+                ScanTypeForFacetMapProjections(type);
+            }
+        }
+        catch
+        {
+            // Silently ignore assembly scanning failures
+        }
+    }
+
+    private static void ScanTypeForFacetMapProjections(Type type)
+    {
+        try
+        {
+            // Check if this type has [FacetMap] attributes
+            var attributes = type.GetCustomAttributesData();
+            foreach (var attr in attributes)
+            {
+                if (attr.AttributeType.FullName != "Facet.FacetMapAttribute")
+                    continue;
+
+                if (attr.ConstructorArguments.Count < 2)
+                    continue;
+
+                var attrSourceType = attr.ConstructorArguments[0].Value as Type;
+                var attrTargetType = attr.ConstructorArguments[1].Value as Type;
+
+                if (attrSourceType == null || attrTargetType == null)
+                    continue;
+
+                // Check if GenerateProjection is explicitly set to false via named arguments
+                bool generateProjection = true;
+                foreach (var namedArg in attr.NamedArguments)
+                {
+                    if (namedArg.MemberName == "GenerateProjection" && namedArg.TypedValue.Value is bool gp)
+                    {
+                        generateProjection = gp;
+                        break;
+                    }
+                }
+
+                if (!generateProjection)
+                    continue;
+
+                // Look for the projection property: {SourceSimpleName}To{TargetSimpleName}Projection
+                var projectionPropertyName = $"{attrSourceType.Name}To{attrTargetType.Name}Projection";
+                var prop = type.GetProperty(projectionPropertyName, BindingFlags.Public | BindingFlags.Static);
+
+                if (prop == null)
+                    continue;
+
                 try
                 {
-                    facetMapAttrs = type.GetCustomAttributesData()
-                        .Where(a => a.AttributeType.FullName == "Facet.FacetMapAttribute")
-                        .ToArray();
+                    var value = prop.GetValue(null);
+                    if (value is LambdaExpression lambda)
+                    {
+                        _projections[(attrSourceType, attrTargetType)] = lambda;
+                    }
                 }
                 catch
                 {
-                    continue; // Skip types that fail to load attributes
-                }
-
-                if (facetMapAttrs.Length == 0)
-                    continue;
-
-                // For each FacetMap attribute, find and cache the projection property
-                foreach (var attr in facetMapAttrs)
-                {
-                    if (attr.ConstructorArguments.Count < 2)
-                        continue;
-
-                    var attrSourceType = attr.ConstructorArguments[0].Value as Type;
-                    var attrTargetType = attr.ConstructorArguments[1].Value as Type;
-
-                    if (attrSourceType == null || attrTargetType == null)
-                        continue;
-
-                    // Look for the projection property: {SourceSimpleName}To{TargetSimpleName}Projection
-                    var projectionPropertyName = $"{attrSourceType.Name}To{attrTargetType.Name}Projection";
-                    var prop = type.GetProperty(projectionPropertyName, BindingFlags.Public | BindingFlags.Static);
-
-                    if (prop == null)
-                        continue;
-
-                    try
-                    {
-                        var value = prop.GetValue(null);
-                        if (value is LambdaExpression lambda)
-                        {
-                            _projections[(attrSourceType, attrTargetType)] = lambda;
-                        }
-                    }
-                    catch
-                    {
-                        // Skip properties that fail to evaluate
-                    }
+                    // Skip properties that fail to evaluate (e.g., dependency not available)
                 }
             }
         }
         catch
         {
-            // Silently ignore assembly scanning failures (e.g., ReflectionTypeLoadException)
+            // Skip types that fail during attribute or property inspection
         }
+    }
+
+    private static bool ReferencesFacetAttributes(Assembly assembly)
+    {
+        try
+        {
+            var referencedAssemblies = assembly.GetReferencedAssemblies();
+            foreach (var reference in referencedAssemblies)
+            {
+                var name = reference.Name;
+                if (name == null) continue;
+                // Check for Facet.Attributes (normal NuGet/ProjectReference)
+                // or Facet (direct reference in development/testing)
+                if (name == "Facet.Attributes" || name == "Facet"
+                    || name.StartsWith("Facet.Attributes,", StringComparison.Ordinal))
+                    return true;
+            }
+            return false;
+        }
+        catch
+        {
+            // If we can't check references, scan it anyway to be safe
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Loads any not-yet-loaded assemblies that are referenced by currently loaded assemblies
+    /// and that might contain FacetMap marker classes. This handles the lazy assembly loading scenario
+    /// where the mapper assembly hasn't been loaded yet because no code from it has been accessed.
+    /// </summary>
+    private static void LoadFacetReferencingAssemblies()
+    {
+        try
+        {
+            var loadedNames = new HashSet<string>(
+                AppDomain.CurrentDomain.GetAssemblies()
+                    .Where(a => !a.IsDynamic)
+                    .Select(a => a.GetName().Name ?? ""),
+                StringComparer.Ordinal);
+
+            // For each loaded assembly, try to load its references that aren't loaded yet.
+            // Focus on assemblies that reference Facet.Attributes (they might have [FacetMap] marker classes).
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies()
+                .Where(a => !a.IsDynamic)
+                .ToArray();
+
+            foreach (var assembly in assemblies)
+            {
+                try
+                {
+                    foreach (var reference in assembly.GetReferencedAssemblies())
+                    {
+                        if (reference.Name == null || loadedNames.Contains(reference.Name))
+                            continue;
+
+                        if (IsFrameworkAssembly(reference.Name))
+                            continue;
+
+                        try
+                        {
+                            var loaded = Assembly.Load(reference);
+                            loadedNames.Add(reference.Name);
+
+                            // Only recursively load if this assembly references Facet.Attributes
+                            if (ReferencesFacetAttributes(loaded))
+                            {
+                                // This assembly might be the mapper assembly - it's now loaded
+                                // and will be scanned in the next ScanAssembly pass
+                            }
+                        }
+                        catch
+                        {
+                            // Ignore load failures - the assembly might not be available
+                        }
+                    }
+                }
+                catch
+                {
+                    // Ignore per-assembly failures
+                }
+            }
+        }
+        catch
+        {
+            // Ignore failures
+        }
+    }
+
+    private static bool IsFrameworkAssembly(string name)
+    {
+        return name.StartsWith("System", StringComparison.Ordinal)
+            || name.StartsWith("Microsoft", StringComparison.Ordinal)
+            || name.StartsWith("netstandard", StringComparison.Ordinal)
+            || name.StartsWith("mscorlib", StringComparison.Ordinal)
+            || name.StartsWith("WindowsBase", StringComparison.Ordinal)
+            || name.StartsWith("PresentationCore", StringComparison.Ordinal)
+            || name.StartsWith("PresentationFramework", StringComparison.Ordinal)
+            || name.StartsWith("testhost", StringComparison.Ordinal)
+            || name.StartsWith("xunit", StringComparison.Ordinal)
+            || name.StartsWith("NuGet", StringComparison.Ordinal)
+            || name.StartsWith("Newtonsoft", StringComparison.Ordinal)
+            || name == "Facet.Attributes"
+            || name == "Facet.Extensions"
+            || name == "Facet.Extensions.EFCore"
+            || name == "Facet.Extensions.EFCore.Mapping"
+            || name == "Facet.Mapping"
+            || name == "Facet.Mapping.Expressions";
     }
 }
