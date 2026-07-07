@@ -107,6 +107,27 @@ public class GenerateDtosAttribute : Attribute
     public string[] ExcludeProperties { get; set; } = Array.Empty<string>();
 
     /// <summary>
+    /// When true, automatically excludes navigation properties: properties whose type
+    /// (or collection element type, for any <see cref="System.Collections.Generic.IEnumerable{T}"/>
+    /// other than <see cref="string"/>, with dictionary key/value types unwrapped) is a class
+    /// or interface declared in the same assembly as the source type. This removes ORM
+    /// navigation/back-reference properties from generated DTOs without listing each one in
+    /// <see cref="ExcludeProperties"/>. Scalar properties — primitives, enums, framework
+    /// types, and user-defined value types such as strongly-typed ID structs — are always
+    /// kept. Aggregate children that should stay in the DTO despite matching the heuristic
+    /// can be forced back in via <see cref="IncludeProperties"/>. Default is false.
+    /// </summary>
+    public bool ExcludeNavigationProperties { get; set; } = false;
+
+    /// <summary>
+    /// Properties to keep in every generated DTO regardless of <see cref="ExcludeProperties"/>,
+    /// <see cref="ExcludeAuditFields"/>, or <see cref="ExcludeNavigationProperties"/> — the
+    /// escape hatch for aggregate children (e.g. an owned parameter collection edited together
+    /// with its parent) that the navigation heuristic would otherwise drop.
+    /// </summary>
+    public string[] IncludeProperties { get; set; } = Array.Empty<string>();
+
+    /// <summary>
     /// When true, automatically excludes common audit fields from generated DTOs.
     /// <para>
     /// Excluded fields: CreatedDate, UpdatedDate, CreatedAt, UpdatedAt, CreatedBy, UpdatedBy, CreatedById, UpdatedById.

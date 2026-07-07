@@ -303,6 +303,17 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 .GetTypeByMetadataName("System.Text.Json.Serialization.JsonConverterAttribute") is not null;
             var supportsNewtonsoftJson = compilation
                 .GetTypeByMetadataName("Newtonsoft.Json.JsonConverterAttribute") is not null;
+            var excludeNavigationProperties = GetNamedArg(attribute.NamedArguments, "ExcludeNavigationProperties", false);
+
+            var includeProperties = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            var includePropertiesArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "IncludeProperties");
+            if (includePropertiesArg.Value.Kind == TypedConstantKind.Array && !includePropertiesArg.Value.IsNull)
+            {
+                foreach (var v in includePropertiesArg.Value.Values)
+                {
+                    if (v.Value?.ToString() is { } name) includeProperties.Add(name);
+                }
+            }
 
             var userExcludeProperties = new List<string>();
             var excludePropertiesArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "ExcludeProperties");
@@ -327,6 +338,10 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 }
             }
 
+            // IncludeProperties is the escape hatch: names listed there survive every
+            // automatic and explicit exclusion (the Create-DTO Id convention excepted).
+            excludeProperties.ExceptWith(includeProperties);
+
             var members = new List<FacetMember>();
             var addedMembers = new HashSet<string>();
 
@@ -340,6 +355,10 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
                 if (member is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } p)
                 {
+                    if (excludeNavigationProperties
+                        && !includeProperties.Contains(p.Name)
+                        && IsNavigationProperty(p.Type, sourceSymbol.ContainingAssembly)) continue;
+
                     members.Add(CreateGenerateDtoMember(
                         p.Name,
                         p.Type,
@@ -1508,5 +1527,67 @@ internal sealed class OptionalNewtonsoftJsonConverter : JsonConverter
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Determines whether a property is an ORM-style navigation: its type (or collection
+    /// element type, for any IEnumerable other than string, with dictionary KeyValuePair
+    /// key/value types unwrapped) is a class or interface declared in the same assembly as
+    /// the source model. Scalars, enums, framework types, and user-defined value types
+    /// (e.g. strongly-typed ID structs) are never treated as navigations.
+    /// Known limitations, by design: wrapper generics that are not collections (Lazy&lt;T&gt;,
+    /// Task&lt;T&gt;) and entities declared in a different assembly than the source type are
+    /// not detected — use ExcludeProperties for those.
+    /// </summary>
+    private static bool IsNavigationProperty(ITypeSymbol propertyType, IAssemblySymbol sourceAssembly)
+    {
+        var type = propertyType;
+
+        // Unwrap Nullable<T> so nullable navigations are treated like their underlying type.
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+        {
+            type = nullable.TypeArguments[0];
+        }
+
+        if (IsSameAssemblyDomainType(type, sourceAssembly)) return true;
+
+        // Collections: any IEnumerable<T> (except string) whose element is a domain type.
+        if (type.SpecialType == SpecialType.System_String) return false;
+
+        if (type is IArrayTypeSymbol arrayType)
+        {
+            return IsSameAssemblyDomainType(arrayType.ElementType, sourceAssembly);
+        }
+
+        if (type is INamedTypeSymbol namedType)
+        {
+            var enumerable = namedType.AllInterfaces
+                .FirstOrDefault(i => i.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T)
+                ?? (namedType.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T ? namedType : null);
+
+            if (enumerable is { TypeArguments.Length: 1 })
+            {
+                var element = enumerable.TypeArguments[0];
+
+                // Dictionaries enumerate KeyValuePair<TKey, TValue>; a dictionary of
+                // entities is just as much a navigation as a list of them.
+                if (element is INamedTypeSymbol { MetadataName: "KeyValuePair`2" } kvp
+                    && kvp.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
+                {
+                    return kvp.TypeArguments.Any(t => IsSameAssemblyDomainType(t, sourceAssembly));
+                }
+
+                return IsSameAssemblyDomainType(element, sourceAssembly);
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsSameAssemblyDomainType(ITypeSymbol type, IAssemblySymbol sourceAssembly)
+    {
+        return (type.TypeKind == TypeKind.Class || type.TypeKind == TypeKind.Interface)
+            && type.SpecialType == SpecialType.None
+            && SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, sourceAssembly);
     }
 }
