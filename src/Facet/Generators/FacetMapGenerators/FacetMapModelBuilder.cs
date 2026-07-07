@@ -20,10 +20,11 @@ internal static class FacetMapModelBuilder
         if (context.Attributes.Length == 0) return ImmutableArray<FacetMapTargetModel?>.Empty;
 
         var builder = ImmutableArray.CreateBuilder<FacetMapTargetModel?>(context.Attributes.Length);
-        foreach (var attribute in context.Attributes)
+        var attributeCount = context.Attributes.Length;
+        for (int i = 0; i < context.Attributes.Length; i++)
         {
             token.ThrowIfCancellationRequested();
-            builder.Add(BuildModelForAttribute(targetSymbol, attribute, globalDefaults));
+            builder.Add(BuildModelForAttribute(targetSymbol, context.Attributes[i], globalDefaults, i, attributeCount));
         }
         return builder.ToImmutable();
     }
@@ -31,7 +32,9 @@ internal static class FacetMapModelBuilder
     private static FacetMapTargetModel? BuildModelForAttribute(
         INamedTypeSymbol markerSymbol,
         AttributeData attribute,
-        GlobalConfigurationDefaults globalDefaults)
+        GlobalConfigurationDefaults globalDefaults,
+        int attributeIndex,
+        int attributeCount)
     {
         if (attribute.ConstructorArguments.Length < 2) return null;
 
@@ -167,7 +170,9 @@ internal static class FacetMapModelBuilder
             sourceHasPositionalConstructor: sourceHasPositionalCtor,
             targetHasParameterlessConstructor: targetHasParameterlessCtor,
             members: members,
-            containingTypes: containingTypes);
+            containingTypes: containingTypes,
+            attributeIndex: attributeIndex,
+            attributeCount: attributeCount);
     }
 
     private static ImmutableArray<FacetMapMember> ResolveMappableMembers(

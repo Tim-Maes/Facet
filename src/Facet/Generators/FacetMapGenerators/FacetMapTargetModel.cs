@@ -36,6 +36,9 @@ internal sealed class FacetMapTargetModel : IEquatable<FacetMapTargetModel>
     public ImmutableArray<FacetMapMember> Members { get; }
     public ImmutableArray<string> ContainingTypes { get; }
 
+    public int AttributeIndex { get; }
+    public int AttributeCount { get; }
+
     public FacetMapTargetModel(
         string markerClassName,
         string? ns,
@@ -57,7 +60,9 @@ internal sealed class FacetMapTargetModel : IEquatable<FacetMapTargetModel>
         bool sourceHasPositionalConstructor,
         bool targetHasParameterlessConstructor,
         ImmutableArray<FacetMapMember> members,
-        ImmutableArray<string> containingTypes)
+        ImmutableArray<string> containingTypes,
+        int attributeIndex = 0,
+        int attributeCount = 1)
     {
         MarkerClassName = markerClassName;
         Namespace = ns;
@@ -80,6 +85,8 @@ internal sealed class FacetMapTargetModel : IEquatable<FacetMapTargetModel>
         TargetHasParameterlessConstructor = targetHasParameterlessConstructor;
         Members = members;
         ContainingTypes = containingTypes;
+        AttributeIndex = attributeIndex;
+        AttributeCount = attributeCount;
     }
 
     public bool Equals(FacetMapTargetModel? other)
@@ -104,6 +111,8 @@ internal sealed class FacetMapTargetModel : IEquatable<FacetMapTargetModel>
             && HasProjectionMapConfiguration == other.HasProjectionMapConfiguration
             && SourceHasPositionalConstructor == other.SourceHasPositionalConstructor
             && TargetHasParameterlessConstructor == other.TargetHasParameterlessConstructor
+            && AttributeIndex == other.AttributeIndex
+            && AttributeCount == other.AttributeCount
             && Members.SequenceEqual(other.Members)
             && ContainingTypes.SequenceEqual(other.ContainingTypes);
     }

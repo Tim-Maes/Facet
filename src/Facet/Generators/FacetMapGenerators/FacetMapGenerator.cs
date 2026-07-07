@@ -35,7 +35,10 @@ public sealed class FacetMapGenerator : IIncrementalGenerator
             spc.CancellationToken.ThrowIfCancellationRequested();
 
             var code = FacetMapCodeBuilder.Generate(model);
-            spc.AddSource($"{model.FullName}.{model.SourceTypeSimpleName}_To_{model.TargetTypeSimpleName}.FacetMap.g.cs", SourceText.From(code, Encoding.UTF8));
+            var hintName = model.AttributeCount > 1
+                ? $"{model.FullName}.FacetMap.{model.AttributeIndex}.g.cs"
+                : $"{model.FullName}.FacetMap.g.cs";
+            spc.AddSource(hintName, SourceText.From(code, Encoding.UTF8));
         });
     }
 }
