@@ -426,6 +426,40 @@ public class Product
 }
 ```
 
+## Excluding Navigation Properties
+
+ORM entities typically carry navigation and back-reference properties (`Tenant? Owner`, `List<Order> Orders`, …) that don't belong in request DTOs. Listing every one in `ExcludeProperties` is tedious on wide entities and has to be kept in sync as navigations are added. `ExcludeNavigationProperties = true` drops them automatically.
+
+A property is treated as a navigation when its type — or its collection element type, for any `IEnumerable<T>` other than `string` (including arrays, with dictionary key/value types unwrapped) — is a **class or interface declared in the same assembly** as the source entity. Everything else is kept:
+
+- primitives, enums, `string`, and framework types (`DateTime`, `Guid`, `byte[]`, …)
+- collections of primitives (`List<string>`)
+- classes from **other** assemblies (e.g. a `SemanticVersion` from a NuGet package)
+- user-defined **value types**, such as strongly-typed ID structs (e.g. Vogen value objects)
+
+```csharp
+[GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update, ExcludeNavigationProperties = true)]
+public class Schedule
+{
+    public int Id { get; set; }
+    public string? Name { get; set; }
+    public int? TenantId { get; set; }              // kept (scalar FK)
+    public Tenant? OwnerTenant { get; set; }        // excluded (same-assembly class)
+    public List<Job> Jobs { get; } = new();         // excluded (collection of same-assembly class)
+    public User? CreatedByUser { get; set; }        // excluded (same-assembly class)
+}
+```
+
+Combine with `ExcludeProperties` for anything the heuristic can't know about (e.g. server-computed scalars). When a same-assembly type genuinely belongs in the DTO — the classic case is an aggregate child collection edited together with its parent (task parameters, order lines) — force it back in with `IncludeProperties`, which wins over every automatic and explicit exclusion:
+
+```csharp
+[GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update,
+    ExcludeNavigationProperties = true,
+    IncludeProperties = new[] { nameof(MaintenanceTask.Parameters) })]
+```
+
+Known limitations, by design: wrapper generics that are not collections (`Lazy<T>`, `Task<T>`) and entities declared in a *different* assembly than the source type are not detected — use `ExcludeProperties` for those.
+
 ## Obsolete: GenerateAuditableDtos Attribute
 
 > **?? Deprecated:** The `[GenerateAuditableDtos]` attribute has been replaced by `[GenerateDtos]` with `ExcludeAuditFields = true`. The old attribute will be removed in a future version.
