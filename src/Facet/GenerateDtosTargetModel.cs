@@ -48,6 +48,18 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
     /// mask for the message.
     /// </summary>
     public OutputTypeIssue Issue { get; }
+    /// <summary>
+    /// Whether the consuming compilation references System.Text.Json. Gates emission of
+    /// the Optional&lt;T&gt; wire-format attributes and converter on Patch DTOs so projects
+    /// without STJ still compile.
+    /// </summary>
+    public bool SupportsSystemTextJson { get; }
+    /// <summary>
+    /// Whether the consuming compilation references Newtonsoft.Json. Gates emission of the
+    /// Json.NET counterpart attributes and converter on Patch DTOs (e.g. for ASP.NET Core
+    /// apps using AddNewtonsoftJson, whose MVC body binding bypasses System.Text.Json).
+    /// </summary>
+    public bool SupportsNewtonsoftJson { get; }
 
     public GenerateDtosTargetModel(
         string sourceTypeName,
@@ -65,7 +77,9 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         ImmutableArray<FacetMember> members,
         bool useFullName,
         DtoTypes siblingInterfaceTypes = DtoTypes.None,
-        OutputTypeIssue issue = OutputTypeIssue.None)
+        OutputTypeIssue issue = OutputTypeIssue.None,
+        bool supportsSystemTextJson = false,
+        bool supportsNewtonsoftJson = false)
     {
         SourceTypeName = sourceTypeName;
         SourceNamespace = sourceNamespace;
@@ -83,6 +97,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         UseFullName = useFullName;
         SiblingInterfaceTypes = siblingInterfaceTypes;
         Issue = issue;
+        SupportsSystemTextJson = supportsSystemTextJson;
+        SupportsNewtonsoftJson = supportsNewtonsoftJson;
     }
 
     /// <summary>
@@ -106,7 +122,10 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             ExcludeProperties,
             Members,
             UseFullName,
-            SiblingInterfaceTypes);
+            SiblingInterfaceTypes,
+            Issue,
+            SupportsSystemTextJson,
+            SupportsNewtonsoftJson);
     }
 
     /// <summary>
@@ -131,7 +150,9 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             Members,
             UseFullName,
             SiblingInterfaceTypes,
-            issue);
+            issue,
+            SupportsSystemTextJson,
+            SupportsNewtonsoftJson);
     }
 
     public bool Equals(GenerateDtosTargetModel? other)
@@ -154,7 +175,9 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             && Members.SequenceEqual(other.Members)
             && UseFullName == other.UseFullName
             && SiblingInterfaceTypes == other.SiblingInterfaceTypes
-            && Issue == other.Issue;
+            && Issue == other.Issue
+            && SupportsSystemTextJson == other.SupportsSystemTextJson
+            && SupportsNewtonsoftJson == other.SupportsNewtonsoftJson;
     }
 
     public override bool Equals(object? obj) => obj is GenerateDtosTargetModel other && Equals(other);
@@ -178,6 +201,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             hash = hash * 31 + UseFullName.GetHashCode();
             hash = hash * 31 + SiblingInterfaceTypes.GetHashCode();
             hash = hash * 31 + Issue.GetHashCode();
+            hash = hash * 31 + SupportsSystemTextJson.GetHashCode();
+            hash = hash * 31 + SupportsNewtonsoftJson.GetHashCode();
 
             foreach (var prop in ExcludeProperties)
                 hash = hash * 31 + prop.GetHashCode();
