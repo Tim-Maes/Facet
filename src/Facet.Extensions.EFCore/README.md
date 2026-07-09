@@ -248,29 +248,50 @@ public class ProductsController : ControllerBase
 
 ## Design-Time Services: the EF Model Manifest
 
-`[GenerateDtos(ExcludeNavigationProperties = true)]` normally decides what a "navigation" is
-with a type-shape heuristic. This package can replace the guess with the EF model's own
-designation: its design-time services write a **model manifest** (`{ContextName}.facetmodel.json`)
-beside the migrations model snapshot every time you run
+`[GenerateDtos(ExcludeNavigationProperties = true)]` shapes a DTO from the EF model's own
+navigation designation — it is **driven entirely by a model manifest**, with no type-shape
+heuristic. This package's design-time services write that manifest
+(`{ContextName}.facetmodel.json`) beside the migrations model snapshot every time you run
 `dotnet ef migrations add`/`remove`, recording per entity exactly which properties EF maps as
 data (scalar columns, complex properties, primitive collections) and which are navigations,
-owned references, or skip navigations.
+owned references, skip navigations, or explicitly ignored. A source type using
+`ExcludeNavigationProperties` with no manifest entry is a compile error (**FAC105**) — there
+is nothing to guess from.
 
-### Three projects, three roles
+### Where each piece lives
 
-In a layered solution these are usually **three different projects**, and each piece lives in
-a specific one. The manifest is written next to the snapshot (the migrations project), but the
-generator that reads it runs in the project that declares your `[GenerateDtos]` attributes —
-so the `<AdditionalFiles>` glob usually reaches *across* projects.
+There is no separate "DTO project": the generated DTOs are emitted into whichever project
+declares the `[GenerateDtos]` attributes. What can be surprising is that in a layered solution
+**three different projects** are involved, and the manifest is written into one project
+(next to the snapshot) but read by the generator running in another — so the `<AdditionalFiles>`
+glob reaches *across* projects. In a single-project app all three roles collapse into one and
+every path is local.
 
-| Role | `dotnet ef` flag | What goes here | Example (a typical layered app) |
-|------|------------------|----------------|--------------------------------|
+```mermaid
+flowchart TB
+    subgraph simple["Simple: one project"]
+        direction TB
+        S["MyApp&nbsp;&nbsp;(startup + migrations + [GenerateDtos])<br/>entities + [GenerateDtos(ExcludeNavigationProperties=true)]<br/>DbContext + Migrations/ (snapshot + manifest)<br/>generated DTOs land here<br/>AdditionalFiles glob: Migrations/*.facetmodel.json (local)"]
+    end
+
+    subgraph layered["Layered: three roles, three projects"]
+        direction LR
+        EF(["dotnet ef migrations add<br/>--startup-project Web --project Persistence"])
+        W["MyApp.Web — startup project<br/>assembly: DesignTimeServicesReference"]
+        P["MyApp.Persistence — migrations project<br/>…ModelSnapshot.cs<br/>MyDbContext.facetmodel.json"]
+        D["MyApp.Domain — [GenerateDtos] project<br/>entities + attributes<br/>AdditionalFiles → ../MyApp.Persistence/Migrations/*.facetmodel.json<br/>generated DTOs land here"]
+
+        W -. discovered by .-> EF
+        EF == writes ==> P
+        P == "manifest read via AdditionalFiles" ==> D
+    end
+```
+
+| Role | `dotnet ef` flag | What goes here | Layered example |
+|------|------------------|----------------|-----------------|
 | **Startup project** | `--startup-project` (or current) | the `DesignTimeServicesReference` attribute | `MyApp.Web` |
 | **Migrations project** | `--project` (or current) | the snapshot **and the generated `{Context}.facetmodel.json`** | `MyApp.Persistence` |
-| **DTO project** | *(not an ef flag)* | the `[GenerateDtos]` attributes and the `<AdditionalFiles>` glob | `MyApp.Domain` |
-
-If all three happen to be one project, every path below is local; the cross-project relative
-path in step 2 is what changes.
+| **`[GenerateDtos]` project** | *(not an ef flag)* | the attributes, the `<AdditionalFiles>` glob, and the generated DTOs | `MyApp.Domain` |
 
 ### 1. Register the design-time services (startup project)
 
@@ -304,11 +325,11 @@ dotnet ef migrations add InitFacetManifest --project ../MyApp.Persistence --star
 ```
 
 Nothing else regenerates it — not `build`, not `database update`, not `dbcontext info`. Until
-that first migration, there is no manifest and `ExcludeNavigationProperties` silently uses the
-heuristic. Each `DbContext` writes its own `{Context}.facetmodel.json`; if you have several,
-the generator merges them (a property mapped as data in any context is kept).
+that first migration exists, `ExcludeNavigationProperties` types have no manifest entry and
+report FAC105. Each `DbContext` writes its own `{Context}.facetmodel.json`; if you have
+several, the generator merges them (a property mapped as data in any context is kept).
 
-### 2. Expose the manifest to the generator (DTO project — the one with `[GenerateDtos]`)
+### 2. Expose the manifest to the generator (the `[GenerateDtos]` project)
 
 Point `<AdditionalFiles>` at wherever the migrations project keeps the manifest. That is
 almost always a **relative path into the migrations project**, not a local folder:
@@ -320,36 +341,32 @@ almost always a **relative path into the migrations project**, not a local folde
 </ItemGroup>
 ```
 
-> A glob that matches nothing is silently empty — the compiler simply receives no file, and
-> the generator cannot tell an empty glob from a missing one. If the path is wrong you get the
-> heuristic with no error. Turn on `Facet_RequireEfModelManifest` (below) to make that a build
-> failure, or sanity-check that the generated DTOs shrank as expected after wiring it up.
+> Mind the path: an `<AdditionalFiles>` glob that matches nothing is silently empty — the
+> compiler simply receives no file. Because `ExcludeNavigationProperties` requires a manifest,
+> a wrong path surfaces as FAC105 on every such type rather than a quiet wrong result.
 
 Commit the manifest like you commit the snapshot. For every entity listed in it,
 `ExcludeNavigationProperties` keeps exactly the mapped data properties — value-converted
-columns survive, EF-ignored (`[NotMapped]`) properties drop — and types not listed anywhere
-keep the heuristic behavior. `IncludeProperties` still wins for aggregate children you want
-in the DTO.
+columns survive (the model maps them as data), EF-ignored (`[NotMapped]`) properties drop.
+`IncludeProperties` still wins for aggregate children you want in the DTO.
 
-### Make drift a build failure (recommended)
+### Drift is a build failure, for free
 
-Because the manifest is regenerated only when migrations are, committing it turns your build
-into a schema-drift guard: add a mapped property without a migration and the generator emits
-**FAC106** (the property is unknown to the model). Two knobs make that guarantee strict:
+Because the manifest is regenerated only when migrations are, committing it makes your build a
+schema-drift guard: add a mapped property without a migration and the generator emits
+**FAC106** (the property is unknown to the model, so it would silently vanish from the DTO).
+FAC106 is a warning by default so mid-development edits don't block the build; escalate it for
+CI so a stale manifest can't merge:
 
 ```xml
 <PropertyGroup>
-  <!-- In the DTO project. Turns off the heuristic: an ExcludeNavigationProperties type with
-       no manifest coverage — including a mis-wired glob that found nothing — is FAC107, an
-       error, instead of a silent fallback. -->
-  <Facet_RequireEfModelManifest>true</Facet_RequireEfModelManifest>
-  <!-- Escalate the drift warnings to errors so CI rejects a stale manifest. -->
-  <WarningsAsErrors>$(WarningsAsErrors);FAC105;FAC106</WarningsAsErrors>
+  <WarningsAsErrors>$(WarningsAsErrors);FAC106</WarningsAsErrors>
 </PropertyGroup>
 ```
 
-With both set, a PR that changes the model without regenerating the manifest cannot merge
-green — your DTO contracts can't silently drift from your schema.
+FAC105 (no manifest entry at all) is already an error. Together they mean a PR that changes the
+model without regenerating the manifest cannot merge green — your DTO contracts can't silently
+drift from your schema.
 
 ### Programmatic generation
 

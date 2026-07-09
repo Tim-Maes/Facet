@@ -28,7 +28,7 @@ Facet includes comprehensive Roslyn analyzers that provide real-time feedback in
 | [FAC102](#fac102) | Error | Generator | OutputType sets Partial without a kind |
 | [FAC103](#fac103) | Error | Generator | EF model manifest could not be read |
 | [FAC104](#fac104) | Error | Generator | EF model manifest version not supported |
-| [FAC105](#fac105) | Warning | Generator | Source type not in the EF model manifest |
+| [FAC105](#fac105) | Error | Generator | Source type not in the EF model manifest |
 | [FAC106](#fac106) | Warning | Generator | Property unknown to the EF model manifest |
 
 ---
@@ -549,19 +549,10 @@ The manifest was written by a Facet.Extensions.EFCore version whose format this 
 
 **GenerateDtos source type is not in the EF model manifest**
 
-- **Severity**: Warning
+- **Severity**: Error
 - **Category**: Generator
 
-Manifests are present, so the model's own navigation designation was expected for this `ExcludeNavigationProperties` source type — falling back to the same-assembly heuristic usually means a stale manifest or a CLR type name mismatch. If the source type genuinely isn't an EF entity, suppress at the attribute:
-
-```csharp
-#pragma warning disable FAC105 // not an EF entity; heuristic intended
-[GenerateDtos(Types = DtoTypes.Response, ExcludeNavigationProperties = true)]
-#pragma warning restore FAC105
-public class DashboardProjection { }
-```
-
-For strict builds, escalate: `<WarningsAsErrors>$(WarningsAsErrors);FAC105;FAC106</WarningsAsErrors>`.
+`ExcludeNavigationProperties` is driven entirely by the EF model manifest — there is **no heuristic fallback**. A source type with no manifest entry cannot be shaped, so this is a hard error. It fires whether no manifest was supplied at all (check the `<AdditionalFiles>` path — a glob that matches nothing is silently empty) or the type is simply absent from the manifests present (regenerate with `dotnet ef migrations add`). If the type is **not** an EF entity, list its navigation-like properties in `ExcludeProperties` instead of using `ExcludeNavigationProperties`.
 
 ---
 
@@ -572,7 +563,7 @@ For strict builds, escalate: `<WarningsAsErrors>$(WarningsAsErrors);FAC105;FAC10
 - **Severity**: Warning
 - **Category**: Generator
 
-The manifest records every member the model has an opinion on (mapped, navigation, owned, skip navigation, ignored, service). A settable property outside that set is unknown to the model — almost always a property added after the manifest was last generated, which would otherwise silently vanish from generated DTOs. Regenerate the manifest, or mark the property `[NotMapped]`/`Ignore()` if the model genuinely does not map it (which also documents the intent).
+The manifest records every member the model has an opinion on (mapped, navigation, owned, skip navigation, ignored, service). A settable property outside that set is unknown to the model — almost always a property added after the manifest was last generated, which would otherwise silently vanish from generated DTOs. Regenerate the manifest, or mark the property `[NotMapped]`/`Ignore()` if the model genuinely does not map it (which also documents the intent). This stays a warning so mid-development edits (property added, migration not yet run) don't block the build; escalate for CI with `<WarningsAsErrors>$(WarningsAsErrors);FAC106</WarningsAsErrors>`.
 
 ---
 

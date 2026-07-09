@@ -107,23 +107,22 @@ public class GenerateDtosAttribute : Attribute
     public string[] ExcludeProperties { get; set; } = Array.Empty<string>();
 
     /// <summary>
-    /// When true, automatically excludes navigation properties: properties whose type
-    /// (or collection element type, for any <see cref="System.Collections.Generic.IEnumerable{T}"/>
-    /// other than <see cref="string"/>, with dictionary key/value types unwrapped) is a class
-    /// or interface declared in the same assembly as the source type. This removes ORM
-    /// navigation/back-reference properties from generated DTOs without listing each one in
-    /// <see cref="ExcludeProperties"/>. Scalar properties — primitives, enums, framework
-    /// types, and user-defined value types such as strongly-typed ID structs — are always
-    /// kept. Aggregate children that should stay in the DTO despite matching the heuristic
-    /// can be forced back in via <see cref="IncludeProperties"/>. Default is false.
+    /// When true, keeps exactly the properties EF Core maps as data (scalar columns and
+    /// complex/value-object members) and drops navigations, skip navigations, owned
+    /// references, and EF-ignored properties — removing ORM navigation/back-reference
+    /// properties from generated DTOs without listing each one in
+    /// <see cref="ExcludeProperties"/>.
     /// <para>
-    /// For EF Core entities the heuristic can be replaced by the model's own designation:
-    /// when a <c>*.facetmodel.json</c> manifest (written beside the model snapshot by
-    /// Facet.Extensions.EFCore's design-time services on every <c>dotnet ef migrations
-    /// add</c>/<c>remove</c>) is exposed as an AdditionalFile and lists the source type,
-    /// exactly the properties EF maps as data are kept — so value-converted columns survive
-    /// and EF-ignored properties drop, in both cases unlike the heuristic. Types not listed
-    /// in any manifest keep the heuristic behavior.
+    /// This is driven entirely by the EF model: it requires a <c>*.facetmodel.json</c>
+    /// manifest (written beside the model snapshot by Facet.Extensions.EFCore's design-time
+    /// services on every <c>dotnet ef migrations add</c>/<c>remove</c>) exposed to the
+    /// generator as an AdditionalFile. Because it follows the model's own designation,
+    /// value-converted entity-typed columns survive and <c>[NotMapped]</c> properties drop —
+    /// neither of which a type-shape guess could get right. A source type with no manifest
+    /// entry is a compile error (FAC105); there is no heuristic fallback. For a non-EF type,
+    /// list its navigation-like properties in <see cref="ExcludeProperties"/> instead.
+    /// Aggregate children that should stay in the DTO despite being navigations can be forced
+    /// back in via <see cref="IncludeProperties"/>. Default is false.
     /// </para>
     /// </summary>
     public bool ExcludeNavigationProperties { get; set; } = false;
@@ -132,7 +131,7 @@ public class GenerateDtosAttribute : Attribute
     /// Properties to keep in every generated DTO regardless of <see cref="ExcludeProperties"/>,
     /// <see cref="ExcludeAuditFields"/>, or <see cref="ExcludeNavigationProperties"/> — the
     /// escape hatch for aggregate children (e.g. an owned parameter collection edited together
-    /// with its parent) that the navigation heuristic would otherwise drop.
+    /// with its parent) that the EF model designates a navigation.
     /// </summary>
     public string[] IncludeProperties { get; set; } = Array.Empty<string>();
 
