@@ -460,6 +460,30 @@ Combine with `ExcludeProperties` for anything the heuristic can't know about (e.
 
 Known limitations, by design: wrapper generics that are not collections (`Lazy<T>`, `Task<T>`) and entities declared in a *different* assembly than the source type are not detected — use `ExcludeProperties` for those.
 
+### EF Core-backed exclusion: the model manifest
+
+The rules above are a *heuristic* — a good guess from type shapes. If the entity is mapped by EF Core, you can replace the guess with the model's own designation. `Facet.Extensions.EFCore` ships design-time services that write a **model manifest** (`{ContextName}.facetmodel`) beside the migrations model snapshot every time you run `dotnet ef migrations add`/`remove`, recording for each entity exactly which properties EF maps as data and which are navigations. Register them once in the startup project:
+
+```csharp
+[assembly: Microsoft.EntityFrameworkCore.Design.DesignTimeServicesReference(
+    "Facet.Extensions.EFCore.Design.FacetDesignTimeServices, Facet.Extensions.EFCore")]
+```
+
+Commit the manifest, then expose it to the generator in the project that declares `[GenerateDtos]`:
+
+```xml
+<ItemGroup>
+  <AdditionalFiles Include="Migrations/*.facetmodel" />
+</ItemGroup>
+```
+
+For any source type listed in a manifest, `ExcludeNavigationProperties = true` now keeps **exactly the properties EF maps as data** (scalar columns, complex properties, primitive collections) and drops everything else. That fixes both directions the heuristic can miss:
+
+- a same-assembly class stored through a **value converter** is kept, because the model maps it as a column;
+- a scalar-looking property the model **ignores** (`[NotMapped]`, `Ignore(...)`) is dropped, because it isn't data.
+
+Owned references, skip navigations (many-to-many), and shadow-only members drop by construction. `IncludeProperties` still forces aggregate children back in, and types not listed in any manifest (non-EF classes, projections) silently keep the heuristic behavior — the manifest is an upgrade, not a requirement. Because the manifest is only rewritten when migrations are, a newly mapped property joins DTOs when you add its migration — the same workflow that keeps the snapshot honest keeps DTO shapes honest.
+
 ## Obsolete: GenerateAuditableDtos Attribute
 
 > **?? Deprecated:** The `[GenerateAuditableDtos]` attribute has been replaced by `[GenerateDtos]` with `ExcludeAuditFields = true`. The old attribute will be removed in a future version.
