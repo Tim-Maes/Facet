@@ -3,6 +3,7 @@ using System.Text;
 using Facet.Generators;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Text;
 
 namespace Facet.Tests.UnitTests.Core.GenerateDtos;
@@ -30,7 +31,32 @@ public class GenerateDtosManifestDiagnosticsTests
         public override SourceText GetText(CancellationToken cancellationToken = default) => _text;
     }
 
+    private sealed class GlobalOptions(bool requireManifest) : AnalyzerConfigOptions
+    {
+        public override bool TryGetValue(string key, out string value)
+        {
+            if (requireManifest && key == "build_property.Facet_RequireEfModelManifest")
+            {
+                value = "true";
+                return true;
+            }
+
+            value = null!;
+            return false;
+        }
+    }
+
+    private sealed class OptionsProvider(bool requireManifest) : AnalyzerConfigOptionsProvider
+    {
+        public override AnalyzerConfigOptions GlobalOptions { get; } = new GlobalOptions(requireManifest);
+        public override AnalyzerConfigOptions GetOptions(SyntaxTree tree) => new GlobalOptions(requireManifest);
+        public override AnalyzerConfigOptions GetOptions(AdditionalText textFile) => new GlobalOptions(requireManifest);
+    }
+
     private static ImmutableArray<Diagnostic> RunGenerator(string source, params string[] manifests)
+        => RunGenerator(source, requireManifest: false, manifests);
+
+    private static ImmutableArray<Diagnostic> RunGenerator(string source, bool requireManifest, params string[] manifests)
     {
         var references = AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
@@ -44,7 +70,8 @@ public class GenerateDtosManifestDiagnosticsTests
             .ToArray();
         var driver = CSharpGeneratorDriver.Create(
             new[] { new GenerateDtosGeneratorHoist(new GenerateDtosGenerator()).AsSourceGenerator() },
-            additionalTexts);
+            additionalTexts,
+            optionsProvider: new OptionsProvider(requireManifest));
         return driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _)
             .GetRunResult().Diagnostics;
     }
@@ -212,6 +239,57 @@ public class GenerateDtosManifestDiagnosticsTests
 
         diagnostics.Should().NotContain(d => d.Id == "FAC103" || d.Id == "FAC104" || d.Id == "FAC105" || d.Id == "FAC106",
             "the zero-infrastructure heuristic tier is the documented default, not a degradation");
+    }
+
+    [Fact]
+    public void StrictMode_NoManifestsAtAll_ReportsFac107()
+    {
+        var diagnostics = RunGenerator(ParentWithNav, requireManifest: true);
+
+        var fac107 = diagnostics.Should().ContainSingle(d => d.Id == "FAC107").Subject;
+        fac107.Severity.Should().Be(DiagnosticSeverity.Error);
+        fac107.GetMessage().Should().Contain("Parent");
+        fac107.Location.Should().NotBe(Location.None, "the error must anchor to the attribute");
+        diagnostics.Should().NotContain(d => d.Id == "FAC105", "strict mode replaces the FAC105 advisory with the FAC107 error");
+    }
+
+    [Fact]
+    public void StrictMode_TypeMissingFromManifest_ReportsFac107()
+    {
+        var diagnostics = RunGenerator(ParentWithNav, requireManifest: true, """
+            {
+              "version": 1,
+              "entities": [ { "clrType": "ManifestDiag.SomeOtherType", "scalar": ["Id"] } ]
+            }
+            """);
+
+        diagnostics.Should().ContainSingle(d => d.Id == "FAC107")
+            .Which.Severity.Should().Be(DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void StrictMode_CoveredType_IsQuiet()
+    {
+        var diagnostics = RunGenerator(ParentWithNav, requireManifest: true, CompleteParentManifest);
+
+        diagnostics.Should().NotContain(d => d.Id == "FAC107" || d.Id == "FAC105",
+            "a covered type satisfies the requirement");
+    }
+
+    [Fact]
+    public void StrictMode_TypeWithoutExcludeNavigation_IsUnaffected()
+    {
+        var diagnostics = RunGenerator(Entities + """
+            [GenerateDtos(Types = DtoTypes.Update)]
+            public class Parent
+            {
+                public int Id { get; set; }
+                public Child? Owner { get; set; }
+            }
+            """, requireManifest: true);
+
+        diagnostics.Should().NotContain(d => d.Id == "FAC107",
+            "the requirement only applies to types that opted into ExcludeNavigationProperties");
     }
 
     [Fact]
