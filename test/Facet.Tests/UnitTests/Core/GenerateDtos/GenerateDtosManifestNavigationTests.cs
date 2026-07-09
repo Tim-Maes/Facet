@@ -78,7 +78,7 @@ public class GenerateDtosManifestNavigationTests
             {
               "version": 1,
               "entities": [
-                { "clrType": "ManifestNav.Parent", "scalar": ["Id", "Name"], "nav": ["Owner", "Items"] }
+                { "clrType": "ManifestNav.Parent", "scalar": ["Id", "Name"], "nav": ["Owner", "Items"], "ignored": ["LegacyBlob"] }
               ]
             }
             """);
@@ -87,7 +87,7 @@ public class GenerateDtosManifestNavigationTests
         dto.Should().Contain("Name");
         dto.Should().NotContain("Owner", "the model designates it a navigation");
         dto.Should().NotContain("Items", "collection navigations drop too");
-        dto.Should().NotContain("LegacyBlob", "properties the model does not map at all (EF-ignored) are not data");
+        dto.Should().NotContain("LegacyBlob", "explicitly ignored members are not data");
     }
 
     [Fact]
@@ -234,7 +234,7 @@ public class GenerateDtosManifestNavigationTests
             """
             {
               "version": 1,
-              "entities": [ { "clrType": "ManifestNav.Parent", "scalar": ["Id"] } ]
+              "entities": [ { "clrType": "ManifestNav.Parent", "scalar": ["Id"], "nav": ["Owner"] } ]
             }
             """,
             """

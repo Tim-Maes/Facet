@@ -79,7 +79,12 @@ public class FacetEfModelManifestTests
     private static string BuildManifest()
     {
         using var context = new ManifestContext();
-        return FacetEfModelManifest.Build(context.Model, nameof(ManifestContext));
+        // The design-time model — what the migrations scaffolder hook receives. Unlike the
+        // runtime model it still implements the convention metadata surface, which is where
+        // explicitly ignored members live.
+        var model = Microsoft.EntityFrameworkCore.Infrastructure.AccessorExtensions
+            .GetService<Microsoft.EntityFrameworkCore.Metadata.IDesignTimeModel>(context).Model;
+        return FacetEfModelManifest.Build(model, nameof(ManifestContext));
     }
 
     private static JsonElement Root(string manifest)
@@ -135,11 +140,20 @@ public class FacetEfModelManifestTests
     }
 
     [Fact]
-    public void IgnoredAndShadowProperties_NeverAppear()
+    public void ExplicitlyIgnoredMembers_AreRecordedAsIgnored()
+    {
+        var blog = Entity(BuildManifest(), ClrName(typeof(ManifestBlog)));
+
+        Category(blog, "ignored").Should().Contain("Secret",
+            "the model's opinion on ignored members is what lets the generator tell 'ignored' apart from 'unknown' (FAC106)");
+        Category(blog, "scalar").Should().NotContain("Secret");
+    }
+
+    [Fact]
+    public void ShadowProperties_NeverAppear()
     {
         var manifest = BuildManifest();
 
-        manifest.Should().NotContain("Secret", "EF-ignored properties are not part of the model");
         manifest.Should().NotContain("ShadowStamp", "shadow properties have no CLR member to keep or drop");
         manifest.Should().NotContain("PublisherId", "the shadow FK EF invents has no CLR member either");
     }
