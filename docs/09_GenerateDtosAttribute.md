@@ -309,6 +309,22 @@ Pick `OutputType.PartialClass` when:
 
 If you don't need extensibility, prefer `OutputType.Class` — it also emits `Projection`, `ToSource`, and `BackTo` for full round-tripping.
 
+## Assembly-level generation: `[GenerateDtosFor]`
+
+`[GenerateDtos]` sits on the entity, so the DTOs compile into the entity's assembly. When your architecture wants contract types **downstream** of the domain — a web-contracts project referencing the domain, with the domain kept free of generated request/response types — use the assembly-level counterpart in the project where the DTOs should live:
+
+```csharp
+// In the contracts project (references the domain project):
+[assembly: GenerateDtosFor(typeof(Schedule),
+    Types = DtoTypes.Create | DtoTypes.Update,
+    OutputType = OutputType.Interface | OutputType.Record | OutputType.Partial,
+    Namespace = "My.Contracts.V1.Requests")]
+```
+
+The source entity is read as metadata from the referenced assembly and needs no attribute of its own. All `[GenerateDtos]` options apply, including flags-combined `OutputType`, the `Partial` modifier, and FAC101/FAC102 validation. Declare one `[assembly: GenerateDtosFor(...)]` per entity; interface/concrete sibling pairing links outputs **per source entity** — two entities registered in the same assembly never cross-pair.
+
+This also composes with source generators' single-compilation rule: because generation happens in the declaring (downstream) project, the domain assembly stays dependency-free of contract concerns.
+
 ## Excluding Audit Fields
 
 Use the `ExcludeAuditFields` property to automatically exclude common audit/tracking fields from the generated DTOs.

@@ -20,3 +20,16 @@ public class ExternalSource
     /// </summary>
     public string Description { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Entity deliberately WITHOUT any [GenerateDtos] attribute: DTOs for it are generated
+/// cross-assembly by [assembly: GenerateDtosFor(typeof(ExternalDomainEntity), ...)] in
+/// Facet.Tests — proving contract generation can live downstream of the domain project.
+/// </summary>
+public class ExternalDomainEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public bool IsActive { get; set; }
+}
