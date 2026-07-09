@@ -245,49 +245,8 @@ public partial interface IUpdateModTestPartialStructInterfaceEntityRequest
 {
 }
 
-// ExcludeNavigationProperties: same-assembly class-typed properties (single and
-// collection) are dropped; scalars, framework types, primitive collections, and
-// user-defined value types (e.g. strongly-typed ID structs) are kept.
-[GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update,
-    ExcludeNavigationProperties = true)]
-public class TestNavigationExclusionEntity
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public TestTypedId TypedId { get; set; }
-    public TestTypedId? OptionalTypedId { get; set; }
-    public List<string> Aliases { get; set; } = new();
-    public byte[]? Payload { get; set; }
-    public DateTime Timestamp { get; set; }
-    public TestNavigationTarget? Parent { get; set; }
-    public List<TestNavigationTarget> Children { get; } = new();
-    public ICollection<TestNavigationTarget> Related { get; set; } = new List<TestNavigationTarget>();
-    public TestNavigationTarget[] TargetArray { get; set; } = Array.Empty<TestNavigationTarget>();
-}
-
-public class TestNavigationTarget
-{
-    public int Id { get; set; }
-}
-
-// Stand-in for a strongly-typed ID (e.g. a Vogen value object): a user-defined struct
-// wrapping a primitive. Must never be treated as a navigation.
-public readonly struct TestTypedId
-{
-    public TestTypedId(int value) { Value = value; }
-    public int Value { get; }
-}
-
-// ExcludeNavigationProperties composed with a flags-combined OutputType: one attribute
-// yields a nav-free Interface + PartialClass pair.
-[GenerateDtos(Types = DtoTypes.Update,
-    OutputType = OutputType.Interface | OutputType.PartialClass,
-    ExcludeNavigationProperties = true,
-    Prefix = "Trim")]
-public class TestNavigationFlagsComboEntity
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public TestNavigationTarget? Parent { get; set; }
-    public List<TestNavigationTarget> Children { get; } = new();
-}
+// ExcludeNavigationProperties is driven by the EF model manifest and has no heuristic
+// fallback, so it cannot be exercised through statically-compiled entities here (there is no
+// manifest AdditionalFile for this test project — such an entity would be a FAC105 error).
+// Its behavior is covered by the driver-based GenerateDtosManifestNavigationTests /
+// GenerateDtosManifestDiagnosticsTests, which supply an in-memory manifest.

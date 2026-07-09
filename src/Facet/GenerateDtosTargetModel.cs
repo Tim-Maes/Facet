@@ -35,11 +35,10 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
     public bool UseFullName { get; }
     /// <summary>
     /// Whether the attribute requested navigation-property exclusion. Members are NOT yet
-    /// filtered for navigations when this is set: the transform only marks candidates (see
-    /// <see cref="HeuristicNavigationProperties"/>), and the generation stage resolves the
-    /// final member set — from the EF model manifest when the source type is listed there,
-    /// from the heuristic marks otherwise. Deferring the decision is what lets AdditionalFiles
-    /// (unavailable in the syntax transform) participate.
+    /// filtered for navigations when this is set: the generation stage resolves the final
+    /// member set from the EF model manifest (an AdditionalFile, unavailable in the syntax
+    /// transform). A source type with no manifest entry is an error (FAC105) — there is no
+    /// heuristic fallback.
     /// </summary>
     public bool ExcludeNavigationProperties { get; }
     /// <summary>
@@ -47,12 +46,6 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
     /// filtering happens after the transform and must still honor forced inclusions.
     /// </summary>
     public ImmutableArray<string> IncludeProperties { get; }
-    /// <summary>
-    /// Member names the same-assembly navigation heuristic would drop, recorded in the
-    /// transform (where symbols are available) and applied in the generation stage when the
-    /// source type has no EF model manifest entry.
-    /// </summary>
-    public ImmutableArray<string> HeuristicNavigationProperties { get; }
     /// <summary>
     /// Names of property members that EF could plausibly map — settable, or get-only
     /// collections — recorded only when <see cref="ExcludeNavigationProperties"/> is set.
@@ -112,7 +105,6 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         bool useFullName,
         bool excludeNavigationProperties = false,
         ImmutableArray<string> includeProperties = default,
-        ImmutableArray<string> heuristicNavigationProperties = default,
         ImmutableArray<string> settableProperties = default,
         SourceLocationInfo? attributeLocation = null,
         DtoTypes siblingInterfaceTypes = DtoTypes.None,
@@ -136,7 +128,6 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         UseFullName = useFullName;
         ExcludeNavigationProperties = excludeNavigationProperties;
         IncludeProperties = includeProperties.IsDefault ? ImmutableArray<string>.Empty : includeProperties;
-        HeuristicNavigationProperties = heuristicNavigationProperties.IsDefault ? ImmutableArray<string>.Empty : heuristicNavigationProperties;
         SettableProperties = settableProperties.IsDefault ? ImmutableArray<string>.Empty : settableProperties;
         AttributeLocation = attributeLocation;
         SiblingInterfaceTypes = siblingInterfaceTypes;
@@ -168,7 +159,6 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             UseFullName,
             ExcludeNavigationProperties,
             IncludeProperties,
-            HeuristicNavigationProperties,
             SettableProperties,
             AttributeLocation,
             SiblingInterfaceTypes,
@@ -179,8 +169,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
 
     /// <summary>
     /// Returns a copy of this model with the final, navigation-filtered member list, used by
-    /// the generation stage once manifest-or-heuristic exclusion is resolved. The navigation
-    /// bookkeeping fields are cleared: they exist only to carry the pending decision.
+    /// the generation stage once manifest exclusion is resolved. The navigation bookkeeping
+    /// fields are cleared: they exist only to carry the pending decision.
     /// </summary>
     public GenerateDtosTargetModel WithResolvedMembers(ImmutableArray<FacetMember> members)
     {
@@ -201,7 +191,6 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             UseFullName,
             excludeNavigationProperties: false,
             includeProperties: IncludeProperties,
-            heuristicNavigationProperties: ImmutableArray<string>.Empty,
             settableProperties: ImmutableArray<string>.Empty,
             attributeLocation: AttributeLocation,
             siblingInterfaceTypes: SiblingInterfaceTypes,
@@ -233,7 +222,6 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             UseFullName,
             ExcludeNavigationProperties,
             IncludeProperties,
-            HeuristicNavigationProperties,
             SettableProperties,
             AttributeLocation,
             SiblingInterfaceTypes,
@@ -263,7 +251,6 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             && UseFullName == other.UseFullName
             && ExcludeNavigationProperties == other.ExcludeNavigationProperties
             && IncludeProperties.SequenceEqual(other.IncludeProperties)
-            && HeuristicNavigationProperties.SequenceEqual(other.HeuristicNavigationProperties)
             && SettableProperties.SequenceEqual(other.SettableProperties)
             && Nullable.Equals(AttributeLocation, other.AttributeLocation)
             && SiblingInterfaceTypes == other.SiblingInterfaceTypes
@@ -301,9 +288,6 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
                 hash = hash * 31 + prop.GetHashCode();
 
             foreach (var prop in IncludeProperties)
-                hash = hash * 31 + prop.GetHashCode();
-
-            foreach (var prop in HeuristicNavigationProperties)
                 hash = hash * 31 + prop.GetHashCode();
 
             foreach (var prop in SettableProperties)

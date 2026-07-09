@@ -64,7 +64,7 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         "Generator",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "A committed *.facetmodel.json file wired up as an AdditionalFile is not readable as a manifest. Silently ignoring it would let ExcludeNavigationProperties degrade to the heuristic without any signal, so the failure is reported instead.");
+        description: "A committed *.facetmodel.json file wired up as an AdditionalFile is not readable as a manifest. It is ignored in full, and any ExcludeNavigationProperties type it should have covered then surfaces as FAC105 — the failure is never silent.");
 
     private static readonly DiagnosticDescriptor ManifestVersionRule = new DiagnosticDescriptor(
         "FAC104",
@@ -73,25 +73,16 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         "Generator",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "The manifest was written by a Facet.Extensions.EFCore version whose format this generator does not read — a package version mismatch. Silently ignoring it would let ExcludeNavigationProperties degrade to the heuristic without any signal.");
+        description: "The manifest was written by a Facet.Extensions.EFCore version whose format this generator does not read — a package version mismatch. It is ignored in full; any ExcludeNavigationProperties type it should have covered then surfaces as FAC105.");
 
     private static readonly DiagnosticDescriptor TypeNotInManifestRule = new DiagnosticDescriptor(
         "FAC105",
         "GenerateDtos source type is not in the EF model manifest",
-        "'{0}' sets ExcludeNavigationProperties but is not listed in any EF model manifest; the same-assembly heuristic is in effect. If it is an EF entity, regenerate the manifest (dotnet ef migrations add/remove); if it is not, suppress this warning for the type.",
-        "Generator",
-        DiagnosticSeverity.Warning,
-        isEnabledByDefault: true,
-        description: "Manifests are present, so the model's own navigation designation was expected — falling back to the heuristic is most likely a stale manifest or a CLR type name mismatch. For non-entity source types this is intentional and can be suppressed with #pragma warning disable FAC105 around the attribute, or escalated to an error with WarningsAsErrors for strict builds.");
-
-    private static readonly DiagnosticDescriptor ManifestRequiredRule = new DiagnosticDescriptor(
-        "FAC107",
-        "GenerateDtos source type requires an EF model manifest",
-        "'{0}' sets ExcludeNavigationProperties and Facet_RequireEfModelManifest is enabled, but no EF model manifest covers it. Wire up the design-time services and add the manifest to AdditionalFiles (a glob that matches nothing is silently empty), or disable Facet_RequireEfModelManifest to allow the same-assembly heuristic.",
+        "'{0}' sets ExcludeNavigationProperties, which requires an EF model manifest entry for the type, but none was found. Wire up Facet.Extensions.EFCore's design-time services and add the manifest to AdditionalFiles — note that an AdditionalFiles glob matching nothing is silently empty, so double-check the path — then run 'dotnet ef migrations add' to generate it.",
         "Generator",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "With Facet_RequireEfModelManifest set, the same-assembly heuristic is turned off and manifest coverage is mandatory: a source type with no manifest entry — because no manifest was supplied at all (an AdditionalFiles glob that matches nothing passes nothing to the compiler, so the generator cannot see that a glob was even written) or because this type is absent from the manifests present — is a hard error rather than a silent fallback.");
+        description: "ExcludeNavigationProperties is driven entirely by the EF model manifest — there is no heuristic fallback. A source type with no manifest entry (because no manifest was supplied at all, or because this type is absent from the manifests present) cannot be shaped and is a hard error. If the type is not an EF entity, list its navigation-like properties in ExcludeProperties instead of using ExcludeNavigationProperties.");
 
     private static readonly DiagnosticDescriptor PropertyNotInManifestRule = new DiagnosticDescriptor(
         "FAC106",
@@ -140,10 +131,10 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
             .SelectMany(static (models, _) => models!);
 
         // EF model manifests (*.facetmodel.json, written beside the model snapshot by
-        // Facet.Extensions.EFCore on every migrations add/remove) upgrade
-        // ExcludeNavigationProperties from the same-assembly heuristic to the EF model's own
-        // designation. AdditionalFiles are invisible to the syntax transform, so the transform
-        // only marks heuristic candidates and the final member set is resolved here.
+        // Facet.Extensions.EFCore on every migrations add/remove) drive
+        // ExcludeNavigationProperties: they carry the EF model's own navigation designation.
+        // AdditionalFiles are invisible to the syntax transform, so the member set is resolved
+        // here, against the manifest.
         var efModelManifest = context.AdditionalTextsProvider
             .Where(static file => file.Path.EndsWith(EfModelManifest.FileExtension, StringComparison.OrdinalIgnoreCase))
             .Select(static (file, token) => (file.Path, Text: file.GetText(token)?.ToString() ?? string.Empty))
@@ -159,26 +150,15 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                 return manifest;
             });
 
-        // Opt-in strict mode: when Facet_RequireEfModelManifest is set, the same-assembly
-        // heuristic is off and manifest coverage is mandatory (FAC107). This is the buildable
-        // form of "error when the manifest glob matches nothing" — the generator can't see an
-        // empty glob, so the consumer signals the requirement with a build property.
-        var requireManifest = context.AnalyzerConfigOptionsProvider
-            .Select(static (provider, _) =>
-                provider.GlobalOptions.TryGetValue("build_property.Facet_RequireEfModelManifest", out var value)
-                && bool.TryParse(value, out var parsed)
-                && parsed);
-
         var allTargets = generateDtosTargets.Collect()
             .Combine(generateAuditableDtosTargets.Collect())
             .Combine(generateDtosForTargets.Collect())
             .Select(static (combined, _) => combined.Left.Left.Concat(combined.Left.Right).Concat(combined.Right))
-            .Combine(efModelManifest)
-            .Combine(requireManifest);
+            .Combine(efModelManifest);
 
         context.RegisterSourceOutput(allTargets, (spc, pair) =>
         {
-            var ((models, manifest), requireManifestValue) = pair;
+            var (models, manifest) = pair;
             var modelList = models.Where(m => m != null).Cast<GenerateDtosTargetModel>().ToList();
 
             // The Optional<T> JSON converter is generated (not shipped in Facet.Attributes)
@@ -199,9 +179,8 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                 spc.AddSource("FacetOptionalNewtonsoftJsonSupport.g.cs", SourceText.From(OptionalNewtonsoftJsonSupportSource, Encoding.UTF8));
             }
 
-            // A rejected manifest file is a broken build input, not a quiet fallback: report
-            // it once per compilation so heuristic behavior is never mistaken for manifest
-            // behavior.
+            // A rejected manifest file is a broken build input: report it once per
+            // compilation. Types it should have covered then surface as FAC105.
             foreach (var issue in manifest.Issues)
             {
                 spc.ReportDiagnostic(Diagnostic.Create(
@@ -212,7 +191,7 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
             }
 
             // Attribute expansion yields several models per attribute (one per output kind),
-            // so manifest-coverage warnings deduplicate per source type / property.
+            // so manifest-coverage diagnostics deduplicate per source type / property.
             var reportedCoverage = new HashSet<string>(StringComparer.Ordinal);
 
             foreach (var pendingModel in modelList)
@@ -221,7 +200,7 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                 {
                     spc.CancellationToken.ThrowIfCancellationRequested();
 
-                    var model = ResolveNavigationExclusions(spc, pendingModel, manifest, requireManifestValue, reportedCoverage);
+                    var model = ResolveNavigationExclusions(spc, pendingModel, manifest, reportedCoverage);
 
                     if (model.Issue != OutputTypeIssue.None)
                     {
@@ -382,7 +361,6 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                 model.UseFullName,
                 model.ExcludeNavigationProperties,
                 model.IncludeProperties,
-                model.HeuristicNavigationProperties,
                 model.SettableProperties,
                 model.AttributeLocation,
                 siblingMask,
@@ -460,11 +438,6 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
 
             var allMembersWithModifiers = GeneratorUtilities.GetAllMembersWithModifiers(sourceSymbol);
 
-            // Heuristic navigation candidates are only marked here, not dropped: the final
-            // decision belongs to the generation stage, where the EF model manifest (an
-            // AdditionalFile, unavailable in this transform) can override the heuristic.
-            var heuristicNavigationProperties = new List<string>();
-
             // Properties EF could plausibly map (settable, or get-only collections), for the
             // manifest completeness check (FAC106). Computed get-only properties are excluded:
             // the model never maps them, so their absence from a manifest means nothing.
@@ -478,13 +451,6 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
 
                 if (member is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } p)
                 {
-                    if (excludeNavigationProperties
-                        && !includeProperties.Contains(p.Name)
-                        && IsNavigationProperty(p.Type, sourceSymbol.ContainingAssembly))
-                    {
-                        heuristicNavigationProperties.Add(p.Name);
-                    }
-
                     if (excludeNavigationProperties
                         && (p.SetMethod != null || GeneratorUtilities.TryGetCollectionElementType(p.Type, out _, out _)))
                     {
@@ -537,7 +503,6 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                 useFullName,
                 excludeNavigationProperties,
                 includeProperties.ToImmutableArray(),
-                heuristicNavigationProperties.ToImmutableArray(),
                 settableProperties.ToImmutableArray(),
                 SourceLocationInfo.FromAttribute(attribute),
                 supportsSystemTextJson: supportsSystemTextJson,
@@ -1667,23 +1632,18 @@ internal sealed class OptionalNewtonsoftJsonConverter : JsonConverter
     }
 
     /// <summary>
-    /// Resolves the pending ExcludeNavigationProperties decision into a final member list.
-    /// When the source type has an EF model manifest entry (*.facetmodel.json AdditionalFile), the
-    /// model's own designation wins: exactly the mapped scalar and complex properties are
-    /// kept, so navigations, skip navigations, owned references, AND EF-ignored properties
-    /// all drop — including cases the symbol heuristic cannot see (value-converted
-    /// entity-typed columns stay, [NotMapped] scalars go). IncludeProperties survives
-    /// both paths.
-    /// The heuristic never runs silently alongside manifests: a listed type with a property
-    /// the model has no opinion on is reported as FAC106 (stale manifest), and an unlisted
-    /// type is reported as FAC105 before the heuristic marks recorded in the transform are
-    /// applied. Only the no-manifests-at-all tier is silent, by design.
+    /// Resolves ExcludeNavigationProperties into a final member list from the EF model
+    /// manifest — the sole source of truth; there is no heuristic fallback. When the source
+    /// type has a manifest entry, exactly the mapped scalar and complex properties are kept,
+    /// so navigations, skip navigations, owned references, and EF-ignored properties all drop.
+    /// A property the model has no opinion on is reported as FAC106 (stale manifest). A type
+    /// with no manifest entry at all is reported as FAC105 (error): the DTO cannot be shaped.
+    /// IncludeProperties always wins.
     /// </summary>
     private static GenerateDtosTargetModel ResolveNavigationExclusions(
         SgfSourceProductionContext spc,
         GenerateDtosTargetModel model,
         EfModelManifest manifest,
-        bool requireManifest,
         HashSet<string> reportedCoverage)
     {
         if (!model.ExcludeNavigationProperties)
@@ -1718,25 +1678,10 @@ internal sealed class OptionalNewtonsoftJsonConverter : JsonConverter
                 .ToImmutableArray());
         }
 
-        // Type is not covered by any manifest. In strict mode that is a hard error and the
-        // heuristic is off; otherwise it is the FAC105 advisory (only when manifests exist —
-        // a manifest-free project is the by-design zero-infrastructure tier).
-        if (requireManifest)
-        {
-            if (reportedCoverage.Add(sourceClrName))
-            {
-                spc.ReportDiagnostic(Diagnostic.Create(
-                    ManifestRequiredRule,
-                    model.AttributeLocation?.ToLocation() ?? Location.None,
-                    GetSimpleTypeName(model.SourceTypeName)));
-            }
-
-            // Emit no members-exclusion at all: with the requirement unmet the DTO shape is
-            // undefined, so keep every member rather than guess — the error is the signal.
-            return model.WithResolvedMembers(model.Members);
-        }
-
-        if (manifest.HasEntities && reportedCoverage.Add(sourceClrName))
+        // No manifest entry — the model has said nothing about this type, so the DTO shape is
+        // undefined. This is a hard error, not a silent guess: emit no exclusion (keep every
+        // member so downstream code still compiles) and let FAC105 be the signal.
+        if (reportedCoverage.Add(sourceClrName))
         {
             spc.ReportDiagnostic(Diagnostic.Create(
                 TypeNotInManifestRule,
@@ -1744,71 +1689,6 @@ internal sealed class OptionalNewtonsoftJsonConverter : JsonConverter
                 GetSimpleTypeName(model.SourceTypeName)));
         }
 
-        var heuristicDrops = new HashSet<string>(model.HeuristicNavigationProperties, StringComparer.Ordinal);
-        return model.WithResolvedMembers(model.Members
-            .Where(m => !heuristicDrops.Contains(m.Name))
-            .ToImmutableArray());
-    }
-
-    /// <summary>
-    /// Determines whether a property is an ORM-style navigation: its type (or collection
-    /// element type, for any IEnumerable other than string, with dictionary KeyValuePair
-    /// key/value types unwrapped) is a class or interface declared in the same assembly as
-    /// the source model. Scalars, enums, framework types, and user-defined value types
-    /// (e.g. strongly-typed ID structs) are never treated as navigations.
-    /// Known limitations, by design: wrapper generics that are not collections (Lazy&lt;T&gt;,
-    /// Task&lt;T&gt;) and entities declared in a different assembly than the source type are
-    /// not detected — use ExcludeProperties for those.
-    /// </summary>
-    private static bool IsNavigationProperty(ITypeSymbol propertyType, IAssemblySymbol sourceAssembly)
-    {
-        var type = propertyType;
-
-        // Unwrap Nullable<T> so nullable navigations are treated like their underlying type.
-        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
-        {
-            type = nullable.TypeArguments[0];
-        }
-
-        if (IsSameAssemblyDomainType(type, sourceAssembly)) return true;
-
-        // Collections: any IEnumerable<T> (except string) whose element is a domain type.
-        if (type.SpecialType == SpecialType.System_String) return false;
-
-        if (type is IArrayTypeSymbol arrayType)
-        {
-            return IsSameAssemblyDomainType(arrayType.ElementType, sourceAssembly);
-        }
-
-        if (type is INamedTypeSymbol namedType)
-        {
-            var enumerable = namedType.AllInterfaces
-                .FirstOrDefault(i => i.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T)
-                ?? (namedType.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T ? namedType : null);
-
-            if (enumerable is { TypeArguments.Length: 1 })
-            {
-                var element = enumerable.TypeArguments[0];
-
-                // Dictionaries enumerate KeyValuePair<TKey, TValue>; a dictionary of
-                // entities is just as much a navigation as a list of them.
-                if (element is INamedTypeSymbol { MetadataName: "KeyValuePair`2" } kvp
-                    && kvp.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
-                {
-                    return kvp.TypeArguments.Any(t => IsSameAssemblyDomainType(t, sourceAssembly));
-                }
-
-                return IsSameAssemblyDomainType(element, sourceAssembly);
-            }
-        }
-
-        return false;
-    }
-
-    private static bool IsSameAssemblyDomainType(ITypeSymbol type, IAssemblySymbol sourceAssembly)
-    {
-        return (type.TypeKind == TypeKind.Class || type.TypeKind == TypeKind.Interface)
-            && type.SpecialType == SpecialType.None
-            && SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, sourceAssembly);
+        return model.WithResolvedMembers(model.Members);
     }
 }
