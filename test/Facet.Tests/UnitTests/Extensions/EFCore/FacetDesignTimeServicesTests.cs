@@ -73,11 +73,12 @@ public class FacetDesignTimeServicesTests
                 nameof(DesignManifestContext) + FacetEfModelManifest.FileExtension);
             File.Exists(manifestPath).Should().BeTrue("the manifest belongs beside the snapshot it mirrors");
 
-            var manifest = File.ReadAllText(manifestPath);
-            manifest.Should().Contain($"entity {typeof(DesignWidget).FullName!.Replace('+', '.')}");
-            manifest.Should().Contain("scalar Name");
-            manifest.Should().Contain("nav Parts");
-            manifest.Should().Contain("nav Widget");
+            using var manifest = System.Text.Json.JsonDocument.Parse(File.ReadAllText(manifestPath));
+            manifest.RootElement.GetProperty("version").GetInt32().Should().Be(1);
+            var widget = manifest.RootElement.GetProperty("entities").EnumerateArray()
+                .Single(e => e.GetProperty("clrType").GetString() == typeof(DesignWidget).FullName!.Replace('+', '.'));
+            widget.GetProperty("scalar").EnumerateArray().Select(m => m.GetString()).Should().Contain("Name");
+            widget.GetProperty("nav").EnumerateArray().Select(m => m.GetString()).Should().Contain("Parts");
         }
         finally
         {

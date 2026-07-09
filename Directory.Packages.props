@@ -57,6 +57,13 @@
 		<PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.8.0" PrivateAssets="all" />
 		<PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
 
+		<!-- Generator framework: exception isolation, logging, dependency embedding -->
+		<PackageVersion Include="SourceGenerator.Foundations" Version="2.0.16" />
+		<PackageVersion Include="SourceGenerator.Foundations.Contracts" Version="2.0.16" />
+
+		<!-- Generator dependencies (embedded into the analyzer by SourceGenerator.Foundations) -->
+		<PackageVersion Include="System.Text.Json" Version="8.0.5" />
+
 		<!-- SourceLink for debugging support -->
 		<PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.300" />
 

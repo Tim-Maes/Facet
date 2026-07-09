@@ -118,7 +118,7 @@ public class GenerateDtosAttribute : Attribute
     /// can be forced back in via <see cref="IncludeProperties"/>. Default is false.
     /// <para>
     /// For EF Core entities the heuristic can be replaced by the model's own designation:
-    /// when a <c>*.facetmodel</c> manifest (written beside the model snapshot by
+    /// when a <c>*.facetmodel.json</c> manifest (written beside the model snapshot by
     /// Facet.Extensions.EFCore's design-time services on every <c>dotnet ef migrations
     /// add</c>/<c>remove</c>) is exposed as an AdditionalFile and lists the source type,
     /// exactly the properties EF maps as data are kept — so value-converted columns survive

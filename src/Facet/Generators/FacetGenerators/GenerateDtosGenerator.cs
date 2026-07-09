@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using SGF;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -11,9 +12,18 @@ using System.Threading;
 
 namespace Facet.Generators;
 
-[Generator(LanguageNames.CSharp)]
-public sealed class GenerateDtosGenerator : IIncrementalGenerator
+// SGF (SourceGenerator.Foundations) hoists this class behind a generated internal
+// GenerateDtosGeneratorHoist that carries [Generator]: callbacks get exception isolation and
+// a logger, and assembly-embedded dependencies (System.Text.Json for the EF model manifest)
+// are resolved before this code runs — analyzers cannot otherwise carry NuGet dependencies
+// into compiler hosts.
+[IncrementalGenerator]
+public sealed class GenerateDtosGenerator : IncrementalGenerator
 {
+    public GenerateDtosGenerator() : base(nameof(GenerateDtosGenerator))
+    {
+    }
+
     private const string GenerateDtosAttributeName = "Facet.GenerateDtosAttribute";
     
     private const string GenerateAuditableDtosAttributeName = "Facet.GenerateAuditableDtosAttribute";
@@ -58,7 +68,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         "Id"
     };
 
-    public void Initialize(IncrementalGeneratorInitializationContext context)
+    public override void OnInitialize(SgfInitializationContext context)
     {
         var generateDtosTargets = context.SyntaxProvider
             .ForAttributeWithMetadataName(
@@ -84,7 +94,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             .Where(static m => m is not null)
             .SelectMany(static (models, _) => models!);
 
-        // EF model manifests (*.facetmodel, written beside the model snapshot by
+        // EF model manifests (*.facetmodel.json, written beside the model snapshot by
         // Facet.Extensions.EFCore on every migrations add/remove) upgrade
         // ExcludeNavigationProperties from the same-assembly heuristic to the EF model's own
         // designation. AdditionalFiles are invisible to the syntax transform, so the transform
@@ -93,7 +103,16 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             .Where(static file => file.Path.EndsWith(EfModelManifest.FileExtension, StringComparison.OrdinalIgnoreCase))
             .Select(static (file, token) => file.GetText(token)?.ToString() ?? string.Empty)
             .Collect()
-            .Select(static (texts, _) => EfModelManifest.Parse(texts));
+            .Select((texts, _) =>
+            {
+                var manifest = EfModelManifest.Parse(texts);
+                if (texts.Length > 0)
+                {
+                    Logger.Debug($"EF model manifest: {manifest.EntityCount} entity types from {texts.Length} file(s)");
+                }
+
+                return manifest;
+            });
 
         var allTargets = generateDtosTargets.Collect()
             .Combine(generateAuditableDtosTargets.Collect())
@@ -148,6 +167,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                     }
                     catch (Exception ex)
                     {
+                        Logger.Error(ex, $"Error generating DTOs for '{GetSimpleTypeName(model.SourceTypeName)}'");
                         var diagnostic = Diagnostic.Create(
                             GeneratorErrorRule,
                             Location.None,
@@ -443,7 +463,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
     }
 
-    private static void GenerateDtosForModel(SourceProductionContext context, GenerateDtosTargetModel model)
+    private static void GenerateDtosForModel(SgfSourceProductionContext context, GenerateDtosTargetModel model)
     {
         context.CancellationToken.ThrowIfCancellationRequested();
 
@@ -1561,7 +1581,7 @@ internal sealed class OptionalNewtonsoftJsonConverter : JsonConverter
 
     /// <summary>
     /// Resolves the pending ExcludeNavigationProperties decision into a final member list.
-    /// When the source type has an EF model manifest entry (*.facetmodel AdditionalFile), the
+    /// When the source type has an EF model manifest entry (*.facetmodel.json AdditionalFile), the
     /// model's own designation wins: exactly the mapped scalar and complex properties are
     /// kept, so navigations, skip navigations, owned references, AND EF-ignored properties
     /// all drop — including cases the symbol heuristic cannot see (value-converted

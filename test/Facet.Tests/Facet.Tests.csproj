@@ -31,6 +31,12 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
     <!-- Design-time scaffolding surface for the FacetDesignTimeServices end-to-end tests -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
+    <!--
+      SGF base types (SGF.IncrementalGenerator etc.) for driver-based generator tests: the
+      generator project references SourceGenerator.Foundations with PrivateAssets="all", so
+      Contracts does not flow here transitively.
+    -->
+    <PackageReference Include="SourceGenerator.Foundations.Contracts" />
   </ItemGroup>
 
   <ItemGroup>

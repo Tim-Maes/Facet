@@ -32,6 +32,43 @@
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" PrivateAssets="all" />
         <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
+
+        <!--
+          SGF wraps generators with exception isolation + logging and, critically, embeds
+          referenced assemblies into Facet.dll as resources, resolving them at generator load
+          time — analyzers otherwise cannot carry NuGet dependencies into compiler hosts.
+          PrivateAssets="all" so neither SGF nor the dependencies leak into the package graph.
+        -->
+        <PackageReference Include="SourceGenerator.Foundations" PrivateAssets="all" />
+
+        <!--
+          Used by the EF model manifest reader. Compiler hosts do not provide System.Text.Json
+          to netstandard2.0 analyzers; SourceGenerator.Foundations embeds it (and its transitive
+          closure) into Facet.dll and resolves it when the generator loads.
+        -->
+        <PackageReference Include="System.Text.Json" PrivateAssets="all" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Driver-based tests instantiate the generated (internal) SGF hoist directly -->
+        <InternalsVisibleTo Include="Facet.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!--
+          Keep IDE-only Roslyn surface out of the SGF embedding: code-fix providers only run
+          in hosts that already provide Workspaces (and its System.Composition MEF closure),
+          embedding Roslyn-family assemblies risks type-identity conflicts (SGF itself excludes
+          Microsoft.CodeAnalysis/CSharp for that reason), and together they triple the
+          analyzer's size for nothing.
+        -->
+        <SGFExcludeAssemblyName Include="Microsoft.CodeAnalysis.Workspaces.dll" />
+        <SGFExcludeAssemblyName Include="Microsoft.CodeAnalysis.CSharp.Workspaces.dll" />
+        <SGFExcludeAssemblyName Include="System.Composition.AttributedModel.dll" />
+        <SGFExcludeAssemblyName Include="System.Composition.Convention.dll" />
+        <SGFExcludeAssemblyName Include="System.Composition.Hosting.dll" />
+        <SGFExcludeAssemblyName Include="System.Composition.Runtime.dll" />
+        <SGFExcludeAssemblyName Include="System.Composition.TypedParts.dll" />
     </ItemGroup>
 
     <ItemGroup>
