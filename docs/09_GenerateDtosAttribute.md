@@ -311,19 +311,53 @@ If you don't need extensibility, prefer `OutputType.Class` — it also emits `Pr
 
 ## Assembly-level generation: `[GenerateDtosFor]`
 
-`[GenerateDtos]` sits on the entity, so the DTOs compile into the entity's assembly. When your architecture wants contract types **downstream** of the domain — a web-contracts project referencing the domain, with the domain kept free of generated request/response types — use the assembly-level counterpart in the project where the DTOs should live:
+A source generator can only emit code into the compilation it runs in, so `[GenerateDtos]` on an entity pins the generated DTOs to the **entity's assembly** — even when the `Namespace` option names a downstream layer, the types physically live upstream and the namespace is a cross-assembly fiction. When your architecture wants contract types genuinely **downstream** of the domain — a web-contracts project referencing the domain, with the domain kept free of generated request/response types — use the assembly-level counterpart in the project where the DTOs should live:
 
 ```csharp
-// In the contracts project (references the domain project):
+// In MyApp.Contracts (which references MyApp.Domain):
 [assembly: GenerateDtosFor(typeof(Schedule),
     Types = DtoTypes.Create | DtoTypes.Update,
     OutputType = OutputType.Interface | OutputType.Record | OutputType.Partial,
-    Namespace = "My.Contracts.V1.Requests")]
+    Namespace = "MyApp.Contracts.V1.Requests")]
 ```
 
 The source entity is read as metadata from the referenced assembly and needs no attribute of its own. All `[GenerateDtos]` options apply, including flags-combined `OutputType`, the `Partial` modifier, and FAC101/FAC102 validation. Declare one `[assembly: GenerateDtosFor(...)]` per entity; interface/concrete sibling pairing links outputs **per source entity** — two entities registered in the same assembly never cross-pair.
 
-This also composes with source generators' single-compilation rule: because generation happens in the declaring (downstream) project, the domain assembly stays dependency-free of contract concerns.
+### What moving the declaration downstream changes
+
+- **The dependency arrow points the right way.** The contracts project references the domain, and the domain knows nothing about contracts: no `[GenerateDtos]` attributes on entity classes, no downstream namespace strings in domain files. If no other Facet attributes remain there, the domain project can drop the generator reference entirely — generation then runs in the (typically much smaller) contracts compilation instead of your largest project.
+- **Types land in the assembly that owns their namespace.** Anything that discovers types by *assembly* — OpenAPI generators, TypeScript exporters, reflection-based registration, `InternalsVisibleTo` — sees the generated DTOs exactly where hand-written ones would have been. Replacing a hand-written contract with a generated one becomes a true drop-in: same assembly, same namespace, same name.
+- **Each layer declares its own shapes.** Several downstream assemblies can independently register DTOs for the same entity (a web project's request bodies, an application layer's command payloads) without the entity accumulating one attribute per consumer.
+
+### Partial halves gain the downstream dependency graph
+
+This is the quiet superpower of combining `GenerateDtosFor` with the `Partial` modifier. A `partial` type must be completed within a single assembly, so a hand-written half is forced into whichever assembly the generated half lives in. With the class-level attribute that means the **entity's** assembly — which, in a layered application, cannot reference your `DbContext`, repositories, or service interfaces (the persistence layer references the domain, never the reverse). Members that need those types simply cannot be written there.
+
+Declared downstream, the generated half compiles into the contracts project — and the hand-written half beside it can use everything that project references:
+
+```csharp
+// MyApp.Contracts — same assembly as the generated partial half
+public partial record UpdateScheduleRequest : IValidatableObject
+{
+    // Hydration against the real database — impossible in the domain assembly,
+    // which cannot reference AppDbContext:
+    public async Task<Schedule> ApplyAsync(AppDbContext db, CancellationToken ct)
+    {
+        var schedule = await db.Schedules.FirstAsync(s => s.Id == Id, ct);
+        // ... map members onto the tracked entity ...
+        return schedule;
+    }
+
+    // Framework-specific validation, using types the domain shouldn't know:
+    public IEnumerable<ValidationResult> Validate(ValidationContext context)
+    {
+        if (StartAt >= EndAt)
+            yield return new ValidationResult("Start must precede end.", [nameof(StartAt)]);
+    }
+}
+```
+
+Extension methods in a downstream layer were always possible; what same-assembly partials add is members **on the type itself** — instance methods and async factories that take a `DbContext` or services as parameters, computed properties over downstream types, interface implementations (`IValidatableObject` and friends, which extension methods can never provide), and attributes applied to the type through the partial half.
 
 ## Excluding Audit Fields
 
