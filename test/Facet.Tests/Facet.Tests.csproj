@@ -51,9 +51,10 @@
     <ProjectReference Include="..\Facet.Tests.ExternalLib\Facet.Tests.ExternalLib.csproj" />
   </ItemGroup>
 
-  <!-- Manually include Facet.Attributes.dll as an analyzer dependency so generators can load it -->
-  <ItemGroup>
-    <Analyzer Include="..\..\src\Facet.Attributes\bin\$(Configuration)\netstandard2.0\Facet.Attributes.dll" />
-  </ItemGroup>
+  <!--
+    No manual <Analyzer Include> for Facet.Attributes.dll anymore: SGF embeds it into
+    Facet.dll and resolves it when the generator loads, so the analyzer assembly is
+    self-contained even when consumed as a ProjectReference.
+  -->
 
 </Project>
