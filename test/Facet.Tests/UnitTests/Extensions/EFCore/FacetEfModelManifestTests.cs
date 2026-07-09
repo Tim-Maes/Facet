@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Facet.Extensions.EFCore.Design;
 using Microsoft.EntityFrameworkCore;
 
@@ -5,9 +6,9 @@ namespace Facet.Tests.UnitTests.Extensions.EFCore;
 
 /// <summary>
 /// FacetEfModelManifest.Build against a real finalized model: mapped scalars (including
-/// primitive collections and FK properties) and complex properties are keep records;
-/// navigations, owned references, and skip navigations are drop records; EF-ignored and
-/// shadow properties never appear at all.
+/// primitive collections and FK properties) and complex properties land in keep categories;
+/// navigations, owned references, and skip navigations land in drop categories; EF-ignored
+/// and shadow properties never appear at all.
 /// </summary>
 public class FacetEfModelManifestTests
 {
@@ -81,43 +82,56 @@ public class FacetEfModelManifestTests
         return FacetEfModelManifest.Build(context.Model, nameof(ManifestContext));
     }
 
-    private static List<string> EntitySection(string manifest, string entityName)
+    private static JsonElement Root(string manifest)
     {
-        var lines = manifest.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
-        var start = lines.IndexOf($"entity {entityName}");
-        start.Should().BeGreaterThanOrEqualTo(0, $"the manifest should list {entityName}");
-
-        var section = new List<string>();
-        for (var i = start + 1; i < lines.Count && !lines[i].StartsWith("entity ", StringComparison.Ordinal); i++)
-        {
-            if (lines[i].Length > 0) section.Add(lines[i]);
-        }
-
-        return section;
+        using var document = JsonDocument.Parse(manifest);
+        return document.RootElement.Clone();
     }
 
-    private static string BlogEntityName => typeof(ManifestBlog).FullName!.Replace('+', '.');
+    private static JsonElement Entity(string manifest, string clrType)
+    {
+        var entities = Root(manifest).GetProperty("entities").EnumerateArray()
+            .Where(e => e.GetProperty("clrType").GetString() == clrType)
+            .ToList();
+        entities.Should().HaveCount(1, $"the manifest should list {clrType} exactly once");
+        return entities[0];
+    }
+
+    private static string[] Category(JsonElement entity, string name)
+        => entity.TryGetProperty(name, out var members)
+            ? members.EnumerateArray().Select(m => m.GetString()!).ToArray()
+            : Array.Empty<string>();
+
+    private static string ClrName(Type type) => type.FullName!.Replace('+', '.');
 
     [Fact]
-    public void MappedScalarsAndComplexProperties_AreKeepRecords()
+    public void Manifest_IsVersionedJson()
     {
-        var section = EntitySection(BuildManifest(), BlogEntityName);
+        var root = Root(BuildManifest());
 
-        section.Should().Contain("scalar Id");
-        section.Should().Contain("scalar Title");
-        section.Should().Contain("scalar Tags", "primitive collections are mapped data");
-        section.Should().Contain("complex HomeAddress");
+        root.GetProperty("version").GetInt32().Should().Be(1);
+        root.GetProperty("context").GetString().Should().Be(nameof(ManifestContext));
+        root.GetProperty("$comment").GetString().Should().Contain("do not edit");
     }
 
     [Fact]
-    public void NavigationsOwnedAndSkipNavigations_AreDropRecords()
+    public void MappedScalarsAndComplexProperties_AreKeepCategories()
     {
-        var section = EntitySection(BuildManifest(), BlogEntityName);
+        var blog = Entity(BuildManifest(), ClrName(typeof(ManifestBlog)));
 
-        section.Should().Contain("nav Publisher");
-        section.Should().Contain("nav Posts");
-        section.Should().Contain("owned Settings");
-        section.Should().Contain("skipnav Labels");
+        Category(blog, "scalar").Should().Contain(["Id", "Title", "Tags"],
+            "scalar columns and primitive collections are mapped data");
+        Category(blog, "complex").Should().Contain("HomeAddress");
+    }
+
+    [Fact]
+    public void NavigationsOwnedAndSkipNavigations_AreDropCategories()
+    {
+        var blog = Entity(BuildManifest(), ClrName(typeof(ManifestBlog)));
+
+        Category(blog, "nav").Should().Contain(["Publisher", "Posts"]);
+        Category(blog, "owned").Should().Contain("Settings");
+        Category(blog, "skipnav").Should().Contain("Labels");
     }
 
     [Fact]
@@ -133,10 +147,10 @@ public class FacetEfModelManifestTests
     [Fact]
     public void ForeignKeyAndInverseNavigation_AreRecordedOnTheDependent()
     {
-        var section = EntitySection(BuildManifest(), typeof(ManifestPost).FullName!.Replace('+', '.'));
+        var post = Entity(BuildManifest(), ClrName(typeof(ManifestPost)));
 
-        section.Should().Contain("scalar BlogId", "CLR-backed FK properties are mapped data");
-        section.Should().Contain("nav Blog");
+        Category(post, "scalar").Should().Contain("BlogId", "CLR-backed FK properties are mapped data");
+        Category(post, "nav").Should().Contain("Blog");
     }
 
     [Fact]
@@ -148,8 +162,8 @@ public class FacetEfModelManifestTests
             using var context = new ManifestContext();
             var path = FacetEfModelManifest.Write(context.Model, directory, nameof(ManifestContext));
 
-            path.Should().Be(Path.Combine(directory, "ManifestContext.facetmodel"));
-            File.ReadAllText(path).Should().Contain($"entity {BlogEntityName}");
+            path.Should().Be(Path.Combine(directory, "ManifestContext.facetmodel.json"));
+            Entity(File.ReadAllText(path), ClrName(typeof(ManifestBlog)));
         }
         finally
         {

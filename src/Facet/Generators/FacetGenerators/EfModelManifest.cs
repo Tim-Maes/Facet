@@ -1,121 +1,211 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Collections.Immutable;
+using System.Text.Json;
 
 namespace Facet.Generators;
 
 /// <summary>
-/// The parsed content of Facet EF model manifest files (<c>*.facetmodel</c>), written beside
-/// the model snapshot by Facet.Extensions.EFCore whenever a migration is added or removed and
-/// exposed to the generator as AdditionalFiles. For each entity CLR type it records the
-/// keep-set: property names EF maps as data (scalar columns and complex/value-object members).
-/// When a [GenerateDtos] source type appears here, ExcludeNavigationProperties keeps exactly
-/// the keep-set — navigations, skip navigations, owned references, and EF-ignored properties
-/// all drop because the model says so, not because a heuristic guessed. Types not listed fall
-/// back to the symbol heuristic.
+/// The parsed content of Facet EF model manifest files (<c>*.facetmodel.json</c>), written
+/// beside the model snapshot by Facet.Extensions.EFCore whenever a migration is added or
+/// removed and exposed to the generator as AdditionalFiles. For each entity CLR type it
+/// records the keep-set: property names EF maps as data (scalar columns and complex/
+/// value-object members). When a [GenerateDtos] source type appears here,
+/// ExcludeNavigationProperties keeps exactly the keep-set — navigations, skip navigations,
+/// owned references, and EF-ignored properties all drop because the model says so, not
+/// because a heuristic guessed. Types not listed fall back to the symbol heuristic.
 /// </summary>
 /// <remarks>
-/// The format is line-based (<c>entity Full.Type.Name</c> / <c>scalar Name</c> /
-/// <c>complex Name</c>, '#' comments, unknown record kinds ignored) so this reader needs no
-/// JSON dependency — analyzers cannot assume one in every compiler host. Multiple manifest
-/// files (one per DbContext) merge by unioning keep-sets per CLR type: a property mapped as
-/// data in any context stays in the DTO.
+/// See <c>FacetEfModelManifest</c> in Facet.Extensions.EFCore for the writer and the schema.
+/// Each file is parsed atomically: a manifest that is malformed or declares an unsupported
+/// <c>version</c> is ignored in full (heuristic fallback) — never half-applied, because an
+/// entity left behind with an empty keep-set would silently drop every property. Multiple
+/// manifest files (one per DbContext) merge by unioning keep-sets per CLR type: a property
+/// mapped as data in any context stays in the DTO. Unknown JSON properties are ignored, so
+/// the schema can grow without breaking older generators.
 /// </remarks>
 internal sealed class EfModelManifest : IEquatable<EfModelManifest>
 {
     /// <summary>File name suffix manifests are discovered by among AdditionalFiles.</summary>
-    public const string FileExtension = ".facetmodel";
+    public const string FileExtension = ".facetmodel.json";
+
+    private const int SupportedVersion = 1;
 
     public static readonly EfModelManifest Empty = new EfModelManifest(
-        new Dictionary<string, HashSet<string>>(StringComparer.Ordinal), string.Empty);
+        ImmutableDictionary<string, ImmutableHashSet<string>>.Empty);
 
-    private readonly Dictionary<string, HashSet<string>> _keepByType;
+    private readonly ImmutableDictionary<string, ImmutableHashSet<string>> _keepByType;
 
-    // Equality drives incremental caching: two manifests are the same iff their raw text is.
-    private readonly string _fingerprint;
-
-    private EfModelManifest(Dictionary<string, HashSet<string>> keepByType, string fingerprint)
+    private EfModelManifest(ImmutableDictionary<string, ImmutableHashSet<string>> keepByType)
     {
         _keepByType = keepByType;
-        _fingerprint = fingerprint;
     }
 
-    public bool IsEmpty => _keepByType.Count == 0;
+    /// <summary>Number of entity CLR types listed across all accepted manifest files.</summary>
+    public int EntityCount => _keepByType.Count;
 
     /// <summary>
     /// Looks up the keep-set for a CLR type name (namespace-qualified, dot-separated —
-    /// matching Roslyn display strings). Returns false for types no manifest lists.
+    /// matching Roslyn display strings). Returns false for types no manifest lists. An empty
+    /// keep-set is a valid answer: an entity whose only mapped data lives in shadow state
+    /// keeps no CLR properties.
     /// </summary>
-    public bool TryGetKeepSet(string clrTypeName, out HashSet<string>? keepSet)
+    public bool TryGetKeepSet(string clrTypeName, out ImmutableHashSet<string>? keepSet)
         => _keepByType.TryGetValue(clrTypeName, out keepSet);
 
     public static EfModelManifest Parse(IEnumerable<string> manifestTexts)
     {
-        var keepByType = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        var merged = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
 
-        // Sorted so the fingerprint (and therefore incremental cache identity) does not
-        // depend on AdditionalFiles enumeration order.
-        var texts = manifestTexts.Where(t => !string.IsNullOrEmpty(t)).OrderBy(t => t, StringComparer.Ordinal).ToList();
-        if (texts.Count == 0) return Empty;
-
-        foreach (var text in texts)
+        foreach (var text in manifestTexts)
         {
-            ParseSingle(text, keepByType);
-        }
+            if (string.IsNullOrWhiteSpace(text)) continue;
 
-        return new EfModelManifest(keepByType, string.Join("\n---\n", texts));
-    }
+            var single = ParseSingle(text);
+            if (single == null) continue;
 
-    private static void ParseSingle(string text, Dictionary<string, HashSet<string>> keepByType)
-    {
-        HashSet<string>? current = null;
-
-        foreach (var rawLine in text.Split('\n'))
-        {
-            var line = rawLine.Trim();
-            if (line.Length == 0 || line[0] == '#') continue;
-
-            var separator = line.IndexOf(' ');
-            if (separator <= 0) continue;
-
-            var kind = line.Substring(0, separator);
-            var value = line.Substring(separator + 1).Trim();
-            if (value.Length == 0) continue;
-
-            switch (kind)
+            foreach (var entity in single)
             {
-                case "version":
-                    // A future major format revision may change what existing records mean;
-                    // ignoring the whole file (and falling back to the heuristic) is safer
-                    // than misreading it.
-                    if (value != "1") return;
-                    break;
-
-                case "entity":
-                    if (!keepByType.TryGetValue(value, out current))
-                    {
-                        current = new HashSet<string>(StringComparer.Ordinal);
-                        keepByType.Add(value, current);
-                    }
-                    break;
-
-                case "scalar":
-                case "complex":
-                    current?.Add(value);
-                    break;
-
-                // "nav"/"owned"/"skipnav" and unknown future kinds: dropped members are
-                // simply everything outside the keep-set, so only keep records are read.
-                default:
-                    break;
+                if (merged.TryGetValue(entity.Key, out var existing))
+                {
+                    existing.UnionWith(entity.Value);
+                }
+                else
+                {
+                    merged.Add(entity.Key, entity.Value);
+                }
             }
         }
+
+        if (merged.Count == 0) return Empty;
+
+        var builder = ImmutableDictionary.CreateBuilder<string, ImmutableHashSet<string>>(StringComparer.Ordinal);
+        foreach (var entity in merged)
+        {
+            builder.Add(entity.Key, entity.Value.ToImmutableHashSet(StringComparer.Ordinal));
+        }
+
+        return new EfModelManifest(builder.ToImmutable());
     }
 
+    /// <summary>
+    /// Parses one manifest file into a local buffer, returning null — file ignored in full —
+    /// for malformed JSON, a non-object root, or an unsupported <c>version</c>.
+    /// </summary>
+    private static Dictionary<string, HashSet<string>>? ParseSingle(string text)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(text, new JsonDocumentOptions
+            {
+                AllowTrailingCommas = true,
+                CommentHandling = JsonCommentHandling.Skip,
+            });
+
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return null;
+
+            if (!root.TryGetProperty("version", out var version)
+                || version.ValueKind != JsonValueKind.Number
+                || !version.TryGetInt32(out var versionNumber)
+                || versionNumber != SupportedVersion)
+            {
+                return null;
+            }
+
+            var result = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+            if (!root.TryGetProperty("entities", out var entities) || entities.ValueKind != JsonValueKind.Array)
+            {
+                return result;
+            }
+
+            foreach (var entity in entities.EnumerateArray())
+            {
+                if (entity.ValueKind != JsonValueKind.Object) continue;
+                if (!entity.TryGetProperty("clrType", out var clrTypeProperty)
+                    || clrTypeProperty.ValueKind != JsonValueKind.String) continue;
+
+                var clrType = clrTypeProperty.GetString();
+                if (string.IsNullOrEmpty(clrType)) continue;
+
+                if (!result.TryGetValue(clrType!, out var keepSet))
+                {
+                    keepSet = new HashSet<string>(StringComparer.Ordinal);
+                    result.Add(clrType!, keepSet);
+                }
+
+                // Only keep categories are read: dropped members are simply everything
+                // outside the keep-set, so "nav"/"owned"/"skipnav" need no interpretation.
+                AddMembers(entity, "scalar", keepSet);
+                AddMembers(entity, "complex", keepSet);
+            }
+
+            return result;
+        }
+        catch (JsonException)
+        {
+            // A manifest that does not parse is ignored (heuristic fallback) rather than
+            // failing or degrading the build.
+            return null;
+        }
+    }
+
+    private static void AddMembers(JsonElement entity, string category, HashSet<string> keepSet)
+    {
+        if (!entity.TryGetProperty(category, out var members) || members.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        foreach (var member in members.EnumerateArray())
+        {
+            if (member.ValueKind != JsonValueKind.String) continue;
+            var name = member.GetString();
+            if (!string.IsNullOrEmpty(name)) keepSet.Add(name!);
+        }
+    }
+
+    /// <summary>
+    /// Structural equality (same types, same keep-sets) drives incremental caching, so
+    /// formatting-only manifest edits — comments, ordering, whitespace — do not invalidate
+    /// cached generator output.
+    /// </summary>
     public bool Equals(EfModelManifest? other)
-        => other != null && string.Equals(_fingerprint, other._fingerprint, StringComparison.Ordinal);
+    {
+        if (other is null) return false;
+        if (ReferenceEquals(this, other)) return true;
+        if (_keepByType.Count != other._keepByType.Count) return false;
+
+        foreach (var entity in _keepByType)
+        {
+            if (!other._keepByType.TryGetValue(entity.Key, out var otherKeepSet)) return false;
+            if (!entity.Value.SetEquals(otherKeepSet)) return false;
+        }
+
+        return true;
+    }
 
     public override bool Equals(object? obj) => obj is EfModelManifest other && Equals(other);
 
-    public override int GetHashCode() => _fingerprint.GetHashCode();
+    public override int GetHashCode()
+    {
+        // Order-independent aggregation: dictionaries and sets have no defined enumeration
+        // order, and equal manifests must hash identically.
+        unchecked
+        {
+            var hash = 0;
+            foreach (var entity in _keepByType)
+            {
+                var setHash = 0;
+                foreach (var member in entity.Value)
+                {
+                    setHash += member.GetHashCode();
+                }
+
+                hash += entity.Key.GetHashCode() * 397 ^ setHash;
+            }
+
+            return hash;
+        }
+    }
 }

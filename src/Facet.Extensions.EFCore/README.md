@@ -250,7 +250,7 @@ public class ProductsController : ControllerBase
 
 `[GenerateDtos(ExcludeNavigationProperties = true)]` normally decides what a "navigation" is
 with a type-shape heuristic. This package can replace the guess with the EF model's own
-designation: its design-time services write a **model manifest** (`{ContextName}.facetmodel`)
+designation: its design-time services write a **model manifest** (`{ContextName}.facetmodel.json`)
 beside the migrations model snapshot every time you run
 `dotnet ef migrations add`/`remove`, recording per entity exactly which properties EF maps as
 data (scalar columns, complex properties, primitive collections) and which are navigations,
@@ -267,7 +267,7 @@ owned references, or skip navigations.
 
 ```xml
 <ItemGroup>
-  <AdditionalFiles Include="Migrations/*.facetmodel" />
+  <AdditionalFiles Include="Migrations/*.facetmodel.json" />
 </ItemGroup>
 ```
 

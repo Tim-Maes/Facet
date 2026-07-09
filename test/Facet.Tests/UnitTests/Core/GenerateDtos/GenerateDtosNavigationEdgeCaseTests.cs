@@ -20,7 +20,7 @@ public class GenerateDtosNavigationEdgeCaseTests
         var compilation = CSharpCompilation.Create("NavEdge",
             new[] { CSharpSyntaxTree.ParseText(source) }, references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
-        var driver = CSharpGeneratorDriver.Create(new GenerateDtosGenerator());
+        var driver = CSharpGeneratorDriver.Create(new GenerateDtosGeneratorHoist(new GenerateDtosGenerator()));
         var result = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _).GetRunResult();
         return result.GeneratedTrees.Select(t => t.ToString())
             .First(t => t.Contains("UpdateParentRequest") && !t.Contains("interface UpdateParentRequest"));
