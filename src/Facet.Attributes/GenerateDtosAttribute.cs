@@ -19,36 +19,60 @@ public enum DtoTypes
 }
 
 /// <summary>
-/// Specifies the output type for generated DTOs.
+/// Flags specifying the output(s) for generated DTOs: four concrete <em>kinds</em>
+/// (<see cref="Class"/>, <see cref="Record"/>, <see cref="Struct"/>, <see cref="RecordStruct"/>),
+/// the <see cref="Interface"/> kind, and one <em>modifier</em> (<see cref="Partial"/>) that
+/// composes with any kind. Combine kinds to emit several outputs from a single
+/// <see cref="GenerateDtosAttribute"/> — most usefully <c>Interface | Record | Partial</c>,
+/// which produces an extensible contract + implementation pair.
+/// Combining multiple <em>concrete</em> kinds (e.g. <c>Class | Record</c>) is rejected with
+/// error <c>FAC101</c>: they would all generate identically-named types and collide. Only
+/// <see cref="Interface"/> composes with a concrete kind (its names carry an <c>I</c> prefix).
+/// <see cref="Partial"/> with no kind is rejected with error <c>FAC102</c>.
 /// </summary>
+[Flags]
 public enum OutputType
 {
-    Class = 0,
-    Record = 1,
-    Struct = 2,
-    RecordStruct = 3,
+    /// <summary>
+    /// Generates nothing. Present only as the required zero value for a flags enum;
+    /// specify at least one output kind.
+    /// </summary>
+    None = 0,
+    Class = 1,
+    Record = 2,
+    Struct = 4,
+    RecordStruct = 8,
     /// <summary>
     /// Generates an interface declaring the entity-mapped properties as get-only members.
     /// Useful when you want compile-time enforcement that a hand-written DTO contains all
     /// the entity's properties (the DTO declares <c>: IMyEntityCreateRequest</c> and the
     /// compiler fails until every interface member is satisfied) without surrendering the
     /// DTO's own shape (construction syntax, validation attributes, extra non-entity fields).
+    /// When combined with a concrete kind (e.g. <c>Interface | Record</c>), the concrete output
+    /// declares the generated interface as a base, so consuming code can accept the interface —
+    /// which also makes request DTOs easy to mock in tests (e.g. with Moq or NSubstitute)
+    /// instead of constructing full concrete instances.
     /// Constructors, projections, and ToSource methods are not emitted on interface output.
     /// Not supported for Patch DTOs (their ApplyTo method requires a concrete implementation).
     /// </summary>
-    Interface = 4,
+    Interface = 16,
     /// <summary>
-    /// Generates a <c>partial class</c> (not sealed) with get/set properties and the same constructors
-    /// as <see cref="Class"/>, but without projection, <c>ToSource</c>, or <c>BackTo</c> methods.
-    /// Designed to be extended by a hand-written partial file in the same project — that is where
-    /// callers add validation attributes, computed members, custom constructors, or mapping logic.
-    /// When a sibling <c>[GenerateDtos]</c> attribute on the same type uses
-    /// <see cref="Interface"/> for the matching DTO type, the generated partial class also declares
-    /// the matching generated interface as a base (e.g. <c>: ICreateUserRequest</c>) so the two
-    /// outputs compose into a contract + implementation pair.
-    /// Not supported for Patch DTOs (their <c>ApplyTo</c> method already lives on a concrete type).
+    /// Modifier, not a kind: emits every requested kind as <c>partial</c> so a hand-written
+    /// partial half in the same project can extend it — validation attributes, computed
+    /// members, custom constructors, or mapping logic. Constructors are still generated for
+    /// concrete kinds, but projection, <c>ToSource</c>, and <c>BackTo</c> are omitted: a
+    /// hand-written half may add members the generator can't see, so a generator-owned
+    /// mapping would be silently incomplete. Applies to <see cref="Interface"/> too
+    /// (<c>partial interface</c>), making generated contracts user-extensible.
+    /// Must be combined with at least one kind; <see cref="Partial"/> alone is rejected
+    /// with error <c>FAC102</c>.
     /// </summary>
-    PartialClass = 5
+    Partial = 32,
+    /// <summary>
+    /// Back-compat alias for <c>Class | Partial</c>. Prefer composing the
+    /// <see cref="Partial"/> modifier explicitly.
+    /// </summary>
+    PartialClass = Class | Partial
 }
 
 /// <summary>
@@ -64,7 +88,11 @@ public class GenerateDtosAttribute : Attribute
     public DtoTypes Types { get; set; } = DtoTypes.All;
 
     /// <summary>
-    /// The output type for generated DTOs (default: Record).
+    /// The output kind(s) for generated DTOs (default: Record). This is a flags value:
+    /// combine kinds to emit several outputs from this single attribute, sharing every
+    /// other option — e.g. <c>OutputType.Interface | OutputType.PartialClass</c> emits
+    /// the contract + implementation pair (the partial class declares the generated
+    /// interface as a base) without duplicating the attribute.
     /// </summary>
     public OutputType OutputType { get; set; } = OutputType.Record;
 

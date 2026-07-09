@@ -58,7 +58,8 @@ public class User
 | `Struct`      | Generate as structs      |
 | `RecordStruct`| Generate as record structs |
 | `Interface`   | Generate as interfaces declaring entity-mapped properties as get-only members. See [Interface Output](#interface-output). |
-| `PartialClass`| Generate as `partial class` (not sealed) with the same properties and constructors as `Class`, but without projections or `ToSource`/`BackTo` — meant to be extended by a hand-written partial. See [Partial Class Output](#partial-class-output). |
+| `Partial`     | **Modifier, not a kind**: emits every requested kind as `partial` (constructors kept, projections and `ToSource`/`BackTo` omitted) so a hand-written partial half can extend it. Composes with any kind, including `Interface`. See [Partial Class Output](#partial-class-output). |
+| `PartialClass`| Back-compat alias for `Class \| Partial`. Prefer composing the `Partial` modifier explicitly. |
 
 ## Interface Output
 
@@ -144,6 +145,19 @@ public sealed record UpdateUserRequest(
 
 If you instead want the generator to own the DTO outright — including constructors, projections, and mapping — use `OutputType.Class`, `OutputType.Record`, `OutputType.Struct`, or `OutputType.RecordStruct`.
 
+### Mocking in tests
+
+Interface output — and the automatic interface linking on concrete outputs — pays off in test code. When services and handlers accept the generated interface (`IUpdateUserRequest`) instead of the concrete DTO, tests can supply a mock (Moq, NSubstitute, etc.) and stub only the properties a given test cares about, instead of constructing a full request object and keeping that construction site in sync as the entity grows:
+
+```csharp
+var request = new Mock<IUpdateUserRequest>();
+request.SetupGet(r => r.Name).Returns("renamed");
+
+await handler.Handle(request.Object);
+```
+
+Because the interface is regenerated from the entity, this stays compile-time-checked: adding a property to the entity flows into the interface, and any hand-written implementations fail to build until they cover it — while mock-based tests keep working untouched unless they need the new property. This is often the main reason teams maintain per-DTO interfaces at all; generating them removes that boilerplate without giving up the mockability.
+
 ## Partial Class Output
 
 Setting `OutputType = OutputType.PartialClass` emits the DTO as a `public partial class` (not sealed) with get/set properties and the same constructors as `OutputType.Class`, but **without** the `Projection` expression, `ToSource`, or `BackTo` methods. The intent is for callers to extend the DTO with their own hand-written partial in the same project — adding validation attributes, computed members, custom mapping, or extra request-only fields — without giving up the generator-emitted property surface or constructors.
@@ -220,7 +234,7 @@ The rationale: a hand-written partial may add members the generator can't see, s
 
 ### Composing with `OutputType.Interface`
 
-When the same entity carries **both** an `OutputType.Interface` attribute and an `OutputType.PartialClass` attribute with overlapping `DtoTypes`, the partial class declares the matching generated interface as a base — pairing the two outputs into a contract + implementation set automatically.
+When the same entity generates **both** an `OutputType.Interface` output and a concrete output (`Class`, `Record`, `Struct`, `RecordStruct`, or `PartialClass`) with overlapping `DtoTypes` — whether from two attributes or from one flags-combined `OutputType` — the concrete type declares the matching generated interface as a base, pairing the two outputs into a contract + implementation set automatically. Records, structs, and record structs can all implement interfaces, so every concrete kind participates.
 
 ```csharp
 [GenerateDtos(Types = DtoTypes.Update, OutputType = OutputType.Interface)]
@@ -250,6 +264,36 @@ public partial class UpdateUserRequest : IUpdateUserRequest
 ```
 
 The match requires equal `Prefix`, `Suffix`, and `Namespace` between the two attributes. Bits in `DtoTypes` that aren't shared are not coupled — e.g. an Interface attribute covering `Create | Update` paired with a PartialClass attribute covering `Update | Response` produces an `IUpdateUserRequest` interface and partial class only for `Update`; `Create` is interface-only and `Response` is a plain (unimplemented) partial.
+
+### One attribute, several outputs: flags-combined `OutputType`
+
+`OutputType` is a `[Flags]` enum (like `Types`) with two categories of bits: **kinds** (`Class`, `Record`, `Struct`, `RecordStruct`, `Interface`) that select what to emit, and one **modifier** (`Partial`) that applies to every selected kind. When paired attributes would be identical except for the output shape, collapse them by OR-ing — the attribute expands into one output per kind bit (each carrying the modifier), sharing every other option, and the interface pairing above applies exactly as if separate attributes had been written:
+
+```csharp
+[GenerateDtos(Types = DtoTypes.Update,
+    OutputType = OutputType.Interface | OutputType.PartialClass)]
+public class User
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+}
+```
+
+This generates the same `IUpdateUserRequest` + `UpdateUserRequest : IUpdateUserRequest` pair as the two-attribute example above (`PartialClass` is the back-compat alias for `Class | Partial`). Any concrete kind pairs the same way — `Interface | Record` yields `public record UpdateUserRequest : IUpdateUserRequest`, and `Interface | RecordStruct` a record struct implementing it.
+
+Because `Partial` is a modifier, it composes with every kind:
+
+```csharp
+// One attribute: a partial record implementing a partial interface.
+// Both halves are user-extensible — hand-written partials can add validation
+// attributes, computed members, or extra contract members.
+[GenerateDtos(Types = DtoTypes.Update,
+    OutputType = OutputType.Interface | OutputType.Record | OutputType.Partial)]
+```
+
+emits `public partial interface IUpdateUserRequest` and `public partial record UpdateUserRequest : IUpdateUserRequest`. A partial concrete kind keeps its generated constructors but omits `Projection`/`ToSource`/`BackTo` (a hand-written half may add members the generator can't see, so generator-owned mapping would be silently incomplete). `Interface | Partial` on its own makes the generated *contract* extensible — a hand-written `partial interface` half can add members that implementations must then satisfy.
+
+Combining multiple **concrete** kinds (e.g. `Class | Record`) is rejected at compile time with **error FAC101**: both bits would generate identically-named types (`UpdateUserRequest`) and collide. The `Interface` output carries an `I` prefix, so `Interface` composes with exactly one concrete kind. Setting `Partial` with **no** kind bits is rejected with **error FAC102** — a modifier with nothing to modify is more likely a mistake than an intentional no-op. A FAC101/FAC102 on one attribute doesn't affect other `[GenerateDtos]` attributes on the same type — their outputs still generate.
 
 ### Patch DTOs
 

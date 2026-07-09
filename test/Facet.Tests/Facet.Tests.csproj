@@ -20,12 +20,14 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Facet\Facet.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <!-- ReferenceOutputAssembly=true so driver-based tests can instantiate the generators directly -->
+    <ProjectReference Include="..\..\src\Facet\Facet.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="true" />
     <ProjectReference Include="..\..\src\Facet.Attributes\Facet.Attributes.csproj" />
     <ProjectReference Include="..\..\src\Facet.Extensions\Facet.Extensions.csproj" />
     <ProjectReference Include="..\..\src\Facet.Mapping\Facet.Mapping.csproj" />

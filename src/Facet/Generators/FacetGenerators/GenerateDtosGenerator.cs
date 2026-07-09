@@ -27,6 +27,24 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         isEnabledByDefault: true,
         description: "The GenerateDtos source generator encountered an unexpected error while processing this type.");
 
+    private static readonly DiagnosticDescriptor ConflictingOutputTypesRule = new DiagnosticDescriptor(
+        "FAC101",
+        "GenerateDtos OutputType combines multiple concrete output kinds",
+        "GenerateDtos on '{0}' sets OutputType to '{1}', which combines multiple concrete output kinds; they would all generate the same type names and collide. Combine OutputType.Interface and the Partial modifier with at most one of Class, Record, Struct, or RecordStruct.",
+        "Generator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Concrete output kinds (Class, Record, Struct, RecordStruct) all generate identically-named types, so at most one may be set. Only OutputType.Interface composes with a concrete kind, because its generated names carry an 'I' prefix; Partial is a modifier and combines with any kind.");
+
+    private static readonly DiagnosticDescriptor PartialWithoutKindRule = new DiagnosticDescriptor(
+        "FAC102",
+        "GenerateDtos OutputType sets the Partial modifier without an output kind",
+        "GenerateDtos on '{0}' sets OutputType to '{1}': Partial is a modifier and must be combined with at least one output kind (Class, Record, Struct, RecordStruct, or Interface).",
+        "Generator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The Partial flag only modifies how the requested kinds are emitted; on its own there is nothing to generate, which is more likely a mistake than an intentional no-op.");
+
     private static readonly HashSet<string> DefaultAuditFields = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
     {
         "CreatedDate", "UpdatedDate", "CreatedAt", "UpdatedAt",
@@ -67,6 +85,17 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 if (model != null)
                 {
                     spc.CancellationToken.ThrowIfCancellationRequested();
+
+                    if (model.Issue != OutputTypeIssue.None)
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(
+                            model.Issue == OutputTypeIssue.PartialWithoutKind ? PartialWithoutKindRule : ConflictingOutputTypesRule,
+                            Location.None,
+                            GetSimpleTypeName(model.SourceTypeName),
+                            model.OutputType.ToString()));
+                        continue;
+                    }
+
                     try
                     {
                         GenerateDtosForModel(spc, model);
@@ -98,15 +127,46 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             token.ThrowIfCancellationRequested();
 
             var model = GetDtosModel(context, attribute, sourceSymbol, forceExcludeAuditFields, token);
-            if (model != null)
+            if (model == null) continue;
+
+            // OutputType is a [Flags] value: kind bits (Class/Record/Struct/RecordStruct/
+            // Interface) select what to emit, and the Partial modifier applies to every
+            // selected kind. Expand into one model per kind (each carrying the modifier) so
+            // downstream passes see a single kind. Sibling interface pairing below then
+            // links Interface + concrete bits the same way separate attributes would.
+            var outputTypes = DecomposeOutputTypes(model.OutputType);
+
+            // Concrete kinds all generate the same type names, so combining more than one
+            // can never compile; keep the un-expanded model as a marker and report FAC101
+            // at generation time instead of emitting colliding sources.
+            if (outputTypes.Count(t => GetKind(t) != OutputType.Interface) > 1)
+            {
+                models.Add(model.WithIssue(OutputTypeIssue.ConflictingConcreteKinds));
+                continue;
+            }
+
+            // The Partial modifier with no kind to modify would silently generate nothing —
+            // more likely a mistake than an intentional no-op, so fail loudly instead.
+            if (outputTypes.Count == 0 && IsPartial(model.OutputType))
+            {
+                models.Add(model.WithIssue(OutputTypeIssue.PartialWithoutKind));
+                continue;
+            }
+            if (outputTypes.Count == 1 && outputTypes[0] == model.OutputType)
             {
                 models.Add(model);
+                continue;
+            }
+
+            foreach (var outputType in outputTypes)
+            {
+                models.Add(model.WithOutputType(outputType));
             }
         }
 
         if (models.Count == 0) return null;
 
-        var interfaceModels = models.Where(m => m.OutputType == OutputType.Interface).ToList();
+        var interfaceModels = models.Where(m => GetKind(m.OutputType) == OutputType.Interface).ToList();
         if (interfaceModels.Count == 0)
         {
             return models;
@@ -115,7 +175,10 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         for (int i = 0; i < models.Count; i++)
         {
             var model = models[i];
-            if (model.OutputType != OutputType.PartialClass) continue;
+            // Every concrete output kind (class, record, struct, record struct — partial or
+            // not) can implement the sibling interface; skip interface models themselves and
+            // invalid-mask markers (which generate nothing).
+            if (GetKind(model.OutputType) == OutputType.Interface || model.Issue != OutputTypeIssue.None) continue;
 
             DtoTypes siblingMask = DtoTypes.None;
             foreach (var iface in interfaceModels)
@@ -264,7 +327,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         var sourceTypeName = GetSimpleTypeName(model.SourceTypeName);
         
         // Keep a custom Prefix between I and the entity name.
-        var interfaceLeader = model.OutputType == OutputType.Interface ? "I" : "";
+        var interfaceLeader = GetKind(model.OutputType) == OutputType.Interface ? "I" : "";
 
         if ((model.Types & DtoTypes.Create) != 0)
         {
@@ -311,7 +374,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
 
         // Patch DTO interfaces are skipped because ApplyTo needs a method body.
-        if ((model.Types & DtoTypes.Patch) != 0 && model.OutputType != OutputType.Interface)
+        if ((model.Types & DtoTypes.Patch) != 0 && GetKind(model.OutputType) != OutputType.Interface)
         {
             var patchMembers = FilterMembers(model.Members, model.ExcludeProperties);
             var patchDtoName = BuildDtoName(sourceTypeName, "", "Patch", model.Prefix, model.Suffix);
@@ -386,8 +449,8 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     {
         var sb = new StringBuilder();
         var sourceTypeName = GetSimpleTypeName(model.SourceTypeName);
-        var isInterface = model.OutputType == OutputType.Interface;
-        var isPartialClass = model.OutputType == OutputType.PartialClass;
+        var isInterface = GetKind(model.OutputType) == OutputType.Interface;
+        var isPartial = IsPartial(model.OutputType);
         var hasInitOnlyProperties = members.Any(m => m.IsInitOnly);
         var hasReadOnlyFields = members.Any(m => m.IsReadOnly);
 
@@ -403,8 +466,8 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 GenerateDtoConstructors(sb, model, dtoName, sourceTypeName, members, hasInitOnlyProperties, hasReadOnlyFields);
             }
 
-            // PartialClass output leaves mapping members to the user-defined partial.
-            if (!isPartialClass)
+            // Partial output leaves mapping members to the user-defined partial half.
+            if (!isPartial)
             {
                 if (model.GenerateProjections)
                 {
@@ -446,22 +509,26 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
     private static void GenerateDtoTypeDeclaration(StringBuilder sb, GenerateDtosTargetModel model, string dtoName, string sourceTypeName, string purpose, DtoTypes dtoType)
     {
-        var keyword = model.OutputType switch
+        var keyword = GetKind(model.OutputType) switch
         {
             OutputType.Class => "class",
             OutputType.Record => "record",
             OutputType.RecordStruct => "record struct",
             OutputType.Struct => "struct",
             OutputType.Interface => "interface",
-            OutputType.PartialClass => "partial class",
             _ => "record"
         };
+
+        if (IsPartial(model.OutputType))
+        {
+            keyword = "partial " + keyword;
+        }
 
         sb.AppendLine($"/// <summary>");
         sb.AppendLine($"/// Generated {purpose} DTO contract for {sourceTypeName}.");
         sb.AppendLine($"/// </summary>");
 
-        if (model.OutputType != OutputType.Interface)
+        if (GetKind(model.OutputType) != OutputType.Interface)
         {
             if (model.ConvertEnumsTo != null)
             {
@@ -474,9 +541,10 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             }
         }
 
-        // Partial classes implement sibling interfaces like ICreateUserRequest.
+        // Concrete outputs implement sibling interfaces like ICreateUserRequest —
+        // records, structs, and record structs can all declare interface bases.
         var baseList = "";
-        if (model.OutputType == OutputType.PartialClass && (model.SiblingInterfaceTypes & dtoType) != 0)
+        if (GetKind(model.OutputType) != OutputType.Interface && (model.SiblingInterfaceTypes & dtoType) != 0)
         {
             baseList = $" : I{dtoName}";
         }
@@ -487,7 +555,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
     private static void GenerateDtoMembers(StringBuilder sb, GenerateDtosTargetModel model, ImmutableArray<FacetMember> members)
     {
-        var isInterface = model.OutputType == OutputType.Interface;
+        var isInterface = GetKind(model.OutputType) == OutputType.Interface;
         foreach (var member in members)
         {
             if (member.Kind == FacetMemberKind.Property)
@@ -764,15 +832,19 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             sb.AppendLine();
         }
 
-        var keyword = model.OutputType switch
+        var keyword = GetKind(model.OutputType) switch
         {
             OutputType.Class => "class",
             OutputType.Record => "record",
             OutputType.RecordStruct => "record struct",
             OutputType.Struct => "struct",
-            OutputType.PartialClass => "partial class",
             _ => "record"
         };
+
+        if (IsPartial(model.OutputType))
+        {
+            keyword = "partial " + keyword;
+        }
 
         sb.AppendLine($"/// <summary>");
         sb.AppendLine($"/// Generated Patch DTO for {sourceTypeName} that supports partial updates.");
@@ -1171,4 +1243,41 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
     }
 
+    private static readonly OutputType[] OutputKinds =
+    {
+        OutputType.Class,
+        OutputType.Record,
+        OutputType.Struct,
+        OutputType.RecordStruct,
+        OutputType.Interface,
+    };
+
+    /// <summary>The kind bits of an <see cref="OutputType"/>, with the Partial modifier stripped.</summary>
+    private static OutputType GetKind(OutputType value) => value & ~OutputType.Partial;
+
+    /// <summary>Whether the <see cref="OutputType.Partial"/> modifier is set.</summary>
+    private static bool IsPartial(OutputType value) => (value & OutputType.Partial) != 0;
+
+    /// <summary>
+    /// Splits a [Flags] <see cref="OutputType"/> value into its individual output kinds,
+    /// re-applying the <see cref="OutputType.Partial"/> modifier to each (so PartialClass —
+    /// the Class | Partial alias — decomposes to itself, and Record | Interface | Partial
+    /// decomposes to a partial record plus a partial interface).
+    /// <see cref="OutputType.None"/> (or a kindless value) yields an empty list.
+    /// </summary>
+    private static List<OutputType> DecomposeOutputTypes(OutputType value)
+    {
+        var result = new List<OutputType>();
+        var modifier = value & OutputType.Partial;
+
+        foreach (var kind in OutputKinds)
+        {
+            if ((value & kind) != 0)
+            {
+                result.Add(kind | modifier);
+            }
+        }
+
+        return result;
+    }
 }
