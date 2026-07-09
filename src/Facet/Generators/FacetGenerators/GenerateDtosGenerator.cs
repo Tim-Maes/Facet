@@ -84,6 +84,15 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         isEnabledByDefault: true,
         description: "Manifests are present, so the model's own navigation designation was expected — falling back to the heuristic is most likely a stale manifest or a CLR type name mismatch. For non-entity source types this is intentional and can be suppressed with #pragma warning disable FAC105 around the attribute, or escalated to an error with WarningsAsErrors for strict builds.");
 
+    private static readonly DiagnosticDescriptor ManifestRequiredRule = new DiagnosticDescriptor(
+        "FAC107",
+        "GenerateDtos source type requires an EF model manifest",
+        "'{0}' sets ExcludeNavigationProperties and Facet_RequireEfModelManifest is enabled, but no EF model manifest covers it. Wire up the design-time services and add the manifest to AdditionalFiles (a glob that matches nothing is silently empty), or disable Facet_RequireEfModelManifest to allow the same-assembly heuristic.",
+        "Generator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "With Facet_RequireEfModelManifest set, the same-assembly heuristic is turned off and manifest coverage is mandatory: a source type with no manifest entry — because no manifest was supplied at all (an AdditionalFiles glob that matches nothing passes nothing to the compiler, so the generator cannot see that a glob was even written) or because this type is absent from the manifests present — is a hard error rather than a silent fallback.");
+
     private static readonly DiagnosticDescriptor PropertyNotInManifestRule = new DiagnosticDescriptor(
         "FAC106",
         "Property is unknown to the EF model manifest",
@@ -150,15 +159,26 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                 return manifest;
             });
 
+        // Opt-in strict mode: when Facet_RequireEfModelManifest is set, the same-assembly
+        // heuristic is off and manifest coverage is mandatory (FAC107). This is the buildable
+        // form of "error when the manifest glob matches nothing" — the generator can't see an
+        // empty glob, so the consumer signals the requirement with a build property.
+        var requireManifest = context.AnalyzerConfigOptionsProvider
+            .Select(static (provider, _) =>
+                provider.GlobalOptions.TryGetValue("build_property.Facet_RequireEfModelManifest", out var value)
+                && bool.TryParse(value, out var parsed)
+                && parsed);
+
         var allTargets = generateDtosTargets.Collect()
             .Combine(generateAuditableDtosTargets.Collect())
             .Combine(generateDtosForTargets.Collect())
             .Select(static (combined, _) => combined.Left.Left.Concat(combined.Left.Right).Concat(combined.Right))
-            .Combine(efModelManifest);
+            .Combine(efModelManifest)
+            .Combine(requireManifest);
 
         context.RegisterSourceOutput(allTargets, (spc, pair) =>
         {
-            var (models, manifest) = pair;
+            var ((models, manifest), requireManifestValue) = pair;
             var modelList = models.Where(m => m != null).Cast<GenerateDtosTargetModel>().ToList();
 
             // The Optional<T> JSON converter is generated (not shipped in Facet.Attributes)
@@ -201,7 +221,7 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                 {
                     spc.CancellationToken.ThrowIfCancellationRequested();
 
-                    var model = ResolveNavigationExclusions(spc, pendingModel, manifest, reportedCoverage);
+                    var model = ResolveNavigationExclusions(spc, pendingModel, manifest, requireManifestValue, reportedCoverage);
 
                     if (model.Issue != OutputTypeIssue.None)
                     {
@@ -1663,6 +1683,7 @@ internal sealed class OptionalNewtonsoftJsonConverter : JsonConverter
         SgfSourceProductionContext spc,
         GenerateDtosTargetModel model,
         EfModelManifest manifest,
+        bool requireManifest,
         HashSet<string> reportedCoverage)
     {
         if (!model.ExcludeNavigationProperties)
@@ -1695,6 +1716,24 @@ internal sealed class OptionalNewtonsoftJsonConverter : JsonConverter
                     || entity!.Keep.Contains(m.Name)
                     || includeProperties.Contains(m.Name))
                 .ToImmutableArray());
+        }
+
+        // Type is not covered by any manifest. In strict mode that is a hard error and the
+        // heuristic is off; otherwise it is the FAC105 advisory (only when manifests exist —
+        // a manifest-free project is the by-design zero-infrastructure tier).
+        if (requireManifest)
+        {
+            if (reportedCoverage.Add(sourceClrName))
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    ManifestRequiredRule,
+                    model.AttributeLocation?.ToLocation() ?? Location.None,
+                    GetSimpleTypeName(model.SourceTypeName)));
+            }
+
+            // Emit no members-exclusion at all: with the requirement unmet the DTO shape is
+            // undefined, so keep every member rather than guess — the error is the signal.
+            return model.WithResolvedMembers(model.Members);
         }
 
         if (manifest.HasEntities && reportedCoverage.Add(sourceClrName))

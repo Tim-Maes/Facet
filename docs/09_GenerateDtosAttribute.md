@@ -469,13 +469,16 @@ The rules above are a *heuristic* — a good guess from type shapes. If the enti
     "Facet.Extensions.EFCore.Design.FacetDesignTimeServices, Facet.Extensions.EFCore")]
 ```
 
-Commit the manifest, then expose it to the generator in the project that declares `[GenerateDtos]`:
+Then run a migration once — **the only thing that writes the manifest** (not `build`, not `database update`), so until the first migration the heuristic is silently in effect. Commit the file, and expose it to the generator in the project that declares `[GenerateDtos]`. In a layered solution the startup project, the migrations project (where the manifest lands, beside the snapshot), and the `[GenerateDtos]` project are usually three different assemblies, so the glob is normally a **relative path into the migrations project**, not a local folder:
 
 ```xml
 <ItemGroup>
-  <AdditionalFiles Include="Migrations/*.facetmodel.json" />
+  <!-- e.g. from MyApp.Domain reaching into MyApp.Persistence -->
+  <AdditionalFiles Include="..\MyApp.Persistence\Migrations\*.facetmodel.json" />
 </ItemGroup>
 ```
+
+Each `DbContext` writes its own `{Context}.facetmodel.json`; the generator merges them, so a property mapped as data in any context is kept. See the [Facet.Extensions.EFCore README](../src/Facet.Extensions.EFCore/README.md) for the full three-project walkthrough.
 
 For any source type listed in a manifest, `ExcludeNavigationProperties = true` now keeps **exactly the properties EF maps as data** (scalar columns, complex properties, primitive collections) and drops everything else. That fixes both directions the heuristic can miss:
 
@@ -490,8 +493,11 @@ Owned references, skip navigations (many-to-many), and shadow-only members drop 
 - **FAC104** (error) — a manifest declares a version this generator doesn't read (package version mismatch).
 - **FAC105** (warning) — an `ExcludeNavigationProperties` source type isn't listed in any manifest; the heuristic is in effect. For genuinely non-entity source types, suppress it at the attribute with `#pragma warning disable FAC105`.
 - **FAC106** (warning) — a settable property on a listed type appears in none of the manifest's categories (mapped, navigation, owned, skip navigation, ignored, service): the manifest almost certainly predates the property, which would otherwise silently vanish from DTOs. Regenerate the manifest, or mark the property `[NotMapped]` if the model really doesn't map it.
+- **FAC107** (error) — you set `Facet_RequireEfModelManifest` (below) but a source type has no manifest coverage. This is the *only* way to turn a mis-wired glob (which is silently empty — the compiler can't see a glob that matched nothing) into a build failure.
 
-The diagnostics express the facts; MSBuild expresses your policy — strict teams escalate with `<WarningsAsErrors>$(WarningsAsErrors);FAC105;FAC106</WarningsAsErrors>`. Because the manifest is only rewritten when migrations are, adding a mapped property without its migration surfaces as FAC106 at compile time — the same workflow that keeps the snapshot honest keeps DTO shapes honest, and now it tells you when it's out of date.
+The diagnostics express the facts; MSBuild expresses your policy. Two knobs make drift fatal — `<Facet_RequireEfModelManifest>true</Facet_RequireEfModelManifest>` turns off the heuristic so an uncovered type is FAC107 (error), and `<WarningsAsErrors>$(WarningsAsErrors);FAC105;FAC106</WarningsAsErrors>` escalates the drift warnings. With both, a PR that changes the model without regenerating the manifest can't merge green — the same workflow that keeps the snapshot honest keeps DTO shapes honest, and now the build tells you when it's out of date.
+
+> **Generating the manifest programmatically?** Pass the design-time model, `context.GetService<IDesignTimeModel>().Model`, not `context.Model` — the runtime model has no convention metadata, so it reports zero ignored members and every `[NotMapped]` property becomes a spurious FAC106. The `dotnet ef` hook already does this correctly.
 
 ## Obsolete: GenerateAuditableDtos Attribute
 
