@@ -318,16 +318,26 @@ Or, with no new file, generate it from the startup project's `.csproj`:
 The startup project must reference `Facet.Extensions.EFCore` (directly or transitively) so
 the assembly named in the attribute is present in its output for `dotnet ef` to load.
 
-Now run a migration once to produce the manifest — **this is the only thing that writes it**:
+With the services registered, the manifest is now written **automatically** whenever you add
+or remove a migration — it rides the migration you were already creating for the schema change:
 
 ```bash
-dotnet ef migrations add InitFacetManifest --project ../MyApp.Persistence --startup-project .
+dotnet ef migrations add AddSchedule --project ../MyApp.Persistence --startup-project .
+# → also (re)writes MyApp.Persistence/Migrations/MyDbContext.facetmodel.json
 ```
 
-Nothing else regenerates it — not `build`, not `database update`, not `dbcontext info`. Until
-that first migration exists, `ExcludeNavigationProperties` types have no manifest entry and
-report FAC105. Each `DbContext` writes its own `{Context}.facetmodel.json`; if you have
-several, the generator merges them (a property mapped as data in any context is kept).
+Nothing else in the design-time services touches it — not `build`, not `database update`, not
+`dbcontext info` — so the manifest changes only when your migrations do. That is exactly what
+makes it a committed drift guard (below). It also means you don't need it fresh on every build;
+you need it fresh whenever the mapped shape changes, which is when you add a migration anyway.
+
+If you'd rather not go through a migration — the first-time bootstrap before any schema change,
+or a workflow that avoids `dotnet ef` entirely — call the same writer directly instead; see
+[Producing the manifest without a migration](#producing-the-manifest-without-a-migration). You
+never have to invent a no-op migration to get a manifest.
+
+Each `DbContext` writes its own `{Context}.facetmodel.json`; if you have several, the generator
+merges them (a property mapped as data in any context is kept).
 
 ### 2. Expose the manifest to the generator (the `[GenerateDtos]` project)
 
@@ -352,9 +362,10 @@ columns survive (the model maps them as data), EF-ignored (`[NotMapped]`) proper
 
 ### Drift is a build failure, for free
 
-Because the manifest is regenerated only when migrations are, committing it makes your build a
-schema-drift guard: add a mapped property without a migration and the generator emits
-**FAC106** (the property is unknown to the model, so it would silently vanish from the DTO).
+Because the committed manifest changes only when you regenerate it, it makes your build a
+schema-drift guard: add a mapped property but forget to regenerate (no migration, or a
+programmatic run you didn't rerun) and the generator emits **FAC106** — the property is unknown
+to the model, so it would silently vanish from the DTO.
 FAC106 is a warning by default so mid-development edits don't block the build; escalate it for
 CI so a stale manifest can't merge:
 
@@ -368,21 +379,35 @@ FAC105 (no manifest entry at all) is already an error. Together they mean a PR t
 model without regenerating the manifest cannot merge green — your DTO contracts can't silently
 drift from your schema.
 
-### Programmatic generation
+### Producing the manifest without a migration
 
-The manifest can also be produced from a custom tool via
-`FacetEfModelManifest.Build(model)` / `FacetEfModelManifest.Write(model, directory, contextName)`
-instead of the migrations workflow. **Pass the design-time model**, not `DbContext.Model`:
+The migration hook is just a convenient caller of a public API — the manifest is an ordinary
+file, and `FacetEfModelManifest.Build`/`Write` produce it from a model directly. Reach for this
+when running a migration is the wrong tool for the moment:
+
+- **First-time bootstrap** — you've added the attribute and the `<AdditionalFiles>` glob, but
+  the model hasn't changed, so `dotnet ef migrations add` reports "no changes." Generate the
+  first manifest here instead of forcing an empty migration.
+- **No migration churn / no `dotnet ef`** — you keep the manifest current some other way (a
+  pre-build target, a `dotnet run` tool, a checked-in generator step) and don't want a schema
+  command in the loop.
+- **A drift-check test** — assert the committed manifest equals `Build(model)` in CI, so a
+  stale manifest fails a test instead of only surfacing as FAC106 in a downstream build.
+
+A ~15-line console tool is the usual shape (this is what a real-world consumer uses):
 
 ```csharp
-var model = context.GetService<IDesignTimeModel>().Model;   // NOT context.Model
-FacetEfModelManifest.Write(model, migrationsDir, nameof(MyDbContext));
+using var context = new MyDbContext(/* design-time options; never connects */);
+// Pass the DESIGN-TIME model, not context.Model:
+var model = context.GetService<IDesignTimeModel>().Model;
+FacetEfModelManifest.Write(model, "../MyApp.Persistence/Migrations", nameof(MyDbContext));
 ```
 
-The runtime model has no convention metadata, so `DbContext.Model` reports zero explicitly
-ignored (`[NotMapped]`/`Ignore(...)`) members — which would turn every one of them into a
-spurious FAC106. The migrations scaffolder hook already uses the design-time model, so the
-`dotnet ef` path in step 1 gets this right for free.
+`DbContext.Model` is the runtime model and has no convention metadata, so it reports zero
+explicitly ignored (`[NotMapped]`/`Ignore(...)`) members — which would turn every one of them
+into a spurious FAC106. `IDesignTimeModel.Model` carries them. The migration hook already uses
+the design-time model, so the `dotnet ef` path gets this right for free; a hand-written tool
+must ask for it explicitly.
 
 ## Advanced: Custom Mapping Support
 
