@@ -457,11 +457,21 @@ When an entity-typed property genuinely belongs in the DTO — the classic case 
 
 ### Setting up the model manifest
 
-`Facet.Extensions.EFCore` ships design-time services that write the manifest (`{ContextName}.facetmodel.json`) beside the migrations model snapshot on every `dotnet ef migrations add`/`remove`. Register them once in the **startup project** (the one you pass to `dotnet ef --startup-project`), in any compiled `.cs` file — conventionally `Properties/AssemblyInfo.cs`, or generated from the csproj with an `<AssemblyAttribute>` item:
+`Facet.Extensions.EFCore` ships design-time services that write the manifest (`{ContextName}.facetmodel.json`) beside the migrations model snapshot on every `dotnet ef migrations add`/`remove`. Register them once in the **startup project** (the one you pass to `dotnet ef --startup-project`), in any compiled `.cs` file — conventionally `Properties/AssemblyInfo.cs`:
 
 ```csharp
 [assembly: Microsoft.EntityFrameworkCore.Design.DesignTimeServicesReference(
     "Facet.Extensions.EFCore.Design.FacetDesignTimeServices, Facet.Extensions.EFCore")]
+```
+
+Or, with no new file, generate the attribute from the startup project's `.csproj`:
+
+```xml
+<ItemGroup>
+  <AssemblyAttribute Include="Microsoft.EntityFrameworkCore.Design.DesignTimeServicesReference">
+    <_Parameter1>Facet.Extensions.EFCore.Design.FacetDesignTimeServices, Facet.Extensions.EFCore</_Parameter1>
+  </AssemblyAttribute>
+</ItemGroup>
 ```
 
 With the services registered, the manifest is written **automatically** whenever you add or remove a migration — it rides the migration you were already creating for the schema change (nothing else in the services touches it: not `build`, not `database update`). If you'd rather not go through a migration — the first-time bootstrap before any schema change, or a workflow that avoids `dotnet ef` — call `FacetEfModelManifest.Write(...)` from a small tool instead; you never have to invent a no-op migration. Either way, commit the file and expose it to the generator in the project that declares `[GenerateDtos]`. In a layered solution the startup project, the migrations project (where the manifest lands, beside the snapshot), and the `[GenerateDtos]` project are usually three different assemblies, so the glob is normally a **relative path into the migrations project**:
