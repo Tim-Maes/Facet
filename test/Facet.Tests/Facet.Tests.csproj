@@ -20,10 +20,17 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="FluentAssertions" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <!--
+      VersionOverride: EFCore.Design (below) depends on Roslyn 4.14, which conflicts with the
+      repo-wide 4.8.0 pin (the generator's compatibility floor). Only this test host needs the
+      newer Roslyn; the generator assembly under test still compiles against 4.8.0.
+    -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" VersionOverride="4.14.0" />
     <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
+    <!-- Design-time scaffolding surface for the FacetDesignTimeServices end-to-end tests -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
   </ItemGroup>
 
   <ItemGroup>

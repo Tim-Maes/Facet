@@ -246,6 +246,39 @@ public class ProductsController : ControllerBase
 }
 ```
 
+## Design-Time Services: the EF Model Manifest
+
+`[GenerateDtos(ExcludeNavigationProperties = true)]` normally decides what a "navigation" is
+with a type-shape heuristic. This package can replace the guess with the EF model's own
+designation: its design-time services write a **model manifest** (`{ContextName}.facetmodel`)
+beside the migrations model snapshot every time you run
+`dotnet ef migrations add`/`remove`, recording per entity exactly which properties EF maps as
+data (scalar columns, complex properties, primitive collections) and which are navigations,
+owned references, or skip navigations.
+
+### 1. Register the design-time services (startup project)
+
+```csharp
+[assembly: Microsoft.EntityFrameworkCore.Design.DesignTimeServicesReference(
+    "Facet.Extensions.EFCore.Design.FacetDesignTimeServices, Facet.Extensions.EFCore")]
+```
+
+### 2. Expose the manifest to the generator (project with [GenerateDtos] attributes)
+
+```xml
+<ItemGroup>
+  <AdditionalFiles Include="Migrations/*.facetmodel" />
+</ItemGroup>
+```
+
+Commit the manifest like you commit the snapshot. For every entity listed in it,
+`ExcludeNavigationProperties` keeps exactly the mapped data properties — value-converted
+columns survive, EF-ignored (`[NotMapped]`) properties drop — and types not listed anywhere
+keep the heuristic behavior. `IncludeProperties` still wins for aggregate children you want
+in the DTO. The manifest can also be produced programmatically via
+`FacetEfModelManifest.Build(model)` / `FacetEfModelManifest.Write(model, directory, contextName)`
+if you want it generated from a custom tool instead of the migrations workflow.
+
 ## Advanced: Custom Mapping Support
 
 For complex mappings that cannot be expressed as SQL projections (e.g., calling external services, complex type conversions like Vector2, or async operations), see the **[Facet.Extensions.EFCore.Mapping](https://www.nuget.org/packages/Facet.Extensions.EFCore.Mapping)** package.
