@@ -32,6 +32,15 @@ defaults:
 jobs:
   publish-preview:
     runs-on: ubuntu-latest
+    # Fork PRs (and dependabot PRs, which use a separate restricted secret store)
+    # run without repository secrets or a writable token, so NuGet login fails on
+    # the empty NUGET_USER and the PR comment couldn't be posted either. Skip the
+    # job instead of failing it — external contributions otherwise always show a
+    # red X they cannot fix. Build/test coverage for those PRs comes from the
+    # build and test workflows, which need no secrets.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
     steps:
       - uses: actions/checkout@v6
         with:
