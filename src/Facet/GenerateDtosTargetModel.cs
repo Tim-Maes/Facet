@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Immutable;
 using System.Linq;
+using Facet.Generators;
 
 namespace Facet;
 
@@ -53,6 +54,19 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
     /// </summary>
     public ImmutableArray<string> HeuristicNavigationProperties { get; }
     /// <summary>
+    /// Names of property members that EF could plausibly map — settable, or get-only
+    /// collections — recorded only when <see cref="ExcludeNavigationProperties"/> is set.
+    /// The generation stage checks these against a manifest entry's known-set: a name the
+    /// model has no opinion on means the manifest predates the property (FAC106).
+    /// </summary>
+    public ImmutableArray<string> SettableProperties { get; }
+    /// <summary>
+    /// Location of the [GenerateDtos] attribute application, so diagnostics point at the
+    /// attribute instead of Location.None (and become #pragma-suppressible). Null when the
+    /// syntax reference is unavailable.
+    /// </summary>
+    public SourceLocationInfo? AttributeLocation { get; }
+    /// <summary>
     /// The set of DTO type bits for which a sibling <see cref="OutputType.Interface"/> output on the
     /// same source type generates a matching interface (same Prefix/Suffix/Namespace, overlapping
     /// <see cref="DtoTypes"/>) — whether from a separate attribute or from a flags-combined
@@ -99,6 +113,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         bool excludeNavigationProperties = false,
         ImmutableArray<string> includeProperties = default,
         ImmutableArray<string> heuristicNavigationProperties = default,
+        ImmutableArray<string> settableProperties = default,
+        SourceLocationInfo? attributeLocation = null,
         DtoTypes siblingInterfaceTypes = DtoTypes.None,
         OutputTypeIssue issue = OutputTypeIssue.None,
         bool supportsSystemTextJson = false,
@@ -121,6 +137,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         ExcludeNavigationProperties = excludeNavigationProperties;
         IncludeProperties = includeProperties.IsDefault ? ImmutableArray<string>.Empty : includeProperties;
         HeuristicNavigationProperties = heuristicNavigationProperties.IsDefault ? ImmutableArray<string>.Empty : heuristicNavigationProperties;
+        SettableProperties = settableProperties.IsDefault ? ImmutableArray<string>.Empty : settableProperties;
+        AttributeLocation = attributeLocation;
         SiblingInterfaceTypes = siblingInterfaceTypes;
         Issue = issue;
         SupportsSystemTextJson = supportsSystemTextJson;
@@ -151,6 +169,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             ExcludeNavigationProperties,
             IncludeProperties,
             HeuristicNavigationProperties,
+            SettableProperties,
+            AttributeLocation,
             SiblingInterfaceTypes,
             Issue,
             SupportsSystemTextJson,
@@ -182,10 +202,12 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             excludeNavigationProperties: false,
             includeProperties: IncludeProperties,
             heuristicNavigationProperties: ImmutableArray<string>.Empty,
-            SiblingInterfaceTypes,
-            Issue,
-            SupportsSystemTextJson,
-            SupportsNewtonsoftJson);
+            settableProperties: ImmutableArray<string>.Empty,
+            attributeLocation: AttributeLocation,
+            siblingInterfaceTypes: SiblingInterfaceTypes,
+            issue: Issue,
+            supportsSystemTextJson: SupportsSystemTextJson,
+            supportsNewtonsoftJson: SupportsNewtonsoftJson);
     }
 
     /// <summary>
@@ -212,6 +234,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             ExcludeNavigationProperties,
             IncludeProperties,
             HeuristicNavigationProperties,
+            SettableProperties,
+            AttributeLocation,
             SiblingInterfaceTypes,
             issue,
             SupportsSystemTextJson,
@@ -240,6 +264,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             && ExcludeNavigationProperties == other.ExcludeNavigationProperties
             && IncludeProperties.SequenceEqual(other.IncludeProperties)
             && HeuristicNavigationProperties.SequenceEqual(other.HeuristicNavigationProperties)
+            && SettableProperties.SequenceEqual(other.SettableProperties)
+            && Nullable.Equals(AttributeLocation, other.AttributeLocation)
             && SiblingInterfaceTypes == other.SiblingInterfaceTypes
             && Issue == other.Issue
             && SupportsSystemTextJson == other.SupportsSystemTextJson
@@ -279,6 +305,11 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
 
             foreach (var prop in HeuristicNavigationProperties)
                 hash = hash * 31 + prop.GetHashCode();
+
+            foreach (var prop in SettableProperties)
+                hash = hash * 31 + prop.GetHashCode();
+
+            hash = hash * 31 + (AttributeLocation?.GetHashCode() ?? 0);
 
             foreach (var member in Members)
                 hash = hash * 31 + member.GetHashCode();
