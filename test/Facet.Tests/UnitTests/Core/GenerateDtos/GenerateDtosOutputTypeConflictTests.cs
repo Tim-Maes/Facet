@@ -30,7 +30,7 @@ public class GenerateDtosOutputTypeConflictTests
     private static (ImmutableDiagnosticList Diagnostics, GeneratorDriverRunResult Result) RunGenerator(string source)
     {
         var compilation = CreateCompilation(source);
-        var driver = CSharpGeneratorDriver.Create(new GenerateDtosGenerator());
+        var driver = CSharpGeneratorDriver.Create(new GenerateDtosGeneratorHoist(new GenerateDtosGenerator()));
         var ranDriver = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out var diagnostics);
         return (new ImmutableDiagnosticList(diagnostics), ranDriver.GetRunResult());
     }

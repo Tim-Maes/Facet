@@ -462,7 +462,7 @@ Known limitations, by design: wrapper generics that are not collections (`Lazy<T
 
 ### EF Core-backed exclusion: the model manifest
 
-The rules above are a *heuristic* — a good guess from type shapes. If the entity is mapped by EF Core, you can replace the guess with the model's own designation. `Facet.Extensions.EFCore` ships design-time services that write a **model manifest** (`{ContextName}.facetmodel`) beside the migrations model snapshot every time you run `dotnet ef migrations add`/`remove`, recording for each entity exactly which properties EF maps as data and which are navigations. Register them once in the startup project:
+The rules above are a *heuristic* — a good guess from type shapes. If the entity is mapped by EF Core, you can replace the guess with the model's own designation. `Facet.Extensions.EFCore` ships design-time services that write a **model manifest** (`{ContextName}.facetmodel.json`) beside the migrations model snapshot every time you run `dotnet ef migrations add`/`remove`, recording for each entity exactly which properties EF maps as data and which are navigations. Register them once in the startup project:
 
 ```csharp
 [assembly: Microsoft.EntityFrameworkCore.Design.DesignTimeServicesReference(
@@ -473,7 +473,7 @@ Commit the manifest, then expose it to the generator in the project that declare
 
 ```xml
 <ItemGroup>
-  <AdditionalFiles Include="Migrations/*.facetmodel" />
+  <AdditionalFiles Include="Migrations/*.facetmodel.json" />
 </ItemGroup>
 ```
 

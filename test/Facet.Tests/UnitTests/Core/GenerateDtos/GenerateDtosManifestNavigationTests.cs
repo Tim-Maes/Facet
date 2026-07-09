@@ -7,11 +7,11 @@ using Microsoft.CodeAnalysis.Text;
 namespace Facet.Tests.UnitTests.Core.GenerateDtos;
 
 /// <summary>
-/// ExcludeNavigationProperties with an EF model manifest (*.facetmodel AdditionalFile): the
-/// model's own designation replaces the same-assembly heuristic — mapped scalars are kept,
-/// navigations AND EF-ignored properties drop, value-converted entity-typed columns survive —
-/// while unlisted types, unsupported manifest versions, and IncludeProperties keep their
-/// existing behavior.
+/// ExcludeNavigationProperties with an EF model manifest (*.facetmodel.json AdditionalFile):
+/// the model's own designation replaces the same-assembly heuristic — mapped scalars are
+/// kept, navigations AND EF-ignored properties drop, value-converted entity-typed columns
+/// survive — while unlisted types, unsupported manifest versions, malformed files, and
+/// IncludeProperties keep their existing behavior.
 /// </summary>
 public class GenerateDtosManifestNavigationTests
 {
@@ -40,10 +40,10 @@ public class GenerateDtosManifestNavigationTests
             new[] { CSharpSyntaxTree.ParseText(source) }, references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
         var additionalTexts = manifests
-            .Select((text, i) => (AdditionalText)new TestAdditionalText($"/model/Context{i}.facetmodel", text))
+            .Select((text, i) => (AdditionalText)new TestAdditionalText($"/model/Context{i}.facetmodel.json", text))
             .ToArray();
         var driver = CSharpGeneratorDriver.Create(
-            new[] { new GenerateDtosGenerator().AsSourceGenerator() },
+            new[] { new GenerateDtosGeneratorHoist(new GenerateDtosGenerator()).AsSourceGenerator() },
             additionalTexts);
         var result = driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _).GetRunResult();
         return result.GeneratedTrees.Select(t => t.ToString())
@@ -75,12 +75,12 @@ public class GenerateDtosManifestNavigationTests
             }
             """,
             """
-            version 1
-            entity ManifestNav.Parent
-            scalar Id
-            scalar Name
-            nav Owner
-            nav Items
+            {
+              "version": 1,
+              "entities": [
+                { "clrType": "ManifestNav.Parent", "scalar": ["Id", "Name"], "nav": ["Owner", "Items"] }
+              ]
+            }
             """);
 
         dto.Should().Contain("Id");
@@ -105,11 +105,12 @@ public class GenerateDtosManifestNavigationTests
             }
             """,
             """
-            version 1
-            entity ManifestNav.Parent
-            scalar Id
-            scalar Price
-            nav Owner
+            {
+              "version": 1,
+              "entities": [
+                { "clrType": "ManifestNav.Parent", "scalar": ["Id", "Price"], "nav": ["Owner"] }
+              ]
+            }
             """);
 
         dto.Should().Contain("Price", "the model maps it as data despite its entity-like shape");
@@ -129,9 +130,12 @@ public class GenerateDtosManifestNavigationTests
             }
             """,
             """
-            version 1
-            entity ManifestNav.SomeOtherType
-            scalar Id
+            {
+              "version": 1,
+              "entities": [
+                { "clrType": "ManifestNav.SomeOtherType", "scalar": ["Id"] }
+              ]
+            }
             """);
 
         dto.Should().NotContain("Owner", "the heuristic still drops same-assembly class-typed properties");
@@ -152,11 +156,12 @@ public class GenerateDtosManifestNavigationTests
             }
             """,
             """
-            version 1
-            entity ManifestNav.Parent
-            scalar Id
-            nav Items
-            nav Owner
+            {
+              "version": 1,
+              "entities": [
+                { "clrType": "ManifestNav.Parent", "scalar": ["Id"], "nav": ["Items", "Owner"] }
+              ]
+            }
             """);
 
         dto.Should().Contain("Items", "IncludeProperties is the aggregate-children escape hatch in both tiers");
@@ -176,12 +181,41 @@ public class GenerateDtosManifestNavigationTests
             }
             """,
             """
-            version 2
-            entity ManifestNav.Parent
-            scalar Id
+            {
+              "version": 2,
+              "entities": [
+                { "clrType": "ManifestNav.Parent", "scalar": ["Id"] }
+              ]
+            }
             """);
 
         dto.Should().Contain("LegacyBlob", "a future-version manifest is ignored rather than misread");
+        dto.Should().NotContain("Owner", "the heuristic remains in force");
+    }
+
+    [Fact]
+    public void MalformedManifest_IsIgnoredAtomically()
+    {
+        // The file names Parent and then breaks: no partial application is allowed — an
+        // entity registered with an accidental empty keep-set would drop every property.
+        var dto = GenerateUpdateDto(Entities + """
+            [GenerateDtos(Types = DtoTypes.Update, ExcludeNavigationProperties = true)]
+            public class Parent
+            {
+                public int Id { get; set; }
+                public string? LegacyBlob { get; set; }
+                public Child? Owner { get; set; }
+            }
+            """,
+            """
+            {
+              "version": 1,
+              "entities": [
+                { "clrType": "ManifestNav.Parent", "scalar": ["Id"
+            """);
+
+        dto.Should().Contain("Id");
+        dto.Should().Contain("LegacyBlob", "a malformed manifest must not half-apply");
         dto.Should().NotContain("Owner", "the heuristic remains in force");
     }
 
@@ -198,14 +232,16 @@ public class GenerateDtosManifestNavigationTests
             }
             """,
             """
-            version 1
-            entity ManifestNav.Parent
-            scalar Id
+            {
+              "version": 1,
+              "entities": [ { "clrType": "ManifestNav.Parent", "scalar": ["Id"] } ]
+            }
             """,
             """
-            version 1
-            entity ManifestNav.Parent
-            scalar Name
+            {
+              "version": 1,
+              "entities": [ { "clrType": "ManifestNav.Parent", "scalar": ["Name"] } ]
+            }
             """);
 
         dto.Should().Contain("Id");
