@@ -258,10 +258,28 @@ owned references, or skip navigations.
 
 ### 1. Register the design-time services (startup project)
 
+The attribute goes in the **startup project** — the one you pass to `dotnet ef` via
+`--startup-project` (or the current project if you don't pass one). It's an assembly-level
+attribute, so any compiled `.cs` file works; conventionally `Properties/AssemblyInfo.cs` or a
+small dedicated file:
+
 ```csharp
 [assembly: Microsoft.EntityFrameworkCore.Design.DesignTimeServicesReference(
     "Facet.Extensions.EFCore.Design.FacetDesignTimeServices, Facet.Extensions.EFCore")]
 ```
+
+Or, with no new file, generate it from the startup project's `.csproj`:
+
+```xml
+<ItemGroup>
+  <AssemblyAttribute Include="Microsoft.EntityFrameworkCore.Design.DesignTimeServicesReference">
+    <_Parameter1>Facet.Extensions.EFCore.Design.FacetDesignTimeServices, Facet.Extensions.EFCore</_Parameter1>
+  </AssemblyAttribute>
+</ItemGroup>
+```
+
+The startup project must reference `Facet.Extensions.EFCore` (directly or transitively) so
+the assembly named in the attribute is present in its output for `dotnet ef` to load.
 
 ### 2. Expose the manifest to the generator (project with [GenerateDtos] attributes)
 
