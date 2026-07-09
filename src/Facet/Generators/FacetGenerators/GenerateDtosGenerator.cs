@@ -84,13 +84,26 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             .Where(static m => m is not null)
             .SelectMany(static (models, _) => models!);
 
+        // EF model manifests (*.facetmodel, written beside the model snapshot by
+        // Facet.Extensions.EFCore on every migrations add/remove) upgrade
+        // ExcludeNavigationProperties from the same-assembly heuristic to the EF model's own
+        // designation. AdditionalFiles are invisible to the syntax transform, so the transform
+        // only marks heuristic candidates and the final member set is resolved here.
+        var efModelManifest = context.AdditionalTextsProvider
+            .Where(static file => file.Path.EndsWith(EfModelManifest.FileExtension, StringComparison.OrdinalIgnoreCase))
+            .Select(static (file, token) => file.GetText(token)?.ToString() ?? string.Empty)
+            .Collect()
+            .Select(static (texts, _) => EfModelManifest.Parse(texts));
+
         var allTargets = generateDtosTargets.Collect()
             .Combine(generateAuditableDtosTargets.Collect())
             .Combine(generateDtosForTargets.Collect())
-            .Select(static (combined, _) => combined.Left.Left.Concat(combined.Left.Right).Concat(combined.Right));
+            .Select(static (combined, _) => combined.Left.Left.Concat(combined.Left.Right).Concat(combined.Right))
+            .Combine(efModelManifest);
 
-        context.RegisterSourceOutput(allTargets, (spc, models) =>
+        context.RegisterSourceOutput(allTargets, (spc, pair) =>
         {
+            var (models, manifest) = pair;
             var modelList = models.Where(m => m != null).Cast<GenerateDtosTargetModel>().ToList();
 
             // The Optional<T> JSON converter is generated (not shipped in Facet.Attributes)
@@ -111,10 +124,13 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 spc.AddSource("FacetOptionalNewtonsoftJsonSupport.g.cs", SourceText.From(OptionalNewtonsoftJsonSupportSource, Encoding.UTF8));
             }
 
-            foreach (var model in modelList)
+            foreach (var pendingModel in modelList)
             {
+                if (pendingModel != null)
                 {
                     spc.CancellationToken.ThrowIfCancellationRequested();
+
+                    var model = ResolveNavigationExclusions(pendingModel, manifest);
 
                     if (model.Issue != OutputTypeIssue.None)
                     {
@@ -272,6 +288,9 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 model.ExcludeProperties,
                 model.Members,
                 model.UseFullName,
+                model.ExcludeNavigationProperties,
+                model.IncludeProperties,
+                model.HeuristicNavigationProperties,
                 siblingMask,
                 model.Issue,
                 model.SupportsSystemTextJson,
@@ -347,6 +366,11 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
             var allMembersWithModifiers = GeneratorUtilities.GetAllMembersWithModifiers(sourceSymbol);
 
+            // Heuristic navigation candidates are only marked here, not dropped: the final
+            // decision belongs to the generation stage, where the EF model manifest (an
+            // AdditionalFile, unavailable in this transform) can override the heuristic.
+            var heuristicNavigationProperties = new List<string>();
+
             foreach (var (member, isInitOnly, isRequired) in allMembersWithModifiers)
             {
                 token.ThrowIfCancellationRequested();
@@ -357,7 +381,10 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 {
                     if (excludeNavigationProperties
                         && !includeProperties.Contains(p.Name)
-                        && IsNavigationProperty(p.Type, sourceSymbol.ContainingAssembly)) continue;
+                        && IsNavigationProperty(p.Type, sourceSymbol.ContainingAssembly))
+                    {
+                        heuristicNavigationProperties.Add(p.Name);
+                    }
 
                     members.Add(CreateGenerateDtoMember(
                         p.Name,
@@ -403,6 +430,9 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 excludeProperties.ToImmutableArray(),
                 members.ToImmutableArray(),
                 useFullName,
+                excludeNavigationProperties,
+                includeProperties.ToImmutableArray(),
+                heuristicNavigationProperties.ToImmutableArray(),
                 supportsSystemTextJson: supportsSystemTextJson,
                 supportsNewtonsoftJson: supportsNewtonsoftJson);
         }
@@ -1527,6 +1557,43 @@ internal sealed class OptionalNewtonsoftJsonConverter : JsonConverter
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Resolves the pending ExcludeNavigationProperties decision into a final member list.
+    /// When the source type has an EF model manifest entry (*.facetmodel AdditionalFile), the
+    /// model's own designation wins: exactly the mapped scalar and complex properties are
+    /// kept, so navigations, skip navigations, owned references, AND EF-ignored properties
+    /// all drop — including cases the symbol heuristic cannot see (value-converted
+    /// entity-typed columns stay, [NotMapped] scalars go). Types not in any manifest fall
+    /// back to the heuristic marks recorded in the transform. IncludeProperties survives
+    /// both paths.
+    /// </summary>
+    private static GenerateDtosTargetModel ResolveNavigationExclusions(GenerateDtosTargetModel model, EfModelManifest manifest)
+    {
+        if (!model.ExcludeNavigationProperties)
+        {
+            return model;
+        }
+
+        var includeProperties = new HashSet<string>(model.IncludeProperties, StringComparer.OrdinalIgnoreCase);
+
+        var sourceClrName = Shared.GeneratorUtilities.StripGlobalPrefix(model.SourceTypeName);
+        if (manifest.TryGetKeepSet(sourceClrName, out var keepSet))
+        {
+            // Fields are not EF-mapped members; the manifest has no opinion on them, so they
+            // keep the behavior IncludeFields already gave them.
+            return model.WithResolvedMembers(model.Members
+                .Where(m => m.Kind != FacetMemberKind.Property
+                    || keepSet!.Contains(m.Name)
+                    || includeProperties.Contains(m.Name))
+                .ToImmutableArray());
+        }
+
+        var heuristicDrops = new HashSet<string>(model.HeuristicNavigationProperties, StringComparer.Ordinal);
+        return model.WithResolvedMembers(model.Members
+            .Where(m => !heuristicDrops.Contains(m.Name))
+            .ToImmutableArray());
     }
 
     /// <summary>

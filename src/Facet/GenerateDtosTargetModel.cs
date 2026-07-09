@@ -33,6 +33,26 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
     public ImmutableArray<FacetMember> Members { get; }
     public bool UseFullName { get; }
     /// <summary>
+    /// Whether the attribute requested navigation-property exclusion. Members are NOT yet
+    /// filtered for navigations when this is set: the transform only marks candidates (see
+    /// <see cref="HeuristicNavigationProperties"/>), and the generation stage resolves the
+    /// final member set — from the EF model manifest when the source type is listed there,
+    /// from the heuristic marks otherwise. Deferring the decision is what lets AdditionalFiles
+    /// (unavailable in the syntax transform) participate.
+    /// </summary>
+    public bool ExcludeNavigationProperties { get; }
+    /// <summary>
+    /// The attribute's IncludeProperties escape hatch, kept on the model because manifest-based
+    /// filtering happens after the transform and must still honor forced inclusions.
+    /// </summary>
+    public ImmutableArray<string> IncludeProperties { get; }
+    /// <summary>
+    /// Member names the same-assembly navigation heuristic would drop, recorded in the
+    /// transform (where symbols are available) and applied in the generation stage when the
+    /// source type has no EF model manifest entry.
+    /// </summary>
+    public ImmutableArray<string> HeuristicNavigationProperties { get; }
+    /// <summary>
     /// The set of DTO type bits for which a sibling <see cref="OutputType.Interface"/> output on the
     /// same source type generates a matching interface (same Prefix/Suffix/Namespace, overlapping
     /// <see cref="DtoTypes"/>) — whether from a separate attribute or from a flags-combined
@@ -76,6 +96,9 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         ImmutableArray<string> excludeProperties,
         ImmutableArray<FacetMember> members,
         bool useFullName,
+        bool excludeNavigationProperties = false,
+        ImmutableArray<string> includeProperties = default,
+        ImmutableArray<string> heuristicNavigationProperties = default,
         DtoTypes siblingInterfaceTypes = DtoTypes.None,
         OutputTypeIssue issue = OutputTypeIssue.None,
         bool supportsSystemTextJson = false,
@@ -95,6 +118,9 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         ExcludeProperties = excludeProperties;
         Members = members;
         UseFullName = useFullName;
+        ExcludeNavigationProperties = excludeNavigationProperties;
+        IncludeProperties = includeProperties.IsDefault ? ImmutableArray<string>.Empty : includeProperties;
+        HeuristicNavigationProperties = heuristicNavigationProperties.IsDefault ? ImmutableArray<string>.Empty : heuristicNavigationProperties;
         SiblingInterfaceTypes = siblingInterfaceTypes;
         Issue = issue;
         SupportsSystemTextJson = supportsSystemTextJson;
@@ -122,6 +148,40 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             ExcludeProperties,
             Members,
             UseFullName,
+            ExcludeNavigationProperties,
+            IncludeProperties,
+            HeuristicNavigationProperties,
+            SiblingInterfaceTypes,
+            Issue,
+            SupportsSystemTextJson,
+            SupportsNewtonsoftJson);
+    }
+
+    /// <summary>
+    /// Returns a copy of this model with the final, navigation-filtered member list, used by
+    /// the generation stage once manifest-or-heuristic exclusion is resolved. The navigation
+    /// bookkeeping fields are cleared: they exist only to carry the pending decision.
+    /// </summary>
+    public GenerateDtosTargetModel WithResolvedMembers(ImmutableArray<FacetMember> members)
+    {
+        return new GenerateDtosTargetModel(
+            SourceTypeName,
+            SourceNamespace,
+            TargetNamespace,
+            Types,
+            OutputType,
+            Prefix,
+            Suffix,
+            IncludeFields,
+            GenerateConstructors,
+            GenerateProjections,
+            ConvertEnumsTo,
+            ExcludeProperties,
+            members,
+            UseFullName,
+            excludeNavigationProperties: false,
+            includeProperties: IncludeProperties,
+            heuristicNavigationProperties: ImmutableArray<string>.Empty,
             SiblingInterfaceTypes,
             Issue,
             SupportsSystemTextJson,
@@ -149,6 +209,9 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             ExcludeProperties,
             Members,
             UseFullName,
+            ExcludeNavigationProperties,
+            IncludeProperties,
+            HeuristicNavigationProperties,
             SiblingInterfaceTypes,
             issue,
             SupportsSystemTextJson,
@@ -174,6 +237,9 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             && ExcludeProperties.SequenceEqual(other.ExcludeProperties)
             && Members.SequenceEqual(other.Members)
             && UseFullName == other.UseFullName
+            && ExcludeNavigationProperties == other.ExcludeNavigationProperties
+            && IncludeProperties.SequenceEqual(other.IncludeProperties)
+            && HeuristicNavigationProperties.SequenceEqual(other.HeuristicNavigationProperties)
             && SiblingInterfaceTypes == other.SiblingInterfaceTypes
             && Issue == other.Issue
             && SupportsSystemTextJson == other.SupportsSystemTextJson
@@ -199,12 +265,19 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             hash = hash * 31 + GenerateProjections.GetHashCode();
             hash = hash * 31 + (ConvertEnumsTo?.GetHashCode() ?? 0);
             hash = hash * 31 + UseFullName.GetHashCode();
+            hash = hash * 31 + ExcludeNavigationProperties.GetHashCode();
             hash = hash * 31 + SiblingInterfaceTypes.GetHashCode();
             hash = hash * 31 + Issue.GetHashCode();
             hash = hash * 31 + SupportsSystemTextJson.GetHashCode();
             hash = hash * 31 + SupportsNewtonsoftJson.GetHashCode();
 
             foreach (var prop in ExcludeProperties)
+                hash = hash * 31 + prop.GetHashCode();
+
+            foreach (var prop in IncludeProperties)
+                hash = hash * 31 + prop.GetHashCode();
+
+            foreach (var prop in HeuristicNavigationProperties)
                 hash = hash * 31 + prop.GetHashCode();
 
             foreach (var member in Members)

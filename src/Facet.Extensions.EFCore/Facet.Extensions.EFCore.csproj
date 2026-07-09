@@ -4,7 +4,7 @@
         <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
         <IsPackable>true</IsPackable>
         <PackageId>Facet.Extensions.EFCore</PackageId>
-        <Description>EF Core async extension methods for Facet.</Description>
+        <Description>EF Core async extension methods and design-time services (EF model manifest for navigation-aware DTO generation) for Facet.</Description>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <Title>Facet.Extensions.EFCore</Title>
         <PackageProjectUrl>https://www.github.com/Tim-Maes/Facet</PackageProjectUrl>
@@ -12,6 +12,13 @@
 
     <ItemGroup>
         <PackageReference Include="Microsoft.EntityFrameworkCore" />
+        <!--
+          Design-time-only surface (IDesignTimeServices, MigrationsScaffolder) used by the
+          Design/ folder. EFCore.Design marks itself developmentDependency, so it does not
+          flow to consumers as a package dependency; 'dotnet ef' loads it into the
+          design-time host itself, which is the only time the Design/ types are touched.
+        -->
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
         <ProjectReference Include="..\Facet.Extensions\Facet.Extensions.csproj" />
     </ItemGroup>
 
