@@ -21,6 +21,5 @@
     <CompilerVisibleProperty Include="Facet_MaxDepth" />
     <CompilerVisibleProperty Include="Facet_MaxDepthToSource" />
     <CompilerVisibleProperty Include="Facet_PreserveReferences" />
-    <CompilerVisibleProperty Include="Facet_RequireEfModelManifest" />
   </ItemGroup>
 </Project>

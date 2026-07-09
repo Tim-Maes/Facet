@@ -3,16 +3,16 @@ using System.Text;
 using Facet.Generators;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Text;
 
 namespace Facet.Tests.UnitTests.Core.GenerateDtos;
 
 /// <summary>
-/// Manifest failures are loud, never silent fallbacks: FAC103 (unreadable file), FAC104
-/// (unsupported version), FAC105 (source type missing while manifests exist), FAC106
-/// (settable property unknown to the model — stale manifest). The only silent state is
-/// having no manifests at all, which is tier-1 behavior by design.
+/// ExcludeNavigationProperties is manifest-driven with no heuristic fallback, so every failure
+/// is loud: FAC103 (unreadable file), FAC104 (unsupported version), FAC105 (source type has no
+/// manifest entry — a hard error), FAC106 (settable property unknown to the model, i.e. a stale
+/// manifest — a warning). A type with no manifest coverage cannot be shaped, so FAC105 fires
+/// whether or not any manifest is present.
 /// </summary>
 public class GenerateDtosManifestDiagnosticsTests
 {
@@ -31,32 +31,7 @@ public class GenerateDtosManifestDiagnosticsTests
         public override SourceText GetText(CancellationToken cancellationToken = default) => _text;
     }
 
-    private sealed class GlobalOptions(bool requireManifest) : AnalyzerConfigOptions
-    {
-        public override bool TryGetValue(string key, out string value)
-        {
-            if (requireManifest && key == "build_property.Facet_RequireEfModelManifest")
-            {
-                value = "true";
-                return true;
-            }
-
-            value = null!;
-            return false;
-        }
-    }
-
-    private sealed class OptionsProvider(bool requireManifest) : AnalyzerConfigOptionsProvider
-    {
-        public override AnalyzerConfigOptions GlobalOptions { get; } = new GlobalOptions(requireManifest);
-        public override AnalyzerConfigOptions GetOptions(SyntaxTree tree) => new GlobalOptions(requireManifest);
-        public override AnalyzerConfigOptions GetOptions(AdditionalText textFile) => new GlobalOptions(requireManifest);
-    }
-
     private static ImmutableArray<Diagnostic> RunGenerator(string source, params string[] manifests)
-        => RunGenerator(source, requireManifest: false, manifests);
-
-    private static ImmutableArray<Diagnostic> RunGenerator(string source, bool requireManifest, params string[] manifests)
     {
         var references = AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
@@ -70,8 +45,7 @@ public class GenerateDtosManifestDiagnosticsTests
             .ToArray();
         var driver = CSharpGeneratorDriver.Create(
             new[] { new GenerateDtosGeneratorHoist(new GenerateDtosGenerator()).AsSourceGenerator() },
-            additionalTexts,
-            optionsProvider: new OptionsProvider(requireManifest));
+            additionalTexts);
         return driver.RunGeneratorsAndUpdateCompilation(compilation, out _, out _)
             .GetRunResult().Diagnostics;
     }
@@ -127,6 +101,18 @@ public class GenerateDtosManifestDiagnosticsTests
     }
 
     [Fact]
+    public void NoManifestAtAll_ReportsFac105_Error()
+    {
+        var diagnostics = RunGenerator(ParentWithNav);
+
+        var fac105 = diagnostics.Should().ContainSingle(d => d.Id == "FAC105").Subject;
+        fac105.Severity.Should().Be(DiagnosticSeverity.Error,
+            "with no heuristic fallback, an ExcludeNavigationProperties type with no manifest cannot be shaped");
+        fac105.Location.Should().NotBe(Location.None, "the error must anchor to the attribute so it is #pragma-suppressible");
+        fac105.Location.GetLineSpan().Path.Should().Be("Entities.cs");
+    }
+
+    [Fact]
     public void TypeMissingFromManifest_ReportsFac105_AtTheAttribute()
     {
         var diagnostics = RunGenerator(ParentWithNav, """
@@ -137,9 +123,8 @@ public class GenerateDtosManifestDiagnosticsTests
             """);
 
         var fac105 = diagnostics.Should().ContainSingle(d => d.Id == "FAC105").Subject;
-        fac105.Severity.Should().Be(DiagnosticSeverity.Warning);
+        fac105.Severity.Should().Be(DiagnosticSeverity.Error);
         fac105.GetMessage().Should().Contain("Parent");
-        fac105.Location.Should().NotBe(Location.None, "the warning must be anchored to the attribute so it is #pragma-suppressible");
         fac105.Location.GetLineSpan().Path.Should().Be("Entities.cs");
     }
 
@@ -155,16 +140,26 @@ public class GenerateDtosManifestDiagnosticsTests
                 public int Id { get; set; }
                 public Child? Owner { get; set; }
             }
-            """,
-            """
-            {
-              "version": 1,
-              "entities": [ { "clrType": "ManifestDiag.SomeOtherType", "scalar": ["Id"] } ]
-            }
             """);
 
         diagnostics.Where(d => d.Id == "FAC105").Should().HaveCount(1,
-            "attribute expansion into multiple output kinds must not multiply coverage warnings");
+            "attribute expansion into multiple output kinds must not multiply coverage errors");
+    }
+
+    [Fact]
+    public void TypeWithoutExcludeNavigation_NeedsNoManifest()
+    {
+        var diagnostics = RunGenerator(Entities + """
+            [GenerateDtos(Types = DtoTypes.Update)]
+            public class Parent
+            {
+                public int Id { get; set; }
+                public Child? Owner { get; set; }
+            }
+            """);
+
+        diagnostics.Should().NotContain(d => d.Id == "FAC105",
+            "the manifest is only required for types that opted into ExcludeNavigationProperties");
     }
 
     [Fact]
@@ -233,71 +228,11 @@ public class GenerateDtosManifestDiagnosticsTests
     }
 
     [Fact]
-    public void NoManifestsAtAll_IsSilent()
-    {
-        var diagnostics = RunGenerator(ParentWithNav);
-
-        diagnostics.Should().NotContain(d => d.Id == "FAC103" || d.Id == "FAC104" || d.Id == "FAC105" || d.Id == "FAC106",
-            "the zero-infrastructure heuristic tier is the documented default, not a degradation");
-    }
-
-    [Fact]
-    public void StrictMode_NoManifestsAtAll_ReportsFac107()
-    {
-        var diagnostics = RunGenerator(ParentWithNav, requireManifest: true);
-
-        var fac107 = diagnostics.Should().ContainSingle(d => d.Id == "FAC107").Subject;
-        fac107.Severity.Should().Be(DiagnosticSeverity.Error);
-        fac107.GetMessage().Should().Contain("Parent");
-        fac107.Location.Should().NotBe(Location.None, "the error must anchor to the attribute");
-        diagnostics.Should().NotContain(d => d.Id == "FAC105", "strict mode replaces the FAC105 advisory with the FAC107 error");
-    }
-
-    [Fact]
-    public void StrictMode_TypeMissingFromManifest_ReportsFac107()
-    {
-        var diagnostics = RunGenerator(ParentWithNav, requireManifest: true, """
-            {
-              "version": 1,
-              "entities": [ { "clrType": "ManifestDiag.SomeOtherType", "scalar": ["Id"] } ]
-            }
-            """);
-
-        diagnostics.Should().ContainSingle(d => d.Id == "FAC107")
-            .Which.Severity.Should().Be(DiagnosticSeverity.Error);
-    }
-
-    [Fact]
-    public void StrictMode_CoveredType_IsQuiet()
-    {
-        var diagnostics = RunGenerator(ParentWithNav, requireManifest: true, CompleteParentManifest);
-
-        diagnostics.Should().NotContain(d => d.Id == "FAC107" || d.Id == "FAC105",
-            "a covered type satisfies the requirement");
-    }
-
-    [Fact]
-    public void StrictMode_TypeWithoutExcludeNavigation_IsUnaffected()
-    {
-        var diagnostics = RunGenerator(Entities + """
-            [GenerateDtos(Types = DtoTypes.Update)]
-            public class Parent
-            {
-                public int Id { get; set; }
-                public Child? Owner { get; set; }
-            }
-            """, requireManifest: true);
-
-        diagnostics.Should().NotContain(d => d.Id == "FAC107",
-            "the requirement only applies to types that opted into ExcludeNavigationProperties");
-    }
-
-    [Fact]
     public void CompleteManifest_IsQuiet()
     {
         var diagnostics = RunGenerator(ParentWithNav, CompleteParentManifest);
 
         diagnostics.Should().NotContain(d => d.Id.StartsWith("FAC10"),
-            "a manifest that covers everything produces no coverage noise");
+            "a manifest that covers the type produces no coverage noise");
     }
 }

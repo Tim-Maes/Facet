@@ -11,5 +11,5 @@ FAC101 | Generator | Error | GenerateDtos OutputType combines multiple concrete 
 FAC102 | Generator | Error | GenerateDtos OutputType sets the Partial modifier without an output kind
 FAC103 | Generator | Error | EF model manifest could not be read
 FAC104 | Generator | Error | EF model manifest version is not supported
-FAC105 | Generator | Warning | GenerateDtos source type is not in the EF model manifest
+FAC105 | Generator | Error | GenerateDtos source type is not in the EF model manifest (no heuristic fallback)
 FAC106 | Generator | Warning | Property is unknown to the EF model manifest

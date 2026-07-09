@@ -7,11 +7,11 @@ using Microsoft.CodeAnalysis.Text;
 namespace Facet.Tests.UnitTests.Core.GenerateDtos;
 
 /// <summary>
-/// ExcludeNavigationProperties with an EF model manifest (*.facetmodel.json AdditionalFile):
-/// the model's own designation replaces the same-assembly heuristic — mapped scalars are
-/// kept, navigations AND EF-ignored properties drop, value-converted entity-typed columns
-/// survive — while unlisted types, unsupported manifest versions, malformed files, and
-/// IncludeProperties keep their existing behavior.
+/// ExcludeNavigationProperties is driven entirely by the EF model manifest
+/// (*.facetmodel.json AdditionalFile): mapped scalars are kept, navigations AND EF-ignored
+/// properties drop, value-converted entity-typed columns survive, and IncludeProperties forces
+/// members back in. There is no heuristic fallback — an uncovered type drops nothing and is a
+/// FAC105 error (see GenerateDtosManifestDiagnosticsTests).
 /// </summary>
 public class GenerateDtosManifestNavigationTests
 {
@@ -93,8 +93,8 @@ public class GenerateDtosManifestNavigationTests
     [Fact]
     public void Manifest_KeepsValueConvertedEntityTypedProperty()
     {
-        // Money is a same-assembly class, so the heuristic calls it a navigation — but the
-        // model maps it as a scalar column (value converter). The manifest must win.
+        // Money is an entity-shaped class, but the model maps it as a scalar column (value
+        // converter) — a designation only the manifest can carry.
         var dto = GenerateUpdateDto(Entities + """
             [GenerateDtos(Types = DtoTypes.Update, ExcludeNavigationProperties = true)]
             public class Parent
@@ -118,8 +118,11 @@ public class GenerateDtosManifestNavigationTests
     }
 
     [Fact]
-    public void TypeNotInManifest_FallsBackToHeuristic()
+    public void TypeNotInManifest_DropsNothing_AndIsAnError()
     {
+        // No heuristic fallback: an uncovered type can't be shaped, so every member is kept
+        // (so downstream code still compiles) and FAC105 is the signal — see
+        // GenerateDtosManifestDiagnosticsTests for the diagnostic assertion.
         var dto = GenerateUpdateDto(Entities + """
             [GenerateDtos(Types = DtoTypes.Update, ExcludeNavigationProperties = true)]
             public class Parent
@@ -138,8 +141,8 @@ public class GenerateDtosManifestNavigationTests
             }
             """);
 
-        dto.Should().NotContain("Owner", "the heuristic still drops same-assembly class-typed properties");
-        dto.Should().Contain("LegacyBlob", "without a manifest entry there is no way to know the model ignores it");
+        dto.Should().Contain("Owner", "with no manifest entry there is no designation to drop it by");
+        dto.Should().Contain("LegacyBlob");
     }
 
     [Fact]
@@ -164,40 +167,17 @@ public class GenerateDtosManifestNavigationTests
             }
             """);
 
-        dto.Should().Contain("Items", "IncludeProperties is the aggregate-children escape hatch in both tiers");
+        dto.Should().Contain("Items", "IncludeProperties is the aggregate-children escape hatch");
         dto.Should().NotContain("Owner");
-    }
-
-    [Fact]
-    public void UnsupportedManifestVersion_FallsBackToHeuristic()
-    {
-        var dto = GenerateUpdateDto(Entities + """
-            [GenerateDtos(Types = DtoTypes.Update, ExcludeNavigationProperties = true)]
-            public class Parent
-            {
-                public int Id { get; set; }
-                public string? LegacyBlob { get; set; }
-                public Child? Owner { get; set; }
-            }
-            """,
-            """
-            {
-              "version": 2,
-              "entities": [
-                { "clrType": "ManifestNav.Parent", "scalar": ["Id"] }
-              ]
-            }
-            """);
-
-        dto.Should().Contain("LegacyBlob", "a future-version manifest is ignored rather than misread");
-        dto.Should().NotContain("Owner", "the heuristic remains in force");
     }
 
     [Fact]
     public void MalformedManifest_IsIgnoredAtomically()
     {
-        // The file names Parent and then breaks: no partial application is allowed — an
-        // entity registered with an accidental empty keep-set would drop every property.
+        // The file names Parent and then breaks: no partial application is allowed — an entity
+        // registered with an accidental empty keep-set would drop every property. The whole
+        // file is discarded, so Parent is uncovered: nothing is dropped (and FAC103/FAC105
+        // fire — see the diagnostics tests).
         var dto = GenerateUpdateDto(Entities + """
             [GenerateDtos(Types = DtoTypes.Update, ExcludeNavigationProperties = true)]
             public class Parent
@@ -215,8 +195,8 @@ public class GenerateDtosManifestNavigationTests
             """);
 
         dto.Should().Contain("Id");
-        dto.Should().Contain("LegacyBlob", "a malformed manifest must not half-apply");
-        dto.Should().NotContain("Owner", "the heuristic remains in force");
+        dto.Should().Contain("LegacyBlob");
+        dto.Should().Contain("Owner", "a malformed manifest is discarded in full — no partial application, no guessing");
     }
 
     [Fact]
