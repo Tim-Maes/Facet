@@ -482,7 +482,16 @@ For any source type listed in a manifest, `ExcludeNavigationProperties = true` n
 - a same-assembly class stored through a **value converter** is kept, because the model maps it as a column;
 - a scalar-looking property the model **ignores** (`[NotMapped]`, `Ignore(...)`) is dropped, because it isn't data.
 
-Owned references, skip navigations (many-to-many), and shadow-only members drop by construction. `IncludeProperties` still forces aggregate children back in, and types not listed in any manifest (non-EF classes, projections) silently keep the heuristic behavior — the manifest is an upgrade, not a requirement. Because the manifest is only rewritten when migrations are, a newly mapped property joins DTOs when you add its migration — the same workflow that keeps the snapshot honest keeps DTO shapes honest.
+Owned references, skip navigations (many-to-many), and shadow-only members drop by construction, and `IncludeProperties` still forces aggregate children back in.
+
+**Failures are loud, not silent.** The only silent state is having no manifests at all (tier 1, by design). Once manifests are present, every degradation carries a diagnostic:
+
+- **FAC103** (error) — a manifest file is malformed; it is ignored in full, never half-applied.
+- **FAC104** (error) — a manifest declares a version this generator doesn't read (package version mismatch).
+- **FAC105** (warning) — an `ExcludeNavigationProperties` source type isn't listed in any manifest; the heuristic is in effect. For genuinely non-entity source types, suppress it at the attribute with `#pragma warning disable FAC105`.
+- **FAC106** (warning) — a settable property on a listed type appears in none of the manifest's categories (mapped, navigation, owned, skip navigation, ignored, service): the manifest almost certainly predates the property, which would otherwise silently vanish from DTOs. Regenerate the manifest, or mark the property `[NotMapped]` if the model really doesn't map it.
+
+The diagnostics express the facts; MSBuild expresses your policy — strict teams escalate with `<WarningsAsErrors>$(WarningsAsErrors);FAC105;FAC106</WarningsAsErrors>`. Because the manifest is only rewritten when migrations are, adding a mapped property without its migration surfaces as FAC106 at compile time — the same workflow that keeps the snapshot honest keeps DTO shapes honest, and now it tells you when it's out of date.
 
 ## Obsolete: GenerateAuditableDtos Attribute
 

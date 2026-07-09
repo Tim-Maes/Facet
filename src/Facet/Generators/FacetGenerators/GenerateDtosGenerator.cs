@@ -57,6 +57,42 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         isEnabledByDefault: true,
         description: "The Partial flag only modifies how the requested kinds are emitted; on its own there is nothing to generate, which is more likely a mistake than an intentional no-op.");
 
+    private static readonly DiagnosticDescriptor ManifestMalformedRule = new DiagnosticDescriptor(
+        "FAC103",
+        "EF model manifest could not be read",
+        "EF model manifest '{0}' could not be read: {1}. The file is ignored in full; regenerate it (dotnet ef migrations add/remove) or remove it from AdditionalFiles.",
+        "Generator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "A committed *.facetmodel.json file wired up as an AdditionalFile is not readable as a manifest. Silently ignoring it would let ExcludeNavigationProperties degrade to the heuristic without any signal, so the failure is reported instead.");
+
+    private static readonly DiagnosticDescriptor ManifestVersionRule = new DiagnosticDescriptor(
+        "FAC104",
+        "EF model manifest version is not supported",
+        "EF model manifest '{0}' declares {1}. The file is ignored in full; align the Facet and Facet.Extensions.EFCore package versions and regenerate the manifest.",
+        "Generator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The manifest was written by a Facet.Extensions.EFCore version whose format this generator does not read — a package version mismatch. Silently ignoring it would let ExcludeNavigationProperties degrade to the heuristic without any signal.");
+
+    private static readonly DiagnosticDescriptor TypeNotInManifestRule = new DiagnosticDescriptor(
+        "FAC105",
+        "GenerateDtos source type is not in the EF model manifest",
+        "'{0}' sets ExcludeNavigationProperties but is not listed in any EF model manifest; the same-assembly heuristic is in effect. If it is an EF entity, regenerate the manifest (dotnet ef migrations add/remove); if it is not, suppress this warning for the type.",
+        "Generator",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Manifests are present, so the model's own navigation designation was expected — falling back to the heuristic is most likely a stale manifest or a CLR type name mismatch. For non-entity source types this is intentional and can be suppressed with #pragma warning disable FAC105 around the attribute, or escalated to an error with WarningsAsErrors for strict builds.");
+
+    private static readonly DiagnosticDescriptor PropertyNotInManifestRule = new DiagnosticDescriptor(
+        "FAC106",
+        "Property is unknown to the EF model manifest",
+        "Property '{0}' on '{1}' does not appear in the EF model manifest entry for the type — the manifest most likely predates the property, and it will be dropped from generated DTOs. Regenerate the manifest (dotnet ef migrations add/remove), or mark the property [NotMapped]/Ignore() if the model genuinely does not map it.",
+        "Generator",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "The manifest records every member the model has an opinion on (mapped, navigation, owned, skip navigation, ignored, service). A settable property outside that set is unknown to the model — almost always one added after the manifest was last generated, which would otherwise silently vanish from DTOs. Escalate with WarningsAsErrors for strict builds.");
+
     private static readonly HashSet<string> DefaultAuditFields = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
     {
         "CreatedDate", "UpdatedDate", "CreatedAt", "UpdatedAt",
@@ -101,14 +137,14 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         // only marks heuristic candidates and the final member set is resolved here.
         var efModelManifest = context.AdditionalTextsProvider
             .Where(static file => file.Path.EndsWith(EfModelManifest.FileExtension, StringComparison.OrdinalIgnoreCase))
-            .Select(static (file, token) => file.GetText(token)?.ToString() ?? string.Empty)
+            .Select(static (file, token) => (file.Path, Text: file.GetText(token)?.ToString() ?? string.Empty))
             .Collect()
-            .Select((texts, _) =>
+            .Select((files, _) =>
             {
-                var manifest = EfModelManifest.Parse(texts);
-                if (texts.Length > 0)
+                var manifest = EfModelManifest.Parse(files);
+                if (files.Length > 0)
                 {
-                    Logger.Debug($"EF model manifest: {manifest.EntityCount} entity types from {texts.Length} file(s)");
+                    Logger.Debug($"EF model manifest: {manifest.EntityCount} entity types from {files.Length} file(s), {manifest.Issues.Length} rejected");
                 }
 
                 return manifest;
@@ -143,19 +179,35 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                 spc.AddSource("FacetOptionalNewtonsoftJsonSupport.g.cs", SourceText.From(OptionalNewtonsoftJsonSupportSource, Encoding.UTF8));
             }
 
+            // A rejected manifest file is a broken build input, not a quiet fallback: report
+            // it once per compilation so heuristic behavior is never mistaken for manifest
+            // behavior.
+            foreach (var issue in manifest.Issues)
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    issue.Kind == ManifestIssueKind.UnsupportedVersion ? ManifestVersionRule : ManifestMalformedRule,
+                    Location.None,
+                    issue.FilePath,
+                    issue.Detail));
+            }
+
+            // Attribute expansion yields several models per attribute (one per output kind),
+            // so manifest-coverage warnings deduplicate per source type / property.
+            var reportedCoverage = new HashSet<string>(StringComparer.Ordinal);
+
             foreach (var pendingModel in modelList)
             {
                 if (pendingModel != null)
                 {
                     spc.CancellationToken.ThrowIfCancellationRequested();
 
-                    var model = ResolveNavigationExclusions(pendingModel, manifest);
+                    var model = ResolveNavigationExclusions(spc, pendingModel, manifest, reportedCoverage);
 
                     if (model.Issue != OutputTypeIssue.None)
                     {
                         spc.ReportDiagnostic(Diagnostic.Create(
                             model.Issue == OutputTypeIssue.PartialWithoutKind ? PartialWithoutKindRule : ConflictingOutputTypesRule,
-                            Location.None,
+                            model.AttributeLocation?.ToLocation() ?? Location.None,
                             GetSimpleTypeName(model.SourceTypeName),
                             model.OutputType.ToString()));
                         continue;
@@ -311,6 +363,8 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                 model.ExcludeNavigationProperties,
                 model.IncludeProperties,
                 model.HeuristicNavigationProperties,
+                model.SettableProperties,
+                model.AttributeLocation,
                 siblingMask,
                 model.Issue,
                 model.SupportsSystemTextJson,
@@ -391,6 +445,11 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
             // AdditionalFile, unavailable in this transform) can override the heuristic.
             var heuristicNavigationProperties = new List<string>();
 
+            // Properties EF could plausibly map (settable, or get-only collections), for the
+            // manifest completeness check (FAC106). Computed get-only properties are excluded:
+            // the model never maps them, so their absence from a manifest means nothing.
+            var settableProperties = new List<string>();
+
             foreach (var (member, isInitOnly, isRequired) in allMembersWithModifiers)
             {
                 token.ThrowIfCancellationRequested();
@@ -404,6 +463,12 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                         && IsNavigationProperty(p.Type, sourceSymbol.ContainingAssembly))
                     {
                         heuristicNavigationProperties.Add(p.Name);
+                    }
+
+                    if (excludeNavigationProperties
+                        && (p.SetMethod != null || GeneratorUtilities.TryGetCollectionElementType(p.Type, out _, out _)))
+                    {
+                        settableProperties.Add(p.Name);
                     }
 
                     members.Add(CreateGenerateDtoMember(
@@ -453,6 +518,8 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                 excludeNavigationProperties,
                 includeProperties.ToImmutableArray(),
                 heuristicNavigationProperties.ToImmutableArray(),
+                settableProperties.ToImmutableArray(),
+                SourceLocationInfo.FromAttribute(attribute),
                 supportsSystemTextJson: supportsSystemTextJson,
                 supportsNewtonsoftJson: supportsNewtonsoftJson);
         }
@@ -1585,11 +1652,18 @@ internal sealed class OptionalNewtonsoftJsonConverter : JsonConverter
     /// model's own designation wins: exactly the mapped scalar and complex properties are
     /// kept, so navigations, skip navigations, owned references, AND EF-ignored properties
     /// all drop — including cases the symbol heuristic cannot see (value-converted
-    /// entity-typed columns stay, [NotMapped] scalars go). Types not in any manifest fall
-    /// back to the heuristic marks recorded in the transform. IncludeProperties survives
+    /// entity-typed columns stay, [NotMapped] scalars go). IncludeProperties survives
     /// both paths.
+    /// The heuristic never runs silently alongside manifests: a listed type with a property
+    /// the model has no opinion on is reported as FAC106 (stale manifest), and an unlisted
+    /// type is reported as FAC105 before the heuristic marks recorded in the transform are
+    /// applied. Only the no-manifests-at-all tier is silent, by design.
     /// </summary>
-    private static GenerateDtosTargetModel ResolveNavigationExclusions(GenerateDtosTargetModel model, EfModelManifest manifest)
+    private static GenerateDtosTargetModel ResolveNavigationExclusions(
+        SgfSourceProductionContext spc,
+        GenerateDtosTargetModel model,
+        EfModelManifest manifest,
+        HashSet<string> reportedCoverage)
     {
         if (!model.ExcludeNavigationProperties)
         {
@@ -1599,15 +1673,36 @@ internal sealed class OptionalNewtonsoftJsonConverter : JsonConverter
         var includeProperties = new HashSet<string>(model.IncludeProperties, StringComparer.OrdinalIgnoreCase);
 
         var sourceClrName = Shared.GeneratorUtilities.StripGlobalPrefix(model.SourceTypeName);
-        if (manifest.TryGetKeepSet(sourceClrName, out var keepSet))
+        if (manifest.TryGetEntity(sourceClrName, out var entity))
         {
+            foreach (var propertyName in model.SettableProperties)
+            {
+                if (entity!.Known.Contains(propertyName)) continue;
+                if (includeProperties.Contains(propertyName)) continue;
+                if (!reportedCoverage.Add($"{sourceClrName}.{propertyName}")) continue;
+
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    PropertyNotInManifestRule,
+                    model.AttributeLocation?.ToLocation() ?? Location.None,
+                    propertyName,
+                    GetSimpleTypeName(model.SourceTypeName)));
+            }
+
             // Fields are not EF-mapped members; the manifest has no opinion on them, so they
             // keep the behavior IncludeFields already gave them.
             return model.WithResolvedMembers(model.Members
                 .Where(m => m.Kind != FacetMemberKind.Property
-                    || keepSet!.Contains(m.Name)
+                    || entity!.Keep.Contains(m.Name)
                     || includeProperties.Contains(m.Name))
                 .ToImmutableArray());
+        }
+
+        if (manifest.HasEntities && reportedCoverage.Add(sourceClrName))
+        {
+            spc.ReportDiagnostic(Diagnostic.Create(
+                TypeNotInManifestRule,
+                model.AttributeLocation?.ToLocation() ?? Location.None,
+                GetSimpleTypeName(model.SourceTypeName)));
         }
 
         var heuristicDrops = new HashSet<string>(model.HeuristicNavigationProperties, StringComparer.Ordinal);

@@ -24,6 +24,12 @@ Facet includes comprehensive Roslyn analyzers that provide real-time feedback in
 | [FAC016](#fac016) | Warning | Performance | Unusual MaxDepth in [Flatten] |
 | [FAC017](#fac017) | Info | Usage | LeafOnly naming collision risk |
 | [FAC022](#fac022) | Warning | SourceTracking | Source entity structure changed |
+| [FAC101](#fac101) | Error | Generator | OutputType combines multiple concrete kinds |
+| [FAC102](#fac102) | Error | Generator | OutputType sets Partial without a kind |
+| [FAC103](#fac103) | Error | Generator | EF model manifest could not be read |
+| [FAC104](#fac104) | Error | Generator | EF model manifest version not supported |
+| [FAC105](#fac105) | Warning | Generator | Source type not in the EF model manifest |
+| [FAC106](#fac106) | Warning | Generator | Property unknown to the EF model manifest |
 
 ---
 
@@ -482,6 +488,91 @@ public class Product { }
 [GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response)]
 public class Product { }
 ```
+
+---
+
+### FAC101
+
+**OutputType combines multiple concrete output kinds**
+
+- **Severity**: Error
+- **Category**: Generator
+
+`OutputType` is a flags value, but concrete kinds (Class, Record, Struct, RecordStruct) all generate identically-named types and would collide. Combine at most one concrete kind with `OutputType.Interface` and/or the `Partial` modifier.
+
+```csharp
+[GenerateDtos(OutputType = OutputType.Class | OutputType.Record)]     // ❌ FAC101
+[GenerateDtos(OutputType = OutputType.Interface | OutputType.Record)] // ✅ OK
+```
+
+---
+
+### FAC102
+
+**OutputType sets the Partial modifier without an output kind**
+
+- **Severity**: Error
+- **Category**: Generator
+
+`Partial` only modifies how requested kinds are emitted; on its own there is nothing to generate.
+
+```csharp
+[GenerateDtos(OutputType = OutputType.Partial)]                      // ❌ FAC102
+[GenerateDtos(OutputType = OutputType.Record | OutputType.Partial)]  // ✅ OK
+```
+
+---
+
+### FAC103
+
+**EF model manifest could not be read**
+
+- **Severity**: Error
+- **Category**: Generator
+
+A `*.facetmodel.json` file wired up as an AdditionalFile is not readable as a manifest (malformed JSON, wrong shape). The file is ignored in full — silently degrading `ExcludeNavigationProperties` to the heuristic would hide the breakage, so it is reported instead. Regenerate the manifest (`dotnet ef migrations add`/`remove`) or remove it from AdditionalFiles.
+
+---
+
+### FAC104
+
+**EF model manifest version is not supported**
+
+- **Severity**: Error
+- **Category**: Generator
+
+The manifest was written by a Facet.Extensions.EFCore version whose format this generator does not read — a package version mismatch. Align the Facet and Facet.Extensions.EFCore versions and regenerate the manifest.
+
+---
+
+### FAC105
+
+**GenerateDtos source type is not in the EF model manifest**
+
+- **Severity**: Warning
+- **Category**: Generator
+
+Manifests are present, so the model's own navigation designation was expected for this `ExcludeNavigationProperties` source type — falling back to the same-assembly heuristic usually means a stale manifest or a CLR type name mismatch. If the source type genuinely isn't an EF entity, suppress at the attribute:
+
+```csharp
+#pragma warning disable FAC105 // not an EF entity; heuristic intended
+[GenerateDtos(Types = DtoTypes.Response, ExcludeNavigationProperties = true)]
+#pragma warning restore FAC105
+public class DashboardProjection { }
+```
+
+For strict builds, escalate: `<WarningsAsErrors>$(WarningsAsErrors);FAC105;FAC106</WarningsAsErrors>`.
+
+---
+
+### FAC106
+
+**Property is unknown to the EF model manifest**
+
+- **Severity**: Warning
+- **Category**: Generator
+
+The manifest records every member the model has an opinion on (mapped, navigation, owned, skip navigation, ignored, service). A settable property outside that set is unknown to the model — almost always a property added after the manifest was last generated, which would otherwise silently vanish from generated DTOs. Regenerate the manifest, or mark the property `[NotMapped]`/`Ignore()` if the model genuinely does not map it (which also documents the intent).
 
 ---
 

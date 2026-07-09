@@ -30,15 +30,21 @@ namespace Facet.Extensions.EFCore.Design;
 ///       "complex": ["HomeAddress"],     // mapped complex/value-object members (kept)
 ///       "nav": ["Posts"],               // reference/collection navigations (dropped)
 ///       "owned": ["Settings"],          // owned references (dropped; IncludeProperties opts back in)
-///       "skipnav": ["Labels"]           // many-to-many skip navigations (dropped)
+///       "skipnav": ["Labels"],          // many-to-many skip navigations (dropped)
+///       "ignored": ["Secret"],          // explicitly ignored members ([NotMapped]/Ignore(); dropped)
+///       "service": ["Loader"]           // service properties (ILazyLoader etc.; dropped)
 ///     }
 ///   ]
 /// }
 /// </code>
-/// Readers ignore unknown properties, so the format can grow without breaking older
-/// generators; a changed <c>version</c> makes older readers ignore the file entirely.
-/// Properties of an entity's CLR type that appear in no array are EF-ignored and are
-/// dropped from DTOs as well.
+/// Together the categories enumerate every member the model has an opinion on, which is what
+/// lets the generator treat a settable property in none of them as a stale-manifest signal
+/// (FAC106) instead of silently dropping it. Readers ignore unknown properties, so the format
+/// can grow without breaking older generators; a changed <c>version</c> makes older readers
+/// ignore the file entirely.
+/// Ignored members are only recoverable from convention-capable models (the design-time
+/// model the migrations scaffolder sees, or a DbContext.Model built without a compiled
+/// model); on compiled models the category is omitted.
 /// </remarks>
 public static class FacetEfModelManifest
 {
@@ -82,6 +88,8 @@ public static class FacetEfModelManifest
                 WriteCategory(writer, "nav", entity.Value.Navigations);
                 WriteCategory(writer, "owned", entity.Value.OwnedNavigations);
                 WriteCategory(writer, "skipnav", entity.Value.SkipNavigations);
+                WriteCategory(writer, "ignored", entity.Value.IgnoredMembers);
+                WriteCategory(writer, "service", entity.Value.ServiceProperties);
                 writer.WriteEndObject();
             }
 
@@ -130,6 +138,8 @@ public static class FacetEfModelManifest
         public SortedSet<string> Navigations { get; } = new(StringComparer.Ordinal);
         public SortedSet<string> OwnedNavigations { get; } = new(StringComparer.Ordinal);
         public SortedSet<string> SkipNavigations { get; } = new(StringComparer.Ordinal);
+        public SortedSet<string> IgnoredMembers { get; } = new(StringComparer.Ordinal);
+        public SortedSet<string> ServiceProperties { get; } = new(StringComparer.Ordinal);
     }
 
     private static Dictionary<string, EntityRecord> CollectEntities(IModel model)
@@ -187,6 +197,24 @@ public static class FacetEfModelManifest
             {
                 if (skipNavigation.IsShadowProperty() || skipNavigation.PropertyInfo == null) continue;
                 record.SkipNavigations.Add(skipNavigation.Name);
+            }
+
+            foreach (var serviceProperty in entityType.GetServiceProperties())
+            {
+                if (serviceProperty.PropertyInfo == null) continue;
+                record.ServiceProperties.Add(serviceProperty.Name);
+            }
+
+            // Explicitly ignored members ([NotMapped]/Ignore()) are only exposed on the
+            // convention metadata surface, which the finalized (non-compiled) model still
+            // implements; the whole inheritance chain is walked because ignores configured
+            // on a base entity type are not repeated on derived ones.
+            for (var currentType = entityType as IConventionEntityType; currentType != null; currentType = currentType.BaseType)
+            {
+                foreach (var ignoredMember in currentType.GetIgnoredMembers())
+                {
+                    record.IgnoredMembers.Add(ignoredMember);
+                }
             }
         }
 
