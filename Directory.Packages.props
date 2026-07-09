@@ -65,6 +65,9 @@
 		<PackageVersion Include="System.Text.Json" Version="8.0.5" />
 
 		<!-- SourceLink for debugging support -->
+		<!-- Legacy efmodel.json reader in the resurrected Facet.Generation.Shared prototype -->
+		<PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
+
 		<PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.300" />
 
 		<!-- Testing Dependencies -->
