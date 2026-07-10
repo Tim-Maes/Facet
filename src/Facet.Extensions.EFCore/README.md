@@ -340,12 +340,50 @@ manifest refreshes automatically whenever migrations change.
 
 ### Step 3 — Wire the manifest into the generator: this is the switch
 
-If your `[GenerateDtos]` attributes live in the **same project as the `DbContext`**, there is
-nothing to do here: `FacetEfDesignTime` already wires the project's own manifests into the
-compilation.
+Take this multi-project solution as the running example:
 
-If they live in a different project (the usual layered setup), add the manifest there as an
-AdditionalFile — a relative path into the migrations project:
+```
+MyApp.sln
+├── Directory.Build.props                        ← (option C) one shared line wires everything below
+└── src/
+    ├── MyApp.Web/                               ← startup project (dotnet ef --startup-project)
+    ├── MyApp.Web.Common/                        ← [GenerateDtos] attributes; must SEE the manifest
+    ├── MyApp.Domain/                            ← entities
+    └── MyApp.Persistence/                       ← DbContext; FacetEfDesignTime = true
+        └── Migrations/
+            ├── AppDbContextModelSnapshot.cs
+            └── AppDbContext.facetmodel.json     ← written by dotnet ef, committed like the snapshot
+```
+
+The generator only sees manifests wired into the compiling project's `<AdditionalFiles>`.
+Where they come from depends on where your attributes live, best case first:
+
+**A. Same project as the `DbContext`** (attributes in `MyApp.Persistence`): nothing to do —
+`FacetEfDesignTime` already wires the project's own manifests.
+
+**B. The attribute project directly references the `DbContext` project**
+(`MyApp.Web.Common` → `MyApp.Persistence`): set `<FacetEfDesignTime>true</FacetEfDesignTime>`
+in `MyApp.Web.Common` too. The package's build target then pulls manifests from every direct
+`ProjectReference` — the knob is local to the project it affects, and the *path* comes from
+the reference you already maintain, so there is nothing to typo. (MSBuild properties never
+flow across project references, and evaluation-time item transforms don't expand wildcards,
+which is why this is a build target rather than a plain glob.)
+
+**C. Any layout at all** — including a `Web.Common` that references only `MyApp.Domain` and
+has no reference path to the manifest: put one line in a `Directory.Build.props` at the
+repo root. Every project underneath imports that file independently (MSBuild walks up the
+directory tree from each project — that's the mechanism, not property inheritance), and
+`$(MSBuildThisFileDirectory)` anchors the path to the props file itself, so it is identical
+for every project regardless of nesting depth:
+
+```xml
+<ItemGroup>
+  <AdditionalFiles Include="$(MSBuildThisFileDirectory)src/MyApp.Persistence/Migrations/*.facetmodel.json" />
+</ItemGroup>
+```
+
+**D. A hand-written relative glob** in the consuming project still works and stays the
+right tool for one-off wiring:
 
 ```xml
 <ItemGroup>
@@ -353,13 +391,13 @@ AdditionalFile — a relative path into the migrations project:
 </ItemGroup>
 ```
 
-This step cannot be automated away: a cross-project manifest path is knowledge only the
-consuming project has (nothing forces it to even reference the `DbContext` project). So get
-the path right — an `<AdditionalFiles>` glob that matches nothing is **silently empty**;
-MSBuild cannot tell a typo from an intentionally absent manifest, and the project just stays
-in unshaped mode with no diagnostic. The build-and-check below is what catches it. For a
-standing guarantee, pin `ExcludeNavigationProperties = true` on one representative entity:
-an explicitly shaped type turns "no manifest matched" into a hard FAC105.
+Overlap between any of these is harmless — the manifest reader merges duplicate files
+idempotently. For hand-written paths (C and D), get them right: an `<AdditionalFiles>` glob
+that matches nothing is **silently empty**; MSBuild cannot tell a typo from an intentionally
+absent manifest, and the project just stays in unshaped mode with no diagnostic. The
+build-and-check below is what catches it. For a standing guarantee, pin
+`ExcludeNavigationProperties = true` on one representative entity: an explicitly shaped type
+turns "no manifest matched" into a hard FAC105.
 
 Wiring the manifest is the opt-in. From this build on, **every `[GenerateDtos]` DTO in the
 project is shaped by the model** — no per-attribute flag:
