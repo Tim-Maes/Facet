@@ -80,11 +80,19 @@ now applies via the model manifest.
 
 ## Modernization path
 
+> Superseded in part by
+> [INTERACTION-WITH-MODEL-MANIFEST.md](INTERACTION-WITH-MODEL-MANIFEST.md), written after
+> this branch was rebased onto the manifest work: it maps each prototype piece to its #399
+> replacement, identifies `keys` as the one real manifest-schema gap (navigation targets and
+> cardinality resolve from Roslyn symbols instead), and works through the unified knob
+> surface.
+
 1. **Retarget the model input**: replace `EfJsonReader`/`ModelRoot` (Newtonsoft, legacy
    `efmodel.json`) with the `*.facetmodel.json` manifest reader (`System.Text.Json` under
-   SGF-embedded dependencies) — the manifest already records navigations with target and
-   cardinality per entity, which is everything the emitters consume `ModelRoot` for. This
-   also deletes this project's Newtonsoft dependency.
+   SGF-embedded dependencies) — the manifest records which properties are navigations;
+   targets and cardinality resolve from the entity's Roslyn symbols, and entity `keys` are
+   the one field the manifest schema still needs to grow (additively — no version bump).
+   This also deletes this project's Newtonsoft dependency.
 2. **SGF-host the generator**: `FacetEfGenerator` becomes an SGF `IncrementalGenerator`
    (exception isolation, logging, embedded deps), like `GenerateDtosGenerator`.
 3. **Finish `SelectorsEmitter`** projections and builder terminals per
