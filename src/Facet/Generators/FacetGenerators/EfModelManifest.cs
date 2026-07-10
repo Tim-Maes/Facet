@@ -54,9 +54,6 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
     /// <summary>Number of entity CLR types listed across all accepted manifest files.</summary>
     public int EntityCount => _entities.Count;
 
-    /// <summary>Whether any accepted manifest content exists (gates FAC105).</summary>
-    public bool HasEntities => _entities.Count > 0;
-
     /// <summary>
     /// Looks up the manifest entry for a CLR type name (namespace-qualified, dot-separated —
     /// matching Roslyn display strings). Returns false for types no manifest lists. An empty
