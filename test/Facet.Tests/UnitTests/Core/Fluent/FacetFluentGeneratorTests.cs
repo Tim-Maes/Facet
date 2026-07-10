@@ -396,6 +396,45 @@ public class FacetFluentGeneratorTests
     }
 
     [Fact]
+    public void ObsoleteEntityMembers_DoNotLeakWarningsFromGeneratedCode()
+    {
+        // The model maps [Obsolete] members like any other; the projection must reference
+        // them without tripping CS0618/CS0612 in consumers that treat warnings as errors.
+        var (output, diagnostics) = RunFluent("""
+            using System;
+            namespace FluentTest;
+
+            public class Legacy
+            {
+                public int Id { get; set; }
+                [Obsolete("delete me eventually")]
+                public string? OldField { get; set; }
+            }
+
+            public static class Consumer
+            {
+                public static async System.Threading.Tasks.Task Use(Microsoft.EntityFrameworkCore.DbContext ctx)
+                {
+                    _ = await ctx.FacetLegacy().ToListAsync();
+                }
+            }
+            """, """
+            {
+              "version": 1,
+              "entities": [
+                { "clrType": "FluentTest.Legacy", "key": ["Id"], "scalar": ["Id", "OldField"] }
+              ]
+            }
+            """);
+
+        diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+        output.GetDiagnostics()
+            .Where(d => d.Id is "CS0618" or "CS0612")
+            .Where(d => d.Location.SourceTree?.FilePath.Contains("FacetQuery.g.cs") == true)
+            .Should().BeEmpty("generated projections must suppress obsolete-member warnings they cannot avoid");
+    }
+
+    [Fact]
     public void ManifestWithoutKey_OmitsGetByKeyAsync()
     {
         var (output, _) = RunFluent(Entities + """
