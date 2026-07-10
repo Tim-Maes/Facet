@@ -168,6 +168,29 @@ public class FacetEfModelManifestTests
     }
 
     [Fact]
+    public void PrimaryKeys_AreRecordedInKeyOrder()
+    {
+        var manifest = BuildManifest();
+
+        Category(Entity(manifest, ClrName(typeof(ManifestBlog))), "key").Should().Equal("Id");
+        // The key field carries primary-key property names for the fluent query surface.
+        Category(Entity(manifest, ClrName(typeof(ManifestPost))), "key").Should().Equal("Id");
+    }
+
+    [Fact]
+    public void OptionalReferenceNavigations_AreMarkedNavOptional()
+    {
+        var manifest = BuildManifest();
+
+        // A nullable reference navigation's relationship is optional — only the model knows.
+        Category(Entity(manifest, ClrName(typeof(ManifestBlog))), "navOptional").Should().Equal("Publisher");
+        Category(Entity(manifest, ClrName(typeof(ManifestPost))), "navOptional").Should().BeEmpty(
+            "Post.Blog rides a required (non-nullable) foreign key");
+        Category(Entity(manifest, ClrName(typeof(ManifestBlog))), "nav")
+            .Should().Contain("Publisher", "navOptional is a subset marker, not a category move");
+    }
+
+    [Fact]
     public void Write_CreatesContextNamedManifestFile()
     {
         var directory = Directory.CreateTempSubdirectory("facet-manifest-").FullName;

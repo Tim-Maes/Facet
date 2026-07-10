@@ -26,9 +26,11 @@ namespace Facet.Extensions.EFCore.Design;
 ///   "entities": [
 ///     {
 ///       "clrType": "My.Domain.Blog",
+///       "key": ["Id"],                  // primary-key property names, in key order (omitted for keyless/owned)
 ///       "scalar": ["Id", "Title"],      // mapped scalar columns (kept in DTOs)
 ///       "complex": ["HomeAddress"],     // mapped complex/value-object members (kept)
-///       "nav": ["Posts"],               // reference/collection navigations (dropped)
+///       "nav": ["Owner", "Posts"],      // reference/collection navigations (dropped)
+///       "navOptional": ["Owner"],       // subset of nav: reference navs whose relationship is optional (may be null)
 ///       "owned": ["Settings"],          // owned references (dropped; IncludeProperties opts back in)
 ///       "skipnav": ["Labels"],          // many-to-many skip navigations (dropped)
 ///       "ignored": ["Secret"],          // explicitly ignored members ([NotMapped]/Ignore(); dropped)
@@ -37,6 +39,11 @@ namespace Facet.Extensions.EFCore.Design;
 ///   ]
 /// }
 /// </code>
+/// <c>key</c> is ordered (composite keys), never sorted, and may name shadow properties —
+/// consumers that need CLR types (typed key parameters) skip entities whose key members
+/// have no CLR property. <c>navOptional</c> marks reference navigations only; collections
+/// are never null. Both exist for the fluent navigation generator; the DTO-shaping path
+/// ignores them.
 /// Together the categories enumerate every member the model has an opinion on, which is what
 /// lets the generator treat a settable property in none of them as a stale-manifest signal
 /// (FAC106) instead of silently dropping it. Readers ignore unknown properties, so the format
@@ -83,9 +90,21 @@ public static class FacetEfModelManifest
             {
                 writer.WriteStartObject();
                 writer.WriteString("clrType", entity.Key);
+                if (entity.Value.Key is { Count: > 0 } key && !entity.Value.KeyConflicted)
+                {
+                    writer.WriteStartArray("key");
+                    foreach (var member in key)
+                    {
+                        writer.WriteStringValue(member);
+                    }
+
+                    writer.WriteEndArray();
+                }
+
                 WriteCategory(writer, "scalar", entity.Value.Scalars);
                 WriteCategory(writer, "complex", entity.Value.ComplexMembers);
                 WriteCategory(writer, "nav", entity.Value.Navigations);
+                WriteCategory(writer, "navOptional", entity.Value.OptionalNavigations);
                 WriteCategory(writer, "owned", entity.Value.OwnedNavigations);
                 WriteCategory(writer, "skipnav", entity.Value.SkipNavigations);
                 WriteCategory(writer, "ignored", entity.Value.IgnoredMembers);
@@ -136,10 +155,20 @@ public static class FacetEfModelManifest
         public SortedSet<string> Scalars { get; } = new(StringComparer.Ordinal);
         public SortedSet<string> ComplexMembers { get; } = new(StringComparer.Ordinal);
         public SortedSet<string> Navigations { get; } = new(StringComparer.Ordinal);
+        public SortedSet<string> OptionalNavigations { get; } = new(StringComparer.Ordinal);
         public SortedSet<string> OwnedNavigations { get; } = new(StringComparer.Ordinal);
         public SortedSet<string> SkipNavigations { get; } = new(StringComparer.Ordinal);
         public SortedSet<string> IgnoredMembers { get; } = new(StringComparer.Ordinal);
         public SortedSet<string> ServiceProperties { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Primary-key property names in key order; null when never set.</summary>
+        public List<string>? Key { get; set; }
+
+        /// <summary>
+        /// Set when entity types sharing this CLR type disagree on the primary key
+        /// (shared-type/owned reuse) — the key is then omitted rather than guessed.
+        /// </summary>
+        public bool KeyConflicted { get; set; }
     }
 
     private static Dictionary<string, EntityRecord> CollectEntities(IModel model)
@@ -189,8 +218,45 @@ public static class FacetEfModelManifest
             foreach (var navigation in entityType.GetNavigations())
             {
                 if (navigation.IsShadowProperty() || navigation.PropertyInfo == null) continue;
-                var target = navigation.TargetEntityType.IsOwned() ? record.OwnedNavigations : record.Navigations;
-                target.Add(navigation.Name);
+                if (navigation.TargetEntityType.IsOwned())
+                {
+                    record.OwnedNavigations.Add(navigation.Name);
+                    continue;
+                }
+
+                record.Navigations.Add(navigation.Name);
+
+                // Requiredness is relationship knowledge only the model has: a
+                // dependent-to-principal reference is required by its FK, a
+                // principal-to-dependent reference by IsRequiredDependent. Collections are
+                // never null, so only reference navigations are marked.
+                if (!navigation.IsCollection)
+                {
+                    var required = navigation.IsOnDependent
+                        ? navigation.ForeignKey.IsRequired
+                        : navigation.ForeignKey.IsRequiredDependent;
+                    if (!required)
+                    {
+                        record.OptionalNavigations.Add(navigation.Name);
+                    }
+                }
+            }
+
+            // The primary key, in key order — pure model configuration (HasKey, composite
+            // keys), unavailable from CLR shape. Owned types get synthetic keys and are not
+            // queried as roots, so they record none; when entity types sharing a CLR type
+            // disagree, the key is omitted rather than guessed.
+            if (!entityType.IsOwned() && entityType.FindPrimaryKey() is { } primaryKey)
+            {
+                var keyMembers = primaryKey.Properties.Select(p => p.Name).ToList();
+                if (record.Key == null)
+                {
+                    record.Key = keyMembers;
+                }
+                else if (!record.Key.SequenceEqual(keyMembers, StringComparer.Ordinal))
+                {
+                    record.KeyConflicted = true;
+                }
             }
 
             foreach (var skipNavigation in entityType.GetSkipNavigations())

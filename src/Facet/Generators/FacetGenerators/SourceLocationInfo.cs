@@ -35,6 +35,13 @@ internal readonly struct SourceLocationInfo : IEquatable<SourceLocationInfo>
         return new SourceLocationInfo(tree.FilePath, reference.Span, tree.GetLineSpan(reference.Span).Span);
     }
 
+    /// <summary>Captures the location of a syntax node (e.g. a fluent chain invocation).</summary>
+    public static SourceLocationInfo FromSyntax(SyntaxNode node)
+    {
+        var tree = node.SyntaxTree;
+        return new SourceLocationInfo(tree.FilePath, node.Span, tree.GetLineSpan(node.Span).Span);
+    }
+
     public Location ToLocation() => Location.Create(FilePath, _span, _lineSpan);
 
     public bool Equals(SourceLocationInfo other)

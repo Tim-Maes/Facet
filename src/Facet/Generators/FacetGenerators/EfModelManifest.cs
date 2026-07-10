@@ -59,6 +59,9 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
     /// <summary>Number of entity CLR types listed across all accepted manifest files.</summary>
     public int EntityCount => _entities.Count;
 
+    /// <summary>All entity CLR type names, for consumers that sweep the model (fluent queries).</summary>
+    public IEnumerable<string> EntityClrNames => _entities.Keys;
+
     /// <summary>
     /// Whether any manifest file parsed successfully, entities or not. Wiring a manifest into
     /// the compilation is the project-level opt-in that flips the ExcludeNavigationProperties
@@ -107,7 +110,12 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
         {
             builder.Add(entity.Key, new ManifestEntity(
                 entity.Value.Keep.ToImmutableHashSet(StringComparer.Ordinal),
-                entity.Value.Known.ToImmutableHashSet(StringComparer.Ordinal)));
+                entity.Value.Known.ToImmutableHashSet(StringComparer.Ordinal),
+                entity.Value.Chainable.ToImmutableHashSet(StringComparer.Ordinal),
+                entity.Value.OptionalNavs.ToImmutableHashSet(StringComparer.Ordinal),
+                entity.Value.KeyConflicted || entity.Value.Key == null
+                    ? ImmutableArray<string>.Empty
+                    : entity.Value.Key.ToImmutableArray()));
         }
 
         return new EfModelManifest(builder.ToImmutable(), issues.ToImmutable(), acceptedFileCount > 0);
@@ -175,6 +183,26 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
                     {
                         AddMembers(entity, category, record.Known);
                     }
+
+                    // Fluent-navigation metadata (additive fields; absent in older
+                    // manifests). Chainable = plain + skip navigations; owned references
+                    // are not chainable. navOptional marks reference navs that may be
+                    // null; "key" is ordered, so it is a list, never a set.
+                    AddMembers(entity, "nav", record.Chainable);
+                    AddMembers(entity, "skipnav", record.Chainable);
+                    AddMembers(entity, "navOptional", record.OptionalNavs);
+                    if (entity.TryGetProperty("key", out var keyElement) && keyElement.ValueKind == JsonValueKind.Array)
+                    {
+                        var keyMembers = new List<string>();
+                        foreach (var member in keyElement.EnumerateArray())
+                        {
+                            if (member.ValueKind != JsonValueKind.String) continue;
+                            var name = member.GetString();
+                            if (!string.IsNullOrEmpty(name)) keyMembers.Add(name!);
+                        }
+
+                        record.MergeKey(keyMembers);
+                    }
                 }
             }
         }
@@ -189,6 +217,12 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
             {
                 existing.Keep.UnionWith(entity.Value.Keep);
                 existing.Known.UnionWith(entity.Value.Known);
+                existing.Chainable.UnionWith(entity.Value.Chainable);
+                existing.OptionalNavs.UnionWith(entity.Value.OptionalNavs);
+                if (entity.Value.Key != null)
+                {
+                    existing.MergeKey(entity.Value.Key);
+                }
             }
             else
             {
@@ -218,6 +252,27 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
     {
         public HashSet<string> Keep { get; } = new HashSet<string>(StringComparer.Ordinal);
         public HashSet<string> Known { get; } = new HashSet<string>(StringComparer.Ordinal);
+        public HashSet<string> Chainable { get; } = new HashSet<string>(StringComparer.Ordinal);
+        public HashSet<string> OptionalNavs { get; } = new HashSet<string>(StringComparer.Ordinal);
+        public List<string>? Key { get; private set; }
+        public bool KeyConflicted { get; private set; }
+
+        /// <summary>
+        /// First key wins; a later disagreeing key (same CLR type mapped with different
+        /// primary keys across contexts) drops the key entirely — order matters, so a
+        /// union would be wrong and a guess worse.
+        /// </summary>
+        public void MergeKey(List<string> key)
+        {
+            if (Key == null)
+            {
+                Key = key;
+            }
+            else if (!Key.SequenceEqual(key, StringComparer.Ordinal))
+            {
+                KeyConflicted = true;
+            }
+        }
     }
 
     /// <summary>
@@ -269,10 +324,18 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
 /// <summary>One entity's manifest entry: what to keep, and everything the model knows about.</summary>
 internal sealed class ManifestEntity : IEquatable<ManifestEntity>
 {
-    public ManifestEntity(ImmutableHashSet<string> keep, ImmutableHashSet<string> known)
+    public ManifestEntity(
+        ImmutableHashSet<string> keep,
+        ImmutableHashSet<string> known,
+        ImmutableHashSet<string>? chainableNavs = null,
+        ImmutableHashSet<string>? optionalNavs = null,
+        ImmutableArray<string> key = default)
     {
         Keep = keep;
         Known = known;
+        ChainableNavs = chainableNavs ?? ImmutableHashSet<string>.Empty;
+        OptionalNavs = optionalNavs ?? ImmutableHashSet<string>.Empty;
+        Key = key.IsDefault ? ImmutableArray<string>.Empty : key;
     }
 
     /// <summary>Property names EF maps as data (scalar + complex) — the DTO member set.</summary>
@@ -286,8 +349,33 @@ internal sealed class ManifestEntity : IEquatable<ManifestEntity>
     /// </summary>
     public ImmutableHashSet<string> Known { get; }
 
+    /// <summary>
+    /// Navigations the fluent query surface can include: plain + skip navigations (owned
+    /// references are not chainable). Empty for manifests written before the field existed.
+    /// </summary>
+    public ImmutableHashSet<string> ChainableNavs { get; }
+
+    /// <summary>
+    /// Reference navigations whose relationship the model marks optional — their shape
+    /// members are nullable. A chainable reference nav outside this set is required.
+    /// Manifests written before the field existed leave it empty; the fluent generator then
+    /// treats every reference nav as optional, which is pessimistic but never lies.
+    /// </summary>
+    public ImmutableHashSet<string> OptionalNavs { get; }
+
+    /// <summary>
+    /// Primary-key property names in key order; empty for keyless entities, owned types,
+    /// pre-field manifests, and cross-context key conflicts. May name shadow properties.
+    /// </summary>
+    public ImmutableArray<string> Key { get; }
+
     public bool Equals(ManifestEntity? other)
-        => other != null && Keep.SetEquals(other.Keep) && Known.SetEquals(other.Known);
+        => other != null
+            && Keep.SetEquals(other.Keep)
+            && Known.SetEquals(other.Known)
+            && ChainableNavs.SetEquals(other.ChainableNavs)
+            && OptionalNavs.SetEquals(other.OptionalNavs)
+            && Key.SequenceEqual(other.Key, StringComparer.Ordinal);
 
     public override bool Equals(object? obj) => obj is ManifestEntity other && Equals(other);
 
@@ -298,6 +386,9 @@ internal sealed class ManifestEntity : IEquatable<ManifestEntity>
             var hash = 0;
             foreach (var member in Keep) hash += member.GetHashCode();
             foreach (var member in Known) hash += member.GetHashCode() * 397;
+            foreach (var member in ChainableNavs) hash += member.GetHashCode() * 31;
+            foreach (var member in OptionalNavs) hash += member.GetHashCode() * 17;
+            foreach (var member in Key) hash = hash * 31 + member.GetHashCode();
             return hash;
         }
     }

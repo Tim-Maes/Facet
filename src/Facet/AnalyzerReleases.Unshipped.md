@@ -13,3 +13,6 @@ FAC103 | Generator | Error | EF model manifest could not be read
 FAC104 | Generator | Error | EF model manifest version is not supported
 FAC105 | Generator | Error | GenerateDtos source type is not in the EF model manifest (no heuristic fallback)
 FAC106 | Generator | Warning | Property is unknown to the EF model manifest
+FAC120 | Generator | Error | FacetFluent requires an EF model manifest
+FAC121 | Generator | Warning | Fluent chain exceeds the configured depth
+FAC122 | Generator | Error | FacetFluent requires Microsoft.EntityFrameworkCore
