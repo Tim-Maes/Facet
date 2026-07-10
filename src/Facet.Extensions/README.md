@@ -101,6 +101,24 @@ var query = dbContext.People.SelectFacet<PersonDto>();
 var list = query.ToList();
 ```
 
+### FacetMap Projection Support
+
+`SelectFacet` also discovers projections from `[FacetMap]`-generated marker classes. This enables generic usage patterns with FacetMap types (plain POCOs without `[Facet]` attributes):
+
+```csharp
+// FacetMap types work with SelectFacet just like [Facet] types
+var dtos = dbContext.OrderLines.SelectFacet<OrderLine, OrderLineDto>().ToList();
+var dtos = dbContext.OrderLines.SelectFacet<OrderLineDto>().ToList();
+
+// Enables generic repository/service patterns
+protected IQueryable<TOut> Project<TOut>(IQueryable<T> queryable) where TOut : class
+{
+    return queryable.SelectFacet<T, TOut>();
+}
+```
+
+Discovery is automatic via assembly scanning — no additional configuration needed.
+
 ## Reverse Mapping (Facet -> Source)
 
 Apply changes from a facet DTO back to the source object. Only properties that exist in both types and have different values will be updated.

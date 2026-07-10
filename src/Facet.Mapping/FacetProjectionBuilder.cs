@@ -23,4 +23,25 @@ public sealed class FacetProjectionBuilder<TSource, TTarget>
         Mappings.Add((member, valueExpression));
         return this;
     }
+
+    /// <summary>
+    /// Builds a LINQ projection expression from all registered mappings.
+    /// Returns an Expression&lt;Func&lt;TSource, TTarget&gt;&gt; that can be used with IQueryable.Select().
+    /// </summary>
+    public Expression<Func<TSource, TTarget>> BuildProjectionExpression()
+    {
+        var sourceParam = Expression.Parameter(typeof(TSource), "source");
+        var bindings = new List<MemberBinding>();
+
+        foreach (var (member, lambdaExpr) in Mappings)
+        {
+            // Replace the lambda's parameter with our sourceParam
+            var body = ParameterReplacer.Replace(lambdaExpr, sourceParam);
+            bindings.Add(Expression.Bind(member, body));
+        }
+
+        var newExpr = Expression.New(typeof(TTarget));
+        var initExpr = Expression.MemberInit(newExpr, bindings);
+        return Expression.Lambda<Func<TSource, TTarget>>(initExpr, sourceParam);
+    }
 }
