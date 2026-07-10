@@ -530,7 +530,7 @@ public class Product { }
 - **Severity**: Error
 - **Category**: Generator
 
-A `*.facetmodel.json` file wired up as an AdditionalFile is not readable as a manifest (malformed JSON, wrong shape). The file is ignored in full — silently degrading `ExcludeNavigationProperties` to the heuristic would hide the breakage, so it is reported instead. Regenerate the manifest (`dotnet ef migrations add`/`remove`) or remove it from AdditionalFiles.
+A `*.facetmodel.json` file wired up as an AdditionalFile is not readable as a manifest (malformed JSON, wrong shape). The file is ignored in full — never half-applied — and reported here rather than silently skipped. A rejected file also does not count as a wired manifest, so it does not flip the `ExcludeNavigationProperties` default: this error stands alone instead of being buried under a FAC105 per source type. Regenerate the manifest (`dotnet ef migrations add`/`remove`) or remove it from AdditionalFiles.
 
 ---
 
@@ -552,7 +552,7 @@ The manifest was written by a Facet.Extensions.EFCore version whose format this 
 - **Severity**: Error
 - **Category**: Generator
 
-`ExcludeNavigationProperties` is driven entirely by the EF model manifest — there is **no heuristic fallback**. A source type with no manifest entry cannot be shaped, so this is a hard error. It fires whether no manifest was supplied at all (check the `<AdditionalFiles>` path — a glob that matches nothing is silently empty) or the type is simply absent from the manifests present (regenerate with `dotnet ef migrations add`). If the type is **not** an EF entity, list its navigation-like properties in `ExcludeProperties` instead of using `ExcludeNavigationProperties`.
+`ExcludeNavigationProperties` is driven entirely by the EF model manifest — there is **no heuristic fallback** — and it defaults to true for every `[GenerateDtos]` attribute in a project that wires a manifest into `<AdditionalFiles>`. A shaped source type with no manifest entry cannot be generated safely, so this is a hard error: the type is absent from the accepted manifests (regenerate with `dotnet ef migrations add`), or it is not an EF entity — set `ExcludeNavigationProperties = false` on it; an explicit value always wins over the wired-manifest default. For **explicitly** shaped types this error also catches a mistyped `<AdditionalFiles>` path, since a glob that matches nothing supplies no manifests at all. Under the wired-manifest default, a mistyped glob instead means no wired manifest, no shaping, and no diagnostic — pin `ExcludeNavigationProperties = true` on one representative entity if you want that failure loud. The message states whether the requirement came from an explicit `ExcludeNavigationProperties = true` or from the wired-manifest default.
 
 ---
 

@@ -10,8 +10,10 @@ namespace Facet.Tests.UnitTests.Core.GenerateDtos;
 /// ExcludeNavigationProperties is driven entirely by the EF model manifest
 /// (*.facetmodel.json AdditionalFile): mapped scalars are kept, navigations AND EF-ignored
 /// properties drop, value-converted entity-typed columns survive, and IncludeProperties forces
-/// members back in. There is no heuristic fallback — an uncovered type drops nothing and is a
-/// FAC105 error (see GenerateDtosManifestDiagnosticsTests).
+/// members back in. Wiring a manifest into the compilation also flips the default: attributes
+/// that leave the flag unset are shaped, with an explicit value winning in both directions.
+/// There is no heuristic fallback — an uncovered shaped type drops nothing and is a FAC105
+/// error (see GenerateDtosManifestDiagnosticsTests).
 /// </summary>
 public class GenerateDtosManifestNavigationTests
 {
@@ -227,6 +229,94 @@ public class GenerateDtosManifestNavigationTests
         dto.Should().Contain("Id");
         dto.Should().Contain("Name", "a property mapped as data in any context's manifest stays");
         dto.Should().NotContain("Owner");
+    }
+
+    [Fact]
+    public void UnsetFlag_ManifestWired_DefaultsToShaping()
+    {
+        // Adding the manifest to AdditionalFiles is the project-level opt-in: no per-attribute
+        // ExcludeNavigationProperties needed.
+        var dto = GenerateUpdateDto(Entities + """
+            [GenerateDtos(Types = DtoTypes.Update)]
+            public class Parent
+            {
+                public int Id { get; set; }
+                public string? Name { get; set; }
+                public Child? Owner { get; set; }
+            }
+            """,
+            """
+            {
+              "version": 1,
+              "entities": [ { "clrType": "ManifestNav.Parent", "scalar": ["Id", "Name"], "nav": ["Owner"] } ]
+            }
+            """);
+
+        dto.Should().Contain("Name");
+        dto.Should().NotContain("Owner", "a wired manifest flips the ExcludeNavigationProperties default to true");
+    }
+
+    [Fact]
+    public void UnsetFlag_NoManifest_CopiesEverything()
+    {
+        var dto = GenerateUpdateDto(Entities + """
+            [GenerateDtos(Types = DtoTypes.Update)]
+            public class Parent
+            {
+                public int Id { get; set; }
+                public Child? Owner { get; set; }
+            }
+            """);
+
+        dto.Should().Contain("Owner", "without a manifest wired, the default stays plain property copying");
+    }
+
+    [Fact]
+    public void ExplicitFalse_ManifestWired_OptsOut()
+    {
+        // The per-type escape hatch for non-entity source types in a manifest-wired project —
+        // an explicit value wins over the flipped default.
+        var dto = GenerateUpdateDto(Entities + """
+            [GenerateDtos(Types = DtoTypes.Update, ExcludeNavigationProperties = false)]
+            public class Parent
+            {
+                public int Id { get; set; }
+                public Child? Owner { get; set; }
+            }
+            """,
+            """
+            {
+              "version": 1,
+              "entities": [ { "clrType": "ManifestNav.Parent", "scalar": ["Id"], "nav": ["Owner"] } ]
+            }
+            """);
+
+        dto.Should().Contain("Owner", "ExcludeNavigationProperties = false opts the type out of manifest shaping");
+    }
+
+    [Fact]
+    public void GenerateAuditableDtos_ManifestWired_KeepsLegacyShape()
+    {
+        // The obsolete attribute has no way to express or opt out of manifest shaping, so a
+        // wired manifest must not change what it generates.
+        var dto = GenerateUpdateDto(Entities + """
+            #pragma warning disable CS0618
+            [GenerateAuditableDtos(Types = DtoTypes.Update)]
+            #pragma warning restore CS0618
+            public class Parent
+            {
+                public int Id { get; set; }
+                public Child? Owner { get; set; }
+            }
+            """,
+            """
+            {
+              "version": 1,
+              "entities": [ { "clrType": "ManifestNav.Parent", "scalar": ["Id"], "nav": ["Owner"] } ]
+            }
+            """);
+
+        dto.Should().Contain("Owner", "the obsolete attribute is exempt from the wired-manifest default");
     }
 
     [Fact]

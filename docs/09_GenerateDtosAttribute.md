@@ -28,6 +28,8 @@ public class User
 | `Namespace`          | `string?`   | Custom namespace for generated DTOs (default: same as source type). |
 | `ExcludeProperties`  | `string[]`  | Properties to exclude from all generated DTOs.                      |
 | `ExcludeAuditFields` | `bool`      | Automatically exclude common audit fields (default: false). See [Excluding Audit Fields](#excluding-audit-fields). |
+| `ExcludeNavigationProperties` | `bool` | Shape DTOs to exactly what the EF model maps as data. Defaults to **true when an EF model manifest is wired into the project's `<AdditionalFiles>`**, false otherwise; an explicit value wins either way. See [Excluding Navigation Properties](#excluding-navigation-properties). |
+| `IncludeProperties`  | `string[]`  | Properties kept in every generated DTO regardless of any exclusion — the escape hatch for aggregate children the EF model designates as navigations. |
 | `Prefix`             | `string?`   | Custom prefix for generated DTO names.                              |
 | `Suffix`             | `string?`   | Custom suffix for generated DTO names.                              |
 | `IncludeFields`      | `bool`      | Include public fields from the source type (default: false).        |
@@ -430,11 +432,13 @@ public class Product
 
 EF Core entities carry navigation properties (`Tenant? Owner`, `List<Order> Orders`, …) that
 don't belong in wire DTOs — copied as-is they bring raw entity types, serializer cycles, and
-accidental graph exposure. `ExcludeNavigationProperties = true` shapes the generated DTOs to
-**exactly what your EF model maps as data**:
+accidental graph exposure. Manifest shaping generates DTOs from **exactly what your EF model
+maps as data** — and it is the default for every `[GenerateDtos]` attribute in a project that
+wires an EF model manifest into its `<AdditionalFiles>` (`ExcludeNavigationProperties` set
+explicitly wins in either direction):
 
 ```csharp
-[GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update, ExcludeNavigationProperties = true)]
+[GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update)]
 public class Schedule
 {
     public int Id { get; set; }
@@ -455,24 +459,30 @@ in, winning over every exclusion (except the fixed convention that Create DTOs n
 
 The shaping is driven by a **model manifest** (`{ContextName}.facetmodel.json`): a committed
 JSON file generated from your `DbContext` model at design time and read by the generator as an
-AdditionalFile. Setup is four steps, once — install the separate `Facet.Extensions.EFCore` NuGet package and
-register its design-time services in the startup project, bootstrap the manifest with a `migrations add`/`remove` pair
-(no leftover migration), point `<AdditionalFiles>` at it, and set the flag. The
+AdditionalFile. Setup is three steps, once — install the separate `Facet.Extensions.EFCore`
+NuGet package into the `DbContext` project and set `<FacetEfDesignTime>true</FacetEfDesignTime>`
+there, bootstrap the manifest with a `migrations add`/`remove` pair (no leftover migration),
+and point `<AdditionalFiles>` at it — that last step is the switch that turns shaping on for
+the whole project. The
 **[Facet.Extensions.EFCore README](../src/Facet.Extensions.EFCore/README.md#shaping-dtos-with-your-ef-model-excludenavigationproperties)**
 has the full walkthrough, the layered-solution diagram, and the programmatic writer for
 `dotnet ef`-free workflows. After setup, the manifest refreshes automatically with every
 migration.
 
-A source type using `ExcludeNavigationProperties` with **no manifest entry is a compile
-error** (FAC105) — a wrong `<AdditionalFiles>` path or a stale manifest surfaces at the
-attribute, never as a silently bloated DTO. For a non-entity type, list its unwanted members
-in `ExcludeProperties` instead.
+A shaped source type with **no manifest entry is a compile error** (FAC105) that surfaces at
+the attribute — never a silently mis-shaped DTO. One caveat under the default: a mistyped
+`<AdditionalFiles>` glob matches nothing, so no manifest is wired and no shaping happens at
+all. Pin `ExcludeNavigationProperties = true` on one representative entity to make that
+failure loud too — the README walkthrough covers this. A source type that is not an EF entity
+(a view model, a projection type) opts out with `ExcludeNavigationProperties = false` and
+copies properties as-is.
 
 ### Diagnostics
 
-Failures are compile-time diagnostics, never silent: **FAC105** (error) — an
-`ExcludeNavigationProperties` type has no manifest entry (wrong `<AdditionalFiles>` path or
-stale manifest); **FAC106** (warning) — a settable property (or get-only collection) on a
+Failures are compile-time diagnostics: **FAC105** (error) — a shaped type has no manifest
+entry (stale manifest, a non-entity type that should opt out with
+`ExcludeNavigationProperties = false`, or — for explicitly shaped types — a wrong
+`<AdditionalFiles>` path); **FAC106** (warning) — a settable property (or get-only collection) on a
 mapped entity is unknown to the manifest, i.e. added since it was last written — scaffold its
 migration or mark it `[NotMapped]`; **FAC103/FAC104** (errors) — a manifest file is
 malformed / from an incompatible package version and is ignored in full. FAC105/FAC106 anchor
