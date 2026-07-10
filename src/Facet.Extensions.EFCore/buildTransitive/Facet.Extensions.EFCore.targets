@@ -12,13 +12,17 @@
      belongs in either; it is inert everywhere else, which is why this ships buildTransitive —
      the startup project usually references this package only transitively.
 
-  2. Wires the project's own manifests into the compilation as AdditionalFiles, so the Facet
-     generator sees them without a hand-written glob. In a single-project setup this makes
-     the property the only knob: write manifests, consume manifests, shaping on. The glob
-     matches nothing until the first migration runs — harmless, since 'dotnet ef' builds the
-     project before it writes anything. A project whose [GenerateDtos] attributes live
-     elsewhere still adds a cross-project <AdditionalFiles> glob there: only that project
-     knows where its manifests come from.
+  2. Wires manifests into the compilation as AdditionalFiles, so the Facet generator sees
+     them without a hand-written glob: the project's OWN manifests at evaluation time, plus
+     the manifests of every DIRECT ProjectReference at build time (a target, below — MSBuild
+     only expands wildcards produced from item metadata inside targets, never in
+     evaluation-time transforms). In a single-project setup — and in the usual layered one,
+     where the DTO project references the DbContext project — the property is therefore the
+     only knob: write manifests, consume manifests, shaping on. The globs match nothing
+     until the first migration runs — harmless, since 'dotnet ef' builds the project before
+     it writes anything. Only a consumer with NO reference path to the manifest project
+     still needs a hand-written cross-project <AdditionalFiles> glob (or one shared line in
+     Directory.Build.props — see the README).
 
   Deliberately opt-in on both counts: this package's mapping extensions are useful without
   manifests, and a package reference alone must not change what migrations write or what the
@@ -37,6 +41,22 @@
     <AdditionalFiles Include="$(MSBuildProjectDirectory)/**/*.facetmodel.json"
                      Exclude="$(DefaultItemExcludes)" />
   </ItemGroup>
+
+  <!--
+    Direct-ProjectReference manifests. Runs before CoreCompile (including design-time
+    builds, same hook SourceLink uses) because wildcard expansion of item-metadata-derived
+    paths only happens inside targets. Batches once per ProjectReference; referenced
+    projects' bin/obj are excluded so stale copies can't leak in. Duplicates of the
+    evaluation-time glob or a hand-written one are merged idempotently by the reader.
+  -->
+  <Target Name="_FacetEfManifestsFromProjectReferences"
+          BeforeTargets="CoreCompile"
+          Condition="'$(FacetEfDesignTime)' == 'true' and '@(ProjectReference)' != ''">
+    <ItemGroup>
+      <AdditionalFiles Include="%(ProjectReference.RootDir)%(ProjectReference.Directory)**/*.facetmodel.json"
+                       Exclude="%(ProjectReference.RootDir)%(ProjectReference.Directory)bin/**;%(ProjectReference.RootDir)%(ProjectReference.Directory)obj/**" />
+    </ItemGroup>
+  </Target>
 
   <!--
     AssemblyAttribute items are emitted through the SDK's generated AssemblyInfo file; a
