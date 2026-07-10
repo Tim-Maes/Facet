@@ -246,66 +246,43 @@ public class ProductsController : ControllerBase
 }
 ```
 
-## Design-Time Services: the EF Model Manifest
+## Shaping DTOs with your EF model: `ExcludeNavigationProperties`
 
-`[GenerateDtos(ExcludeNavigationProperties = true)]` shapes a DTO from the EF model's own
-navigation designation — it is **driven entirely by a model manifest**, with no type-shape
-heuristic. This package's design-time services write that manifest
-(`{ContextName}.facetmodel.json`) beside the migrations model snapshot every time you run
-`dotnet ef migrations add`/`remove`, recording per entity exactly which properties EF maps as
-data (scalar columns, complex properties, primitive collections) and which are navigations,
-owned references, skip navigations, or explicitly ignored. A source type using
-`ExcludeNavigationProperties` with no manifest entry is a compile error (**FAC105**) — there
-is nothing to guess from.
+If your entities are mapped by EF Core, they carry navigation properties — `Order.Customer`,
+`Customer.Orders`, back-references, owned types. `[GenerateDtos]` copies properties as it
+finds them, so without shaping, every generated DTO drags those navigations along **as raw
+entity types**: serializer cycles, accidental graph exposure, bloated wire contracts.
 
-### Where each piece lives
+`ExcludeNavigationProperties = true` fixes that by shaping the DTO to **exactly what EF maps
+as data** — scalar columns, complex/value-object members, primitive collections — and
+dropping navigations, skip navigations, owned references, and `[NotMapped]` members. It reads
+the truth from a **model manifest**: a small committed JSON file generated from your actual
+`DbContext` model at design time. No manifest entry for a type is a compile error (FAC105),
+never a silently mis-shaped DTO.
 
-There is no separate "DTO project": the generated DTOs are emitted into whichever project
-declares the `[GenerateDtos]` attributes. What can be surprising is that in a layered solution
-**three different projects** are involved, and the manifest is written into one project
-(next to the snapshot) but read by the generator running in another — so the `<AdditionalFiles>`
-glob reaches *across* projects. In a single-project app all three roles collapse into one and
-every path is local.
+Setup is four steps, once. The assumed starting point is the normal one: an existing
+application with a `DbContext` and a migrations history, no model change in flight, on a
+clean branch.
 
-```mermaid
-flowchart TB
-    subgraph simple["Simple: one project"]
-        direction TB
-        S["MyApp&nbsp;&nbsp;(startup + migrations + [GenerateDtos])<br/>entities + [GenerateDtos(ExcludeNavigationProperties=true)]<br/>DbContext + Migrations/ (snapshot + manifest)<br/>generated DTOs land here<br/>AdditionalFiles glob: Migrations/*.facetmodel.json (local)"]
-    end
+### Step 1 — Install the package and register the design-time services
 
-    subgraph layered["Layered: three roles, three projects"]
-        direction LR
-        EF(["dotnet ef migrations add<br/>--startup-project Web --project Persistence"])
-        W["MyApp.Web — startup project<br/>assembly: DesignTimeServicesReference"]
-        P["MyApp.Persistence — migrations project<br/>…ModelSnapshot.cs<br/>MyDbContext.facetmodel.json"]
-        D["MyApp.Domain — [GenerateDtos] project<br/>entities + attributes<br/>AdditionalFiles → ../MyApp.Persistence/Migrations/*.facetmodel.json<br/>generated DTOs land here"]
+`Facet.Extensions.EFCore` is its own NuGet package. Add it where your `DbContext` lives —
+the startup project then gets it transitively through its project reference:
 
-        W -. discovered by .-> EF
-        EF == writes ==> P
-        P == "manifest read via AdditionalFiles" ==> D
-    end
+```bash
+dotnet add MyApp.Persistence package Facet.Extensions.EFCore
 ```
 
-| Role | `dotnet ef` flag | What goes here | Layered example |
-|------|------------------|----------------|-----------------|
-| **Startup project** | `--startup-project` (or current) | the `DesignTimeServicesReference` attribute | `MyApp.Web` |
-| **Migrations project** | `--project` (or current) | the snapshot **and the generated `{Context}.facetmodel.json`** | `MyApp.Persistence` |
-| **`[GenerateDtos]` project** | *(not an ef flag)* | the attributes, the `<AdditionalFiles>` glob, and the generated DTOs | `MyApp.Domain` |
-
-### 1. Register the design-time services (startup project)
-
-The attribute goes in the **startup project** — the one you pass to `dotnet ef` via
-`--startup-project` (or the current project if you don't pass one). It's an assembly-level
-attribute, so any compiled `.cs` file works; conventionally `Properties/AssemblyInfo.cs` or a
-small dedicated file:
+Then register the design-time services in the **startup project** — the one you pass to
+`dotnet ef --startup-project` (without that flag, `dotnet ef` treats the project in your
+current directory as the startup project). Any compiled `.cs` file works:
 
 ```csharp
 [assembly: Microsoft.EntityFrameworkCore.Design.DesignTimeServicesReference(
     "Facet.Extensions.EFCore.Design.FacetDesignTimeServices, Facet.Extensions.EFCore")]
 ```
 
-Or, with no new file, generate it from the startup project's `.csproj`:
+Or, with no new file, from the startup project's `.csproj`:
 
 ```xml
 <ItemGroup>
@@ -315,111 +292,126 @@ Or, with no new file, generate it from the startup project's `.csproj`:
 </ItemGroup>
 ```
 
-The startup project must reference `Facet.Extensions.EFCore` (directly or transitively) so
-the assembly named in the attribute is present in its output for `dotnet ef` to load.
+From now on, every `dotnet ef migrations add`/`remove` that leaves a model snapshot in place
+also rewrites the manifest (`{ContextName}.facetmodel.json`) beside it. (Removing your *only*
+migration deletes the snapshot and leaves the manifest untouched — not a state the flows
+below ever produce.)
 
-With the services registered, the manifest is now written **automatically** whenever you add
-or remove a migration — it rides the migration you were already creating for the schema change:
+### Step 2 — Generate the first manifest
+
+You are adopting a tool, not changing your schema, so there is no migration to ride. Use an
+add/remove pair — the hook fires on both commands, and you end with a manifest and **no new
+migration**:
 
 ```bash
-dotnet ef migrations add AddSchedule --project ../MyApp.Persistence --startup-project .
-# → also (re)writes MyApp.Persistence/Migrations/MyDbContext.facetmodel.json
+dotnet ef migrations add FacetBootstrap    # writes the manifest (plus a temporary migration)
+dotnet ef migrations remove                # deletes that migration; the manifest stays
 ```
 
-Nothing else in the design-time services touches it — not `build`, not `database update`, not
-`dbcontext info` — so the manifest changes only when your migrations do. That is exactly what
-makes it a committed drift guard (below). It also means you don't need it fresh on every build;
-you need it fresh whenever the mapped shape changes, which is when you add a migration anyway.
+Two things worth knowing, because they are real:
 
-Adopting on an existing application with no model change pending? A migration add/remove pair
-bootstraps the manifest with no leftover migration, and a small tool covers `dotnet ef`-free
-workflows — see
-[Producing the manifest without a migration](#producing-the-manifest-without-a-migration). You
-never have to keep a no-op migration to have a manifest.
+- Neither command changes your database. `remove` does **query** it, to verify the migration
+  was never applied; if no database is reachable from your machine, add `--force` (safe here —
+  `FacetBootstrap` was never applied anywhere).
+- Open the manifest once. You should recognize your model: one entry per entity, its mapped
+  columns under `scalar`, its navigations under `nav`. This file is generated — never edit it.
 
-Each `DbContext` writes its own `{Context}.facetmodel.json`; if you have several, the generator
-merges them (a property mapped as data in any context is kept).
+Commit it like you commit the snapshot. You will not run this step again: from here the
+manifest refreshes automatically whenever migrations change.
 
-### 2. Expose the manifest to the generator (the `[GenerateDtos]` project)
+### Step 3 — Feed the manifest to the generator
 
-Point `<AdditionalFiles>` at wherever the migrations project keeps the manifest. That is
-almost always a **relative path into the migrations project**, not a local folder:
+In the project that declares your `[GenerateDtos]` attributes, add the manifest as an
+AdditionalFile. If your entities and `DbContext` live in different projects (the usual layered
+setup), this is a relative path into the migrations project:
 
 ```xml
 <ItemGroup>
-  <!-- from MyApp.Domain, reaching into MyApp.Persistence -->
   <AdditionalFiles Include="..\MyApp.Persistence\Migrations\*.facetmodel.json" />
 </ItemGroup>
 ```
 
-> Mind the path: an `<AdditionalFiles>` glob that matches nothing is silently empty — the
-> compiler simply receives no file. Because `ExcludeNavigationProperties` requires a manifest,
-> a wrong path surfaces as FAC105 on every such type rather than a quiet wrong result.
+Same-project setups just use `Migrations\*.facetmodel.json`.
 
-Commit the manifest like you commit the snapshot. For every entity listed in it,
-`ExcludeNavigationProperties` keeps exactly the mapped data properties — value-converted
-columns survive (the model maps them as data), EF-ignored (`[NotMapped]`) properties drop.
-`IncludeProperties` still wins for aggregate children you want in the DTO.
+### Step 4 — Turn it on
 
-### Drift is a build failure, for free
-
-Because the committed manifest changes only when you regenerate it, it makes your build a
-schema-drift guard: add a mapped property but forget to regenerate (no migration, or a
-programmatic run you didn't rerun) and the generator emits **FAC106** — the property is unknown
-to the model, so it would silently vanish from the DTO.
-FAC106 is a warning by default so mid-development edits don't block the build; escalate it for
-CI so a stale manifest can't merge:
-
-```xml
-<PropertyGroup>
-  <WarningsAsErrors>$(WarningsAsErrors);FAC106</WarningsAsErrors>
-</PropertyGroup>
+```csharp
+[GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update, ExcludeNavigationProperties = true)]
+public class Schedule
+{
+    public int Id { get; set; }
+    public int? TenantId { get; set; }         // kept   — mapped scalar column
+    public Tenant? OwnerTenant { get; set; }   // dropped — navigation
+    public List<Job> Jobs { get; } = new();    // dropped — collection navigation
+}
 ```
 
-FAC105 (no manifest entry at all) is already an error. Together they mean a PR that changes the
-model without regenerating the manifest cannot merge green — your DTO contracts can't silently
-drift from your schema.
+Build, and check one generated DTO: it should contain the mapped data members and nothing
+else. Because the shaping comes from the model rather than from type shapes, it is right in
+the cases guesswork can't be: a class stored through a **value converter** stays (the model
+maps it as a column), and a scalar-looking `[NotMapped]` property goes. When an entity-typed
+member genuinely belongs in the DTO — an owned collection edited together with its parent —
+force it back in with `IncludeProperties = new[] { nameof(Order.Lines) }`; it wins over every
+exclusion (the one thing it cannot restore is `Id` on Create DTOs, a fixed convention).
 
-### Producing the manifest without a migration
+That's the whole setup. Day to day there is nothing to operate: the manifest rides your
+normal migration workflow.
 
-The most common adoption case is an existing application with a migration history and **no
-model change pending** — `migrations add` alone would create a migration you don't want. You
-don't need a tool for that case: the hook fires on `remove` too, so an add/remove pair
-bootstraps the manifest and leaves no migration behind:
+### When something is off, the build says so
 
-```bash
-dotnet ef migrations add FacetBootstrap    # writes the manifest (and a temp migration)
-dotnet ef migrations remove                # deletes the migration; the manifest stays, rewritten
+| Rule | Severity | Meaning |
+|---|---|---|
+| **FAC105** | Error | An `ExcludeNavigationProperties` type has no manifest entry. Either the `<AdditionalFiles>` path is wrong (a glob that matches nothing is silently empty — this error is how you find out) or the type isn't in the manifest (regenerate it). For a type that isn't an EF entity, use `ExcludeProperties` instead. |
+| **FAC106** | Warning | A settable property (or get-only collection property) on a mapped entity is unknown to the manifest — you added it after the manifest was last written, and it would silently vanish from the DTO. Scaffold the migration for it (`dotnet ef migrations add …`), or mark it `[NotMapped]`. |
+| **FAC103 / FAC104** | Error | A manifest file is malformed / written by an incompatible package version. The file is ignored in full, never half-applied. |
+
+FAC106 is the schema-drift guard: because the committed manifest only changes when you
+regenerate it, a PR that adds a mapped property without its migration gets flagged at compile
+time. Keep it a warning locally so mid-edit states don't block you, and escalate it in CI:
+`<WarningsAsErrors>$(WarningsAsErrors);FAC106</WarningsAsErrors>`. FAC105/FAC106 anchor to the
+`[GenerateDtos]` attribute (squiggles, `#pragma`-suppressible); FAC103/FAC104 are file-level
+and carry no source location — suppress those with `<NoWarn>` if you must.
+
+### Reference
+
+**Where each piece lives in a layered solution.** There is no separate "DTO project" — the
+generated DTOs land in whichever project declares the attributes:
+
+```mermaid
+flowchart LR
+    EF(["dotnet ef migrations add/remove<br/>--startup-project Web --project Persistence"])
+    W["MyApp.Web — startup project<br/>assembly: DesignTimeServicesReference"]
+    P["MyApp.Persistence — migrations project<br/>…ModelSnapshot.cs<br/>MyDbContext.facetmodel.json"]
+    D["MyApp.Domain — [GenerateDtos] project<br/>entities + attributes<br/>AdditionalFiles → ../MyApp.Persistence/Migrations/*.facetmodel.json<br/>generated DTOs land here"]
+
+    W -. discovered by .-> EF
+    EF == writes ==> P
+    P == read via AdditionalFiles ==> D
 ```
 
-(`remove` re-scaffolds the snapshot from the remaining migrations and the hook rewrites the
-manifest beside it; if `FacetBootstrap` was your only migration, the manifest written by the
-`add` simply remains. Nothing is applied to a database at any point.)
+In a single-project app all three roles collapse into one and every path is local. With the
+assembly-level `[assembly: GenerateDtosFor(typeof(Entity), ...)]` (see the GenerateDtos docs),
+the attribute, the glob, and the generated DTOs all sit in the downstream project — e.g. the
+Web project next to your controllers.
 
-For everything else, the migration hook is just a convenient caller of a public API — the
-manifest is an ordinary file, and `FacetEfModelManifest.Build`/`Write` produce it from a model
-directly. Reach for the API when:
+**Multiple `DbContext`s.** Each context writes its own `{ContextName}.facetmodel.json`; the
+generator merges them, keeping a property that any context maps as data.
 
-- **No migration churn / no `dotnet ef`** — you keep the manifest current some other way (a
-  pre-build target, a `dotnet run` tool, a checked-in generator step) and don't want a schema
-  command in the loop.
-- **A drift-check test** — assert the committed manifest equals `Build(model)` in CI, so a
-  stale manifest fails a test instead of only surfacing as FAC106 in a downstream build.
-
-A ~15-line console tool is the usual shape (this is what a real-world consumer uses):
+**Producing the manifest programmatically.** The migration hook is a convenience over a public
+API. `FacetEfModelManifest.Write(model, directory, contextName)` writes the same file from a
+tool — useful for a pre-build target that avoids `dotnet ef`, or a CI test asserting the
+committed manifest equals `Build(model)` so drift fails a test. Pass the **design-time
+model**, not `DbContext.Model`:
 
 ```csharp
 using var context = new MyDbContext(/* design-time options; never connects */);
-// Pass the DESIGN-TIME model, not context.Model:
-var model = context.GetService<IDesignTimeModel>().Model;
+var model = context.GetService<IDesignTimeModel>().Model;   // NOT context.Model
 FacetEfModelManifest.Write(model, "../MyApp.Persistence/Migrations", nameof(MyDbContext));
 ```
 
-`DbContext.Model` is the runtime model and has no convention metadata, so it reports zero
-explicitly ignored (`[NotMapped]`/`Ignore(...)`) members — which would turn every one of them
-into a spurious FAC106. `IDesignTimeModel.Model` carries them. The migration hook already uses
-the design-time model, so the `dotnet ef` path gets this right for free; a hand-written tool
-must ask for it explicitly.
+The runtime model has no convention metadata, so `context.Model` reports zero
+`[NotMapped]`/`Ignore(...)` members and every one of them would surface as a spurious FAC106.
+The `dotnet ef` hook already uses the design-time model; a hand-written tool must ask for it.
 
 ## Advanced: Custom Mapping Support
 
