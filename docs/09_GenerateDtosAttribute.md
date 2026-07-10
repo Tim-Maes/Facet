@@ -428,88 +428,63 @@ public class Product
 
 ## Excluding Navigation Properties
 
-ORM entities typically carry navigation and back-reference properties (`Tenant? Owner`, `List<Order> Orders`, …) that don't belong in request DTOs. Listing every one in `ExcludeProperties` is tedious on wide entities and has to be kept in sync as navigations are added. `ExcludeNavigationProperties = true` drops them automatically — following the **EF Core model's own designation**, not a guess:
+EF Core entities carry navigation properties (`Tenant? Owner`, `List<Order> Orders`, …) that
+don't belong in wire DTOs — copied as-is they bring raw entity types, serializer cycles, and
+accidental graph exposure. `ExcludeNavigationProperties = true` shapes the generated DTOs to
+**exactly what your EF model maps as data**:
 
 ```csharp
 [GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update, ExcludeNavigationProperties = true)]
 public class Schedule
 {
     public int Id { get; set; }
-    public string? Name { get; set; }
-    public int? TenantId { get; set; }              // kept (mapped scalar column)
-    public Tenant? OwnerTenant { get; set; }        // dropped (navigation)
-    public List<Job> Jobs { get; } = new();         // dropped (collection navigation)
-    public User? CreatedByUser { get; set; }        // dropped (navigation)
+    public int? TenantId { get; set; }         // kept   — mapped scalar column
+    public Tenant? OwnerTenant { get; set; }   // dropped — navigation
+    public List<Job> Jobs { get; } = new();    // dropped — collection navigation
 }
 ```
 
-For each entity, the generated DTO keeps **exactly the properties EF maps as data** — scalar columns, complex/value-object members, primitive collections — and drops navigations, skip navigations (many-to-many), owned references, and `[NotMapped]`/`Ignore(...)` members. Because it reads the real model rather than inferring from type shapes, it's right in the cases a heuristic can't be: a same-assembly class stored through a **value converter** is kept (the model maps it as a column), and a scalar-looking property the model **ignores** is dropped.
+**Kept**: scalar columns, complex/value-object members, primitive collections — including
+entity-shaped classes the model maps through a value converter.
+**Dropped**: reference and collection navigations, many-to-many skip navigations, owned
+references, `[NotMapped]`/`Ignore(...)` members, and anything else the model has no mapping
+for. When an entity-typed member genuinely belongs in the DTO — an owned collection edited
+together with its parent — `IncludeProperties = new[] { nameof(Order.Lines) }` forces it back
+in, winning over every exclusion (except the fixed convention that Create DTOs never carry
+`Id`).
 
-This requires an **EF model manifest** — there is no heuristic fallback. A source type using `ExcludeNavigationProperties` with no manifest entry is a compile error (**FAC105**). For a non-EF type, list its navigation-like properties in `ExcludeProperties` instead.
+The shaping is driven by a **model manifest** (`{ContextName}.facetmodel.json`): a committed
+JSON file generated from your `DbContext` model at design time and read by the generator as an
+AdditionalFile. Setup is four steps, once — install the separate `Facet.Extensions.EFCore` NuGet package and
+register its design-time services in the startup project, bootstrap the manifest with a `migrations add`/`remove` pair
+(no leftover migration), point `<AdditionalFiles>` at it, and set the flag. The
+**[Facet.Extensions.EFCore README](../src/Facet.Extensions.EFCore/README.md#shaping-dtos-with-your-ef-model-excludenavigationproperties)**
+has the full walkthrough, the layered-solution diagram, and the programmatic writer for
+`dotnet ef`-free workflows. After setup, the manifest refreshes automatically with every
+migration.
 
-When an entity-typed property genuinely belongs in the DTO — the classic case is an aggregate child collection edited together with its parent (task parameters, order lines) — force it back in with `IncludeProperties`, which wins over every automatic and explicit exclusion:
+A source type using `ExcludeNavigationProperties` with **no manifest entry is a compile
+error** (FAC105) — a wrong `<AdditionalFiles>` path or a stale manifest surfaces at the
+attribute, never as a silently bloated DTO. For a non-entity type, list its unwanted members
+in `ExcludeProperties` instead.
 
-```csharp
-[GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update,
-    ExcludeNavigationProperties = true,
-    IncludeProperties = new[] { nameof(MaintenanceTask.Parameters) })]
-```
+### Diagnostics
 
-### Setting up the model manifest
-
-`Facet.Extensions.EFCore` ships design-time services that write the manifest (`{ContextName}.facetmodel.json`) beside the migrations model snapshot on every `dotnet ef migrations add`/`remove`. Register them once in the **startup project** (the one you pass to `dotnet ef --startup-project`), in any compiled `.cs` file — conventionally `Properties/AssemblyInfo.cs`:
-
-```csharp
-[assembly: Microsoft.EntityFrameworkCore.Design.DesignTimeServicesReference(
-    "Facet.Extensions.EFCore.Design.FacetDesignTimeServices, Facet.Extensions.EFCore")]
-```
-
-Or, with no new file, generate the attribute from the startup project's `.csproj`:
-
-```xml
-<ItemGroup>
-  <AssemblyAttribute Include="Microsoft.EntityFrameworkCore.Design.DesignTimeServicesReference">
-    <_Parameter1>Facet.Extensions.EFCore.Design.FacetDesignTimeServices, Facet.Extensions.EFCore</_Parameter1>
-  </AssemblyAttribute>
-</ItemGroup>
-```
-
-With the services registered, the manifest is written **automatically** whenever you add or remove a migration — it rides the migration you were already creating for the schema change (nothing else in the services touches it: not `build`, not `database update`).
-
-**Producing the first manifest** — the most common adoption case is an existing application with no model change pending, so `migrations add` alone would either report "no changes" or create a migration you don't want. The hook fires on `remove` as well, so an add/remove pair bootstraps the manifest and leaves **no migration behind**:
-
-```bash
-dotnet ef migrations add FacetBootstrap    # writes the manifest (and a temp migration)
-dotnet ef migrations remove                # deletes the migration; the manifest stays, rewritten
-```
-
-Alternatively, call `FacetEfModelManifest.Write(...)` from a small tool for workflows that avoid `dotnet ef` entirely. Either way you never have to keep a no-op migration. Commit the file and expose it to the generator in the project that declares `[GenerateDtos]`. In a layered solution the startup project, the migrations project (where the manifest lands, beside the snapshot), and the `[GenerateDtos]` project are usually three different assemblies, so the glob is normally a **relative path into the migrations project**:
-
-```xml
-<ItemGroup>
-  <!-- e.g. from MyApp.Domain reaching into MyApp.Persistence -->
-  <AdditionalFiles Include="..\MyApp.Persistence\Migrations\*.facetmodel.json" />
-</ItemGroup>
-```
-
-Each `DbContext` writes its own `{Context}.facetmodel.json`; the generator merges them, so a property mapped as data in any context is kept. The **[Facet.Extensions.EFCore README](../src/Facet.Extensions.EFCore/README.md)** has a diagram of the three-project layout and the full walkthrough.
-
-### Diagnostics — and drift as a build failure
-
-Every failure is a diagnostic; there is no silent path:
-
-- **FAC103** (error) — a manifest file is malformed; it is ignored in full, never half-applied.
-- **FAC104** (error) — a manifest declares a version this generator doesn't read (Facet / Facet.Extensions.EFCore version mismatch).
-- **FAC105** (error) — an `ExcludeNavigationProperties` source type has no manifest entry (no manifest wired up — check the `<AdditionalFiles>` path, since a glob matching nothing is silently empty — or the type is absent from the manifests present). There is no heuristic to fall back to.
-- **FAC106** (warning) — a settable property on a listed type appears in none of the manifest's categories (mapped, navigation, owned, skip navigation, ignored, service): the manifest almost certainly predates the property, which would otherwise silently vanish from the DTO. Regenerate the manifest, or mark the property `[NotMapped]`.
-
-Because the committed manifest changes only when you regenerate it (via the migration hook or the tool), it makes the build a schema-drift guard. FAC105 is already an error; FAC106 stays a warning so mid-development edits don't block the build, and escalates for CI with `<WarningsAsErrors>$(WarningsAsErrors);FAC106</WarningsAsErrors>`. With that, a PR that changes the model without regenerating the manifest can't merge green — the same workflow that keeps the snapshot honest keeps DTO shapes honest.
-
-> **Producing the manifest without a migration?** The hook is just a caller of a public API — use `FacetEfModelManifest.Write(model, dir, contextName)` from a ~15-line console tool for the first-time bootstrap, a no-`dotnet ef` workflow, or a CI drift-check test. Pass the design-time model, `context.GetService<IDesignTimeModel>().Model`, **not** `context.Model` — the runtime model has no convention metadata, so it reports zero ignored members and every `[NotMapped]` property becomes a spurious FAC106. The `dotnet ef` hook already does this correctly. See the [Facet.Extensions.EFCore README](../src/Facet.Extensions.EFCore/README.md#producing-the-manifest-without-a-migration).
+Failures are compile-time diagnostics, never silent: **FAC105** (error) — an
+`ExcludeNavigationProperties` type has no manifest entry (wrong `<AdditionalFiles>` path or
+stale manifest); **FAC106** (warning) — a settable property (or get-only collection) on a
+mapped entity is unknown to the manifest, i.e. added since it was last written — scaffold its
+migration or mark it `[NotMapped]`; **FAC103/FAC104** (errors) — a manifest file is
+malformed / from an incompatible package version and is ignored in full. FAC105/FAC106 anchor
+to the attribute; FAC103/FAC104 are file-level (no source location). Escalate FAC106 in CI
+with `<WarningsAsErrors>$(WarningsAsErrors);FAC106</WarningsAsErrors>` so a PR that changes
+the model without regenerating the manifest can't merge green. Full table and remedies: the
+[Facet.Extensions.EFCore README](../src/Facet.Extensions.EFCore/README.md#when-something-is-off-the-build-says-so)
+and [Analyzer Rules](13_AnalyzerRules.md).
 
 ## Obsolete: GenerateAuditableDtos Attribute
 
-> **?? Deprecated:** The `[GenerateAuditableDtos]` attribute has been replaced by `[GenerateDtos]` with `ExcludeAuditFields = true`. The old attribute will be removed in a future version.
+> **⚠️ Deprecated:** The `[GenerateAuditableDtos]` attribute has been replaced by `[GenerateDtos]` with `ExcludeAuditFields = true`. The old attribute will be removed in a future version.
 >
 > **Migration:**
 > ```csharp

@@ -7,7 +7,7 @@ namespace Facet.Extensions.EFCore.Design;
 /// <summary>
 /// EF Core design-time services that keep the Facet EF model manifest in sync with the model
 /// snapshot: every <c>dotnet ef migrations add</c>/<c>remove</c> also rewrites
-/// <c>{ContextName}.facetmodel</c> beside the snapshot (see <see cref="FacetEfModelManifest"/>).
+/// <c>{ContextName}.facetmodel.json</c> beside the snapshot (see <see cref="FacetEfModelManifest"/>).
 /// </summary>
 /// <remarks>
 /// Because these services live in a referenced library rather than the startup project,
@@ -20,7 +20,7 @@ namespace Facet.Extensions.EFCore.Design;
 /// Then expose the manifest to the Facet generator in the project that declares
 /// <c>[GenerateDtos]</c> attributes:
 /// <code>
-/// &lt;AdditionalFiles Include="Migrations/*.facetmodel" /&gt;
+/// &lt;AdditionalFiles Include="Migrations/*.facetmodel.json" /&gt;
 /// </code>
 /// </remarks>
 public sealed class FacetDesignTimeServices : IDesignTimeServices
