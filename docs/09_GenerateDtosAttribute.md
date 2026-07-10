@@ -476,6 +476,28 @@ Patch DTOs are designed for HTTP PATCH scenarios where you need to update only s
 2. **Explicitly Null** - Property should be set to null
 3. **Has Value** - Property should be updated to the specified value
 
+### Wire format: JSON Merge Patch (RFC 7396)
+
+The generator gives Patch DTOs merge-patch wire semantics automatically, for **both** JSON stacks — each gated on the consuming compilation actually referencing it, so projects without either still compile:
+
+- **System.Text.Json**: a `[JsonConverter]` + `[JsonIgnore(WhenWritingDefault)]` pair on every generated property, plus an internal converter factory generated into the consuming assembly.
+- **Newtonsoft.Json**: a `[JsonConverter]` + `[JsonProperty(DefaultValueHandling = Ignore)]` pair, plus an internal Json.NET converter — because ASP.NET Core apps using `AddNewtonsoftJson` bind MVC request bodies through Json.NET, where System.Text.Json attributes are invisible.
+
+Both serializers honor per-property converter attributes, so **no serializer or MVC startup registration is needed** — the DTOs are self-describing. Facet.Attributes takes no package dependency on either library (the converters are generated, the same trick strongly-typed-ID libraries use).
+
+| JSON payload | `Optional<T>` state | Effect of `ApplyTo` |
+|---|---|---|
+| property absent | Unspecified (`HasValue == false`) | not touched |
+| `"email": null` (nullable target) | Specified null | set to `null` |
+| `"isActive": null` (non-nullable value type) | — | `JsonException` → HTTP 400 in ASP.NET Core |
+| `"name": "x"` | Specified value | set to `"x"` |
+
+The mechanics: System.Text.Json never invokes a converter for an **absent** property — the field keeps `default(Optional<T>)`, i.e. unspecified. A **present** property always routes through the converter and becomes specified, including explicit null. Serialization skips unspecified properties, so a round-trip never clobbers fields the sender didn't mention.
+
+**Typed clients**: in TypeScript, `undefined` is the "don't touch" value — `JSON.stringify` omits `undefined`-valued keys entirely, so a client type of `email?: string | null` expresses all three states with no sentinel values.
+
+**Known limitation**: nullable-reference annotations are erased at runtime, so an explicit null into `Optional<string>` (non-nullable reference) deserializes as a specified null rather than failing — only non-nullable *value types* get the automatic 400. Validate reference-type nulls server-side where it matters.
+
 ### Usage Example
 
 ```csharp

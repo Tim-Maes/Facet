@@ -91,9 +91,28 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
         context.RegisterSourceOutput(allTargets, (spc, models) =>
         {
-            foreach (var model in models)
+            var modelList = models.Where(m => m != null).Cast<GenerateDtosTargetModel>().ToList();
+
+            // The Optional<T> JSON converter is generated (not shipped in Facet.Attributes)
+            // so Facet adds no System.Text.Json package dependency; emit it once per
+            // compilation when any Patch DTO needs it.
+            bool NeedsPatchWireSupport(GenerateDtosTargetModel m) =>
+                m.Issue == OutputTypeIssue.None
+                && (m.Types & DtoTypes.Patch) != 0
+                && GetKind(m.OutputType) != OutputType.Interface;
+
+            if (modelList.Any(m => NeedsPatchWireSupport(m) && m.SupportsSystemTextJson))
             {
-                if (model != null)
+                spc.AddSource("FacetOptionalJsonSupport.g.cs", SourceText.From(OptionalJsonSupportSource, Encoding.UTF8));
+            }
+
+            if (modelList.Any(m => NeedsPatchWireSupport(m) && m.SupportsNewtonsoftJson))
+            {
+                spc.AddSource("FacetOptionalNewtonsoftJsonSupport.g.cs", SourceText.From(OptionalNewtonsoftJsonSupportSource, Encoding.UTF8));
+            }
+
+            foreach (var model in modelList)
+            {
                 {
                     spc.CancellationToken.ThrowIfCancellationRequested();
 
@@ -130,7 +149,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         token.ThrowIfCancellationRequested();
         if (context.TargetSymbol is not INamedTypeSymbol sourceSymbol) return null;
 
-        return BuildModels(context.Attributes, _ => sourceSymbol, forceExcludeAuditFields, token);
+        return BuildModels(context.Attributes, _ => sourceSymbol, context.SemanticModel.Compilation, forceExcludeAuditFields, token);
     }
 
     /// <summary>
@@ -149,6 +168,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             static attr => attr.ConstructorArguments.Length == 1
                 ? attr.ConstructorArguments[0].Value as INamedTypeSymbol
                 : null,
+            context.SemanticModel.Compilation,
             forceExcludeAuditFields: false,
             token);
     }
@@ -156,6 +176,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     private static IEnumerable<GenerateDtosTargetModel>? BuildModels(
         ImmutableArray<AttributeData> attributes,
         Func<AttributeData, INamedTypeSymbol?> sourceSelector,
+        Compilation compilation,
         bool forceExcludeAuditFields,
         CancellationToken token)
     {
@@ -169,7 +190,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
             if (sourceSelector(attribute) is not INamedTypeSymbol sourceSymbol) continue;
 
-            var model = GetDtosModel(attribute, sourceSymbol, forceExcludeAuditFields, token);
+            var model = GetDtosModel(attribute, sourceSymbol, compilation, forceExcludeAuditFields, token);
             if (model == null) continue;
 
             // OutputType is a [Flags] value: kind bits (Class/Record/Struct/RecordStruct/
@@ -251,13 +272,16 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 model.ExcludeProperties,
                 model.Members,
                 model.UseFullName,
-                siblingMask);
+                siblingMask,
+                model.Issue,
+                model.SupportsSystemTextJson,
+                model.SupportsNewtonsoftJson);
         }
 
         return models;
     }
 
-    private static GenerateDtosTargetModel? GetDtosModel(AttributeData attribute, INamedTypeSymbol sourceSymbol, bool forceExcludeAuditFields, CancellationToken token)
+    private static GenerateDtosTargetModel? GetDtosModel(AttributeData attribute, INamedTypeSymbol sourceSymbol, Compilation compilation, bool forceExcludeAuditFields, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
 
@@ -275,6 +299,10 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             var convertEnumsTo = ExtractConvertEnumsTo(attribute.NamedArguments);
             
             var excludeAuditFields = forceExcludeAuditFields || GetNamedArg(attribute.NamedArguments, "ExcludeAuditFields", false);
+            var supportsSystemTextJson = compilation
+                .GetTypeByMetadataName("System.Text.Json.Serialization.JsonConverterAttribute") is not null;
+            var supportsNewtonsoftJson = compilation
+                .GetTypeByMetadataName("Newtonsoft.Json.JsonConverterAttribute") is not null;
 
             var userExcludeProperties = new List<string>();
             var excludePropertiesArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "ExcludeProperties");
@@ -355,7 +383,9 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 convertEnumsTo,
                 excludeProperties.ToImmutableArray(),
                 members.ToImmutableArray(),
-                useFullName);
+                useFullName,
+                supportsSystemTextJson: supportsSystemTextJson,
+                supportsNewtonsoftJson: supportsNewtonsoftJson);
         }
         catch (Exception ex)
         {
@@ -902,6 +932,21 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             if (member.Kind == FacetMemberKind.Property)
             {
                 sb.AppendLine($"    /// <summary>Optional value for {member.Name}.</summary>");
+                // RFC 7396 (JSON Merge Patch) wire semantics: an absent property never
+                // reaches a converter, so the Optional stays unspecified; an explicit
+                // null becomes a specified null (or a 400 for non-nullable value types).
+                // Unspecified values are skipped when serializing. Both serializers honor
+                // per-property converter attributes, so no startup registration is needed.
+                if (model.SupportsSystemTextJson)
+                {
+                    sb.AppendLine($"    [global::System.Text.Json.Serialization.JsonConverter(typeof(global::Facet.Generated.OptionalJsonConverterFactory))]");
+                    sb.AppendLine($"    [global::System.Text.Json.Serialization.JsonIgnore(Condition = global::System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]");
+                }
+                if (model.SupportsNewtonsoftJson)
+                {
+                    sb.AppendLine($"    [global::Newtonsoft.Json.JsonConverter(typeof(global::Facet.Generated.OptionalNewtonsoftJsonConverter))]");
+                    sb.AppendLine($"    [global::Newtonsoft.Json.JsonProperty(DefaultValueHandling = global::Newtonsoft.Json.DefaultValueHandling.Ignore)]");
+                }
                 sb.AppendLine($"    public global::Facet.Optional<{member.TypeName}> {member.Name} {{ get; set; }}");
             }
         }
@@ -1301,6 +1346,146 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
     /// <summary>Whether the <see cref="OutputType.Partial"/> modifier is set.</summary>
     private static bool IsPartial(OutputType value) => (value & OutputType.Partial) != 0;
+
+    /// <summary>
+    /// Generated System.Text.Json support for <c>Facet.Optional&lt;T&gt;</c> giving Patch DTOs
+    /// RFC 7396 (JSON Merge Patch) wire semantics. Generated into the consuming assembly —
+    /// like strongly-typed-ID libraries do for their converters — so Facet.Attributes takes
+    /// no System.Text.Json package dependency.
+    /// </summary>
+    private const string OptionalJsonSupportSource = """
+// <auto-generated>
+//     This code was generated by the Facet GenerateDtos source generator.
+//     Changes to this file may cause incorrect behavior and will be lost if
+//     the code is regenerated.
+// </auto-generated>
+
+#nullable enable
+
+using System;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace Facet.Generated;
+
+/// <summary>
+/// Creates converters giving <see cref="global::Facet.Optional{T}"/> JSON Merge Patch
+/// (RFC 7396) semantics: an absent property stays unspecified, an explicit null becomes
+/// a specified null (or a JsonException — surfaced by ASP.NET Core as HTTP 400 — for
+/// non-nullable value types), and a value becomes a specified value.
+/// </summary>
+internal sealed class OptionalJsonConverterFactory : JsonConverterFactory
+{
+    public override bool CanConvert(Type typeToConvert)
+        => typeToConvert.IsGenericType
+           && typeToConvert.GetGenericTypeDefinition() == typeof(global::Facet.Optional<>);
+
+    public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
+    {
+        var valueType = typeToConvert.GetGenericArguments()[0];
+        return (JsonConverter)Activator.CreateInstance(
+            typeof(OptionalJsonConverter<>).MakeGenericType(valueType))!;
+    }
+}
+
+internal sealed class OptionalJsonConverter<T> : JsonConverter<global::Facet.Optional<T>>
+{
+    // A null token must reach Read so it can become a *specified* null; without this,
+    // System.Text.Json would reject null for the non-nullable Optional<T> struct itself.
+    public override bool HandleNull => true;
+
+    public override global::Facet.Optional<T> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        // An absent property never invokes a converter — the field keeps
+        // default(Optional<T>), i.e. unspecified. Reaching this method means the
+        // property was present, so the result is always specified. Null into a
+        // non-nullable value type throws JsonException here.
+        var value = JsonSerializer.Deserialize<T>(ref reader, options);
+        return new global::Facet.Optional<T>(value!);
+    }
+
+    public override void Write(Utf8JsonWriter writer, global::Facet.Optional<T> value, JsonSerializerOptions options)
+    {
+        // Unspecified values are normally skipped via [JsonIgnore(WhenWritingDefault)]
+        // on the generated properties; if one is serialized directly anyway, null is
+        // the closest wire representation.
+        if (!value.HasValue)
+        {
+            writer.WriteNullValue();
+            return;
+        }
+
+        JsonSerializer.Serialize(writer, value.Value, options);
+    }
+}
+""";
+
+    /// <summary>
+    /// Generated Newtonsoft.Json support for <c>Facet.Optional&lt;T&gt;</c> — the Json.NET
+    /// counterpart of <see cref="OptionalJsonSupportSource"/>, for apps whose MVC pipeline
+    /// binds bodies through Json.NET (AddNewtonsoftJson). Json.NET honors per-property
+    /// [JsonConverter] attributes, so no serializer registration is needed.
+    /// </summary>
+    private const string OptionalNewtonsoftJsonSupportSource = """
+// <auto-generated>
+//     This code was generated by the Facet GenerateDtos source generator.
+//     Changes to this file may cause incorrect behavior and will be lost if
+//     the code is regenerated.
+// </auto-generated>
+
+#nullable enable
+
+using System;
+using Newtonsoft.Json;
+
+namespace Facet.Generated;
+
+/// <summary>
+/// Gives <see cref="global::Facet.Optional{T}"/> JSON Merge Patch (RFC 7396) semantics
+/// under Newtonsoft.Json: an absent property never invokes a converter (the field keeps
+/// default(Optional&lt;T&gt;), i.e. unspecified); an explicit null becomes a specified null,
+/// or a JsonSerializationException — surfaced by ASP.NET Core as HTTP 400 — for
+/// non-nullable value types.
+/// </summary>
+internal sealed class OptionalNewtonsoftJsonConverter : JsonConverter
+{
+    public override bool CanConvert(Type objectType)
+        => objectType.IsGenericType
+           && objectType.GetGenericTypeDefinition() == typeof(global::Facet.Optional<>);
+
+    public override object ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
+    {
+        var valueType = objectType.GetGenericArguments()[0];
+
+        if (reader.TokenType == JsonToken.Null
+            && valueType.IsValueType
+            && Nullable.GetUnderlyingType(valueType) == null)
+        {
+            throw new JsonSerializationException(
+                $"Cannot convert null to non-nullable {valueType.Name}. Omit the property to leave the value unchanged.");
+        }
+
+        var value = reader.TokenType == JsonToken.Null ? null : serializer.Deserialize(reader, valueType);
+        return Activator.CreateInstance(objectType, value)!;
+    }
+
+    public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
+    {
+        // Unspecified values are normally skipped via [JsonProperty(DefaultValueHandling =
+        // Ignore)] on the generated properties; if one is serialized directly anyway, null
+        // is the closest wire representation.
+        var hasValue = value is not null
+            && (bool)value.GetType().GetProperty("HasValue")!.GetValue(value)!;
+        if (!hasValue)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        serializer.Serialize(writer, value!.GetType().GetProperty("Value")!.GetValue(value));
+    }
+}
+""";
 
     /// <summary>
     /// Splits a [Flags] <see cref="OutputType"/> value into its individual output kinds,
