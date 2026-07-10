@@ -15,7 +15,10 @@ namespace Facet.Generators;
 /// on: kept, navigation, owned, skip navigation, explicitly ignored, or a service property).
 /// When a [GenerateDtos] source type appears here, ExcludeNavigationProperties keeps exactly
 /// the keep-set; a settable property outside the known-set means the manifest predates the
-/// property and is reported as FAC106 rather than silently mis-shaping the DTO.
+/// property and is reported as FAC106 rather than silently mis-shaping the DTO. Wiring any
+/// manifest into a project also flips the ExcludeNavigationProperties default to true there
+/// (see <see cref="HasAcceptedManifests"/>) — attributes opt out per type with an explicit
+/// <c>ExcludeNavigationProperties = false</c>.
 /// </summary>
 /// <remarks>
 /// See <c>FacetEfModelManifest</c> in Facet.Extensions.EFCore for the writer and the schema.
@@ -38,14 +41,16 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
 
     public static readonly EfModelManifest Empty = new EfModelManifest(
         ImmutableDictionary<string, ManifestEntity>.Empty,
-        ImmutableArray<ManifestIssue>.Empty);
+        ImmutableArray<ManifestIssue>.Empty,
+        hasAcceptedManifests: false);
 
     private readonly ImmutableDictionary<string, ManifestEntity> _entities;
 
-    private EfModelManifest(ImmutableDictionary<string, ManifestEntity> entities, ImmutableArray<ManifestIssue> issues)
+    private EfModelManifest(ImmutableDictionary<string, ManifestEntity> entities, ImmutableArray<ManifestIssue> issues, bool hasAcceptedManifests)
     {
         _entities = entities;
         Issues = issues;
+        HasAcceptedManifests = hasAcceptedManifests;
     }
 
     /// <summary>Files that were rejected in full, for the generator to report (FAC103/FAC104).</summary>
@@ -53,6 +58,17 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
 
     /// <summary>Number of entity CLR types listed across all accepted manifest files.</summary>
     public int EntityCount => _entities.Count;
+
+    /// <summary>
+    /// Whether any manifest file parsed successfully, entities or not. Wiring a manifest into
+    /// the compilation is the project-level opt-in that flips the ExcludeNavigationProperties
+    /// default to true for attributes that leave it unset. Deliberately false when every
+    /// supplied file was rejected: those already fail the build as FAC103/FAC104, and flipping
+    /// the default on top would bury the real error under a cascade of FAC105s. A bool rather
+    /// than a file count — behavior only depends on presence, and equality (which drives
+    /// incremental caching) must not invalidate on a content-preserving file consolidation.
+    /// </summary>
+    public bool HasAcceptedManifests { get; }
 
     /// <summary>
     /// Looks up the manifest entry for a CLR type name (namespace-qualified, dot-separated —
@@ -67,6 +83,7 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
     {
         var merged = new Dictionary<string, MutableEntity>(StringComparer.Ordinal);
         var issues = ImmutableArray.CreateBuilder<ManifestIssue>();
+        var acceptedFileCount = 0;
 
         // Sorted by path so merge results and issue order do not depend on
         // AdditionalFiles enumeration order.
@@ -80,9 +97,10 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
 
             var issue = ParseSingle(file.Path, file.Text, merged);
             if (issue != null) issues.Add(issue);
+            else acceptedFileCount++;
         }
 
-        if (merged.Count == 0 && issues.Count == 0) return Empty;
+        if (acceptedFileCount == 0 && issues.Count == 0) return Empty;
 
         var builder = ImmutableDictionary.CreateBuilder<string, ManifestEntity>(StringComparer.Ordinal);
         foreach (var entity in merged)
@@ -92,7 +110,7 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
                 entity.Value.Known.ToImmutableHashSet(StringComparer.Ordinal)));
         }
 
-        return new EfModelManifest(builder.ToImmutable(), issues.ToImmutable());
+        return new EfModelManifest(builder.ToImmutable(), issues.ToImmutable(), acceptedFileCount > 0);
     }
 
     /// <summary>
@@ -211,6 +229,7 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
     {
         if (other is null) return false;
         if (ReferenceEquals(this, other)) return true;
+        if (HasAcceptedManifests != other.HasAcceptedManifests) return false;
         if (_entities.Count != other._entities.Count) return false;
         if (!Issues.SequenceEqual(other.Issues)) return false;
 
@@ -231,7 +250,7 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
         // order, and equal manifests must hash identically.
         unchecked
         {
-            var hash = 0;
+            var hash = HasAcceptedManifests ? 1 : 0;
             foreach (var entity in _entities)
             {
                 hash += entity.Key.GetHashCode() * 397 ^ entity.Value.GetHashCode();

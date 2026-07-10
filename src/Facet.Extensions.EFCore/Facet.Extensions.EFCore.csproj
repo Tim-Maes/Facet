@@ -28,6 +28,12 @@
 
     <ItemGroup>
         <None Include="README.md" Pack="true" PackagePath="" />
+        <!--
+          buildTransitive (not build/) so the FacetEfDesignTime opt-in property works from
+          the startup project too, which typically references this package only transitively
+          through the DbContext project.
+        -->
+        <None Include="buildTransitive\Facet.Extensions.EFCore.targets" Pack="true" PackagePath="buildTransitive\" />
     </ItemGroup>
 
     <!-- Resolve System.Collections.Immutable version conflict for net8.0 -->

@@ -34,13 +34,15 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
     public ImmutableArray<FacetMember> Members { get; }
     public bool UseFullName { get; }
     /// <summary>
-    /// Whether the attribute requested navigation-property exclusion. Members are NOT yet
-    /// filtered for navigations when this is set: the generation stage resolves the final
-    /// member set from the EF model manifest (an AdditionalFile, unavailable in the syntax
-    /// transform). A source type with no manifest entry is an error (FAC105) — there is no
-    /// heuristic fallback.
+    /// The attribute's navigation-property exclusion request: true or false when set
+    /// explicitly, null when the attribute leaves it unset — the generation stage then
+    /// defaults it to whether an EF model manifest is wired into the compilation. Members are
+    /// NOT yet filtered for navigations here: manifests are AdditionalFiles, unavailable in
+    /// the syntax transform, so the final member set is resolved at generation time. A shaped
+    /// source type with no manifest entry is an error (FAC105) — there is no heuristic
+    /// fallback.
     /// </summary>
-    public bool ExcludeNavigationProperties { get; }
+    public bool? ExcludeNavigationProperties { get; }
     /// <summary>
     /// The attribute's IncludeProperties escape hatch, kept on the model because manifest-based
     /// filtering happens after the transform and must still honor forced inclusions.
@@ -48,7 +50,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
     public ImmutableArray<string> IncludeProperties { get; }
     /// <summary>
     /// Names of property members that EF could plausibly map — settable, or get-only
-    /// collections — recorded only when <see cref="ExcludeNavigationProperties"/> is set.
+    /// collections — recorded unless <see cref="ExcludeNavigationProperties"/> is explicitly
+    /// false (an unset value may still resolve to shaping, so the names must be carried).
     /// The generation stage checks these against a manifest entry's known-set: a name the
     /// model has no opinion on means the manifest predates the property (FAC106).
     /// </summary>
@@ -103,7 +106,7 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         ImmutableArray<string> excludeProperties,
         ImmutableArray<FacetMember> members,
         bool useFullName,
-        bool excludeNavigationProperties = false,
+        bool? excludeNavigationProperties = null,
         ImmutableArray<string> includeProperties = default,
         ImmutableArray<string> settableProperties = default,
         SourceLocationInfo? attributeLocation = null,
