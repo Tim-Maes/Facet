@@ -129,6 +129,37 @@ public class GenerateDtosManifestDiagnosticsTests
     }
 
     [Fact]
+    public void AssemblyLevelDeclaration_ReportsFac105_AtTheAssemblyAttribute()
+    {
+        // [assembly: GenerateDtosFor] flows through the same manifest resolution as the
+        // class-level attribute: no manifest entry is the same hard error, anchored at the
+        // assembly attribute.
+        var diagnostics = RunGenerator("""
+            using Facet;
+            using System;
+            using System.Collections.Generic;
+
+            [assembly: GenerateDtosFor(typeof(ManifestDiag.Parent),
+                Types = DtoTypes.Update, ExcludeNavigationProperties = true)]
+
+            namespace ManifestDiag;
+
+            public class Child { public int Id { get; set; } }
+
+            public class Parent
+            {
+                public int Id { get; set; }
+                public Child? Owner { get; set; }
+            }
+            """);
+
+        var fac105 = diagnostics.Should().ContainSingle(d => d.Id == "FAC105").Subject;
+        fac105.Severity.Should().Be(DiagnosticSeverity.Error);
+        fac105.GetMessage().Should().Contain("Parent");
+        fac105.Location.Should().NotBe(Location.None);
+    }
+
+    [Fact]
     public void FlagsCombinedOutputTypes_ReportFac105Once()
     {
         var diagnostics = RunGenerator(Entities + """
