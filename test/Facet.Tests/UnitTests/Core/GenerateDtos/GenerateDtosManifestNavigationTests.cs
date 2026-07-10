@@ -228,4 +228,41 @@ public class GenerateDtosManifestNavigationTests
         dto.Should().Contain("Name", "a property mapped as data in any context's manifest stays");
         dto.Should().NotContain("Owner");
     }
+
+    [Fact]
+    public void AssemblyLevelDeclaration_UsesTheManifest()
+    {
+        // The assembly-level entry point shares the class-level pipeline, so a
+        // [assembly: GenerateDtosFor] registration gets the same manifest-driven shaping.
+        var dto = GenerateUpdateDto("""
+            using Facet;
+            using System;
+            using System.Collections.Generic;
+
+            [assembly: GenerateDtosFor(typeof(ManifestNav.Parent),
+                Types = DtoTypes.Update, ExcludeNavigationProperties = true)]
+
+            namespace ManifestNav;
+
+            public class Child { public int Id { get; set; } }
+
+            public class Parent
+            {
+                public int Id { get; set; }
+                public string? Name { get; set; }
+                public Child? Owner { get; set; }
+            }
+            """,
+            """
+            {
+              "version": 1,
+              "entities": [
+                { "clrType": "ManifestNav.Parent", "scalar": ["Id", "Name"], "nav": ["Owner"] }
+              ]
+            }
+            """);
+
+        dto.Should().Contain("Name");
+        dto.Should().NotContain("Owner", "assembly-level declarations follow the model's designation too");
+    }
 }
