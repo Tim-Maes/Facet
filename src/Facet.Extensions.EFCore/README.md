@@ -331,10 +331,11 @@ Nothing else in the design-time services touches it — not `build`, not `databa
 makes it a committed drift guard (below). It also means you don't need it fresh on every build;
 you need it fresh whenever the mapped shape changes, which is when you add a migration anyway.
 
-If you'd rather not go through a migration — the first-time bootstrap before any schema change,
-or a workflow that avoids `dotnet ef` entirely — call the same writer directly instead; see
+Adopting on an existing application with no model change pending? A migration add/remove pair
+bootstraps the manifest with no leftover migration, and a small tool covers `dotnet ef`-free
+workflows — see
 [Producing the manifest without a migration](#producing-the-manifest-without-a-migration). You
-never have to invent a no-op migration to get a manifest.
+never have to keep a no-op migration to have a manifest.
 
 Each `DbContext` writes its own `{Context}.facetmodel.json`; if you have several, the generator
 merges them (a property mapped as data in any context is kept).
@@ -381,13 +382,24 @@ drift from your schema.
 
 ### Producing the manifest without a migration
 
-The migration hook is just a convenient caller of a public API — the manifest is an ordinary
-file, and `FacetEfModelManifest.Build`/`Write` produce it from a model directly. Reach for this
-when running a migration is the wrong tool for the moment:
+The most common adoption case is an existing application with a migration history and **no
+model change pending** — `migrations add` alone would create a migration you don't want. You
+don't need a tool for that case: the hook fires on `remove` too, so an add/remove pair
+bootstraps the manifest and leaves no migration behind:
 
-- **First-time bootstrap** — you've added the attribute and the `<AdditionalFiles>` glob, but
-  the model hasn't changed, so `dotnet ef migrations add` reports "no changes." Generate the
-  first manifest here instead of forcing an empty migration.
+```bash
+dotnet ef migrations add FacetBootstrap    # writes the manifest (and a temp migration)
+dotnet ef migrations remove                # deletes the migration; the manifest stays, rewritten
+```
+
+(`remove` re-scaffolds the snapshot from the remaining migrations and the hook rewrites the
+manifest beside it; if `FacetBootstrap` was your only migration, the manifest written by the
+`add` simply remains. Nothing is applied to a database at any point.)
+
+For everything else, the migration hook is just a convenient caller of a public API — the
+manifest is an ordinary file, and `FacetEfModelManifest.Build`/`Write` produce it from a model
+directly. Reach for the API when:
+
 - **No migration churn / no `dotnet ef`** — you keep the manifest current some other way (a
   pre-build target, a `dotnet run` tool, a checked-in generator step) and don't want a schema
   command in the loop.
