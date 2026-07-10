@@ -1,17 +1,28 @@
 <!--
-  Opt-in registration of Facet's EF design-time services. Setting
+  Opt-in EF integration for Facet. Setting
 
       <FacetEfDesignTime>true</FacetEfDesignTime>
 
-  in a project emits the [assembly: DesignTimeServicesReference] attribute that tells
-  'dotnet ef' to load FacetDesignTimeServices, which writes the {ContextName}.facetmodel.json
-  manifest beside the model snapshot on every 'dotnet ef migrations add'/'remove'. The
-  attribute is read from the DbContext project's assembly and the startup assembly, so the
-  property belongs in either; it is inert everywhere else, which is why this ships
-  buildTransitive — the startup project usually references this package only transitively.
+  in a project does two things:
 
-  Deliberately opt-in: this package's mapping extensions are useful without manifests, and a
-  package reference alone must not change what migrations write.
+  1. Emits the [assembly: DesignTimeServicesReference] attribute that tells 'dotnet ef' to
+     load FacetDesignTimeServices, which writes the {ContextName}.facetmodel.json manifest
+     beside the model snapshot on every 'dotnet ef migrations add'/'remove'. The attribute is
+     read from the DbContext project's assembly and the startup assembly, so the property
+     belongs in either; it is inert everywhere else, which is why this ships buildTransitive —
+     the startup project usually references this package only transitively.
+
+  2. Wires the project's own manifests into the compilation as AdditionalFiles, so the Facet
+     generator sees them without a hand-written glob. In a single-project setup this makes
+     the property the only knob: write manifests, consume manifests, shaping on. The glob
+     matches nothing until the first migration runs — harmless, since 'dotnet ef' builds the
+     project before it writes anything. A project whose [GenerateDtos] attributes live
+     elsewhere still adds a cross-project <AdditionalFiles> glob there: only that project
+     knows where its manifests come from.
+
+  Deliberately opt-in on both counts: this package's mapping extensions are useful without
+  manifests, and a package reference alone must not change what migrations write or what the
+  compiler consumes.
 -->
 <Project>
 
@@ -19,20 +30,26 @@
     <AssemblyAttribute Include="Microsoft.EntityFrameworkCore.Design.DesignTimeServicesReference">
       <_Parameter1>Facet.Extensions.EFCore.Design.FacetDesignTimeServices, Facet.Extensions.EFCore</_Parameter1>
     </AssemblyAttribute>
+    <!--
+      Own-directory manifests only; a duplicate of a hand-written glob is harmless (the
+      manifest reader merges per-file idempotently). DefaultItemExcludes keeps bin/obj out.
+    -->
+    <AdditionalFiles Include="$(MSBuildProjectDirectory)/**/*.facetmodel.json"
+                     Exclude="$(DefaultItemExcludes)" />
   </ItemGroup>
 
   <!--
     AssemblyAttribute items are emitted through the SDK's generated AssemblyInfo file; a
-    project that disables that generation would silently swallow the registration. The
-    remediation is to switch mechanisms entirely (source-file attribute, property removed) —
-    the property can do nothing useful under GenerateAssemblyInfo=false, so once removed the
-    warning stops. Carries a code so <MSBuildWarningsAsMessages>FACET001</...> can demote it
-    under -warnaserror.
+    project that disables that generation silently swallows the registration half of the
+    property (the AdditionalFiles half is unaffected — plain items don't go through
+    AssemblyInfo). The remediation keeps the property for manifest consumption and moves the
+    registration to a source file; the warning carries a code so it can be demoted once that
+    is done, including under -warnaserror.
   -->
   <Target Name="_FacetEfDesignTimeAssemblyInfoCheck"
           BeforeTargets="CoreCompile"
           Condition="'$(FacetEfDesignTime)' == 'true' and '$(GenerateAssemblyInfo)' == 'false'">
-    <Warning Code="FACET001" Text="FacetEfDesignTime is set, but GenerateAssemblyInfo is disabled, so the DesignTimeServicesReference assembly attribute will not be emitted. Remove the FacetEfDesignTime property and add [assembly: Microsoft.EntityFrameworkCore.Design.DesignTimeServicesReference(&quot;Facet.Extensions.EFCore.Design.FacetDesignTimeServices, Facet.Extensions.EFCore&quot;)] to a source file instead." />
+    <Warning Code="FACET001" Text="FacetEfDesignTime is set, but GenerateAssemblyInfo is disabled, so the DesignTimeServicesReference assembly attribute will not be emitted (this project's *.facetmodel.json files are still wired as AdditionalFiles). Register the design-time services by adding [assembly: Microsoft.EntityFrameworkCore.Design.DesignTimeServicesReference(&quot;Facet.Extensions.EFCore.Design.FacetDesignTimeServices, Facet.Extensions.EFCore&quot;)] to a source file, then demote this warning with &lt;MSBuildWarningsAsMessages&gt;$(MSBuildWarningsAsMessages);FACET001&lt;/MSBuildWarningsAsMessages&gt;." />
   </Target>
 
 </Project>

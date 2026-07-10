@@ -280,12 +280,15 @@ dotnet add MyApp.Persistence package Facet.Extensions.EFCore
 </PropertyGroup>
 ```
 
-The property emits an assembly attribute that tells `dotnet ef` to load Facet's design-time
-services. EF reads that attribute from the `DbContext` project's assembly and from the
-startup assembly (`--startup-project`), so the property works in either — the `DbContext`
-project is the natural home, since the package is already there. It changes nothing at
-runtime, and it is opt-in on purpose: a package reference alone never changes what your
-migrations write.
+The property does two things. It emits an assembly attribute that tells `dotnet ef` to load
+Facet's design-time services — EF reads that attribute from the `DbContext` project's
+assembly and from the startup assembly (`--startup-project`), so the property works in
+either; the `DbContext` project is the natural home, since the package is already there. And
+it wires the project's **own** `*.facetmodel.json` files into the compilation as
+AdditionalFiles, so if your `[GenerateDtos]` attributes live in this same project, this
+property is the only knob you will touch. It changes nothing at runtime, and it is opt-in on
+purpose: a package reference alone never changes what your migrations write or what the
+compiler consumes.
 
 Prefer the registration visible in code — or have `GenerateAssemblyInfo` disabled? (Both the
 property and raw `<AssemblyAttribute>` items are emitted through the SDK's generated
@@ -337,9 +340,12 @@ manifest refreshes automatically whenever migrations change.
 
 ### Step 3 — Wire the manifest into the generator: this is the switch
 
-In the project that declares your `[GenerateDtos]` attributes, add the manifest as an
-AdditionalFile. If your entities and `DbContext` live in different projects (the usual layered
-setup), this is a relative path into the migrations project:
+If your `[GenerateDtos]` attributes live in the **same project as the `DbContext`**, there is
+nothing to do here: `FacetEfDesignTime` already wires the project's own manifests into the
+compilation.
+
+If they live in a different project (the usual layered setup), add the manifest there as an
+AdditionalFile — a relative path into the migrations project:
 
 ```xml
 <ItemGroup>
@@ -347,10 +353,10 @@ setup), this is a relative path into the migrations project:
 </ItemGroup>
 ```
 
-Same-project setups just use `Migrations\*.facetmodel.json`.
-
-Get the path right: an `<AdditionalFiles>` glob that matches nothing is **silently empty** —
-MSBuild cannot tell a typo from an intentionally absent manifest, so the project just stays
+This step cannot be automated away: a cross-project manifest path is knowledge only the
+consuming project has (nothing forces it to even reference the `DbContext` project). So get
+the path right — an `<AdditionalFiles>` glob that matches nothing is **silently empty**;
+MSBuild cannot tell a typo from an intentionally absent manifest, and the project just stays
 in unshaped mode with no diagnostic. The build-and-check below is what catches it. For a
 standing guarantee, pin `ExcludeNavigationProperties = true` on one representative entity:
 an explicitly shaped type turns "no manifest matched" into a hard FAC105.

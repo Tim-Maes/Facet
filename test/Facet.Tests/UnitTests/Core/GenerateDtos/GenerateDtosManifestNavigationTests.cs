@@ -295,6 +295,33 @@ public class GenerateDtosManifestNavigationTests
     }
 
     [Fact]
+    public void DuplicateManifestWiring_IsIdempotent()
+    {
+        // FacetEfDesignTime auto-wires a project's own manifests; a hand-written
+        // <AdditionalFiles> glob may match the same files again. The reader merges per file
+        // by union, so seeing the same content twice must change nothing.
+        const string manifest = """
+            {
+              "version": 1,
+              "entities": [ { "clrType": "ManifestNav.Parent", "scalar": ["Id", "Name"], "nav": ["Owner"] } ]
+            }
+            """;
+        var dto = GenerateUpdateDto(Entities + """
+            [GenerateDtos(Types = DtoTypes.Update)]
+            public class Parent
+            {
+                public int Id { get; set; }
+                public string? Name { get; set; }
+                public Child? Owner { get; set; }
+            }
+            """,
+            manifest, manifest);
+
+        dto.Should().Contain("Name");
+        dto.Should().NotContain("Owner", "duplicate wiring of the same manifest content is a no-op");
+    }
+
+    [Fact]
     public void GenerateAuditableDtos_ManifestWired_KeepsLegacyShape()
     {
         // The obsolete attribute has no way to express or opt out of manifest shaping, so a

@@ -463,7 +463,8 @@ AdditionalFile. Setup is three steps, once — install the separate `Facet.Exten
 NuGet package into the `DbContext` project and set `<FacetEfDesignTime>true</FacetEfDesignTime>`
 there, bootstrap the manifest with a `migrations add`/`remove` pair (no leftover migration),
 and point `<AdditionalFiles>` at it — that last step is the switch that turns shaping on for
-the whole project. The
+the whole project, and it is pre-wired when the attributes live in the `DbContext` project
+itself (`FacetEfDesignTime` wires the project's own manifests automatically). The
 **[Facet.Extensions.EFCore README](../src/Facet.Extensions.EFCore/README.md#shaping-dtos-with-your-ef-model-excludenavigationproperties)**
 has the full walkthrough, the layered-solution diagram, and the programmatic writer for
 `dotnet ef`-free workflows. After setup, the manifest refreshes automatically with every
