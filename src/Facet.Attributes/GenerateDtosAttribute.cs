@@ -107,6 +107,40 @@ public class GenerateDtosAttribute : Attribute
     public string[] ExcludeProperties { get; set; } = Array.Empty<string>();
 
     /// <summary>
+    /// When true, keeps exactly the properties EF Core maps as data (scalar columns and
+    /// complex/value-object members) and drops navigations, skip navigations, owned
+    /// references, and EF-ignored properties — removing ORM navigation/back-reference
+    /// properties from generated DTOs without listing each one in
+    /// <see cref="ExcludeProperties"/>.
+    /// <para>
+    /// This is driven entirely by the EF model: it requires a <c>*.facetmodel.json</c>
+    /// manifest (written beside the model snapshot by Facet.Extensions.EFCore's design-time
+    /// services on every <c>dotnet ef migrations add</c>/<c>remove</c>) exposed to the
+    /// generator as an AdditionalFile. Because it follows the model's own designation,
+    /// value-converted entity-typed columns survive and <c>[NotMapped]</c> properties drop —
+    /// neither of which a type-shape guess could get right. A source type with no manifest
+    /// entry is a compile error (FAC105); there is no heuristic fallback.
+    /// </para>
+    /// <para>
+    /// Left unset, this defaults to whether the project wires a manifest into
+    /// AdditionalFiles: a manifest-wired project shapes every generated DTO, a project
+    /// without one copies properties as-is. An explicit value wins in both directions —
+    /// most usefully <c>false</c> on a non-entity source type in a manifest-wired project.
+    /// Aggregate children that should stay in the DTO despite being navigations can be
+    /// forced back in via <see cref="IncludeProperties"/>.
+    /// </para>
+    /// </summary>
+    public bool ExcludeNavigationProperties { get; set; }
+
+    /// <summary>
+    /// Properties to keep in every generated DTO regardless of <see cref="ExcludeProperties"/>,
+    /// <see cref="ExcludeAuditFields"/>, or <see cref="ExcludeNavigationProperties"/> — the
+    /// escape hatch for aggregate children (e.g. an owned parameter collection edited together
+    /// with its parent) that the EF model designates a navigation.
+    /// </summary>
+    public string[] IncludeProperties { get; set; } = Array.Empty<string>();
+
+    /// <summary>
     /// When true, automatically excludes common audit fields from generated DTOs.
     /// <para>
     /// Excluded fields: CreatedDate, UpdatedDate, CreatedAt, UpdatedAt, CreatedBy, UpdatedBy, CreatedById, UpdatedById.

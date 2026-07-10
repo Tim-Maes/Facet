@@ -5,6 +5,9 @@
   -->
 
   <ItemGroup>
+    <!-- Fluent EF query surface: the per-project enable switch and its depth guardrail. -->
+    <CompilerVisibleProperty Include="FacetFluent" />
+    <CompilerVisibleProperty Include="FacetMaxChainDepth" />
     <CompilerVisibleProperty Include="Facet_GenerateConstructor" />
     <CompilerVisibleProperty Include="Facet_GenerateParameterlessConstructor" />
     <CompilerVisibleProperty Include="Facet_GenerateProjection" />
