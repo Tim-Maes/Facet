@@ -18,6 +18,8 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     
     private const string GenerateAuditableDtosAttributeName = "Facet.GenerateAuditableDtosAttribute";
 
+    private const string GenerateDtosForAttributeName = "Facet.GenerateDtosForAttribute";
+
     private static readonly DiagnosticDescriptor GeneratorErrorRule = new DiagnosticDescriptor(
         "FAC100",
         "GenerateDtos generator encountered an error",
@@ -74,9 +76,18 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             .Where(static m => m is not null)
             .SelectMany(static (models, _) => models!);
 
+        var generateDtosForTargets = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                GenerateDtosForAttributeName,
+                predicate: static (node, _) => node is CompilationUnitSyntax,
+                transform: static (ctx, token) => GetGenerateDtosForModels(ctx, token))
+            .Where(static m => m is not null)
+            .SelectMany(static (models, _) => models!);
+
         var allTargets = generateDtosTargets.Collect()
             .Combine(generateAuditableDtosTargets.Collect())
-            .Select(static (combined, _) => combined.Left.Concat(combined.Right));
+            .Combine(generateDtosForTargets.Collect())
+            .Select(static (combined, _) => combined.Left.Left.Concat(combined.Left.Right).Concat(combined.Right));
 
         context.RegisterSourceOutput(allTargets, (spc, models) =>
         {
@@ -118,15 +129,47 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     {
         token.ThrowIfCancellationRequested();
         if (context.TargetSymbol is not INamedTypeSymbol sourceSymbol) return null;
-        if (context.Attributes.Length == 0) return null;
+
+        return BuildModels(context.Attributes, _ => sourceSymbol, forceExcludeAuditFields, token);
+    }
+
+    /// <summary>
+    /// Assembly-level entry point: <c>[assembly: GenerateDtosFor(typeof(Entity), ...)]</c>
+    /// generates into the DECLARING assembly, with the source entity resolved from the
+    /// attribute's constructor argument — typically a type from a referenced assembly, so
+    /// contract DTOs can live downstream of the domain project.
+    /// </summary>
+    private static IEnumerable<GenerateDtosTargetModel>? GetGenerateDtosForModels(GeneratorAttributeSyntaxContext context, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        if (context.TargetSymbol is not IAssemblySymbol) return null;
+
+        return BuildModels(
+            context.Attributes,
+            static attr => attr.ConstructorArguments.Length == 1
+                ? attr.ConstructorArguments[0].Value as INamedTypeSymbol
+                : null,
+            forceExcludeAuditFields: false,
+            token);
+    }
+
+    private static IEnumerable<GenerateDtosTargetModel>? BuildModels(
+        ImmutableArray<AttributeData> attributes,
+        Func<AttributeData, INamedTypeSymbol?> sourceSelector,
+        bool forceExcludeAuditFields,
+        CancellationToken token)
+    {
+        if (attributes.Length == 0) return null;
 
         var models = new List<GenerateDtosTargetModel>();
 
-        foreach (var attribute in context.Attributes)
+        foreach (var attribute in attributes)
         {
             token.ThrowIfCancellationRequested();
 
-            var model = GetDtosModel(context, attribute, sourceSymbol, forceExcludeAuditFields, token);
+            if (sourceSelector(attribute) is not INamedTypeSymbol sourceSymbol) continue;
+
+            var model = GetDtosModel(attribute, sourceSymbol, forceExcludeAuditFields, token);
             if (model == null) continue;
 
             // OutputType is a [Flags] value: kind bits (Class/Record/Struct/RecordStruct/
@@ -183,6 +226,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             DtoTypes siblingMask = DtoTypes.None;
             foreach (var iface in interfaceModels)
             {
+                if (iface.SourceTypeName != model.SourceTypeName) continue;
                 if (iface.Prefix != model.Prefix) continue;
                 if (iface.Suffix != model.Suffix) continue;
                 if (iface.TargetNamespace != model.TargetNamespace) continue;
@@ -213,7 +257,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         return models;
     }
 
-    private static GenerateDtosTargetModel? GetDtosModel(GeneratorAttributeSyntaxContext context, AttributeData attribute, INamedTypeSymbol sourceSymbol, bool forceExcludeAuditFields, CancellationToken token)
+    private static GenerateDtosTargetModel? GetDtosModel(AttributeData attribute, INamedTypeSymbol sourceSymbol, bool forceExcludeAuditFields, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
 

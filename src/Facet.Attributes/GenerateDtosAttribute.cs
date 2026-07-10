@@ -155,6 +155,32 @@ public class GenerateDtosAttribute : Attribute
 }
 
 /// <summary>
+/// Assembly-level counterpart of <see cref="GenerateDtosAttribute"/>: generates DTOs for
+/// <see cref="SourceType"/> into the assembly that DECLARES this attribute rather than the
+/// assembly that declares the entity. Place it in the project where the DTOs should live
+/// (e.g. a web-contracts layer referencing the domain), keeping the domain assembly free of
+/// generated contract types:
+/// <code>
+/// [assembly: GenerateDtosFor(typeof(Schedule),
+///     Types = DtoTypes.Create | DtoTypes.Update,
+///     OutputType = OutputType.Interface | OutputType.Record | OutputType.Partial)]
+/// </code>
+/// All options of <see cref="GenerateDtosAttribute"/> apply. Interface/concrete sibling
+/// pairing links outputs for the same <see cref="SourceType"/> only.
+/// </summary>
+[AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
+public sealed class GenerateDtosForAttribute : GenerateDtosAttribute
+{
+    /// <summary>The entity type (typically from a referenced assembly) to generate DTOs for.</summary>
+    public Type SourceType { get; }
+
+    public GenerateDtosForAttribute(Type sourceType)
+    {
+        SourceType = sourceType;
+    }
+}
+
+/// <summary>
 /// Obsolete. Use <see cref="GenerateDtosAttribute"/> with <c>ExcludeAuditFields = true</c> instead.
 /// </summary>
 /// <remarks>
