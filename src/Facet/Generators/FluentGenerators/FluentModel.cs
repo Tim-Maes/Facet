@@ -176,7 +176,11 @@ internal sealed class FluentEntityModel : IEquatable<FluentEntityModel>
                 // their shape types must exist for the capability interface to reference.
                 if (!manifest.TryGetEntity(targetClrName, out _)) continue;
 
-                navs.Add(new FluentNav(name, targetClrName, isCollection, entry.OptionalNavs.Contains(name)));
+                // Pre-navOptional manifests can't say which references are required;
+                // pessimistic-nullable never lies, and regenerating the manifest tightens it.
+                var isOptional = !isCollection
+                    && (!entry.OptionalNavsKnown || entry.OptionalNavs.Contains(name));
+                navs.Add(new FluentNav(name, targetClrName, isCollection, isOptional));
             }
 
             var keyMembers = ImmutableArray.CreateBuilder<FluentMember>();

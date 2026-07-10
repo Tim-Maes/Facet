@@ -113,6 +113,7 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
                 entity.Value.Known.ToImmutableHashSet(StringComparer.Ordinal),
                 entity.Value.Chainable.ToImmutableHashSet(StringComparer.Ordinal),
                 entity.Value.OptionalNavs.ToImmutableHashSet(StringComparer.Ordinal),
+                entity.Value.HasNavOptionalField,
                 entity.Value.KeyConflicted || entity.Value.Key == null
                     ? ImmutableArray<string>.Empty
                     : entity.Value.Key.ToImmutableArray()));
@@ -191,6 +192,12 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
                     AddMembers(entity, "nav", record.Chainable);
                     AddMembers(entity, "skipnav", record.Chainable);
                     AddMembers(entity, "navOptional", record.OptionalNavs);
+                    if (entity.TryGetProperty("navOptional", out var navOptionalField)
+                        && navOptionalField.ValueKind == JsonValueKind.Array)
+                    {
+                        record.HasNavOptionalField = true;
+                    }
+
                     if (entity.TryGetProperty("key", out var keyElement) && keyElement.ValueKind == JsonValueKind.Array)
                     {
                         var keyMembers = new List<string>();
@@ -219,6 +226,7 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
                 existing.Known.UnionWith(entity.Value.Known);
                 existing.Chainable.UnionWith(entity.Value.Chainable);
                 existing.OptionalNavs.UnionWith(entity.Value.OptionalNavs);
+                existing.HasNavOptionalField |= entity.Value.HasNavOptionalField;
                 if (entity.Value.Key != null)
                 {
                     existing.MergeKey(entity.Value.Key);
@@ -254,6 +262,7 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
         public HashSet<string> Known { get; } = new HashSet<string>(StringComparer.Ordinal);
         public HashSet<string> Chainable { get; } = new HashSet<string>(StringComparer.Ordinal);
         public HashSet<string> OptionalNavs { get; } = new HashSet<string>(StringComparer.Ordinal);
+        public bool HasNavOptionalField { get; set; }
         public List<string>? Key { get; private set; }
         public bool KeyConflicted { get; private set; }
 
@@ -329,12 +338,14 @@ internal sealed class ManifestEntity : IEquatable<ManifestEntity>
         ImmutableHashSet<string> known,
         ImmutableHashSet<string>? chainableNavs = null,
         ImmutableHashSet<string>? optionalNavs = null,
+        bool optionalNavsKnown = false,
         ImmutableArray<string> key = default)
     {
         Keep = keep;
         Known = known;
         ChainableNavs = chainableNavs ?? ImmutableHashSet<string>.Empty;
         OptionalNavs = optionalNavs ?? ImmutableHashSet<string>.Empty;
+        OptionalNavsKnown = optionalNavsKnown;
         Key = key.IsDefault ? ImmutableArray<string>.Empty : key;
     }
 
@@ -357,11 +368,20 @@ internal sealed class ManifestEntity : IEquatable<ManifestEntity>
 
     /// <summary>
     /// Reference navigations whose relationship the model marks optional — their shape
-    /// members are nullable. A chainable reference nav outside this set is required.
-    /// Manifests written before the field existed leave it empty; the fluent generator then
-    /// treats every reference nav as optional, which is pessimistic but never lies.
+    /// members are nullable. When <see cref="OptionalNavsKnown"/> is true, a chainable
+    /// reference nav outside this set is required; when false (a manifest written before the
+    /// field existed), the fluent generator treats every reference nav as optional — which
+    /// is pessimistic but never lies.
     /// </summary>
     public ImmutableHashSet<string> OptionalNavs { get; }
+
+    /// <summary>
+    /// Whether any accepted manifest carried the <c>navOptional</c> field for this entity.
+    /// Distinguishes "all navs required" (field present, empty) from "written before the
+    /// field existed" (absent) — the writer emits the field, even empty, whenever an entity
+    /// has navigations.
+    /// </summary>
+    public bool OptionalNavsKnown { get; }
 
     /// <summary>
     /// Primary-key property names in key order; empty for keyless entities, owned types,
@@ -375,6 +395,7 @@ internal sealed class ManifestEntity : IEquatable<ManifestEntity>
             && Known.SetEquals(other.Known)
             && ChainableNavs.SetEquals(other.ChainableNavs)
             && OptionalNavs.SetEquals(other.OptionalNavs)
+            && OptionalNavsKnown == other.OptionalNavsKnown
             && Key.SequenceEqual(other.Key, StringComparer.Ordinal);
 
     public override bool Equals(object? obj) => obj is ManifestEntity other && Equals(other);
@@ -388,6 +409,7 @@ internal sealed class ManifestEntity : IEquatable<ManifestEntity>
             foreach (var member in Known) hash += member.GetHashCode() * 397;
             foreach (var member in ChainableNavs) hash += member.GetHashCode() * 31;
             foreach (var member in OptionalNavs) hash += member.GetHashCode() * 17;
+            hash = hash * 31 + (OptionalNavsKnown ? 1 : 0);
             foreach (var member in Key) hash = hash * 31 + member.GetHashCode();
             return hash;
         }

@@ -390,7 +390,11 @@ internal sealed class FluentEmitter
     private static string CamelCase(string name)
     {
         if (name.Length == 0 || char.IsLower(name[0])) return "@" + name;
-        return char.ToLowerInvariant(name[0]) + name.Substring(1);
+        var candidate = char.ToLowerInvariant(name[0]) + name.Substring(1);
+        // A member like "Class" camel-cases into a reserved keyword; verbatim-escape those.
+        return Microsoft.CodeAnalysis.CSharp.SyntaxFacts.GetKeywordKind(candidate) != Microsoft.CodeAnalysis.CSharp.SyntaxKind.None
+            ? "@" + candidate
+            : candidate;
     }
 
     private void EmitChains(StringBuilder sb, EntityPlan plan)

@@ -123,6 +123,13 @@ public class FacetFluentGeneratorTests
             public int Quantity { get; set; }
             public int ProductId { get; set; }
             public Product? Product { get; set; }
+            public Note? Note { get; set; }
+        }
+
+        public class Note
+        {
+            public int Id { get; set; }
+            public string Text { get; set; } = null!;
         }
 
         public class Product
@@ -138,8 +145,9 @@ public class FacetFluentGeneratorTests
           "entities": [
             { "clrType": "FluentTest.Order", "key": ["Id"], "scalar": ["Id", "PlacedAt", "Total", "UserId"], "nav": ["Items", "User"], "navOptional": ["User"] },
             { "clrType": "FluentTest.User", "key": ["Id"], "scalar": ["Id", "Name"] },
-            { "clrType": "FluentTest.OrderItem", "key": ["Id"], "scalar": ["Id", "Quantity", "ProductId"], "nav": ["Product"] },
-            { "clrType": "FluentTest.Product", "key": ["Id"], "scalar": ["Id", "Sku"] }
+            { "clrType": "FluentTest.OrderItem", "key": ["Id"], "scalar": ["Id", "Quantity", "ProductId"], "nav": ["Note", "Product"], "navOptional": ["Note"] },
+            { "clrType": "FluentTest.Product", "key": ["Id"], "scalar": ["Id", "Sku"] },
+            { "clrType": "FluentTest.Note", "key": ["Id"], "scalar": ["Id", "Text"] }
           ]
         }
         """;
@@ -154,13 +162,34 @@ public class FacetFluentGeneratorTests
     }
 
     [Fact]
-    public void Enabled_WithoutManifest_ReportsFac120()
+    public void Enabled_WithoutManifestOrChains_ReportsFac120_AsWarning()
     {
+        // The first 'dotnet ef migrations add' builds the project before any manifest can
+        // exist; an unconditional error would deadlock that bootstrap.
         var (_, diagnostics) = RunFluent(Entities, manifest: null);
 
         var fac120 = diagnostics.Should().ContainSingle(d => d.Id == "FAC120").Subject;
+        fac120.Severity.Should().Be(DiagnosticSeverity.Warning);
+    }
+
+    [Fact]
+    public void Enabled_WithoutManifest_ButWithChains_EscalatesFac120_ToError()
+    {
+        var (_, diagnostics) = RunFluent(Entities + """
+
+            public static class Consumer
+            {
+                public static async System.Threading.Tasks.Task Use(Microsoft.EntityFrameworkCore.DbContext ctx)
+                {
+                    _ = await ctx.FacetOrder().WithUser().ToListAsync();
+                }
+            }
+            """, manifest: null);
+
+        var fac120 = diagnostics.Should().ContainSingle(d => d.Id == "FAC120").Subject;
         fac120.Severity.Should().Be(DiagnosticSeverity.Error,
-            "the property is an explicit opt-in, so a missing manifest is a configuration error, never a quiet no-op");
+            "once chains are written, the missing manifest must explain the CS1061 wall loudly");
+        fac120.Location.Should().NotBe(Location.None, "anchored at a chain so the error lands near the broken call sites");
     }
 
     [Fact]
@@ -266,6 +295,104 @@ public class FacetFluentGeneratorTests
         fac121.Severity.Should().Be(DiagnosticSeverity.Warning);
         fac121.Location.Should().NotBe(Location.None, "the warning must point at the chain that was capped");
         fac121.Location.GetLineSpan().Path.Should().Be("Consumer.cs");
+    }
+
+    [Fact]
+    public void RepeatedSteps_WithDifferentNestedLambdas_MergeOntoOneCompilableShape()
+    {
+        // Two WithItems steps whose lambdas include different navs merge into a nested set
+        // no single lambda produced ({Note, Product}); the composed interface for that union
+        // must be declared on the target entity or the generated file cannot compile.
+        var (output, diagnostics) = RunFluent(Entities + """
+
+            public static class Consumer
+            {
+                public static async System.Threading.Tasks.Task Use(Microsoft.EntityFrameworkCore.DbContext ctx)
+                {
+                    var rows = await ctx.FacetOrder()
+                        .WithItems(i => i.WithProduct())
+                        .WithItems(i => i.WithNote())
+                        .ToListAsync();
+                    string sku = rows[0].Items[0].Product.Sku;
+                    string? note = rows[0].Items[0].Note?.Text;
+                }
+            }
+            """, Manifest);
+
+        diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+        output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void KeywordFormingKeyMember_IsVerbatimEscaped()
+    {
+        // A key member named "Class" camel-cases into a reserved keyword; the emitted
+        // GetByKeyAsync parameter must be verbatim-escaped or the whole file fails to parse.
+        var (output, diagnostics) = RunFluent("""
+            namespace FluentTest;
+
+            public class Lookup
+            {
+                public int Class { get; set; }
+                public string Label { get; set; } = null!;
+            }
+
+            public static class Consumer
+            {
+                public static async System.Threading.Tasks.Task Use(Microsoft.EntityFrameworkCore.DbContext ctx)
+                {
+                    _ = await ctx.FacetLookup().GetByKeyAsync(1);
+                }
+            }
+            """, """
+            {
+              "version": 1,
+              "entities": [
+                { "clrType": "FluentTest.Lookup", "key": ["Class"], "scalar": ["Class", "Label"] }
+              ]
+            }
+            """);
+
+        diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+        output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void PreNavOptionalManifest_TreatsReferenceNavsAsNullable()
+    {
+        // A manifest written before the navOptional field existed cannot say which
+        // references are required; pessimistic-nullable never lies. The null guard in the
+        // selector and the nullable member type must both appear.
+        var (output, diagnostics) = RunFluent(Entities + """
+
+            public static class Consumer
+            {
+                public static async System.Threading.Tasks.Task Use(Microsoft.EntityFrameworkCore.DbContext ctx)
+                {
+                    var row = await ctx.FacetOrder().WithUser().FirstOrDefaultAsync();
+                    string? name = row?.User?.Name;
+                }
+            }
+            """, """
+            {
+              "version": 1,
+              "entities": [
+                { "clrType": "FluentTest.Order", "key": ["Id"], "scalar": ["Id", "PlacedAt", "Total", "UserId"], "nav": ["Items", "User"] },
+                { "clrType": "FluentTest.User", "key": ["Id"], "scalar": ["Id", "Name"] },
+                { "clrType": "FluentTest.OrderItem", "key": ["Id"], "scalar": ["Id", "Quantity", "ProductId"], "nav": ["Note", "Product"] },
+                { "clrType": "FluentTest.Product", "key": ["Id"], "scalar": ["Id", "Sku"] },
+                { "clrType": "FluentTest.Note", "key": ["Id"], "scalar": ["Id", "Text"] }
+              ]
+            }
+            """);
+
+        diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+        output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+
+        var orderFile = output.SyntaxTrees.Select(t => t.ToString())
+            .Single(t => t.Contains("class OrderFacetShape"));
+        orderFile.Should().Contain("e.User == null ? null :",
+            "unknown requiredness must produce the null guard, not a materialization crash on NULL rows");
     }
 
     [Fact]

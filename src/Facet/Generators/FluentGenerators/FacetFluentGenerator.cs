@@ -26,9 +26,9 @@ public sealed class FacetFluentGenerator : IncrementalGenerator
         "FacetFluent requires an EF model manifest",
         "FacetFluent is enabled, but no EF model manifest was found in AdditionalFiles. Set <FacetEfDesignTime>true</FacetEfDesignTime> in the DbContext project, run 'dotnet ef migrations add', and wire the *.facetmodel.json into this project (automatic in the DbContext project itself; a cross-project <AdditionalFiles> glob otherwise).",
         "Generator",
-        DiagnosticSeverity.Error,
+        DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "The fluent query surface is generated entirely from the EF model manifest — without one there is nothing safe to generate, and silently generating nothing would look like the feature is broken. The property is the project's explicit opt-in, so a missing manifest is a configuration error, not a quiet no-op.");
+        description: "The fluent query surface is generated entirely from the EF model manifest — without one there is nothing safe to generate, and generating nothing silently would look like the feature is broken. Severity is situational: during first-time setup the first 'dotnet ef migrations add' builds the project BEFORE any manifest exists, so an unconditional error would deadlock the bootstrap — it stays a warning until fluent chains are actually written, and escalates to an error exactly then, alongside the CS1061s it explains.");
 
     private static readonly DiagnosticDescriptor ChainDepthCappedRule = new DiagnosticDescriptor(
         "FAC121",
@@ -115,7 +115,16 @@ public sealed class FacetFluentGenerator : IncrementalGenerator
             // pipeline; this generator only cares whether any manifest made it through.
             if (!efManifest.HasAcceptedManifests)
             {
-                spc.ReportDiagnostic(Diagnostic.Create(FluentWithoutManifestRule, Location.None));
+                // Warning while no chain exists (the bootstrap migration builds before the
+                // first manifest can exist); error once chains are written, so the wall of
+                // CS1061s at the call sites comes with its explanation.
+                var anyChain = discovered.FirstOrDefault(c => c != null);
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    FluentWithoutManifestRule,
+                    anyChain?.Location.ToLocation() ?? Location.None,
+                    anyChain != null ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning,
+                    additionalLocations: null,
+                    properties: null));
                 return;
             }
 

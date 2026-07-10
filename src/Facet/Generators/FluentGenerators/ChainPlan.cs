@@ -179,7 +179,33 @@ internal static class ChainPlanner
             if (wasCapped) capped.Add(chain);
         }
 
+        // Cross-step merges (.WithItems(i => i.WithProduct()).WithItems(i => i.WithDiscount()))
+        // union nested sets that no single lambda ever produced; every nested set reachable
+        // from any final state needs its composed interface declared on the TARGET entity.
+        foreach (var plan in plans.Values)
+        {
+            foreach (var state in plan.States.Values.ToList())
+            {
+                RegisterNestedComposed(plans, plan.Model, state);
+            }
+        }
+
         return new Result(plans.ToImmutableDictionary(StringComparer.Ordinal), capped.ToImmutable());
+    }
+
+    private static void RegisterNestedComposed(
+        Dictionary<string, EntityPlan> plans,
+        FluentEntityModel model,
+        ImmutableArray<ChainNode> state)
+    {
+        foreach (var node in state)
+        {
+            if (node.Children.Length == 0) continue;
+            var nav = model.FindNav(node.Nav);
+            if (nav == null || !plans.TryGetValue(nav.TargetClrName, out var targetPlan)) continue;
+            targetPlan.RegisterComposed(node.Children);
+            RegisterNestedComposed(plans, targetPlan.Model, node.Children);
+        }
     }
 
     /// <summary>

@@ -104,7 +104,19 @@ public static class FacetEfModelManifest
                 WriteCategory(writer, "scalar", entity.Value.Scalars);
                 WriteCategory(writer, "complex", entity.Value.ComplexMembers);
                 WriteCategory(writer, "nav", entity.Value.Navigations);
-                WriteCategory(writer, "navOptional", entity.Value.OptionalNavigations);
+                // Present-but-empty is meaningful: it says "every reference nav is required",
+                // which readers must distinguish from manifests predating the field (those
+                // get pessimistic-nullable treatment). So it is written whenever navs exist.
+                if (entity.Value.Navigations.Count > 0)
+                {
+                    writer.WriteStartArray("navOptional");
+                    foreach (var member in entity.Value.OptionalNavigations)
+                    {
+                        writer.WriteStringValue(member);
+                    }
+
+                    writer.WriteEndArray();
+                }
                 WriteCategory(writer, "owned", entity.Value.OwnedNavigations);
                 WriteCategory(writer, "skipnav", entity.Value.SkipNavigations);
                 WriteCategory(writer, "ignored", entity.Value.IgnoredMembers);
