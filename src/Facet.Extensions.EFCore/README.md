@@ -253,36 +253,52 @@ If your entities are mapped by EF Core, they carry navigation properties — `Or
 finds them, so without shaping, every generated DTO drags those navigations along **as raw
 entity types**: serializer cycles, accidental graph exposure, bloated wire contracts.
 
-`ExcludeNavigationProperties = true` fixes that by shaping the DTO to **exactly what EF maps
-as data** — scalar columns, complex/value-object members, primitive collections — and
-dropping navigations, skip navigations, owned references, and `[NotMapped]` members. It reads
-the truth from a **model manifest**: a small committed JSON file generated from your actual
-`DbContext` model at design time. No manifest entry for a type is a compile error (FAC105),
-never a silently mis-shaped DTO.
+Manifest shaping fixes that by generating **exactly what EF maps as data** — scalar columns,
+complex/value-object members, primitive collections — and dropping navigations, skip
+navigations, owned references, and `[NotMapped]` members. It reads the truth from a **model
+manifest**: a small committed JSON file generated from your actual `DbContext` model at
+design time. Once a manifest is wired into a project, every `[GenerateDtos]` DTO there is
+shaped by default; a shaped type with no manifest entry is a compile error (FAC105), never a
+silently mis-shaped DTO.
 
-Setup is four steps, once. The assumed starting point is the normal one: an existing
+Setup is three steps, once. The assumed starting point is the normal one: an existing
 application with a `DbContext` and a migrations history, no model change in flight, on a
 clean branch.
 
-### Step 1 — Install the package and register the design-time services
+### Step 1 — Install the package and switch on the design-time hook
 
-`Facet.Extensions.EFCore` is its own NuGet package. Add it where your `DbContext` lives —
-the startup project then gets it transitively through its project reference:
+`Facet.Extensions.EFCore` is its own NuGet package. Add it to the project that has your
+`DbContext`, and set one property in that same `.csproj`:
 
 ```bash
 dotnet add MyApp.Persistence package Facet.Extensions.EFCore
 ```
 
-Then register the design-time services in the **startup project** — the one you pass to
-`dotnet ef --startup-project` (without that flag, `dotnet ef` treats the project in your
-current directory as the startup project). Any compiled `.cs` file works:
+```xml
+<PropertyGroup>
+  <FacetEfDesignTime>true</FacetEfDesignTime>
+</PropertyGroup>
+```
+
+The property emits an assembly attribute that tells `dotnet ef` to load Facet's design-time
+services. EF reads that attribute from the `DbContext` project's assembly and from the
+startup assembly (`--startup-project`), so the property works in either — the `DbContext`
+project is the natural home, since the package is already there. It changes nothing at
+runtime, and it is opt-in on purpose: a package reference alone never changes what your
+migrations write.
+
+Prefer the registration visible in code — or have `GenerateAssemblyInfo` disabled? (Both the
+property and raw `<AssemblyAttribute>` items are emitted through the SDK's generated
+AssemblyInfo file, so neither works without it.) The attribute is one line in any compiled
+`.cs` file, and this form always works:
 
 ```csharp
 [assembly: Microsoft.EntityFrameworkCore.Design.DesignTimeServicesReference(
     "Facet.Extensions.EFCore.Design.FacetDesignTimeServices, Facet.Extensions.EFCore")]
 ```
 
-Or, with no new file, from the startup project's `.csproj`:
+The raw `<AssemblyAttribute>` item in a `.csproj` is what the property expands to, if you'd
+rather see it spelled out:
 
 ```xml
 <ItemGroup>
@@ -292,10 +308,10 @@ Or, with no new file, from the startup project's `.csproj`:
 </ItemGroup>
 ```
 
-From now on, every `dotnet ef migrations add`/`remove` that leaves a model snapshot in place
-also rewrites the manifest (`{ContextName}.facetmodel.json`) beside it. (Removing your *only*
-migration deletes the snapshot and leaves the manifest untouched — not a state the flows
-below ever produce.)
+Registering it more than once is harmless — EF de-duplicates. From now on, every
+`dotnet ef migrations add`/`remove` that leaves a model snapshot in place also rewrites the
+manifest (`{ContextName}.facetmodel.json`) beside it. (Removing your *only* migration deletes
+the snapshot and leaves the manifest untouched — not a state the flows below ever produce.)
 
 ### Step 2 — Generate the first manifest
 
@@ -319,7 +335,7 @@ Two things worth knowing, because they are real:
 Commit it like you commit the snapshot. You will not run this step again: from here the
 manifest refreshes automatically whenever migrations change.
 
-### Step 3 — Feed the manifest to the generator
+### Step 3 — Wire the manifest into the generator: this is the switch
 
 In the project that declares your `[GenerateDtos]` attributes, add the manifest as an
 AdditionalFile. If your entities and `DbContext` live in different projects (the usual layered
@@ -333,10 +349,17 @@ setup), this is a relative path into the migrations project:
 
 Same-project setups just use `Migrations\*.facetmodel.json`.
 
-### Step 4 — Turn it on
+Get the path right: an `<AdditionalFiles>` glob that matches nothing is **silently empty** —
+MSBuild cannot tell a typo from an intentionally absent manifest, so the project just stays
+in unshaped mode with no diagnostic. The build-and-check below is what catches it. For a
+standing guarantee, pin `ExcludeNavigationProperties = true` on one representative entity:
+an explicitly shaped type turns "no manifest matched" into a hard FAC105.
+
+Wiring the manifest is the opt-in. From this build on, **every `[GenerateDtos]` DTO in the
+project is shaped by the model** — no per-attribute flag:
 
 ```csharp
-[GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update, ExcludeNavigationProperties = true)]
+[GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update)]
 public class Schedule
 {
     public int Id { get; set; }
@@ -349,10 +372,18 @@ public class Schedule
 Build, and check one generated DTO: it should contain the mapped data members and nothing
 else. Because the shaping comes from the model rather than from type shapes, it is right in
 the cases guesswork can't be: a class stored through a **value converter** stays (the model
-maps it as a column), and a scalar-looking `[NotMapped]` property goes. When an entity-typed
-member genuinely belongs in the DTO — an owned collection edited together with its parent —
-force it back in with `IncludeProperties = new[] { nameof(Order.Lines) }`; it wins over every
-exclusion (the one thing it cannot restore is `Id` on Create DTOs, a fixed convention).
+maps it as a column), and a scalar-looking `[NotMapped]` property goes.
+
+Two per-type dials, and an explicit value always wins over the default:
+
+- A source type that is **not an EF entity** — a view model, a projection type — has no
+  manifest entry, so shaping it would be FAC105. Mark it
+  `ExcludeNavigationProperties = false`: it copies properties as-is, exactly like a project
+  with no manifest.
+- An entity-typed member that genuinely belongs in the DTO — an owned collection edited
+  together with its parent — comes back with
+  `IncludeProperties = new[] { nameof(Order.Lines) }`; it wins over every exclusion (the one
+  thing it cannot restore is `Id` on Create DTOs, a fixed convention).
 
 That's the whole setup. Day to day there is nothing to operate: the manifest rides your
 normal migration workflow.
@@ -361,7 +392,7 @@ normal migration workflow.
 
 | Rule | Severity | Meaning |
 |---|---|---|
-| **FAC105** | Error | An `ExcludeNavigationProperties` type has no manifest entry. Either the `<AdditionalFiles>` path is wrong (a glob that matches nothing is silently empty — this error is how you find out) or the type isn't in the manifest (regenerate it). For a type that isn't an EF entity, use `ExcludeProperties` instead. |
+| **FAC105** | Error | A shaped type has no manifest entry: it is missing from the manifest (regenerate it), or it isn't an EF entity at all — set `ExcludeNavigationProperties = false` on it. On an explicitly shaped type this also catches a mistyped `<AdditionalFiles>` path, since zero matched manifests fails every explicit type; under the wired-manifest default a mistyped glob instead means no shaping and no diagnostics — the pin-one-entity tip in Step 3 is the tripwire for that. The message states whether shaping came from an explicit flag or from the default. |
 | **FAC106** | Warning | A settable property (or get-only collection property) on a mapped entity is unknown to the manifest — you added it after the manifest was last written, and it would silently vanish from the DTO. Scaffold the migration for it (`dotnet ef migrations add …`), or mark it `[NotMapped]`. |
 | **FAC103 / FAC104** | Error | A manifest file is malformed / written by an incompatible package version. The file is ignored in full, never half-applied. |
 
@@ -380,8 +411,8 @@ generated DTOs land in whichever project declares the attributes:
 ```mermaid
 flowchart LR
     EF(["dotnet ef migrations add/remove<br/>--startup-project Web --project Persistence"])
-    W["MyApp.Web — startup project<br/>assembly: DesignTimeServicesReference"]
-    P["MyApp.Persistence — migrations project<br/>…ModelSnapshot.cs<br/>MyDbContext.facetmodel.json"]
+    W["MyApp.Web — startup project"]
+    P["MyApp.Persistence — DbContext + migrations<br/>FacetEfDesignTime = true<br/>…ModelSnapshot.cs<br/>MyDbContext.facetmodel.json"]
     D["MyApp.Domain — [GenerateDtos] project<br/>entities + attributes<br/>AdditionalFiles → ../MyApp.Persistence/Migrations/*.facetmodel.json<br/>generated DTOs land here"]
 
     W -. discovered by .-> EF

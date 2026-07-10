@@ -1,0 +1,38 @@
+<!--
+  Opt-in registration of Facet's EF design-time services. Setting
+
+      <FacetEfDesignTime>true</FacetEfDesignTime>
+
+  in a project emits the [assembly: DesignTimeServicesReference] attribute that tells
+  'dotnet ef' to load FacetDesignTimeServices, which writes the {ContextName}.facetmodel.json
+  manifest beside the model snapshot on every 'dotnet ef migrations add'/'remove'. The
+  attribute is read from the DbContext project's assembly and the startup assembly, so the
+  property belongs in either; it is inert everywhere else, which is why this ships
+  buildTransitive — the startup project usually references this package only transitively.
+
+  Deliberately opt-in: this package's mapping extensions are useful without manifests, and a
+  package reference alone must not change what migrations write.
+-->
+<Project>
+
+  <ItemGroup Condition="'$(FacetEfDesignTime)' == 'true'">
+    <AssemblyAttribute Include="Microsoft.EntityFrameworkCore.Design.DesignTimeServicesReference">
+      <_Parameter1>Facet.Extensions.EFCore.Design.FacetDesignTimeServices, Facet.Extensions.EFCore</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <!--
+    AssemblyAttribute items are emitted through the SDK's generated AssemblyInfo file; a
+    project that disables that generation would silently swallow the registration. The
+    remediation is to switch mechanisms entirely (source-file attribute, property removed) —
+    the property can do nothing useful under GenerateAssemblyInfo=false, so once removed the
+    warning stops. Carries a code so <MSBuildWarningsAsMessages>FACET001</...> can demote it
+    under -warnaserror.
+  -->
+  <Target Name="_FacetEfDesignTimeAssemblyInfoCheck"
+          BeforeTargets="CoreCompile"
+          Condition="'$(FacetEfDesignTime)' == 'true' and '$(GenerateAssemblyInfo)' == 'false'">
+    <Warning Code="FACET001" Text="FacetEfDesignTime is set, but GenerateAssemblyInfo is disabled, so the DesignTimeServicesReference assembly attribute will not be emitted. Remove the FacetEfDesignTime property and add [assembly: Microsoft.EntityFrameworkCore.Design.DesignTimeServicesReference(&quot;Facet.Extensions.EFCore.Design.FacetDesignTimeServices, Facet.Extensions.EFCore&quot;)] to a source file instead." />
+  </Target>
+
+</Project>

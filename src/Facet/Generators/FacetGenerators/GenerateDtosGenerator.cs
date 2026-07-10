@@ -64,7 +64,7 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         "Generator",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "A committed *.facetmodel.json file wired up as an AdditionalFile is not readable as a manifest. It is ignored in full, and any ExcludeNavigationProperties type it should have covered then surfaces as FAC105 — the failure is never silent.");
+        description: "A committed *.facetmodel.json file wired up as an AdditionalFile is not readable as a manifest. It is ignored in full and does not count as a wired manifest — so it does not flip the ExcludeNavigationProperties default, and this error stands alone instead of being buried under a FAC105 cascade (explicitly shaped types it should have covered still surface as FAC105).");
 
     private static readonly DiagnosticDescriptor ManifestVersionRule = new DiagnosticDescriptor(
         "FAC104",
@@ -73,16 +73,16 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         "Generator",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "The manifest was written by a Facet.Extensions.EFCore version whose format this generator does not read — a package version mismatch. It is ignored in full; any ExcludeNavigationProperties type it should have covered then surfaces as FAC105.");
+        description: "The manifest was written by a Facet.Extensions.EFCore version whose format this generator does not read — a package version mismatch. It is ignored in full and does not count as a wired manifest, so it does not flip the ExcludeNavigationProperties default; explicitly shaped types it should have covered still surface as FAC105.");
 
     private static readonly DiagnosticDescriptor TypeNotInManifestRule = new DiagnosticDescriptor(
         "FAC105",
         "GenerateDtos source type is not in the EF model manifest",
-        "'{0}' sets ExcludeNavigationProperties, which requires an EF model manifest entry for the type, but none was found. Wire up Facet.Extensions.EFCore's design-time services and add the manifest to AdditionalFiles — note that an AdditionalFiles glob matching nothing is silently empty, so double-check the path — then run 'dotnet ef migrations add' to generate it.",
+        "'{0}' {1}, which requires an EF model manifest entry for the type, but none was found. If the type is an EF entity, generate the manifest: register Facet.Extensions.EFCore's design-time services (FacetEfDesignTime property in the DbContext project), run 'dotnet ef migrations add', and double-check the AdditionalFiles path — a glob matching nothing is silently empty. If it is not an entity, set ExcludeNavigationProperties = false on the attribute.",
         "Generator",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "ExcludeNavigationProperties is driven entirely by the EF model manifest — there is no heuristic fallback. A source type with no manifest entry (because no manifest was supplied at all, or because this type is absent from the manifests present) cannot be shaped and is a hard error. If the type is not an EF entity, list its navigation-like properties in ExcludeProperties instead of using ExcludeNavigationProperties.");
+        description: "ExcludeNavigationProperties is driven entirely by the EF model manifest — there is no heuristic fallback — and defaults to true for every [GenerateDtos] attribute in a project that wires a manifest into AdditionalFiles. A source type with no manifest entry (because no manifest was supplied at all, or because this type is absent from the manifests present) cannot be shaped and is a hard error. Non-entity source types opt out per attribute with ExcludeNavigationProperties = false.");
 
     private static readonly DiagnosticDescriptor PropertyNotInManifestRule = new DiagnosticDescriptor(
         "FAC106",
@@ -394,7 +394,22 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                 .GetTypeByMetadataName("System.Text.Json.Serialization.JsonConverterAttribute") is not null;
             var supportsNewtonsoftJson = compilation
                 .GetTypeByMetadataName("Newtonsoft.Json.JsonConverterAttribute") is not null;
-            var excludeNavigationProperties = GetNamedArg(attribute.NamedArguments, "ExcludeNavigationProperties", false);
+            // Tri-state: an attribute that leaves ExcludeNavigationProperties unset defaults
+            // to shaping exactly when the project wires an EF model manifest into
+            // AdditionalFiles — resolved at generation time, where manifests are visible.
+            bool? excludeNavigationProperties = attribute.NamedArguments
+                .Where(kvp => kvp.Key == "ExcludeNavigationProperties")
+                .Select(kvp => kvp.Value.Value as bool?)
+                .FirstOrDefault();
+
+            // The obsolete [GenerateAuditableDtos] declares neither ExcludeNavigationProperties
+            // nor IncludeProperties, so the wired-manifest default must not reach it: there
+            // would be no per-type opt-out, and FAC105 would advise a named argument that does
+            // not compile on that attribute. It keeps its legacy unshaped behavior.
+            if (forceExcludeAuditFields)
+            {
+                excludeNavigationProperties = false;
+            }
 
             var includeProperties = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
             var includePropertiesArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "IncludeProperties");
@@ -441,6 +456,8 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
             // Properties EF could plausibly map (settable, or get-only collections), for the
             // manifest completeness check (FAC106). Computed get-only properties are excluded:
             // the model never maps them, so their absence from a manifest means nothing.
+            // Collected unless shaping is explicitly off — an unset value may still resolve
+            // to shaping once the manifest is in view.
             var settableProperties = new List<string>();
 
             foreach (var (member, isInitOnly, isRequired) in allMembersWithModifiers)
@@ -451,7 +468,7 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
 
                 if (member is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } p)
                 {
-                    if (excludeNavigationProperties
+                    if (excludeNavigationProperties != false
                         && (p.SetMethod != null || GeneratorUtilities.TryGetCollectionElementType(p.Type, out _, out _)))
                     {
                         settableProperties.Add(p.Name);
@@ -1633,12 +1650,14 @@ internal sealed class OptionalNewtonsoftJsonConverter : JsonConverter
 
     /// <summary>
     /// Resolves ExcludeNavigationProperties into a final member list from the EF model
-    /// manifest — the sole source of truth; there is no heuristic fallback. When the source
-    /// type has a manifest entry, exactly the mapped scalar and complex properties are kept,
-    /// so navigations, skip navigations, owned references, and EF-ignored properties all drop.
-    /// A property the model has no opinion on is reported as FAC106 (stale manifest). A type
-    /// with no manifest entry at all is reported as FAC105 (error): the DTO cannot be shaped.
-    /// IncludeProperties always wins.
+    /// manifest — the sole source of truth; there is no heuristic fallback. An attribute that
+    /// leaves the flag unset defaults to shaping exactly when a manifest is wired into the
+    /// compilation: adding the AdditionalFiles glob is the project-level opt-in, and explicit
+    /// values win in both directions. When the source type has a manifest entry, exactly the
+    /// mapped scalar and complex properties are kept, so navigations, skip navigations, owned
+    /// references, and EF-ignored properties all drop. A property the model has no opinion on
+    /// is reported as FAC106 (stale manifest). A type with no manifest entry at all is
+    /// reported as FAC105 (error): the DTO cannot be shaped. IncludeProperties always wins.
     /// </summary>
     private static GenerateDtosTargetModel ResolveNavigationExclusions(
         SgfSourceProductionContext spc,
@@ -1646,7 +1665,7 @@ internal sealed class OptionalNewtonsoftJsonConverter : JsonConverter
         EfModelManifest manifest,
         HashSet<string> reportedCoverage)
     {
-        if (!model.ExcludeNavigationProperties)
+        if (!(model.ExcludeNavigationProperties ?? manifest.HasAcceptedManifests))
         {
             return model;
         }
@@ -1686,7 +1705,10 @@ internal sealed class OptionalNewtonsoftJsonConverter : JsonConverter
             spc.ReportDiagnostic(Diagnostic.Create(
                 TypeNotInManifestRule,
                 model.AttributeLocation?.ToLocation() ?? Location.None,
-                GetSimpleTypeName(model.SourceTypeName)));
+                GetSimpleTypeName(model.SourceTypeName),
+                model.ExcludeNavigationProperties == true
+                    ? "sets ExcludeNavigationProperties"
+                    : "defaults to ExcludeNavigationProperties = true because an EF model manifest is wired into this project"));
         }
 
         return model.WithResolvedMembers(model.Members);
