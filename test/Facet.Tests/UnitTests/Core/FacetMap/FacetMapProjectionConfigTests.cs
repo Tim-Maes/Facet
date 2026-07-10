@@ -44,4 +44,47 @@ public class FacetMapProjectionConfigTests
         dto.Should().NotBeNull();
         dto.Total.Should().Be(0m);
     }
+
+    [Fact]
+    public void ToTarget_WithProjectionConfigAndNoAutoMatchedProperties_ShouldGenerate()
+    {
+        // Test case where NO properties auto-match, all mapping via IFacetProjectionMapConfiguration
+        var entity = new WarehouseItemEntity
+        {
+            ItemId = 42,
+            PackingLevel = new PackingLevelEntity { TotalLabels = 10 },
+            ProductionLine = new ProductionLineEntity
+            {
+                MultiRangeIntakeRef = 100,
+                TransferRef = 200
+            }
+        };
+
+        var dto = entity.ToWarehouseItemDto();
+
+        dto.Should().NotBeNull();
+        dto.Id.Should().Be(42, "Id should map from ItemId via config");
+        dto.LabelCount.Should().Be(10, "LabelCount should map from PackingLevel.TotalLabels via config");
+        dto.IntakeReference.Should().Be(100, "IntakeReference should map from ProductionLine.MultiRangeIntakeRef via config");
+        dto.TransferReference.Should().Be(200, "TransferReference should map from ProductionLine.TransferRef via config");
+    }
+
+    [Fact]
+    public void ToTarget_WithProjectionConfigAndNoAutoMatchedProperties_ShouldHandleNullProduction()
+    {
+        var entity = new WarehouseItemEntity
+        {
+            ItemId = 99,
+            PackingLevel = new PackingLevelEntity { TotalLabels = 5 },
+            ProductionLine = null
+        };
+
+        var dto = entity.ToWarehouseItemDto();
+
+        dto.Should().NotBeNull();
+        dto.Id.Should().Be(99);
+        dto.LabelCount.Should().Be(5);
+        dto.IntakeReference.Should().BeNull("ProductionLine is null, so IntakeReference should be null");
+        dto.TransferReference.Should().BeNull("ProductionLine is null, so TransferReference should be null");
+    }
 }

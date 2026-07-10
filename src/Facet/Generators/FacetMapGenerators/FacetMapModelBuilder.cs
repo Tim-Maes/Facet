@@ -128,7 +128,9 @@ internal static class FacetMapModelBuilder
         var collectionTargetWrapper = ResolveCollectionTargetWrapper(collectionTargetType);
         var members = ResolveMappableMembers(sourceType, targetType, include, exclude, collectionTargetWrapper);
 
-        if (members.IsEmpty) return null;
+        // Allow empty members list if there's a configuration that will provide the mappings
+        // (e.g., IFacetProjectionMapConfiguration where all mappings are defined via builder.Map())
+        if (members.IsEmpty && configType == null) return null;
 
         var ns = markerSymbol.ContainingNamespace?.IsGlobalNamespace == true
             ? null

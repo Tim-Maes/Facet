@@ -467,3 +467,47 @@ public class DtoWithDifferentDict
 
 [FacetMap(typeof(EntityWithDifferentDict), typeof(DtoWithDifferentDict))]
 public static partial class DifferentDictMapper;
+
+// ========================================
+// Test FacetMap with IFacetProjectionMapConfiguration where NO properties auto-match
+// All mapping done via builder.Map() with nested projection
+// ========================================
+public class WarehouseItemEntity
+{
+    public int ItemId { get; set; }
+    public PackingLevelEntity PackingLevel { get; set; } = new();
+    public ProductionLineEntity? ProductionLine { get; set; }
+}
+
+public class PackingLevelEntity
+{
+    public int TotalLabels { get; set; }
+}
+
+public class ProductionLineEntity
+{
+    public int? MultiRangeIntakeRef { get; set; }
+    public int? TransferRef { get; set; }
+}
+
+public class WarehouseItemDto
+{
+    public int Id { get; set; }
+    public int LabelCount { get; set; }
+    public int? IntakeReference { get; set; }
+    public int? TransferReference { get; set; }
+}
+
+public class WarehouseItemMapConfig : Facet.Mapping.IFacetProjectionMapConfiguration<WarehouseItemEntity, WarehouseItemDto>
+{
+    public static void ConfigureProjection(Facet.Mapping.IFacetProjectionBuilder<WarehouseItemEntity, WarehouseItemDto> builder)
+    {
+        builder.Map(target => target.Id, source => source.ItemId);
+        builder.Map(target => target.LabelCount, source => source.PackingLevel.TotalLabels);
+        builder.Map(target => target.IntakeReference, source => source.ProductionLine != null ? source.ProductionLine.MultiRangeIntakeRef : null);
+        builder.Map(target => target.TransferReference, source => source.ProductionLine != null ? source.ProductionLine.TransferRef : null);
+    }
+}
+
+[FacetMap(typeof(WarehouseItemEntity), typeof(WarehouseItemDto), Configuration = typeof(WarehouseItemMapConfig), GenerateProjection = true)]
+public static partial class WarehouseItemMapper;

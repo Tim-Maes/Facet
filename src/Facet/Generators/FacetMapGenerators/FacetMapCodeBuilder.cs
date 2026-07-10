@@ -42,7 +42,15 @@ internal static class FacetMapCodeBuilder
 
         if (model.GenerateProjection)
         {
-            GenerateProjectionProperty(sb, model, memberIndent);
+            // When using IFacetProjectionMapConfiguration, generate dynamic projection from config
+            if (model.ConfigurationTypeName != null && !model.HasMapConfiguration && model.HasProjectionMapConfiguration)
+            {
+                GenerateProjectionFromConfig(sb, model, memberIndent);
+            }
+            else
+            {
+                GenerateProjectionProperty(sb, model, memberIndent);
+            }
         }
 
         // Generate projection map action helper when configuration uses IFacetProjectionMapConfiguration
@@ -316,6 +324,37 @@ internal static class FacetMapCodeBuilder
         }
 
         sb.AppendLine($"{indent}    }};");
+    }
+
+    /// <summary>
+    /// Generates a projection property that uses the IFacetProjectionMapConfiguration to build the expression.
+    /// This is used when all mappings come from builder.Map() calls rather than auto-detected properties.
+    /// </summary>
+    private static void GenerateProjectionFromConfig(StringBuilder sb, FacetMapTargetModel model, string indent)
+    {
+        var sourceSimple = GetSimpleTypeName(model.SourceTypeName);
+        var targetSimple = GetSimpleTypeName(model.TargetTypeName);
+        var src = model.SourceTypeName;
+        var tgt = model.TargetTypeName;
+
+        sb.AppendLine();
+        sb.AppendLine($"{indent}private static Expression<Func<{src}, {tgt}>>? __projectionExpression;");
+        sb.AppendLine();
+        sb.AppendLine($"{indent}/// <summary>");
+        sb.AppendLine($"{indent}/// LINQ projection expression for mapping <see cref=\"{sourceSimple}\"/> to <see cref=\"{targetSimple}\"/>.");
+        sb.AppendLine($"{indent}/// </summary>");
+        sb.AppendLine($"{indent}public static Expression<Func<{src}, {tgt}>> {model.SourceTypeSimpleName}To{model.TargetTypeSimpleName}Projection =>");
+        sb.AppendLine($"{indent}    __GetProjectionExpression();");
+        sb.AppendLine();
+        sb.AppendLine($"{indent}private static Expression<Func<{src}, {tgt}>> __GetProjectionExpression()");
+        sb.AppendLine($"{indent}{{");
+        sb.AppendLine($"{indent}    return global::System.Threading.LazyInitializer.EnsureInitialized(ref __projectionExpression, () =>");
+        sb.AppendLine($"{indent}    {{");
+        sb.AppendLine($"{indent}        var __builder = new global::Facet.Mapping.FacetProjectionBuilder<{src}, {tgt}>();");
+        sb.AppendLine($"{indent}        {model.ConfigurationTypeName}.ConfigureProjection(__builder);");
+        sb.AppendLine($"{indent}        return __builder.BuildProjectionExpression();");
+        sb.AppendLine($"{indent}    }})!;");
+        sb.AppendLine($"{indent}}}");
     }
 
     /// <summary>
