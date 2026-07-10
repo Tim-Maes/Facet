@@ -474,7 +474,16 @@ Or, with no new file, generate the attribute from the startup project's `.csproj
 </ItemGroup>
 ```
 
-With the services registered, the manifest is written **automatically** whenever you add or remove a migration — it rides the migration you were already creating for the schema change (nothing else in the services touches it: not `build`, not `database update`). If you'd rather not go through a migration — the first-time bootstrap before any schema change, or a workflow that avoids `dotnet ef` — call `FacetEfModelManifest.Write(...)` from a small tool instead; you never have to invent a no-op migration. Either way, commit the file and expose it to the generator in the project that declares `[GenerateDtos]`. In a layered solution the startup project, the migrations project (where the manifest lands, beside the snapshot), and the `[GenerateDtos]` project are usually three different assemblies, so the glob is normally a **relative path into the migrations project**:
+With the services registered, the manifest is written **automatically** whenever you add or remove a migration — it rides the migration you were already creating for the schema change (nothing else in the services touches it: not `build`, not `database update`).
+
+**Producing the first manifest** — the most common adoption case is an existing application with no model change pending, so `migrations add` alone would either report "no changes" or create a migration you don't want. The hook fires on `remove` as well, so an add/remove pair bootstraps the manifest and leaves **no migration behind**:
+
+```bash
+dotnet ef migrations add FacetBootstrap    # writes the manifest (and a temp migration)
+dotnet ef migrations remove                # deletes the migration; the manifest stays, rewritten
+```
+
+Alternatively, call `FacetEfModelManifest.Write(...)` from a small tool for workflows that avoid `dotnet ef` entirely. Either way you never have to keep a no-op migration. Commit the file and expose it to the generator in the project that declares `[GenerateDtos]`. In a layered solution the startup project, the migrations project (where the manifest lands, beside the snapshot), and the `[GenerateDtos]` project are usually three different assemblies, so the glob is normally a **relative path into the migrations project**:
 
 ```xml
 <ItemGroup>
