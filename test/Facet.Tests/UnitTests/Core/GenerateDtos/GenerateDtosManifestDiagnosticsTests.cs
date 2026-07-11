@@ -441,6 +441,31 @@ public class GenerateDtosManifestDiagnosticsTests
     }
 
     [Fact]
+    public void Coverage_ExcludesOwnedTypesFromDenominator()
+    {
+        // Owned types are never independent DTO targets — they only appear as nested
+        // properties of their owning entity. The coverage diagnostic must exclude them
+        // from both the count and the uncovered list.
+        var diagnostics = RunGenerator(ParentWithNav, """
+            {
+              "version": 1,
+              "entities": [
+                { "clrType": "ManifestDiag.Parent", "scalar": ["Id"], "nav": ["Owner"] },
+                { "clrType": "ManifestDiag.OwnedSettings", "isOwned": true, "scalar": ["Key", "Value"] },
+                { "clrType": "ManifestDiag.Uncovered1", "scalar": ["Id"] }
+              ]
+            }
+            """);
+
+        var fac107 = diagnostics.Should().ContainSingle(d => d.Id == "FAC107").Subject;
+        fac107.GetMessage().Should().Contain("1 of 2",
+            "owned types are excluded from the denominator");
+        fac107.GetMessage().Should().NotContain("OwnedSettings",
+            "owned types must not appear in the uncovered list");
+        fac107.GetMessage().Should().Contain("Uncovered1");
+    }
+
+    [Fact]
     public void Coverage_DoesNotReportFac107_WhenAllEntitiesConfigured()
     {
         var diagnostics = RunGenerator(ParentWithNav, CompleteParentManifest);
