@@ -83,6 +83,10 @@ public static class FacetEfModelManifest
             {
                 writer.WriteStartObject();
                 writer.WriteString("clrType", entity.Key);
+                if (entity.Value.IsOwned)
+                {
+                    writer.WriteBoolean("isOwned", true);
+                }
                 WriteCategory(writer, "scalar", entity.Value.Scalars);
                 WriteCategory(writer, "complex", entity.Value.ComplexMembers);
                 WriteCategory(writer, "nav", entity.Value.Navigations);
@@ -140,6 +144,7 @@ public static class FacetEfModelManifest
         public SortedSet<string> SkipNavigations { get; } = new(StringComparer.Ordinal);
         public SortedSet<string> IgnoredMembers { get; } = new(StringComparer.Ordinal);
         public SortedSet<string> ServiceProperties { get; } = new(StringComparer.Ordinal);
+        public bool IsOwned { get; set; }
     }
 
     private static Dictionary<string, EntityRecord> CollectEntities(IModel model)
@@ -170,6 +175,11 @@ public static class FacetEfModelManifest
             {
                 record = new EntityRecord();
                 entities.Add(clrName, record);
+            }
+
+            if (entityType.IsOwned())
+            {
+                record.IsOwned = true;
             }
 
             foreach (var property in entityType.GetProperties())
