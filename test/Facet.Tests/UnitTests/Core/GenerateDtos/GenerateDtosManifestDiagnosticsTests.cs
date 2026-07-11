@@ -272,7 +272,7 @@ public class GenerateDtosManifestDiagnosticsTests
             """,
             CompleteParentManifest);
 
-        diagnostics.Should().NotContain(d => d.Id.StartsWith("FAC10"),
+        diagnostics.Should().NotContain(d => d.Id == "FAC105" || d.Id == "FAC106",
             "the flipped default holds covered types to the same rules as explicit opt-in, with no extra noise");
     }
 
@@ -318,7 +318,7 @@ public class GenerateDtosManifestDiagnosticsTests
             }
             """);
 
-        diagnostics.Should().NotContain(d => d.Id.StartsWith("FAC10"),
+        diagnostics.Should().NotContain(d => d.Id == "FAC105" || d.Id == "FAC106",
             "the attribute cannot express the opt-out, so it keeps its legacy unshaped behavior");
     }
 
@@ -342,7 +342,7 @@ public class GenerateDtosManifestDiagnosticsTests
             }
             """);
 
-        diagnostics.Should().NotContain(d => d.Id.StartsWith("FAC10"));
+        diagnostics.Should().NotContain(d => d.Id == "FAC105" || d.Id == "FAC106");
     }
 
     [Fact]
@@ -415,7 +415,69 @@ public class GenerateDtosManifestDiagnosticsTests
     {
         var diagnostics = RunGenerator(ParentWithNav, CompleteParentManifest);
 
-        diagnostics.Should().NotContain(d => d.Id.StartsWith("FAC10"),
+        diagnostics.Should().NotContain(d => d.Id == "FAC105" || d.Id == "FAC106",
             "a manifest that covers the type produces no coverage noise");
+    }
+
+    [Fact]
+    public void Coverage_ReportsFac107_WhenManifestHasUnconfiguredEntities()
+    {
+        var diagnostics = RunGenerator(ParentWithNav, """
+            {
+              "version": 1,
+              "entities": [
+                { "clrType": "ManifestDiag.Parent", "scalar": ["Id"], "nav": ["Owner"] },
+                { "clrType": "ManifestDiag.Uncovered1", "scalar": ["Id"] },
+                { "clrType": "ManifestDiag.Uncovered2", "scalar": ["Id"] }
+              ]
+            }
+            """);
+
+        var fac107 = diagnostics.Should().ContainSingle(d => d.Id == "FAC107").Subject;
+        fac107.Severity.Should().Be(DiagnosticSeverity.Info);
+        fac107.GetMessage().Should().Contain("1 of 3");
+        fac107.GetMessage().Should().Contain("Uncovered1");
+        fac107.GetMessage().Should().Contain("Uncovered2");
+    }
+
+    [Fact]
+    public void Coverage_DoesNotReportFac107_WhenAllEntitiesConfigured()
+    {
+        var diagnostics = RunGenerator(ParentWithNav, CompleteParentManifest);
+
+        diagnostics.Should().NotContain(d => d.Id == "FAC107",
+            "when every manifest entity has [GenerateDtos], coverage is 100% and the info diagnostic is unnecessary");
+    }
+
+    [Fact]
+    public void Coverage_DoesNotReportFac107_WithoutManifest()
+    {
+        var diagnostics = RunGenerator(ParentWithNav);
+
+        diagnostics.Should().NotContain(d => d.Id == "FAC107",
+            "without a manifest there is nothing to measure coverage against");
+    }
+
+    [Fact]
+    public void Coverage_TruncatesUncoveredListAtTen()
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("""{ "version": 1, "entities": [""");
+        sb.AppendLine("""  { "clrType": "ManifestDiag.Parent", "scalar": ["Id"], "nav": ["Owner"] },""");
+        for (int i = 1; i <= 15; i++)
+        {
+            sb.Append("  { \"clrType\": \"ManifestDiag.Entity");
+            sb.Append(i);
+            sb.Append("\", \"scalar\": [\"Id\"] }");
+            if (i < 15) sb.Append(',');
+            sb.AppendLine();
+        }
+        sb.AppendLine("] }");
+
+        var diagnostics = RunGenerator(ParentWithNav, sb.ToString());
+
+        var fac107 = diagnostics.Should().ContainSingle(d => d.Id == "FAC107").Subject;
+        fac107.GetMessage().Should().Contain("1 of 16");
+        fac107.GetMessage().Should().Contain("… (15 total)");
     }
 }
