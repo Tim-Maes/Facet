@@ -204,13 +204,22 @@ public class GenerateDtosCoverageAnalyzerTests
     }
 
     [Fact]
-    public void Fac108_AnchorsToEntityClass_WhenInCurrentCompilation()
+    public void Fac108_AnchorsToGenerateDtosForLocation()
     {
-        var diagnostics = RunAnalyzer(Entities, ManifestWithThreeEntities);
+        // FAC108 anchors to the [assembly: GenerateDtosFor] attribute location so the
+        // code fixer knows which document to modify. Entities are in referenced assemblies,
+        // so their class locations can't be used (Roslyn rejects cross-compilation locations).
+        var diagnostics = RunAnalyzer(Entities, ManifestWithThreeEntities,
+            """
+            using Facet;
 
-        var computerDiag = diagnostics.First(d => d.Id == "FAC108" && d.GetMessage().Contains("Computer"));
-        computerDiag.Location.Should().NotBe(Location.None,
-            "the entity is in the current compilation, so the diagnostic should anchor to it");
-        computerDiag.Location.GetLineSpan().Path.Should().Be("Entities.cs");
+            [assembly: GenerateDtosFor(typeof(CoverageTest.Computer), Types = DtoTypes.Create, OutputType = OutputType.PartialClass)]
+            """);
+
+        // Computer has only Create, so it gets a partial-coverage FAC108.
+        var computerDiag = diagnostics.FirstOrDefault(d => d.Id == "FAC108" && d.GetMessage().Contains("Computer"));
+        computerDiag.Should().NotBeNull();
+        computerDiag!.Location.Should().NotBe(Location.None,
+            "FAC108 should anchor to the [assembly: GenerateDtosFor] attribute location");
     }
 }
