@@ -60,6 +60,13 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
     public int EntityCount => _entities.Count;
 
     /// <summary>
+    /// All entity CLR type names in the manifest (namespace-qualified, dot-separated).
+    /// Used by the coverage diagnostic (FAC107) to report how many entities have
+    /// [GenerateDtos] configured versus the total available.
+    /// </summary>
+    public IEnumerable<string> GetEntityNames() => _entities.Keys;
+
+    /// <summary>
     /// Whether any manifest file parsed successfully, entities or not. Wiring a manifest into
     /// the compilation is the project-level opt-in that flips the ExcludeNavigationProperties
     /// default to true for attributes that leave it unset. Deliberately false when every

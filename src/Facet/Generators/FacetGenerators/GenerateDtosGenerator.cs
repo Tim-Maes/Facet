@@ -93,6 +93,15 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         isEnabledByDefault: true,
         description: "The manifest records every member the model has an opinion on (mapped, navigation, owned, skip navigation, ignored, service). A settable property outside that set is unknown to the model — almost always one added after the manifest was last generated, which would otherwise silently vanish from DTOs. Escalate with WarningsAsErrors for strict builds.");
 
+    private static readonly DiagnosticDescriptor CoverageRule = new DiagnosticDescriptor(
+        "FAC107",
+        "Facet DTO coverage",
+        "Facet DTO coverage: {0} of {1} entities from the EF model manifest have [GenerateDtos] configured. Uncovered: {2}",
+        "Generator",
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: true,
+        description: "Reports how many EF model entities have DTO generation configured versus the total in the manifest, listing up to 10 uncovered entity names. Only fires when a manifest is wired into the project. Suppress with #pragma warning disable FAC107 if the uncovered entities are intentionally excluded.");
+
     private static readonly HashSet<string> DefaultAuditFields = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
     {
         "CreatedDate", "UpdatedDate", "CreatedAt", "UpdatedAt",
@@ -194,11 +203,18 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
             // so manifest-coverage diagnostics deduplicate per source type / property.
             var reportedCoverage = new HashSet<string>(StringComparer.Ordinal);
 
+            // Track which source types have [GenerateDtos] configured (deduplicated —
+            // multiple OutputType bits or DtoTypes on the same entity expand to several
+            // models but count as one configured entity for FAC107 coverage).
+            var configuredTypes = new HashSet<string>(StringComparer.Ordinal);
+
             foreach (var pendingModel in modelList)
             {
                 if (pendingModel != null)
                 {
                     spc.CancellationToken.ThrowIfCancellationRequested();
+
+                    configuredTypes.Add(Shared.GeneratorUtilities.StripGlobalPrefix(pendingModel.SourceTypeName));
 
                     var model = ResolveNavigationExclusions(spc, pendingModel, manifest, reportedCoverage);
 
@@ -226,6 +242,33 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                             ex.Message);
                         spc.ReportDiagnostic(diagnostic);
                     }
+                }
+            }
+
+            // FAC107: coverage report — how many manifest entities have [GenerateDtos]
+            // configured vs. the total. Only fires when a manifest is wired in and there
+            // are uncovered entities.
+            if (manifest.HasAcceptedManifests && manifest.EntityCount > 0)
+            {
+                var uncovered = new List<string>();
+                foreach (var entityName in manifest.GetEntityNames())
+                {
+                    if (!configuredTypes.Contains(entityName))
+                        uncovered.Add(GetSimpleNameFromFullName(entityName));
+                }
+
+                if (uncovered.Count > 0)
+                {
+                    var preview = string.Join(", ", uncovered.Take(10));
+                    if (uncovered.Count > 10)
+                        preview += $", … ({uncovered.Count} total)";
+
+                    spc.ReportDiagnostic(Diagnostic.Create(
+                        CoverageRule,
+                        Location.None,
+                        configuredTypes.Count,
+                        manifest.EntityCount,
+                        preview));
                 }
             }
         });
@@ -633,6 +676,12 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         var name = Shared.GeneratorUtilities.StripGlobalPrefix(fullyQualifiedName);
 
         var parts = name.Split('.');
+        return parts[parts.Length - 1];
+    }
+
+    private static string GetSimpleNameFromFullName(string fullName)
+    {
+        var parts = fullName.Split('.');
         return parts[parts.Length - 1];
     }
 
