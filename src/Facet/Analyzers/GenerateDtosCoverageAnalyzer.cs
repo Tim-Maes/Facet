@@ -131,6 +131,15 @@ public class GenerateDtosCoverageAnalyzer : DiagnosticAnalyzer
         context.RegisterCompilationEndAction(compilationContext =>
         {
             // Report FAC108 for each uncovered or partially covered manifest entity.
+            // Anchor to the first [assembly: GenerateDtosFor] attribute location
+            // (typically FacetGeneration.cs) so the code fixer knows which document
+            // to modify. Roslyn requires the location to be in the current compilation.
+            var anchorLocation = generateDtosForLocation.TryDequeue(out var anchor) && anchor.IsInSource
+                ? anchor
+                : Location.None;
+            if (anchorLocation.IsInSource)
+                generateDtosForLocation.Enqueue(anchor); // re-enqueue for other diagnostics
+
             foreach (var entityName in manifest.GetEntityNames())
             {
                 var simpleName = GetSimpleName(entityName);
@@ -141,11 +150,9 @@ public class GenerateDtosCoverageAnalyzer : DiagnosticAnalyzer
 
                 if (!configuredTypes.TryGetValue(entityName, out var configured))
                 {
-                    // No coverage at all.
-                    var location = ResolveEntityLocation(compilationContext.Compilation, entityName, generateDtosForLocation, compilationContext.CancellationToken);
                     compilationContext.ReportDiagnostic(Diagnostic.Create(
                         CoverageRule,
-                        location,
+                        anchorLocation,
                         properties,
                         $"Entity '{simpleName}' has no DTOs configured (expected {FormatDtoTypes(expectedDtoTypes)})"));
                 }
@@ -154,14 +161,12 @@ public class GenerateDtosCoverageAnalyzer : DiagnosticAnalyzer
                     var missing = expectedDtoTypes & ~configured;
                     if (missing != DtoTypes.None)
                     {
-                        // Partial coverage — some expected DtoTypes are missing.
                         var configuredNames = FormatDtoTypes(configured & expectedDtoTypes);
                         var missingNames = FormatDtoTypes(missing);
-                        var location = ResolveEntityLocation(compilationContext.Compilation, entityName, generateDtosForLocation, compilationContext.CancellationToken);
 
                         compilationContext.ReportDiagnostic(Diagnostic.Create(
                             CoverageRule,
-                            location,
+                            anchorLocation,
                             properties,
                             $"Entity '{simpleName}' has {configuredNames} configured, but {missingNames} missing"));
                     }
