@@ -57,14 +57,21 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
     public ImmutableArray<ManifestIssue> Issues { get; }
 
     /// <summary>Number of entity CLR types listed across all accepted manifest files.</summary>
-    public int EntityCount => _entities.Count;
+    /// <summary>
+    /// All entity CLR type names in the manifest (namespace-qualified, dot-separated),
+    /// excluding owned types. Used by the coverage diagnostic (FAC107) to report how many
+    /// entities have [GenerateDtos] configured versus the total available.
+    /// </summary>
+    public IEnumerable<string> GetEntityNames() => _entities
+        .Where(kv => !kv.Value.IsOwned)
+        .Select(kv => kv.Key);
 
     /// <summary>
-    /// All entity CLR type names in the manifest (namespace-qualified, dot-separated).
-    /// Used by the coverage diagnostic (FAC107) to report how many entities have
-    /// [GenerateDtos] configured versus the total available.
+    /// Total number of non-owned entity CLR types listed across all accepted manifest files.
+    /// Owned types are excluded because they are never independent DTO targets — they only
+    /// appear as nested properties of their owning entity.
     /// </summary>
-    public IEnumerable<string> GetEntityNames() => _entities.Keys;
+    public int EntityCount => _entities.Count(kv => !kv.Value.IsOwned);
 
     /// <summary>
     /// Whether any manifest file parsed successfully, entities or not. Wiring a manifest into
@@ -114,7 +121,8 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
         {
             builder.Add(entity.Key, new ManifestEntity(
                 entity.Value.Keep.ToImmutableHashSet(StringComparer.Ordinal),
-                entity.Value.Known.ToImmutableHashSet(StringComparer.Ordinal)));
+                entity.Value.Known.ToImmutableHashSet(StringComparer.Ordinal),
+                entity.Value.IsOwned));
         }
 
         return new EfModelManifest(builder.ToImmutable(), issues.ToImmutable(), acceptedFileCount > 0);
@@ -172,6 +180,12 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
                         local.Add(clrType!, record);
                     }
 
+                    if (entity.TryGetProperty("isOwned", out var isOwnedProp)
+                        && isOwnedProp.ValueKind == JsonValueKind.True)
+                    {
+                        record.IsOwned = true;
+                    }
+
                     foreach (var category in KeepCategories)
                     {
                         AddMembers(entity, category, record.Keep);
@@ -196,6 +210,7 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
             {
                 existing.Keep.UnionWith(entity.Value.Keep);
                 existing.Known.UnionWith(entity.Value.Known);
+                if (entity.Value.IsOwned) existing.IsOwned = true;
             }
             else
             {
@@ -225,6 +240,7 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
     {
         public HashSet<string> Keep { get; } = new HashSet<string>(StringComparer.Ordinal);
         public HashSet<string> Known { get; } = new HashSet<string>(StringComparer.Ordinal);
+        public bool IsOwned { get; set; }
     }
 
     /// <summary>
@@ -276,10 +292,11 @@ internal sealed class EfModelManifest : IEquatable<EfModelManifest>
 /// <summary>One entity's manifest entry: what to keep, and everything the model knows about.</summary>
 internal sealed class ManifestEntity : IEquatable<ManifestEntity>
 {
-    public ManifestEntity(ImmutableHashSet<string> keep, ImmutableHashSet<string> known)
+    public ManifestEntity(ImmutableHashSet<string> keep, ImmutableHashSet<string> known, bool isOwned = false)
     {
         Keep = keep;
         Known = known;
+        IsOwned = isOwned;
     }
 
     /// <summary>Property names EF maps as data (scalar + complex) — the DTO member set.</summary>
@@ -293,8 +310,15 @@ internal sealed class ManifestEntity : IEquatable<ManifestEntity>
     /// </summary>
     public ImmutableHashSet<string> Known { get; }
 
+    /// <summary>
+    /// Whether this entity type is an EF Core owned type. Owned types are never independent
+    /// DTO targets — they only appear as nested properties of their owning entity — so the
+    /// coverage diagnostic (FAC107) excludes them from the denominator.
+    /// </summary>
+    public bool IsOwned { get; }
+
     public bool Equals(ManifestEntity? other)
-        => other != null && Keep.SetEquals(other.Keep) && Known.SetEquals(other.Known);
+        => other != null && Keep.SetEquals(other.Keep) && Known.SetEquals(other.Known) && IsOwned == other.IsOwned;
 
     public override bool Equals(object? obj) => obj is ManifestEntity other && Equals(other);
 
@@ -305,6 +329,7 @@ internal sealed class ManifestEntity : IEquatable<ManifestEntity>
             var hash = 0;
             foreach (var member in Keep) hash += member.GetHashCode();
             foreach (var member in Known) hash += member.GetHashCode() * 397;
+            hash = hash * 31 + IsOwned.GetHashCode();
             return hash;
         }
     }
