@@ -39,14 +39,20 @@ public class GenerateDtosCoverageCodeFixProvider : CodeFixProvider
         if (root == null) return;
 
         var diagnostic = context.Diagnostics.First();
-        var entityName = ExtractEntityName(diagnostic.GetMessage());
-        if (entityName == null) return;
+        var entitySimpleName = ExtractEntityName(diagnostic.GetMessage());
+        if (entitySimpleName == null) return;
+
+        // The analyzer embeds the full type name in diagnostic properties so we can
+        // resolve the exact type without ambiguous fuzzy matching on simple names.
+        var entityFullName = diagnostic.Properties.TryGetValue("EntityFullName", out var fullName) && !string.IsNullOrEmpty(fullName)
+            ? fullName
+            : entitySimpleName;
 
         context.RegisterCodeFix(
             CodeAction.Create(
-                title: string.Format(TitleFormat, entityName),
-                createChangedDocument: c => AddGenerateDtosForAttributeAsync(context.Document, entityName, c),
-                equivalenceKey: $"GenerateDtosFor_{entityName}"),
+                title: string.Format(TitleFormat, entitySimpleName),
+                createChangedDocument: c => AddGenerateDtosForAttributeAsync(context.Document, entitySimpleName, entityFullName, c),
+                equivalenceKey: $"GenerateDtosFor_{entitySimpleName}"),
             diagnostic);
     }
 
@@ -71,6 +77,7 @@ public class GenerateDtosCoverageCodeFixProvider : CodeFixProvider
     private static async Task<Document> AddGenerateDtosForAttributeAsync(
         Document document,
         string entitySimpleName,
+        string entityFullName,
         CancellationToken cancellationToken)
     {
         var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
@@ -79,12 +86,11 @@ public class GenerateDtosCoverageCodeFixProvider : CodeFixProvider
         var compilation = await document.Project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
         if (compilation == null) return document;
 
-        // Find the entity type symbol by searching for a type with this simple name.
-        // The FAC108 diagnostic carries only the simple name; we need the full name for typeof().
-        var entityType = ResolveEntityType(compilation, entitySimpleName);
+        // Resolve the entity type by its full name from the manifest — no fuzzy matching.
+        var entityType = compilation.GetTypeByMetadataName(entityFullName);
         if (entityType == null) return document;
 
-        var entityFullName = entityType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var qualifiedName = entityType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
         // Build the new attribute: [assembly: GenerateDtosFor(typeof(global::Ns.Entity), Types = DtoTypes.Create | DtoTypes.Update, OutputType = OutputType.PartialClass, ExcludeAuditFields = true)]
         var newAttribute = SyntaxFactory.Attribute(
@@ -93,7 +99,7 @@ public class GenerateDtosCoverageCodeFixProvider : CodeFixProvider
                 SyntaxFactory.SeparatedList(new[]
                 {
                     SyntaxFactory.AttributeArgument(
-                        SyntaxFactory.ParseExpression($"typeof({entityFullName})")),
+                        SyntaxFactory.ParseExpression($"typeof({qualifiedName})")),
                     SyntaxFactory.AttributeArgument(
                         SyntaxFactory.NameEquals("Types"),
                         null,
@@ -139,49 +145,4 @@ public class GenerateDtosCoverageCodeFixProvider : CodeFixProvider
         return document.WithSyntaxRoot(newRoot);
     }
 
-    /// <summary>
-    /// Resolves an entity type symbol from its simple name by scanning all referenced
-    /// assemblies and the current compilation. Returns the first match — entity simple names
-    /// are typically unique within a solution's domain model.
-    /// </summary>
-    private static INamedTypeSymbol? ResolveEntityType(Compilation compilation, string simpleName)
-    {
-        // First try an exact metadata name match in the current compilation.
-        foreach (var type in compilation.GetSymbolsWithName(
-                     s => s.Equals(simpleName, System.StringComparison.Ordinal),
-                     SymbolFilter.Type).OfType<INamedTypeSymbol>())
-        {
-            if (type.TypeKind == TypeKind.Class && !type.IsAbstract)
-                return type;
-        }
-
-        // Then scan referenced assemblies via namespace walk.
-        foreach (var module in compilation.SourceModule.ReferencedAssemblySymbols
-                     .SelectMany(a => a.Modules))
-        {
-            foreach (var ns in module.GlobalNamespace.GetNamespaceNames())
-            {
-                var fullName = $"{ns}.{simpleName}";
-                var symbol = compilation.GetTypeByMetadataName(fullName);
-                if (symbol != null && symbol.TypeKind == TypeKind.Class && !symbol.IsAbstract)
-                    return symbol;
-            }
-        }
-
-        return null;
-    }
-}
-
-internal static class NamespaceExtensions
-{
-    public static System.Collections.Generic.IEnumerable<string> GetNamespaceNames(
-        this INamespaceSymbol namespaceSymbol)
-    {
-        yield return namespaceSymbol.ToDisplayString();
-        foreach (var child in namespaceSymbol.GetNamespaceMembers())
-        {
-            foreach (var name in child.GetNamespaceNames())
-                yield return name;
-        }
-    }
 }

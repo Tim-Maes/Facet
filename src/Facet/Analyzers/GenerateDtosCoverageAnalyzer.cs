@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Threading;
 
 namespace Facet.Analyzers;
 
@@ -133,14 +134,19 @@ public class GenerateDtosCoverageAnalyzer : DiagnosticAnalyzer
             foreach (var entityName in manifest.GetEntityNames())
             {
                 var simpleName = GetSimpleName(entityName);
+                var properties = ImmutableDictionary.CreateRange(new[]
+                {
+                    new System.Collections.Generic.KeyValuePair<string, string?>("EntityFullName", entityName),
+                });
 
                 if (!configuredTypes.TryGetValue(entityName, out var configured))
                 {
                     // No coverage at all.
-                    var location = ResolveEntityLocation(compilationContext.Compilation, entityName, generateDtosForLocation);
+                    var location = ResolveEntityLocation(compilationContext.Compilation, entityName, generateDtosForLocation, compilationContext.CancellationToken);
                     compilationContext.ReportDiagnostic(Diagnostic.Create(
                         CoverageRule,
                         location,
+                        properties,
                         $"Entity '{simpleName}' has no DTOs configured (expected {FormatDtoTypes(expectedDtoTypes)})"));
                 }
                 else
@@ -151,11 +157,12 @@ public class GenerateDtosCoverageAnalyzer : DiagnosticAnalyzer
                         // Partial coverage — some expected DtoTypes are missing.
                         var configuredNames = FormatDtoTypes(configured & expectedDtoTypes);
                         var missingNames = FormatDtoTypes(missing);
-                        var location = ResolveEntityLocation(compilationContext.Compilation, entityName, generateDtosForLocation);
+                        var location = ResolveEntityLocation(compilationContext.Compilation, entityName, generateDtosForLocation, compilationContext.CancellationToken);
 
                         compilationContext.ReportDiagnostic(Diagnostic.Create(
                             CoverageRule,
                             location,
+                            properties,
                             $"Entity '{simpleName}' has {configuredNames} configured, but {missingNames} missing"));
                     }
                 }
@@ -180,13 +187,16 @@ public class GenerateDtosCoverageAnalyzer : DiagnosticAnalyzer
 
     /// <summary>
     /// Anchors a diagnostic to the entity class declaration when it is in the current
-    /// compilation. Falls back to the first [assembly: GenerateDtosFor] attribute location
-    /// (typically FacetGeneration.cs), then to <see cref="Location.None"/>.
+    /// compilation's source tree. Falls back to the first [assembly: GenerateDtosFor]
+    /// attribute location (typically FacetGeneration.cs), then to <see cref="Location.None"/>.
+    /// Roslyn rejects diagnostics whose <see cref="Location"/> is in a referenced assembly,
+    /// so we must verify the syntax tree belongs to the current compilation.
     /// </summary>
     private static Location ResolveEntityLocation(
         Compilation compilation,
         string entityFullName,
-        ConcurrentQueue<Location> fallbackLocations)
+        ConcurrentQueue<Location> fallbackLocations,
+        CancellationToken cancellationToken)
     {
         // Try to find the entity type in the current compilation.
         var entitySymbol = compilation.GetTypeByMetadataName(entityFullName);
@@ -194,9 +204,13 @@ public class GenerateDtosCoverageAnalyzer : DiagnosticAnalyzer
         {
             foreach (var syntaxRef in entitySymbol.DeclaringSyntaxReferences)
             {
-                var syntax = syntaxRef.GetSyntax();
-                if (syntax.GetLocation().IsInSource)
-                    return syntax.GetLocation();
+                var tree = syntaxRef.SyntaxTree;
+                if (compilation.ContainsSyntaxTree(tree))
+                {
+                    var location = syntaxRef.GetSyntax(cancellationToken).GetLocation();
+                    if (location.IsInSource)
+                        return location;
+                }
             }
         }
 
