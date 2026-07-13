@@ -1,0 +1,64 @@
+name: Publish to GitHub Packages
+
+on:
+  push:
+    branches:
+      - feature/generate-dtos-verbosity
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: true
+  NUGET_SOURCE: https://nuget.pkg.github.com/immense/index.json
+
+jobs:
+  pack-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Read base version
+        id: base_version
+        shell: bash
+        run: |
+          VERSION=$(grep -o '<Version>[^<]*</Version>' Directory.Build.props | sed 's/<\/\?Version>//g')
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Compute package version
+        id: pkg_version
+        shell: bash
+        run: |
+          PKG_VERSION="${{ steps.base_version.outputs.VERSION }}-facet-poc.${{ github.run_number }}"
+          echo "PKG_VERSION=$PKG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Package version: $PKG_VERSION"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore -p:Version=${{ steps.pkg_version.outputs.PKG_VERSION }}
+
+      - name: Pack
+        run: dotnet pack --configuration Release --no-build -p:Version=${{ steps.pkg_version.outputs.PKG_VERSION }} --output ./artifacts
+
+      - name: List packages
+        run: ls -la ./artifacts/*.nupkg
+
+      - name: Push to GitHub Packages
+        run: dotnet nuget push ./artifacts/*.nupkg --source ${{ env.NUGET_SOURCE }} --api-key ${{ github.token }} --skip-duplicate
