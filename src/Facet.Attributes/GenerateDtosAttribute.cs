@@ -186,6 +186,19 @@ public class GenerateDtosAttribute : Attribute
     /// to avoid collisions. Default is false (shorter file names).
     /// </summary>
     public bool UseFullName { get; set; } = false;
+
+    /// <summary>
+    /// Pairs of "EntityPropertyName:DtoPropertyName" that rename entity properties in the
+    /// generated DTO. The generated property uses <c>DtoPropertyName</c> as its name but
+    /// maps to <c>EntityPropertyName</c> in constructors and projections. This avoids
+    /// needing a hand-written partial class just to rename a few properties.
+    /// <para>
+    /// Example: <c>RenameProperties = new[] { "ActionReason:Reason", "ActionResult:Result" }</c>
+    /// generates <c>public MaintenanceActionReason Reason { get; set; }</c> mapped from
+    /// <c>source.ActionReason</c>.
+    /// </para>
+    /// </summary>
+    public string[] RenameProperties { get; set; } = Array.Empty<string>();
 }
 
 /// <summary>
