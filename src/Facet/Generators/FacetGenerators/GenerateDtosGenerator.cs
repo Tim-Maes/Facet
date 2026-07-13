@@ -479,6 +479,24 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
 
             var excludeProperties = new HashSet<string>(userExcludeProperties, System.StringComparer.OrdinalIgnoreCase);
 
+            // Parse RenameProperties: "EntityProp:DtoProp" pairs that rename entity properties
+            // in the generated DTO while keeping the source mapping intact.
+            var renameMap = new Dictionary<string, string>(StringComparer.Ordinal);
+            var renameArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "RenameProperties");
+            if (renameArg.Value.Kind == TypedConstantKind.Array && !renameArg.Value.IsNull)
+            {
+                foreach (var v in renameArg.Value.Values)
+                {
+                    var pair = v.Value?.ToString();
+                    if (pair is not null && pair.Contains(':'))
+                    {
+                        var parts = pair.Split(new[] { ':' }, 2);
+                        if (parts.Length == 2 && !string.IsNullOrWhiteSpace(parts[0]) && !string.IsNullOrWhiteSpace(parts[1]))
+                            renameMap[parts[0].Trim()] = parts[1].Trim();
+                    }
+                }
+            }
+
             if (excludeAuditFields)
             {
                 foreach (var field in DefaultAuditFields)
@@ -517,28 +535,32 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                         settableProperties.Add(p.Name);
                     }
 
+                    var dtoName = renameMap.TryGetValue(p.Name, out var renamed) ? renamed : p.Name;
                     members.Add(CreateGenerateDtoMember(
-                        p.Name,
+                        dtoName,
                         p.Type,
                         FacetMemberKind.Property,
                         isInitOnly,
                         isRequired,
                         false,
-                        convertEnumsTo));
-                    addedMembers.Add(p.Name);
+                        convertEnumsTo,
+                        sourcePropertyName: p.Name));
+                    addedMembers.Add(dtoName);
                 }
                 else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
                 {
                     bool isReadOnly = f.IsReadOnly;
+                    var dtoName = renameMap.TryGetValue(f.Name, out var renamed) ? renamed : f.Name;
                     members.Add(CreateGenerateDtoMember(
-                        f.Name,
+                        dtoName,
                         f.Type,
                         FacetMemberKind.Field,
                         false,
                         isRequired,
                         isReadOnly,
-                        convertEnumsTo));
-                    addedMembers.Add(f.Name);
+                        convertEnumsTo,
+                        sourcePropertyName: f.Name));
+                    addedMembers.Add(dtoName);
                 }
             }
 
@@ -1188,7 +1210,8 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         bool isInitOnly,
         bool isRequired,
         bool isReadOnly,
-        string? convertEnumsTo)
+        string? convertEnumsTo,
+        string? sourcePropertyName = null)
     {
         var isCollection = GeneratorUtilities.TryGetCollectionElementType(typeSymbol, out var elementType, out var collectionWrapper);
         var originalTypeName = GeneratorUtilities.GetTypeNameWithNullability(typeSymbol);
@@ -1260,7 +1283,7 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
             null,
             false,
             true,
-            name,
+            sourcePropertyName ?? name,
             false,
             null,
             null,
