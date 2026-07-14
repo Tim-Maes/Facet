@@ -76,6 +76,30 @@ public enum OutputType
 }
 
 /// <summary>
+/// Presets that apply common defaults for generated DTOs. Explicit values in the
+/// attribute always override preset defaults.
+/// </summary>
+public enum DtoPreset
+{
+    /// <summary>No preset — use built-in defaults.</summary>
+    None = 0,
+    /// <summary>
+    /// Response DTO as a partial class: OutputType.PartialClass,
+    /// GenerateConstructors=false, GenerateProjections=false.
+    /// </summary>
+    ResponsePartial = 1,
+    /// <summary>
+    /// Request DTO as a partial class: OutputType.PartialClass,
+    /// ExcludeAuditFields=true, Suffix="Body".
+    /// </summary>
+    RequestPartial = 2,
+    /// <summary>
+    /// Request interface: OutputType.Interface, ExcludeAuditFields=true, Suffix="Body".
+    /// </summary>
+    InterfaceRequest = 3,
+}
+
+/// <summary>
 /// Generates standard CRUD DTOs (Create, Update, Response, Query, Upsert, Patch) for a domain model.
 /// Can be applied multiple times with different configurations for fine-grained control.
 /// </summary>
@@ -199,6 +223,12 @@ public class GenerateDtosAttribute : Attribute
     /// </para>
     /// </summary>
     public string[] RenameProperties { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Applies common defaults for the given DTO kind. Explicit property values
+    /// in the attribute always override preset defaults.
+    /// </summary>
+    public DtoPreset Preset { get; set; } = DtoPreset.None;
 }
 
 /// <summary>
