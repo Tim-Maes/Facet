@@ -431,8 +431,34 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
             var generateProjections = GetNamedArg(attribute.NamedArguments, "GenerateProjections", true);
             var useFullName = GetNamedArg(attribute.NamedArguments, "UseFullName", false);
             var convertEnumsTo = ExtractConvertEnumsTo(attribute.NamedArguments);
-            
+            var preset = GetNamedArg(attribute.NamedArguments, "Preset", DtoPreset.None);
             var excludeAuditFields = forceExcludeAuditFields || GetNamedArg(attribute.NamedArguments, "ExcludeAuditFields", false);
+
+            // Track which properties were explicitly set so presets don't override them.
+            var explicitArgs = new HashSet<string>(
+                attribute.NamedArguments.Select(kvp => kvp.Key),
+                StringComparer.Ordinal);
+
+            // Apply preset defaults — explicit attribute values always win.
+            if (preset == DtoPreset.ResponsePartial)
+            {
+                if (!explicitArgs.Contains("OutputType")) outputType = OutputType.PartialClass;
+                if (!explicitArgs.Contains("GenerateConstructors")) generateConstructors = false;
+                if (!explicitArgs.Contains("GenerateProjections")) generateProjections = false;
+            }
+            else if (preset == DtoPreset.RequestPartial)
+            {
+                if (!explicitArgs.Contains("OutputType")) outputType = OutputType.PartialClass;
+                if (!explicitArgs.Contains("ExcludeAuditFields") && !forceExcludeAuditFields) excludeAuditFields = true;
+                if (!explicitArgs.Contains("Suffix")) suffix = "Body";
+            }
+            else if (preset == DtoPreset.InterfaceRequest)
+            {
+                if (!explicitArgs.Contains("OutputType")) outputType = OutputType.Interface;
+                if (!explicitArgs.Contains("ExcludeAuditFields") && !forceExcludeAuditFields) excludeAuditFields = true;
+                if (!explicitArgs.Contains("Suffix")) suffix = "Body";
+            }
+
             var supportsSystemTextJson = compilation
                 .GetTypeByMetadataName("System.Text.Json.Serialization.JsonConverterAttribute") is not null;
             var supportsNewtonsoftJson = compilation
@@ -507,6 +533,10 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
 
             // IncludeProperties is the escape hatch: names listed there survive every
             // automatic and explicit exclusion (the Create-DTO Id convention excepted).
+            // Renamed properties also survive — otherwise ExcludeAuditFields would drop
+            // e.g. "CreatedDate" before the rename to "CreatedDateUTC" can apply.
+            foreach (var entityProp in renameMap.Keys)
+                includeProperties.Add(entityProp);
             excludeProperties.ExceptWith(includeProperties);
 
             var members = new List<FacetMember>();
