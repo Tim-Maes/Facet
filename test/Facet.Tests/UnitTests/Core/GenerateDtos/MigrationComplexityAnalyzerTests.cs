@@ -395,4 +395,89 @@ public class GenerateDtosMigrationComplexityAnalyzerTests
         // 3 entity-shaped props × 3 + 15 = 24
         fac109.GetMessage().Should().Contain("24");
     }
+
+    // ─── Tests: Create/Update Request DTOs ─────────────────────────────────────
+
+    [Fact]
+    public void ReportsFac109_ForCreateRequestBodyDto()
+    {
+        var source = WidgetEntity + """
+            
+            namespace MigrationTest
+            {
+                public class CreateWidgetRequestBody
+                {
+                    public string Name { get; set; } = "";
+                    public string Description { get; set; } = "";
+                }
+            }
+            """;
+
+        var diagnostics = RunAnalyzer(source, ManifestWithWidget);
+
+        var fac109 = diagnostics.FirstOrDefault(d => d.Id == "FAC109");
+        fac109.Should().NotBeNull("CreateWidgetRequestBody matches entity Widget");
+        fac109!.Severity.Should().Be(DiagnosticSeverity.Info,
+            "all properties are get/set auto-properties");
+        fac109.GetMessage().Should().Contain("Create request");
+        fac109.GetMessage().Should().Contain("CreateWidgetRequestBody");
+        fac109.GetMessage().Should().Contain("entity 'Widget'");
+        // 2 entity-shaped props × 2 + 8 = 12
+        fac109.GetMessage().Should().Contain("12");
+    }
+
+    [Fact]
+    public void ReportsFac109_ForUpdateRequestBodyDto()
+    {
+        var source = GadgetEntity + """
+            
+            namespace MigrationTest
+            {
+                public class UpdateGadgetRequestBody
+                {
+                    public int Id { get; set; }
+                    public string Name { get; set; } = "";
+                    public string Category { get; set; } = "";
+                    public int Priority { get; set; }
+                }
+            }
+            """;
+
+        var diagnostics = RunAnalyzer(source, ManifestWithGadget);
+
+        var fac109 = diagnostics.FirstOrDefault(d => d.Id == "FAC109");
+        fac109.Should().NotBeNull("UpdateGadgetRequestBody matches entity Gadget");
+        fac109!.Severity.Should().Be(DiagnosticSeverity.Info);
+        fac109.GetMessage().Should().Contain("Update request");
+        fac109.GetMessage().Should().Contain("UpdateGadgetRequestBody");
+        // 4 entity-shaped props × 2 + 8 = 16
+        fac109.GetMessage().Should().Contain("16");
+    }
+
+    [Fact]
+    public void DoesNotReportFac109_ForCreateDtoWhenAlreadyConfigured()
+    {
+        var source = WidgetEntity + """
+            
+            namespace MigrationTest
+            {
+                public class CreateWidgetRequestBody
+                {
+                    public string Name { get; set; } = "";
+                    public string Description { get; set; } = "";
+                }
+            }
+            """;
+
+        var assemblyAttributes = """
+            using Facet;
+
+            [assembly: GenerateDtosFor(typeof(MigrationTest.Widget), Types = DtoTypes.Create, OutputType = OutputType.PartialClass)]
+            """;
+
+        var diagnostics = RunAnalyzer(source, ManifestWithWidget, assemblyAttributes);
+
+        var fac109s = diagnostics.Where(d => d.Id == "FAC109" && d.GetMessage().Contains("Widget")).ToList();
+        fac109s.Should().BeEmpty("Widget Create is already configured via [assembly: GenerateDtosFor]");
+    }
 }
