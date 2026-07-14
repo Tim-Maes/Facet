@@ -555,7 +555,8 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                     if (member is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } sp
                         && !excludeProperties.Contains(sp.Name)
                         && !renameMap.ContainsKey(sp.Name)
-                        && IsDateTimeType(sp.Type))
+                        && IsDateTimeType(sp.Type)
+                        && !sp.Name.EndsWith(propertySuffix, System.StringComparison.OrdinalIgnoreCase))
                     {
                         renameMap[sp.Name] = sp.Name + propertySuffix;
                         includeProperties.Add(sp.Name);

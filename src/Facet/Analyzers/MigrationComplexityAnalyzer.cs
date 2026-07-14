@@ -212,7 +212,7 @@ public class MigrationComplexityAnalyzer : DiagnosticAnalyzer
             LogInfo($"SymbolAction: {fullName} scored as {score.Complexity} " +
                     $"(entity-shaped: {score.EntityShapedCount}, read-only: {score.ReadOnlyCount}, " +
                     $"computed: {score.ComputedCount}, sieve: {score.SieveCount}, " +
-                    $"est. lines saved: {score.EstimatedLinesSaved})");
+                    $"dateTime: {score.DateTimePropsCount}, est. lines saved: {score.EstimatedLinesSaved})");
 
             // Report diagnostic with severity based on complexity — use the appropriate descriptor.
             var descriptor = score.Complexity == MigrationComplexity.Easy
@@ -244,6 +244,7 @@ public class MigrationComplexityAnalyzer : DiagnosticAnalyzer
         var readOnly = 0;
         var computed = 0;
         var sieve = 0;
+        var dateTimeProps = 0;
 
         var keepSet = entityEntry?.Keep ?? ImmutableHashSet<string>.Empty;
 
@@ -266,44 +267,55 @@ public class MigrationComplexityAnalyzer : DiagnosticAnalyzer
             if (property.SetMethod == null || property.IsReadOnly)
             {
                 readOnly++;
-                LogDebug($"  {property.Name}: read-only");
+                LogDebug($"  {property.Name}: read-only (Facet generates {{ get; init; }} — no longer a blocker)");
+                // Read-only properties are NOT a blocker anymore — Facet's
+                // GenerateReadOnlyProperties generates { get; init; } by default
+                // for ResponsePartial. Count them as entity-shaped if they match.
+                if (IsAutoProperty(property))
+                {
+                    entityShaped++;
+                }
+                else
+                {
+                    computed++;
+                    LogDebug($"  {property.Name}: computed (move to OnInitialized hook)");
+                }
+
+                // Check for DateTime/DateTimeOffset — candidates for PropertySuffix.
+                if (IsDateTimeType(property.Type))
+                    dateTimeProps++;
+
                 continue;
             }
 
             // Check if property is computed (has a body — not auto-property).
-            // Auto-properties have GetMethod with no body (IsExpressionBodied false, no statements).
-            // In Roslyn, auto-properties' getter has no method implementation in the symbol model.
-            // We check if the property has InitOnly/IsExpressionBodied via syntax.
-            // For analyzer purposes, a property that is { get; set; } is auto, anything else is computed.
             if (IsAutoProperty(property))
             {
-                // Check if the property name matches an entity scalar.
-                if (keepSet.Contains(property.Name))
-                {
-                    entityShaped++;
-                    LogDebug($"  {property.Name}: entity-shaped (matches manifest scalar)");
-                }
-                else
-                {
-                    LogDebug($"  {property.Name}: auto-property but not in manifest keep set");
-                    // Still count as entity-shaped if it looks like a simple data property.
-                    entityShaped++;
-                }
+                entityShaped++;
+
+                // Check for DateTime/DateTimeOffset — candidates for PropertySuffix.
+                if (IsDateTimeType(property.Type))
+                    dateTimeProps++;
             }
             else
             {
                 computed++;
-                LogDebug($"  {property.Name}: computed (non-auto property)");
+                LogDebug($"  {property.Name}: computed (move to OnInitialized hook)");
             }
         }
 
-        var complexity = (readOnly > 0 || computed > 0)
+        // With GenerateReadOnlyProperties and OnInitialized, read-only and computed
+        // properties are no longer blockers — they're handled by Facet's partial
+        // generation. Only Sieve-attributed properties still need manual exclusion.
+        var complexity = sieve > 0
             ? MigrationComplexity.Medium
             : MigrationComplexity.Easy;
 
-        // Estimate lines saved: each entity-shaped property saves ~2 lines (declaration + mapping),
-        // plus ~10 lines of class boilerplate (class declaration, braces, constructor, mapping method).
-        var estimatedLinesSaved = (entityShaped * 2) + 10;
+        // Estimate lines saved:
+        // - Each entity-shaped property: ~3 lines (declaration + constructor assignment + mapping)
+        // - Each DateTime property with UTC suffix: ~1 additional line saved (PropertySuffix vs RenameProperties)
+        // - Class boilerplate: ~15 lines (class declaration, braces, constructor signature, OnInitialized stub)
+        var estimatedLinesSaved = (entityShaped * 3) + (dateTimeProps * 1) + 15 - (sieve * 2);
 
         return new DtoMigrationScore(
             complexity,
@@ -311,7 +323,8 @@ public class MigrationComplexityAnalyzer : DiagnosticAnalyzer
             readOnly,
             computed,
             sieve,
-            estimatedLinesSaved);
+            estimatedLinesSaved,
+            dateTimeProps);
     }
 
     // ─── DTO-to-Entity Name Matching ──────────────────────────────────────────
@@ -430,6 +443,18 @@ public class MigrationComplexityAnalyzer : DiagnosticAnalyzer
         return false;
     }
 
+    private static bool IsDateTimeType(ITypeSymbol type)
+    {
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+            type = nullable.TypeArguments[0];
+
+        if (type.SpecialType == SpecialType.System_DateTime)
+            return true;
+
+        var fullName = type.ToDisplayString(FullyQualifiedFormat);
+        return fullName == "global::System.DateTimeOffset";
+    }
+
     private static DtoTypes GetDtoTypesFromAttribute(AttributeData attr)
     {
         foreach (var arg in attr.NamedArguments)
@@ -477,6 +502,7 @@ internal sealed class DtoMigrationScore
     public int ComputedCount { get; }
     public int SieveCount { get; }
     public int EstimatedLinesSaved { get; }
+    public int DateTimePropsCount { get; }
 
     public DtoMigrationScore(
         MigrationComplexity complexity,
@@ -484,7 +510,8 @@ internal sealed class DtoMigrationScore
         int readOnlyCount,
         int computedCount,
         int sieveCount,
-        int estimatedLinesSaved)
+        int estimatedLinesSaved,
+        int dateTimePropsCount = 0)
     {
         Complexity = complexity;
         EntityShapedCount = entityShapedCount;
@@ -492,20 +519,29 @@ internal sealed class DtoMigrationScore
         ComputedCount = computedCount;
         SieveCount = sieveCount;
         EstimatedLinesSaved = estimatedLinesSaved;
+        DateTimePropsCount = dateTimePropsCount;
     }
 
     public string ToMessage(string dtoName, string entityName)
     {
+        var suffixHint = DateTimePropsCount > 0
+            ? $", {DateTimePropsCount} DateTime props (use PropertySuffix)"
+            : "";
+
         return Complexity switch
         {
             MigrationComplexity.Easy =>
-                $"DTO '{dtoName}' is a low-complexity migration candidate for entity '{entityName}' " +
-                $"({EntityShapedCount} entity-shaped properties, ~{EstimatedLinesSaved} lines saveable)",
+                $"DTO '{dtoName}' → entity '{entityName}': {EntityShapedCount} entity-shaped props" +
+                (ReadOnlyCount > 0 ? $", {ReadOnlyCount} read-only (init-only)" : "") +
+                (ComputedCount > 0 ? $", {ComputedCount} computed (OnInitialized)" : "") +
+                suffixHint +
+                $" — est. ~{EstimatedLinesSaved} lines saveable",
 
             MigrationComplexity.Medium =>
-                $"DTO '{dtoName}' requires behavior changes before migration to entity '{entityName}' " +
-                $"({ReadOnlyCount} read-only, {ComputedCount} computed properties need conversion, " +
-                $"~{EstimatedLinesSaved} lines saveable)",
+                $"DTO '{dtoName}' → entity '{entityName}': {SieveCount} Sieve-attributed props need manual exclusion" +
+                (ComputedCount > 0 ? $", {ComputedCount} computed (OnInitialized)" : "") +
+                suffixHint +
+                $" — est. ~{EstimatedLinesSaved} lines saveable",
 
             _ => throw new InvalidOperationException(
                 $"FAC109: unknown complexity value {Complexity}")
