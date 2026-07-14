@@ -1792,10 +1792,15 @@ internal sealed class OptionalNewtonsoftJsonConverter : JsonConverter
 
             // Fields are not EF-mapped members; the manifest has no opinion on them, so they
             // keep the behavior IncludeFields already gave them.
+            // When a property is renamed (e.g. CreatedDate → CreatedDateUtc), m.Name is the
+            // DTO name but the manifest/keep/include sets use the source entity name — so
+            // check SourcePropertyName as well.
             return model.WithResolvedMembers(model.Members
                 .Where(m => m.Kind != FacetMemberKind.Property
                     || entity!.Keep.Contains(m.Name)
-                    || includeProperties.Contains(m.Name))
+                    || entity!.Keep.Contains(m.SourcePropertyName)
+                    || includeProperties.Contains(m.Name)
+                    || includeProperties.Contains(m.SourcePropertyName))
                 .ToImmutableArray());
         }
 
