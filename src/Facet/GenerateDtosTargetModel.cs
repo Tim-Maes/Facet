@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Immutable;
 using System.Linq;
+using Facet.Generators;
 
 namespace Facet;
 
@@ -28,10 +29,41 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
     public bool IncludeFields { get; }
     public bool GenerateConstructors { get; }
     public bool GenerateProjections { get; }
+    public bool GenerateReadOnlyProperties { get; }
+    public string? PropertySuffix { get; }
     public string? ConvertEnumsTo { get; }
     public ImmutableArray<string> ExcludeProperties { get; }
     public ImmutableArray<FacetMember> Members { get; }
     public bool UseFullName { get; }
+    /// <summary>
+    /// The attribute's navigation-property exclusion request: true or false when set
+    /// explicitly, null when the attribute leaves it unset — the generation stage then
+    /// defaults it to whether an EF model manifest is wired into the compilation. Members are
+    /// NOT yet filtered for navigations here: manifests are AdditionalFiles, unavailable in
+    /// the syntax transform, so the final member set is resolved at generation time. A shaped
+    /// source type with no manifest entry is an error (FAC105) — there is no heuristic
+    /// fallback.
+    /// </summary>
+    public bool? ExcludeNavigationProperties { get; }
+    /// <summary>
+    /// The attribute's IncludeProperties escape hatch, kept on the model because manifest-based
+    /// filtering happens after the transform and must still honor forced inclusions.
+    /// </summary>
+    public ImmutableArray<string> IncludeProperties { get; }
+    /// <summary>
+    /// Names of property members that EF could plausibly map — settable, or get-only
+    /// collections — recorded unless <see cref="ExcludeNavigationProperties"/> is explicitly
+    /// false (an unset value may still resolve to shaping, so the names must be carried).
+    /// The generation stage checks these against a manifest entry's known-set: a name the
+    /// model has no opinion on means the manifest predates the property (FAC106).
+    /// </summary>
+    public ImmutableArray<string> SettableProperties { get; }
+    /// <summary>
+    /// Location of the [GenerateDtos] attribute application, so diagnostics point at the
+    /// attribute instead of Location.None (and become #pragma-suppressible). Null when the
+    /// syntax reference is unavailable.
+    /// </summary>
+    public SourceLocationInfo? AttributeLocation { get; }
     /// <summary>
     /// The set of DTO type bits for which a sibling <see cref="OutputType.Interface"/> output on the
     /// same source type generates a matching interface (same Prefix/Suffix/Namespace, overlapping
@@ -72,10 +104,16 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         bool includeFields,
         bool generateConstructors,
         bool generateProjections,
+        bool generateReadOnlyProperties,
+        string? propertySuffix,
         string? convertEnumsTo,
         ImmutableArray<string> excludeProperties,
         ImmutableArray<FacetMember> members,
         bool useFullName,
+        bool? excludeNavigationProperties = null,
+        ImmutableArray<string> includeProperties = default,
+        ImmutableArray<string> settableProperties = default,
+        SourceLocationInfo? attributeLocation = null,
         DtoTypes siblingInterfaceTypes = DtoTypes.None,
         OutputTypeIssue issue = OutputTypeIssue.None,
         bool supportsSystemTextJson = false,
@@ -91,10 +129,16 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         IncludeFields = includeFields;
         GenerateConstructors = generateConstructors;
         GenerateProjections = generateProjections;
+        GenerateReadOnlyProperties = generateReadOnlyProperties;
+        PropertySuffix = propertySuffix;
         ConvertEnumsTo = convertEnumsTo;
         ExcludeProperties = excludeProperties;
         Members = members;
         UseFullName = useFullName;
+        ExcludeNavigationProperties = excludeNavigationProperties;
+        IncludeProperties = includeProperties.IsDefault ? ImmutableArray<string>.Empty : includeProperties;
+        SettableProperties = settableProperties.IsDefault ? ImmutableArray<string>.Empty : settableProperties;
+        AttributeLocation = attributeLocation;
         SiblingInterfaceTypes = siblingInterfaceTypes;
         Issue = issue;
         SupportsSystemTextJson = supportsSystemTextJson;
@@ -118,14 +162,54 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             IncludeFields,
             GenerateConstructors,
             GenerateProjections,
+            GenerateReadOnlyProperties,
+            PropertySuffix,
             ConvertEnumsTo,
             ExcludeProperties,
             Members,
             UseFullName,
+            ExcludeNavigationProperties,
+            IncludeProperties,
+            SettableProperties,
+            AttributeLocation,
             SiblingInterfaceTypes,
             Issue,
             SupportsSystemTextJson,
             SupportsNewtonsoftJson);
+    }
+
+    /// <summary>
+    /// Returns a copy of this model with the final, navigation-filtered member list, used by
+    /// the generation stage once manifest exclusion is resolved. The navigation bookkeeping
+    /// fields are cleared: they exist only to carry the pending decision.
+    /// </summary>
+    public GenerateDtosTargetModel WithResolvedMembers(ImmutableArray<FacetMember> members)
+    {
+        return new GenerateDtosTargetModel(
+            SourceTypeName,
+            SourceNamespace,
+            TargetNamespace,
+            Types,
+            OutputType,
+            Prefix,
+            Suffix,
+            IncludeFields,
+            GenerateConstructors,
+            GenerateProjections,
+            GenerateReadOnlyProperties,
+            PropertySuffix,
+            ConvertEnumsTo,
+            ExcludeProperties,
+            members,
+            UseFullName,
+            excludeNavigationProperties: false,
+            includeProperties: IncludeProperties,
+            settableProperties: ImmutableArray<string>.Empty,
+            attributeLocation: AttributeLocation,
+            siblingInterfaceTypes: SiblingInterfaceTypes,
+            issue: Issue,
+            supportsSystemTextJson: SupportsSystemTextJson,
+            supportsNewtonsoftJson: SupportsNewtonsoftJson);
     }
 
     /// <summary>
@@ -145,10 +229,16 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             IncludeFields,
             GenerateConstructors,
             GenerateProjections,
+            GenerateReadOnlyProperties,
+            PropertySuffix,
             ConvertEnumsTo,
             ExcludeProperties,
             Members,
             UseFullName,
+            ExcludeNavigationProperties,
+            IncludeProperties,
+            SettableProperties,
+            AttributeLocation,
             SiblingInterfaceTypes,
             issue,
             SupportsSystemTextJson,
@@ -170,10 +260,16 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             && IncludeFields == other.IncludeFields
             && GenerateConstructors == other.GenerateConstructors
             && GenerateProjections == other.GenerateProjections
+            && GenerateReadOnlyProperties == other.GenerateReadOnlyProperties
+            && PropertySuffix == other.PropertySuffix
             && ConvertEnumsTo == other.ConvertEnumsTo
             && ExcludeProperties.SequenceEqual(other.ExcludeProperties)
             && Members.SequenceEqual(other.Members)
             && UseFullName == other.UseFullName
+            && ExcludeNavigationProperties == other.ExcludeNavigationProperties
+            && IncludeProperties.SequenceEqual(other.IncludeProperties)
+            && SettableProperties.SequenceEqual(other.SettableProperties)
+            && Nullable.Equals(AttributeLocation, other.AttributeLocation)
             && SiblingInterfaceTypes == other.SiblingInterfaceTypes
             && Issue == other.Issue
             && SupportsSystemTextJson == other.SupportsSystemTextJson
@@ -197,8 +293,11 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             hash = hash * 31 + IncludeFields.GetHashCode();
             hash = hash * 31 + GenerateConstructors.GetHashCode();
             hash = hash * 31 + GenerateProjections.GetHashCode();
+            hash = hash * 31 + GenerateReadOnlyProperties.GetHashCode();
+            hash = hash * 31 + (PropertySuffix?.GetHashCode() ?? 0);
             hash = hash * 31 + (ConvertEnumsTo?.GetHashCode() ?? 0);
             hash = hash * 31 + UseFullName.GetHashCode();
+            hash = hash * 31 + ExcludeNavigationProperties.GetHashCode();
             hash = hash * 31 + SiblingInterfaceTypes.GetHashCode();
             hash = hash * 31 + Issue.GetHashCode();
             hash = hash * 31 + SupportsSystemTextJson.GetHashCode();
@@ -206,6 +305,14 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
 
             foreach (var prop in ExcludeProperties)
                 hash = hash * 31 + prop.GetHashCode();
+
+            foreach (var prop in IncludeProperties)
+                hash = hash * 31 + prop.GetHashCode();
+
+            foreach (var prop in SettableProperties)
+                hash = hash * 31 + prop.GetHashCode();
+
+            hash = hash * 31 + (AttributeLocation?.GetHashCode() ?? 0);
 
             foreach (var member in Members)
                 hash = hash * 31 + member.GetHashCode();

@@ -87,7 +87,9 @@ public class GenerateDtosPartialClassTests
 
         type!.GetConstructor(Type.EmptyTypes).Should().NotBeNull("PartialClass should emit a parameterless constructor");
 
-        var sourceCtor = type.GetConstructor(new[] { typeof(TestPartialClassEntity) });
+        var sourceCtor = type.GetConstructor(
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            null, new[] { typeof(TestPartialClassEntity) }, null);
         sourceCtor.Should().NotBeNull("PartialClass should emit a constructor taking the source type");
     }
 

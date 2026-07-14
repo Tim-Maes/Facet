@@ -76,6 +76,30 @@ public enum OutputType
 }
 
 /// <summary>
+/// Presets that apply common defaults for generated DTOs. Explicit values in the
+/// attribute always override preset defaults.
+/// </summary>
+public enum DtoPreset
+{
+    /// <summary>No preset — use built-in defaults.</summary>
+    None = 0,
+    /// <summary>
+    /// Response DTO as a partial class: OutputType.PartialClass,
+    /// GenerateConstructors=false, GenerateProjections=false.
+    /// </summary>
+    ResponsePartial = 1,
+    /// <summary>
+    /// Request DTO as a partial class: OutputType.PartialClass,
+    /// ExcludeAuditFields=true, Suffix="Body".
+    /// </summary>
+    RequestPartial = 2,
+    /// <summary>
+    /// Request interface: OutputType.Interface, ExcludeAuditFields=true, Suffix="Body".
+    /// </summary>
+    InterfaceRequest = 3,
+}
+
+/// <summary>
 /// Generates standard CRUD DTOs (Create, Update, Response, Query, Upsert, Patch) for a domain model.
 /// Can be applied multiple times with different configurations for fine-grained control.
 /// </summary>
@@ -105,6 +129,40 @@ public class GenerateDtosAttribute : Attribute
     /// Properties to exclude from all generated DTOs.
     /// </summary>
     public string[] ExcludeProperties { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// When true, keeps exactly the properties EF Core maps as data (scalar columns and
+    /// complex/value-object members) and drops navigations, skip navigations, owned
+    /// references, and EF-ignored properties — removing ORM navigation/back-reference
+    /// properties from generated DTOs without listing each one in
+    /// <see cref="ExcludeProperties"/>.
+    /// <para>
+    /// This is driven entirely by the EF model: it requires a <c>*.facetmodel.json</c>
+    /// manifest (written beside the model snapshot by Facet.Extensions.EFCore's design-time
+    /// services on every <c>dotnet ef migrations add</c>/<c>remove</c>) exposed to the
+    /// generator as an AdditionalFile. Because it follows the model's own designation,
+    /// value-converted entity-typed columns survive and <c>[NotMapped]</c> properties drop —
+    /// neither of which a type-shape guess could get right. A source type with no manifest
+    /// entry is a compile error (FAC105); there is no heuristic fallback.
+    /// </para>
+    /// <para>
+    /// Left unset, this defaults to whether the project wires a manifest into
+    /// AdditionalFiles: a manifest-wired project shapes every generated DTO, a project
+    /// without one copies properties as-is. An explicit value wins in both directions —
+    /// most usefully <c>false</c> on a non-entity source type in a manifest-wired project.
+    /// Aggregate children that should stay in the DTO despite being navigations can be
+    /// forced back in via <see cref="IncludeProperties"/>.
+    /// </para>
+    /// </summary>
+    public bool ExcludeNavigationProperties { get; set; }
+
+    /// <summary>
+    /// Properties to keep in every generated DTO regardless of <see cref="ExcludeProperties"/>,
+    /// <see cref="ExcludeAuditFields"/>, or <see cref="ExcludeNavigationProperties"/> — the
+    /// escape hatch for aggregate children (e.g. an owned parameter collection edited together
+    /// with its parent) that the EF model designates a navigation.
+    /// </summary>
+    public string[] IncludeProperties { get; set; } = Array.Empty<string>();
 
     /// <summary>
     /// When true, automatically excludes common audit fields from generated DTOs.
@@ -141,6 +199,26 @@ public class GenerateDtosAttribute : Attribute
     public bool GenerateProjections { get; set; } = true;
 
     /// <summary>
+    /// When true, generated properties use <c>{ get; }</c> (no setter) instead of
+    /// <c>{ get; set; }</c>. The <see cref="DtoPreset.ResponsePartial"/> preset sets this
+    /// to true by default — response DTOs are read-only projections. When false (default),
+    /// all generated properties are <c>{ get; set; }</c>.
+    /// </summary>
+    public bool GenerateReadOnlyProperties { get; set; } = false;
+
+    /// <summary>
+    /// When set, appends this suffix to all <see cref="DateTime"/> and <see cref="DateTimeOffset"/>
+    /// property names in the generated DTO (including nullable variants). This is a convenience
+    /// over <see cref="RenameProperties"/> for the common pattern of suffixing audit date fields
+    /// with "UTC". Explicit <see cref="RenameProperties"/> entries always take precedence.
+    /// <para>
+    /// Example: <c>PropertySuffix = "UTC"</c> renames <c>CreatedDate</c> → <c>CreatedDateUTC</c>,
+    /// <c>UpdatedDate</c> → <c>UpdatedDateUTC</c>, etc.
+    /// </para>
+    /// </summary>
+    public string? PropertySuffix { get; set; }
+
+    /// <summary>
     /// When set, all enum properties from the source type will be converted to the specified type
     /// in generated DTOs. Supported values are <see cref="string"/> and <see cref="int"/>.
     /// When null (default), enum properties retain their original enum types.
@@ -152,6 +230,25 @@ public class GenerateDtosAttribute : Attribute
     /// to avoid collisions. Default is false (shorter file names).
     /// </summary>
     public bool UseFullName { get; set; } = false;
+
+    /// <summary>
+    /// Pairs of "EntityPropertyName:DtoPropertyName" that rename entity properties in the
+    /// generated DTO. The generated property uses <c>DtoPropertyName</c> as its name but
+    /// maps to <c>EntityPropertyName</c> in constructors and projections. This avoids
+    /// needing a hand-written partial class just to rename a few properties.
+    /// <para>
+    /// Example: <c>RenameProperties = new[] { "ActionReason:Reason", "ActionResult:Result" }</c>
+    /// generates <c>public MaintenanceActionReason Reason { get; set; }</c> mapped from
+    /// <c>source.ActionReason</c>.
+    /// </para>
+    /// </summary>
+    public string[] RenameProperties { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Applies common defaults for the given DTO kind. Explicit property values
+    /// in the attribute always override preset defaults.
+    /// </summary>
+    public DtoPreset Preset { get; set; } = DtoPreset.None;
 }
 
 /// <summary>
@@ -243,6 +340,19 @@ public class GenerateAuditableDtosAttribute : Attribute
     /// Whether to generate projection expressions for the DTOs (default: true).
     /// </summary>
     public bool GenerateProjections { get; set; } = true;
+
+    /// <summary>
+    /// When true, generated properties use <c>{ get; }</c> (no setter) instead of
+    /// <c>{ get; set; }</c>. The <see cref="DtoPreset.ResponsePartial"/> preset sets this
+    /// to true by default — response DTOs are read-only projections.
+    /// </summary>
+    public bool GenerateReadOnlyProperties { get; set; } = false;
+
+    /// <summary>
+    /// When set, appends this suffix to all DateTime/DateTimeOffset property names.
+    /// See <see cref="GenerateDtosAttribute.PropertySuffix"/> for details.
+    /// </summary>
+    public string? PropertySuffix { get; set; }
 
     /// <summary>
     /// If true, generated files will use the full type name (namespace + containing types)

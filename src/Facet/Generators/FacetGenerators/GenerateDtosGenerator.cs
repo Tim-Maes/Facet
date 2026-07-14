@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using SGF;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -11,9 +12,18 @@ using System.Threading;
 
 namespace Facet.Generators;
 
-[Generator(LanguageNames.CSharp)]
-public sealed class GenerateDtosGenerator : IIncrementalGenerator
+// SGF (SourceGenerator.Foundations) hoists this class behind a generated internal
+// GenerateDtosGeneratorHoist that carries [Generator]: callbacks get exception isolation and
+// a logger, and assembly-embedded dependencies (System.Text.Json for the EF model manifest)
+// are resolved before this code runs — analyzers cannot otherwise carry NuGet dependencies
+// into compiler hosts.
+[IncrementalGenerator]
+public sealed class GenerateDtosGenerator : IncrementalGenerator
 {
+    public GenerateDtosGenerator() : base(nameof(GenerateDtosGenerator))
+    {
+    }
+
     private const string GenerateDtosAttributeName = "Facet.GenerateDtosAttribute";
     
     private const string GenerateAuditableDtosAttributeName = "Facet.GenerateAuditableDtosAttribute";
@@ -47,6 +57,51 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         isEnabledByDefault: true,
         description: "The Partial flag only modifies how the requested kinds are emitted; on its own there is nothing to generate, which is more likely a mistake than an intentional no-op.");
 
+    private static readonly DiagnosticDescriptor ManifestMalformedRule = new DiagnosticDescriptor(
+        "FAC103",
+        "EF model manifest could not be read",
+        "EF model manifest '{0}' could not be read: {1}. The file is ignored in full; regenerate it (dotnet ef migrations add/remove) or remove it from AdditionalFiles.",
+        "Generator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "A committed *.facetmodel.json file wired up as an AdditionalFile is not readable as a manifest. It is ignored in full and does not count as a wired manifest — so it does not flip the ExcludeNavigationProperties default, and this error stands alone instead of being buried under a FAC105 cascade (explicitly shaped types it should have covered still surface as FAC105).");
+
+    private static readonly DiagnosticDescriptor ManifestVersionRule = new DiagnosticDescriptor(
+        "FAC104",
+        "EF model manifest version is not supported",
+        "EF model manifest '{0}' declares {1}. The file is ignored in full; align the Facet and Facet.Extensions.EFCore package versions and regenerate the manifest.",
+        "Generator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The manifest was written by a Facet.Extensions.EFCore version whose format this generator does not read — a package version mismatch. It is ignored in full and does not count as a wired manifest, so it does not flip the ExcludeNavigationProperties default; explicitly shaped types it should have covered still surface as FAC105.");
+
+    private static readonly DiagnosticDescriptor TypeNotInManifestRule = new DiagnosticDescriptor(
+        "FAC105",
+        "GenerateDtos source type is not in the EF model manifest",
+        "'{0}' {1}, which requires an EF model manifest entry for the type, but none was found. If the type is an EF entity, generate the manifest: register Facet.Extensions.EFCore's design-time services (FacetEfDesignTime property in the DbContext project), run 'dotnet ef migrations add', and double-check the AdditionalFiles path — a glob matching nothing is silently empty. If it is not an entity, set ExcludeNavigationProperties = false on the attribute.",
+        "Generator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "ExcludeNavigationProperties is driven entirely by the EF model manifest — there is no heuristic fallback — and defaults to true for every [GenerateDtos] attribute in a project that wires a manifest into AdditionalFiles. A source type with no manifest entry (because no manifest was supplied at all, or because this type is absent from the manifests present) cannot be shaped and is a hard error. Non-entity source types opt out per attribute with ExcludeNavigationProperties = false.");
+
+    private static readonly DiagnosticDescriptor PropertyNotInManifestRule = new DiagnosticDescriptor(
+        "FAC106",
+        "Property is unknown to the EF model manifest",
+        "Property '{0}' on '{1}' does not appear in the EF model manifest entry for the type — the manifest most likely predates the property, and it will be dropped from generated DTOs. Regenerate the manifest (dotnet ef migrations add/remove), or mark the property [NotMapped]/Ignore() if the model genuinely does not map it.",
+        "Generator",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "The manifest records every member the model has an opinion on (mapped, navigation, owned, skip navigation, ignored, service). A settable property outside that set is unknown to the model — almost always one added after the manifest was last generated, which would otherwise silently vanish from DTOs. Escalate with WarningsAsErrors for strict builds.");
+
+    private static readonly DiagnosticDescriptor CoverageRule = new DiagnosticDescriptor(
+        "FAC107",
+        "Facet DTO coverage",
+        "Facet DTO coverage: {0} of {1} entities from the EF model manifest have [GenerateDtos] configured. Uncovered: {2}",
+        "Generator",
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: true,
+        description: "Reports how many EF model entities have DTO generation configured versus the total in the manifest, listing up to 10 uncovered entity names. Only fires when a manifest is wired into the project. Suppress with #pragma warning disable FAC107 if the uncovered entities are intentionally excluded.");
+
     private static readonly HashSet<string> DefaultAuditFields = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
     {
         "CreatedDate", "UpdatedDate", "CreatedAt", "UpdatedAt",
@@ -58,7 +113,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         "Id"
     };
 
-    public void Initialize(IncrementalGeneratorInitializationContext context)
+    public override void OnInitialize(SgfInitializationContext context)
     {
         var generateDtosTargets = context.SyntaxProvider
             .ForAttributeWithMetadataName(
@@ -84,13 +139,35 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             .Where(static m => m is not null)
             .SelectMany(static (models, _) => models!);
 
+        // EF model manifests (*.facetmodel.json, written beside the model snapshot by
+        // Facet.Extensions.EFCore on every migrations add/remove) drive
+        // ExcludeNavigationProperties: they carry the EF model's own navigation designation.
+        // AdditionalFiles are invisible to the syntax transform, so the member set is resolved
+        // here, against the manifest.
+        var efModelManifest = context.AdditionalTextsProvider
+            .Where(static file => file.Path.EndsWith(EfModelManifest.FileExtension, StringComparison.OrdinalIgnoreCase))
+            .Select(static (file, token) => (file.Path, Text: file.GetText(token)?.ToString() ?? string.Empty))
+            .Collect()
+            .Select((files, _) =>
+            {
+                var manifest = EfModelManifest.Parse(files);
+                if (files.Length > 0)
+                {
+                    Logger.Debug($"EF model manifest: {manifest.EntityCount} entity types from {files.Length} file(s), {manifest.Issues.Length} rejected");
+                }
+
+                return manifest;
+            });
+
         var allTargets = generateDtosTargets.Collect()
             .Combine(generateAuditableDtosTargets.Collect())
             .Combine(generateDtosForTargets.Collect())
-            .Select(static (combined, _) => combined.Left.Left.Concat(combined.Left.Right).Concat(combined.Right));
+            .Select(static (combined, _) => combined.Left.Left.Concat(combined.Left.Right).Concat(combined.Right))
+            .Combine(efModelManifest);
 
-        context.RegisterSourceOutput(allTargets, (spc, models) =>
+        context.RegisterSourceOutput(allTargets, (spc, pair) =>
         {
+            var (models, manifest) = pair;
             var modelList = models.Where(m => m != null).Cast<GenerateDtosTargetModel>().ToList();
 
             // The Optional<T> JSON converter is generated (not shipped in Facet.Attributes)
@@ -111,16 +188,41 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 spc.AddSource("FacetOptionalNewtonsoftJsonSupport.g.cs", SourceText.From(OptionalNewtonsoftJsonSupportSource, Encoding.UTF8));
             }
 
-            foreach (var model in modelList)
+            // A rejected manifest file is a broken build input: report it once per
+            // compilation. Types it should have covered then surface as FAC105.
+            foreach (var issue in manifest.Issues)
             {
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    issue.Kind == ManifestIssueKind.UnsupportedVersion ? ManifestVersionRule : ManifestMalformedRule,
+                    Location.None,
+                    issue.FilePath,
+                    issue.Detail));
+            }
+
+            // Attribute expansion yields several models per attribute (one per output kind),
+            // so manifest-coverage diagnostics deduplicate per source type / property.
+            var reportedCoverage = new HashSet<string>(StringComparer.Ordinal);
+
+            // Track which source types have [GenerateDtos] configured (deduplicated —
+            // multiple OutputType bits or DtoTypes on the same entity expand to several
+            // models but count as one configured entity for FAC107 coverage).
+            var configuredTypes = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var pendingModel in modelList)
+            {
+                if (pendingModel != null)
                 {
                     spc.CancellationToken.ThrowIfCancellationRequested();
+
+                    configuredTypes.Add(Shared.GeneratorUtilities.StripGlobalPrefix(pendingModel.SourceTypeName));
+
+                    var model = ResolveNavigationExclusions(spc, pendingModel, manifest, reportedCoverage);
 
                     if (model.Issue != OutputTypeIssue.None)
                     {
                         spc.ReportDiagnostic(Diagnostic.Create(
                             model.Issue == OutputTypeIssue.PartialWithoutKind ? PartialWithoutKindRule : ConflictingOutputTypesRule,
-                            Location.None,
+                            model.AttributeLocation?.ToLocation() ?? Location.None,
                             GetSimpleTypeName(model.SourceTypeName),
                             model.OutputType.ToString()));
                         continue;
@@ -132,6 +234,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                     }
                     catch (Exception ex)
                     {
+                        Logger.Error(ex, $"Error generating DTOs for '{GetSimpleTypeName(model.SourceTypeName)}'");
                         var diagnostic = Diagnostic.Create(
                             GeneratorErrorRule,
                             Location.None,
@@ -139,6 +242,33 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                             ex.Message);
                         spc.ReportDiagnostic(diagnostic);
                     }
+                }
+            }
+
+            // FAC107: coverage report — how many manifest entities have [GenerateDtos]
+            // configured vs. the total. Only fires when a manifest is wired in and there
+            // are uncovered entities.
+            if (manifest.HasAcceptedManifests && manifest.EntityCount > 0)
+            {
+                var uncovered = new List<string>();
+                foreach (var entityName in manifest.GetEntityNames())
+                {
+                    if (!configuredTypes.Contains(entityName))
+                        uncovered.Add(GetSimpleNameFromFullName(entityName));
+                }
+
+                if (uncovered.Count > 0)
+                {
+                    var preview = string.Join(", ", uncovered.Take(10));
+                    if (uncovered.Count > 10)
+                        preview += $", … ({uncovered.Count} total)";
+
+                    spc.ReportDiagnostic(Diagnostic.Create(
+                        CoverageRule,
+                        Location.None,
+                        configuredTypes.Count,
+                        manifest.EntityCount,
+                        preview));
                 }
             }
         });
@@ -268,10 +398,16 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 model.IncludeFields,
                 model.GenerateConstructors,
                 model.GenerateProjections,
+                model.GenerateReadOnlyProperties,
+                model.PropertySuffix,
                 model.ConvertEnumsTo,
                 model.ExcludeProperties,
                 model.Members,
                 model.UseFullName,
+                model.ExcludeNavigationProperties,
+                model.IncludeProperties,
+                model.SettableProperties,
+                model.AttributeLocation,
                 siblingMask,
                 model.Issue,
                 model.SupportsSystemTextJson,
@@ -295,14 +431,69 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             var includeFields = GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
             var generateConstructors = GetNamedArg(attribute.NamedArguments, "GenerateConstructors", true);
             var generateProjections = GetNamedArg(attribute.NamedArguments, "GenerateProjections", true);
+            var generateReadOnlyProperties = GetNamedArg(attribute.NamedArguments, "GenerateReadOnlyProperties", false);
+            var propertySuffix = GetNamedArg<string?>(attribute.NamedArguments, "PropertySuffix", null);
             var useFullName = GetNamedArg(attribute.NamedArguments, "UseFullName", false);
             var convertEnumsTo = ExtractConvertEnumsTo(attribute.NamedArguments);
-            
+            var preset = GetNamedArg(attribute.NamedArguments, "Preset", DtoPreset.None);
             var excludeAuditFields = forceExcludeAuditFields || GetNamedArg(attribute.NamedArguments, "ExcludeAuditFields", false);
+
+            // Track which properties were explicitly set so presets don't override them.
+            var explicitArgs = new HashSet<string>(
+                attribute.NamedArguments.Select(kvp => kvp.Key),
+                StringComparer.Ordinal);
+
+            // Apply preset defaults — explicit attribute values always win.
+            if (preset == DtoPreset.ResponsePartial)
+            {
+                if (!explicitArgs.Contains("OutputType")) outputType = OutputType.PartialClass;
+                if (!explicitArgs.Contains("GenerateConstructors")) generateConstructors = true;
+                if (!explicitArgs.Contains("GenerateProjections")) generateProjections = false;
+                if (!explicitArgs.Contains("GenerateReadOnlyProperties")) generateReadOnlyProperties = true;
+            }
+            else if (preset == DtoPreset.RequestPartial)
+            {
+                if (!explicitArgs.Contains("OutputType")) outputType = OutputType.PartialClass;
+                if (!explicitArgs.Contains("ExcludeAuditFields") && !forceExcludeAuditFields) excludeAuditFields = true;
+                if (!explicitArgs.Contains("Suffix")) suffix = "Body";
+            }
+            else if (preset == DtoPreset.InterfaceRequest)
+            {
+                if (!explicitArgs.Contains("OutputType")) outputType = OutputType.Interface;
+                if (!explicitArgs.Contains("ExcludeAuditFields") && !forceExcludeAuditFields) excludeAuditFields = true;
+                if (!explicitArgs.Contains("Suffix")) suffix = "Body";
+            }
+
             var supportsSystemTextJson = compilation
                 .GetTypeByMetadataName("System.Text.Json.Serialization.JsonConverterAttribute") is not null;
             var supportsNewtonsoftJson = compilation
                 .GetTypeByMetadataName("Newtonsoft.Json.JsonConverterAttribute") is not null;
+            // Tri-state: an attribute that leaves ExcludeNavigationProperties unset defaults
+            // to shaping exactly when the project wires an EF model manifest into
+            // AdditionalFiles — resolved at generation time, where manifests are visible.
+            bool? excludeNavigationProperties = attribute.NamedArguments
+                .Where(kvp => kvp.Key == "ExcludeNavigationProperties")
+                .Select(kvp => kvp.Value.Value as bool?)
+                .FirstOrDefault();
+
+            // The obsolete [GenerateAuditableDtos] declares neither ExcludeNavigationProperties
+            // nor IncludeProperties, so the wired-manifest default must not reach it: there
+            // would be no per-type opt-out, and FAC105 would advise a named argument that does
+            // not compile on that attribute. It keeps its legacy unshaped behavior.
+            if (forceExcludeAuditFields)
+            {
+                excludeNavigationProperties = false;
+            }
+
+            var includeProperties = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            var includePropertiesArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "IncludeProperties");
+            if (includePropertiesArg.Value.Kind == TypedConstantKind.Array && !includePropertiesArg.Value.IsNull)
+            {
+                foreach (var v in includePropertiesArg.Value.Values)
+                {
+                    if (v.Value?.ToString() is { } name) includeProperties.Add(name);
+                }
+            }
 
             var userExcludeProperties = new List<string>();
             var excludePropertiesArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "ExcludeProperties");
@@ -319,6 +510,24 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
             var excludeProperties = new HashSet<string>(userExcludeProperties, System.StringComparer.OrdinalIgnoreCase);
 
+            // Parse RenameProperties: "EntityProp:DtoProp" pairs that rename entity properties
+            // in the generated DTO while keeping the source mapping intact.
+            var renameMap = new Dictionary<string, string>(StringComparer.Ordinal);
+            var renameArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "RenameProperties");
+            if (renameArg.Value.Kind == TypedConstantKind.Array && !renameArg.Value.IsNull)
+            {
+                foreach (var v in renameArg.Value.Values)
+                {
+                    var pair = v.Value?.ToString();
+                    if (pair is not null && pair.Contains(':'))
+                    {
+                        var parts = pair.Split(new[] { ':' }, 2);
+                        if (parts.Length == 2 && !string.IsNullOrWhiteSpace(parts[0]) && !string.IsNullOrWhiteSpace(parts[1]))
+                            renameMap[parts[0].Trim()] = parts[1].Trim();
+                    }
+                }
+            }
+
             if (excludeAuditFields)
             {
                 foreach (var field in DefaultAuditFields)
@@ -327,10 +536,45 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 }
             }
 
+            // IncludeProperties is the escape hatch: names listed there survive every
+            // automatic and explicit exclusion (the Create-DTO Id convention excepted).
+            // Renamed properties also survive — otherwise ExcludeAuditFields would drop
+            // e.g. "CreatedDate" before the rename to "CreatedDateUTC" can apply.
+            foreach (var entityProp in renameMap.Keys)
+                includeProperties.Add(entityProp);
+            excludeProperties.ExceptWith(includeProperties);
+
+            // Apply PropertySuffix: append suffix (e.g. "UTC") to all DateTime/DateTimeOffset
+            // property names that aren't already renamed explicitly. This must happen after
+            // exclusions so suffixed audit fields that were excluded stay excluded.
+            if (!string.IsNullOrWhiteSpace(propertySuffix))
+            {
+                var allMembersForSuffix = GeneratorUtilities.GetAllMembersWithModifiers(sourceSymbol);
+                foreach (var (member, _, _) in allMembersForSuffix)
+                {
+                    if (member is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } sp
+                        && !excludeProperties.Contains(sp.Name)
+                        && !renameMap.ContainsKey(sp.Name)
+                        && IsDateTimeType(sp.Type)
+                        && !sp.Name.EndsWith(propertySuffix, System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        renameMap[sp.Name] = sp.Name + propertySuffix;
+                        includeProperties.Add(sp.Name);
+                    }
+                }
+            }
+
             var members = new List<FacetMember>();
             var addedMembers = new HashSet<string>();
 
             var allMembersWithModifiers = GeneratorUtilities.GetAllMembersWithModifiers(sourceSymbol);
+
+            // Properties EF could plausibly map (settable, or get-only collections), for the
+            // manifest completeness check (FAC106). Computed get-only properties are excluded:
+            // the model never maps them, so their absence from a manifest means nothing.
+            // Collected unless shaping is explicitly off — an unset value may still resolve
+            // to shaping once the manifest is in view.
+            var settableProperties = new List<string>();
 
             foreach (var (member, isInitOnly, isRequired) in allMembersWithModifiers)
             {
@@ -340,28 +584,38 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
                 if (member is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } p)
                 {
+                    if (excludeNavigationProperties != false
+                        && (p.SetMethod != null || GeneratorUtilities.TryGetCollectionElementType(p.Type, out _, out _)))
+                    {
+                        settableProperties.Add(p.Name);
+                    }
+
+                    var dtoName = renameMap.TryGetValue(p.Name, out var renamed) ? renamed : p.Name;
                     members.Add(CreateGenerateDtoMember(
-                        p.Name,
+                        dtoName,
                         p.Type,
                         FacetMemberKind.Property,
                         isInitOnly,
                         isRequired,
                         false,
-                        convertEnumsTo));
-                    addedMembers.Add(p.Name);
+                        convertEnumsTo,
+                        sourcePropertyName: p.Name));
+                    addedMembers.Add(dtoName);
                 }
                 else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
                 {
                     bool isReadOnly = f.IsReadOnly;
+                    var dtoName = renameMap.TryGetValue(f.Name, out var renamed) ? renamed : f.Name;
                     members.Add(CreateGenerateDtoMember(
-                        f.Name,
+                        dtoName,
                         f.Type,
                         FacetMemberKind.Field,
                         false,
                         isRequired,
                         isReadOnly,
-                        convertEnumsTo));
-                    addedMembers.Add(f.Name);
+                        convertEnumsTo,
+                        sourcePropertyName: f.Name));
+                    addedMembers.Add(dtoName);
                 }
             }
 
@@ -380,10 +634,16 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 includeFields,
                 generateConstructors,
                 generateProjections,
+                generateReadOnlyProperties,
+                propertySuffix,
                 convertEnumsTo,
                 excludeProperties.ToImmutableArray(),
                 members.ToImmutableArray(),
                 useFullName,
+                excludeNavigationProperties,
+                includeProperties.ToImmutableArray(),
+                settableProperties.ToImmutableArray(),
+                SourceLocationInfo.FromAttribute(attribute),
                 supportsSystemTextJson: supportsSystemTextJson,
                 supportsNewtonsoftJson: supportsNewtonsoftJson);
         }
@@ -394,7 +654,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
     }
 
-    private static void GenerateDtosForModel(SourceProductionContext context, GenerateDtosTargetModel model)
+    private static void GenerateDtosForModel(SgfSourceProductionContext context, GenerateDtosTargetModel model)
     {
         context.CancellationToken.ThrowIfCancellationRequested();
 
@@ -498,6 +758,12 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         return parts[parts.Length - 1];
     }
 
+    private static string GetSimpleNameFromFullName(string fullName)
+    {
+        var parts = fullName.Split('.');
+        return parts[parts.Length - 1];
+    }
+
     /// <summary>
     /// Filters members by exclusion lists, returning only members not in any exclusion set.
     /// </summary>
@@ -527,8 +793,16 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         var isPartial = IsPartial(model.OutputType);
         var hasInitOnlyProperties = members.Any(m => m.IsInitOnly);
         var hasReadOnlyFields = members.Any(m => m.IsReadOnly);
+        var needsCs8618Suppress = model.GenerateReadOnlyProperties && !isInterface;
 
         GenerateDtoFileHeader(sb, model);
+
+        if (needsCs8618Suppress)
+        {
+            sb.AppendLine("#pragma warning disable CS8618");
+            sb.AppendLine();
+        }
+
         GenerateDtoTypeDeclaration(sb, model, dtoName, sourceTypeName, purpose, dtoType);
 
         GenerateDtoMembers(sb, model, members);
@@ -554,6 +828,11 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
 
         sb.AppendLine("}");
+
+        if (needsCs8618Suppress)
+        {
+            sb.AppendLine("#pragma warning restore CS8618");
+        }
 
         return sb.ToString();
     }
@@ -634,7 +913,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
             if (member.Kind == FacetMemberKind.Property)
             {
-                GenerateDtoProperty(sb, member, isInterface);
+                GenerateDtoProperty(sb, member, isInterface, model.GenerateReadOnlyProperties);
             }
             else if (!isInterface)
             {
@@ -643,7 +922,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
     }
 
-    private static void GenerateDtoProperty(StringBuilder sb, FacetMember member, bool isInterface)
+    private static void GenerateDtoProperty(StringBuilder sb, FacetMember member, bool isInterface, bool readOnlyProperties = false)
     {
         if (isInterface)
         {
@@ -657,18 +936,24 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
             propDef += " { get; init; }";
         }
+        else if (readOnlyProperties)
+        {
+            propDef += " { get; init; }";
+        }
         else
         {
             propDef += " { get; set; }";
         }
 
-        // Suppress CS8618 for generated non-nullable refs.
-        if (!member.IsValueType && !member.IsRequired && !NullabilityAnalyzer.IsNullableTypeName(member.TypeName))
+        // Suppress CS8618 for generated non-nullable refs — only needed when properties have setters
+        // (read-only properties are assigned via constructor or object initializer, not defaulted).
+        if (!member.IsValueType && !member.IsRequired && !NullabilityAnalyzer.IsNullableTypeName(member.TypeName) && !readOnlyProperties)
         {
             propDef += " = default!;";
         }
 
-        if (member.IsRequired)
+        // `required` only makes sense with setters or init — read-only properties can't be required.
+        if (member.IsRequired && !readOnlyProperties)
         {
             propDef = $"required {propDef}";
         }
@@ -708,19 +993,22 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
     private static void GenerateDtoConstructors(StringBuilder sb, GenerateDtosTargetModel model, string dtoName, string sourceTypeName, ImmutableArray<FacetMember> members, bool hasInitOnlyProperties, bool hasReadOnlyFields)
     {
+        var isPartial = IsPartial(model.OutputType);
+
         sb.AppendLine();
         sb.AppendLine($"    /// <summary>");
         sb.AppendLine($"    /// Initializes a new instance of the <see cref=\"{dtoName}\"/> class from the specified <see cref=\"{sourceTypeName}\"/>.");
         sb.AppendLine($"    /// </summary>");
         sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{sourceTypeName}\"/> object to copy data from.</param>");
 
-        var hasRequiredProperties = model.Members.Any(m => m.IsRequired);
+        var hasRequiredProperties = !model.GenerateReadOnlyProperties && model.Members.Any(m => m.IsRequired);
         if (hasRequiredProperties)
         {
             sb.AppendLine("    [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]");
         }
 
-        sb.AppendLine($"    public {dtoName}({model.SourceTypeName} source)");
+        var constructorAccess = isPartial ? "internal" : "public";
+        sb.AppendLine($"    {constructorAccess} {dtoName}({model.SourceTypeName} source)");
         sb.AppendLine("    {");
 
         var assignableMembers = members.Where(x => !x.IsInitOnly && !x.IsReadOnly).ToArray();
@@ -729,7 +1017,8 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
             foreach (var member in assignableMembers)
             {
-                var sourceExpression = $"source.{member.Name}";
+                var sourcePropName = !string.IsNullOrEmpty(member.SourcePropertyName) ? member.SourcePropertyName : member.Name;
+                var sourceExpression = $"source.{sourcePropName}";
                 var mappedExpression = ConvertSourceToDtoExpression(sourceExpression, member, forProjection: false);
                 sb.AppendLine($"        this.{member.Name} = {mappedExpression};");
             }
@@ -738,6 +1027,11 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
             sb.AppendLine("        // No assignable members to initialize from source");
             sb.AppendLine("        // (all members are either init-only properties or readonly fields with default values)");
+        }
+
+        if (isPartial)
+        {
+            sb.AppendLine("        OnInitialized(source);");
         }
 
         sb.AppendLine("    }");
@@ -750,7 +1044,18 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine("    {");
         sb.AppendLine("    }");
 
-        if (hasInitOnlyProperties || hasReadOnlyFields)
+        if (isPartial)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Hook called after the entity-to-DTO constructor copies all generated properties.");
+            sb.AppendLine($"    /// Implement this in a partial class to set computed or navigation-derived properties.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{sourceTypeName}\"/> object.</param>");
+            sb.AppendLine($"    partial void OnInitialized({model.SourceTypeName} source);");
+        }
+
+        if (hasInitOnlyProperties || hasReadOnlyFields || model.GenerateReadOnlyProperties)
         {
             GenerateDtoFromSourceFactory(sb, model, dtoName, sourceTypeName, members, hasReadOnlyFields);
         }
@@ -760,7 +1065,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     {
         sb.AppendLine();
         sb.AppendLine($"    /// <summary>");
-        sb.AppendLine($"    /// Creates a new instance of <see cref=\"{dtoName}\"/> from the specified <see cref=\"{sourceTypeName}\"/> with init-only properties.");
+        sb.AppendLine($"    /// Creates a new instance of <see cref=\"{dtoName}\"/> from the specified <see cref=\"{sourceTypeName}\"/>.");
         sb.AppendLine($"    /// </summary>");
         sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{sourceTypeName}\"/> object to copy data from.</param>");
         sb.AppendLine($"    /// <returns>A new <see cref=\"{dtoName}\"/> instance with all properties initialized from the source.</returns>");
@@ -774,20 +1079,30 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
         sb.AppendLine($"    public static {dtoName} FromSource({model.SourceTypeName} source)");
         sb.AppendLine("    {");
-        sb.AppendLine($"        return new {dtoName}");
-        sb.AppendLine("        {");
 
-        var initializableMembers = members.Where(m => !m.IsReadOnly).ToArray();
-        for (int i = 0; i < initializableMembers.Length; i++)
+        if (model.GenerateReadOnlyProperties && model.GenerateConstructors)
         {
-            var member = initializableMembers[i];
-            var comma = i == initializableMembers.Length - 1 ? "" : ",";
-            var sourceExpression = $"source.{member.Name}";
-            var mappedExpression = ConvertSourceToDtoExpression(sourceExpression, member, forProjection: false);
-            sb.AppendLine($"            {member.Name} = {mappedExpression}{comma}");
+            sb.AppendLine($"        return new {dtoName}(source);");
+        }
+        else
+        {
+            sb.AppendLine($"        return new {dtoName}");
+            sb.AppendLine("        {");
+
+            var initializableMembers = members.Where(m => !m.IsReadOnly).ToArray();
+            for (int i = 0; i < initializableMembers.Length; i++)
+            {
+                var member = initializableMembers[i];
+                var comma = i == initializableMembers.Length - 1 ? "" : ",";
+                var sourcePropName = !string.IsNullOrEmpty(member.SourcePropertyName) ? member.SourcePropertyName : member.Name;
+                var sourceExpression = $"source.{sourcePropName}";
+                var mappedExpression = ConvertSourceToDtoExpression(sourceExpression, member, forProjection: false);
+                sb.AppendLine($"            {member.Name} = {mappedExpression}{comma}");
+            }
+
+            sb.AppendLine("        };");
         }
 
-        sb.AppendLine("        };");
         sb.AppendLine("    }");
     }
 
@@ -809,7 +1124,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine($"    /// </example>");
         sb.AppendLine($"    public static Expression<Func<{model.SourceTypeName}, {dtoName}>> Projection =>");
 
-        if (hasInitOnlyProperties || hasReadOnlyFields)
+        if (hasInitOnlyProperties || hasReadOnlyFields || model.GenerateReadOnlyProperties)
         {
             sb.AppendLine($"        source => new {dtoName}");
             sb.AppendLine("        {");
@@ -819,7 +1134,8 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             {
                 var member = initializableMembers[i];
                 var comma = i == initializableMembers.Length - 1 ? "" : ",";
-                var sourceExpression = $"source.{member.Name}";
+                var sourcePropName = !string.IsNullOrEmpty(member.SourcePropertyName) ? member.SourcePropertyName : member.Name;
+                var sourceExpression = $"source.{sourcePropName}";
                 var mappedExpression = ConvertSourceToDtoExpression(sourceExpression, member, forProjection: true);
                 sb.AppendLine($"            {member.Name} = {mappedExpression}{comma}");
             }
@@ -1001,7 +1317,8 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         bool isInitOnly,
         bool isRequired,
         bool isReadOnly,
-        string? convertEnumsTo)
+        string? convertEnumsTo,
+        string? sourcePropertyName = null)
     {
         var isCollection = GeneratorUtilities.TryGetCollectionElementType(typeSymbol, out var elementType, out var collectionWrapper);
         var originalTypeName = GeneratorUtilities.GetTypeNameWithNullability(typeSymbol);
@@ -1073,7 +1390,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             null,
             false,
             true,
-            name,
+            sourcePropertyName ?? name,
             false,
             null,
             null,
@@ -1105,6 +1422,18 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
     private static bool IsSupportedEnumConversion(string? convertEnumsTo)
         => convertEnumsTo is "string" or "int";
+
+    private static bool IsDateTimeType(ITypeSymbol type)
+    {
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+            type = nullable.TypeArguments[0];
+
+        if (type.SpecialType == SpecialType.System_DateTime)
+            return true;
+
+        var fullName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        return fullName == "global::System.DateTimeOffset";
+    }
 
     private static string GetConvertedEnumType(string convertEnumsTo, bool isNullable)
     {
@@ -1508,5 +1837,76 @@ internal sealed class OptionalNewtonsoftJsonConverter : JsonConverter
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Resolves ExcludeNavigationProperties into a final member list from the EF model
+    /// manifest — the sole source of truth; there is no heuristic fallback. An attribute that
+    /// leaves the flag unset defaults to shaping exactly when a manifest is wired into the
+    /// compilation: adding the AdditionalFiles glob is the project-level opt-in, and explicit
+    /// values win in both directions. When the source type has a manifest entry, exactly the
+    /// mapped scalar and complex properties are kept, so navigations, skip navigations, owned
+    /// references, and EF-ignored properties all drop. A property the model has no opinion on
+    /// is reported as FAC106 (stale manifest). A type with no manifest entry at all is
+    /// reported as FAC105 (error): the DTO cannot be shaped. IncludeProperties always wins.
+    /// </summary>
+    private static GenerateDtosTargetModel ResolveNavigationExclusions(
+        SgfSourceProductionContext spc,
+        GenerateDtosTargetModel model,
+        EfModelManifest manifest,
+        HashSet<string> reportedCoverage)
+    {
+        if (!(model.ExcludeNavigationProperties ?? manifest.HasAcceptedManifests))
+        {
+            return model;
+        }
+
+        var includeProperties = new HashSet<string>(model.IncludeProperties, StringComparer.OrdinalIgnoreCase);
+
+        var sourceClrName = Shared.GeneratorUtilities.StripGlobalPrefix(model.SourceTypeName);
+        if (manifest.TryGetEntity(sourceClrName, out var entity))
+        {
+            foreach (var propertyName in model.SettableProperties)
+            {
+                if (entity!.Known.Contains(propertyName)) continue;
+                if (includeProperties.Contains(propertyName)) continue;
+                if (!reportedCoverage.Add($"{sourceClrName}.{propertyName}")) continue;
+
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    PropertyNotInManifestRule,
+                    model.AttributeLocation?.ToLocation() ?? Location.None,
+                    propertyName,
+                    GetSimpleTypeName(model.SourceTypeName)));
+            }
+
+            // Fields are not EF-mapped members; the manifest has no opinion on them, so they
+            // keep the behavior IncludeFields already gave them.
+            // When a property is renamed (e.g. CreatedDate → CreatedDateUtc), m.Name is the
+            // DTO name but the manifest/keep/include sets use the source entity name — so
+            // check SourcePropertyName as well.
+            return model.WithResolvedMembers(model.Members
+                .Where(m => m.Kind != FacetMemberKind.Property
+                    || entity!.Keep.Contains(m.Name)
+                    || entity!.Keep.Contains(m.SourcePropertyName)
+                    || includeProperties.Contains(m.Name)
+                    || includeProperties.Contains(m.SourcePropertyName))
+                .ToImmutableArray());
+        }
+
+        // No manifest entry — the model has said nothing about this type, so the DTO shape is
+        // undefined. This is a hard error, not a silent guess: emit no exclusion (keep every
+        // member so downstream code still compiles) and let FAC105 be the signal.
+        if (reportedCoverage.Add(sourceClrName))
+        {
+            spc.ReportDiagnostic(Diagnostic.Create(
+                TypeNotInManifestRule,
+                model.AttributeLocation?.ToLocation() ?? Location.None,
+                GetSimpleTypeName(model.SourceTypeName),
+                model.ExcludeNavigationProperties == true
+                    ? "sets ExcludeNavigationProperties"
+                    : "defaults to ExcludeNavigationProperties = true because an EF model manifest is wired into this project"));
+        }
+
+        return model.WithResolvedMembers(model.Members);
     }
 }
