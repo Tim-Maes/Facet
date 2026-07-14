@@ -175,7 +175,7 @@ public class MigrationComplexityAnalyzer : DiagnosticAnalyzer
             }
 
             // Try to match this class to a manifest entity by name.
-            if (!TryMatchDtoToEntity(namedType.Name, entityNames, out var entityFullName, out var entitySimpleName))
+            if (!TryMatchDtoToEntity(namedType.Name, entityNames, out var entityFullName, out var entitySimpleName, out var dtoKind))
             {
                 LogDebug($"SymbolAction: {namedType.Name} does not match any manifest entity");
                 return;
@@ -188,11 +188,22 @@ public class MigrationComplexityAnalyzer : DiagnosticAnalyzer
                 return;
             }
 
-            // Skip if the matched entity is already configured for Facet generation.
-            if (configuredTypes.ContainsKey(entityFullName))
+            // Skip if the matched entity is already configured for this specific DTO kind.
+            if (configuredTypes.TryGetValue(entityFullName, out var configuredKinds))
             {
-                LogDebug($"SymbolAction: skipping {fullName} — entity {entitySimpleName} is already Facet-configured");
-                return;
+                var kindFlag = dtoKind switch
+                {
+                    DtoKind.Create => DtoTypes.Create,
+                    DtoKind.Update => DtoTypes.Update,
+                    DtoKind.Response => DtoTypes.Response,
+                    _ => DtoTypes.None
+                };
+
+                if ((configuredKinds & kindFlag) != 0)
+                {
+                    LogDebug($"SymbolAction: skipping {fullName} — entity {entitySimpleName} already has {dtoKind} configured");
+                    return;
+                }
             }
 
             LogInfo($"SymbolAction: analyzing {fullName} → matched entity {entitySimpleName}");
@@ -206,7 +217,7 @@ public class MigrationComplexityAnalyzer : DiagnosticAnalyzer
             }
 
             // Analyze the DTO's properties.
-            var score = AnalyzeDto(namedType, entityEntry, entitySimpleName);
+            var score = AnalyzeDto(namedType, entityEntry, entitySimpleName, dtoKind);
             cache[namedType] = score;
 
             LogInfo($"SymbolAction: {fullName} scored as {score.Complexity} " +
@@ -238,7 +249,8 @@ public class MigrationComplexityAnalyzer : DiagnosticAnalyzer
     private static DtoMigrationScore AnalyzeDto(
         INamedTypeSymbol dtoType,
         ManifestEntity? entityEntry,
-        string entitySimpleName)
+        string entitySimpleName,
+        DtoKind dtoKind)
     {
         var entityShaped = 0;
         var readOnly = 0;
@@ -311,11 +323,27 @@ public class MigrationComplexityAnalyzer : DiagnosticAnalyzer
             ? MigrationComplexity.Medium
             : MigrationComplexity.Easy;
 
-        // Estimate lines saved:
-        // - Each entity-shaped property: ~3 lines (declaration + constructor assignment + mapping)
-        // - Each DateTime property with UTC suffix: ~1 additional line saved (PropertySuffix vs RenameProperties)
-        // - Class boilerplate: ~15 lines (class declaration, braces, constructor signature, OnInitialized stub)
-        var estimatedLinesSaved = (entityShaped * 3) + (dateTimeProps * 1) + 15 - (sieve * 2);
+        // Estimate lines saved based on DTO kind:
+        // - Response: entityShaped × 3 (declaration + constructor assignment + projection) + 15 boilerplate
+        // - Create/Update: entityShaped × 2 (declaration + ToSource mapping) + 8 boilerplate (simpler class)
+        // - DateTime props with PropertySuffix: +1 each (vs RenameProperties boilerplate)
+        // - Sieve props need manual exclusion: -2 each
+        int perProp;
+        int boilerplate;
+        switch (dtoKind)
+        {
+            case DtoKind.Create:
+            case DtoKind.Update:
+                perProp = 2;
+                boilerplate = 8;
+                break;
+            default:
+                perProp = 3;
+                boilerplate = 15;
+                break;
+        }
+
+        var estimatedLinesSaved = (entityShaped * perProp) + (dateTimeProps * 1) + boilerplate - (sieve * 2);
 
         return new DtoMigrationScore(
             complexity,
@@ -324,27 +352,31 @@ public class MigrationComplexityAnalyzer : DiagnosticAnalyzer
             computed,
             sieve,
             estimatedLinesSaved,
-            dateTimeProps);
+            dateTimeProps,
+            dtoKind);
     }
 
     // ─── DTO-to-Entity Name Matching ──────────────────────────────────────────
 
     /// <summary>
     /// Attempts to match a DTO class name to a manifest entity name by stripping common
-    /// DTO prefix/suffix patterns.
+    /// DTO prefix/suffix patterns. Also determines the DTO kind (Response, Create, Update).
     /// </summary>
     private static bool TryMatchDtoToEntity(
         string className,
         Dictionary<string, string> entityNames,
         out string entityFullName,
-        out string entitySimpleName)
+        out string entitySimpleName,
+        out DtoKind kind)
     {
         entityFullName = string.Empty;
         entitySimpleName = string.Empty;
+        kind = DtoKind.Other;
 
-        // Strip common suffixes: Response, Request, Dto, DTO, ViewModel, Model
         var stripped = className;
-        var suffixes = new[] { "Response", "Request", "Dto", "DTO", "ViewModel", "Model" };
+
+        // Strip common suffixes — order matters: "RequestBody" before "Request", "Body" last.
+        var suffixes = new[] { "RequestBody", "Response", "Request", "Body", "Dto", "DTO", "ViewModel", "Model" };
         var strippedSuffix = false;
         foreach (var suffix in suffixes)
         {
@@ -360,22 +392,40 @@ public class MigrationComplexityAnalyzer : DiagnosticAnalyzer
         if (!strippedSuffix)
             return false;
 
-        // Strip common prefixes: Get, Create, Update, Upsert, Patch, Delete, New
+        // Strip common prefixes and record the DTO kind.
         var prefixes = new[] { "Get", "Create", "Update", "Upsert", "Patch", "Delete", "New" };
         foreach (var prefix in prefixes)
         {
             if (stripped.StartsWith(prefix, System.StringComparison.Ordinal) && stripped.Length > prefix.Length)
             {
                 stripped = stripped.Substring(prefix.Length);
-                break; // Only strip one prefix
+                kind = prefix switch
+                {
+                    "Get" => DtoKind.Response,
+                    "Create" => DtoKind.Create,
+                    "Update" => DtoKind.Update,
+                    "Upsert" => DtoKind.Create,
+                    "Patch" => DtoKind.Update,
+                    "New" => DtoKind.Create,
+                    _ => DtoKind.Other
+                };
+                break;
             }
+        }
+
+        // If no prefix was stripped but the suffix was "Response", it's a Response DTO.
+        if (kind == DtoKind.Other)
+        {
+            // Check what suffix was stripped by looking at the original name.
+            if (className.EndsWith("Response", System.StringComparison.Ordinal))
+                kind = DtoKind.Response;
         }
 
         // Exact match only — no fuzzy matching to avoid false positives like "WidgetHelper" → "Widget".
         if (entityNames.TryGetValue(stripped, out entityFullName))
         {
             entitySimpleName = stripped;
-            LogDebug($"  name match: {className} → {stripped} (exact)");
+            LogDebug($"  name match: {className} → {stripped} (exact, kind={kind})");
             return true;
         }
 
@@ -503,6 +553,7 @@ internal sealed class DtoMigrationScore
     public int SieveCount { get; }
     public int EstimatedLinesSaved { get; }
     public int DateTimePropsCount { get; }
+    public DtoKind Kind { get; }
 
     public DtoMigrationScore(
         MigrationComplexity complexity,
@@ -511,7 +562,8 @@ internal sealed class DtoMigrationScore
         int computedCount,
         int sieveCount,
         int estimatedLinesSaved,
-        int dateTimePropsCount = 0)
+        int dateTimePropsCount = 0,
+        DtoKind kind = DtoKind.Other)
     {
         Complexity = complexity;
         EntityShapedCount = entityShapedCount;
@@ -520,10 +572,19 @@ internal sealed class DtoMigrationScore
         SieveCount = sieveCount;
         EstimatedLinesSaved = estimatedLinesSaved;
         DateTimePropsCount = dateTimePropsCount;
+        Kind = kind;
     }
 
     public string ToMessage(string dtoName, string entityName)
     {
+        var kindLabel = Kind switch
+        {
+            DtoKind.Create => "Create request",
+            DtoKind.Update => "Update request",
+            DtoKind.Response => "Response",
+            _ => "DTO"
+        };
+
         var suffixHint = DateTimePropsCount > 0
             ? $", {DateTimePropsCount} DateTime props (use PropertySuffix)"
             : "";
@@ -531,14 +592,14 @@ internal sealed class DtoMigrationScore
         return Complexity switch
         {
             MigrationComplexity.Easy =>
-                $"DTO '{dtoName}' → entity '{entityName}': {EntityShapedCount} entity-shaped props" +
+                $"{kindLabel} '{dtoName}' → entity '{entityName}': {EntityShapedCount} entity-shaped props" +
                 (ReadOnlyCount > 0 ? $", {ReadOnlyCount} read-only (init-only)" : "") +
                 (ComputedCount > 0 ? $", {ComputedCount} computed (OnInitialized)" : "") +
                 suffixHint +
                 $" — est. ~{EstimatedLinesSaved} lines saveable",
 
             MigrationComplexity.Medium =>
-                $"DTO '{dtoName}' → entity '{entityName}': {SieveCount} Sieve-attributed props need manual exclusion" +
+                $"{kindLabel} '{dtoName}' → entity '{entityName}': {SieveCount} Sieve-attributed props need manual exclusion" +
                 (ComputedCount > 0 ? $", {ComputedCount} computed (OnInitialized)" : "") +
                 suffixHint +
                 $" — est. ~{EstimatedLinesSaved} lines saveable",
@@ -559,6 +620,24 @@ internal enum MigrationComplexity
     /// <summary>All properties are get/set and match entity scalars. Direct replacement.</summary>
     Easy,
 
-    /// <summary>Has read-only or computed properties that must become get/set or be excluded.</summary>
+    /// <summary>Has Sieve-attributed properties that must be excluded and re-declared in the partial.</summary>
     Medium,
+}
+
+/// <summary>
+/// The kind of DTO being scored, determined from the class name prefix/suffix.
+/// </summary>
+internal enum DtoKind
+{
+    /// <summary>Unknown or other DTO kind.</summary>
+    Other,
+
+    /// <summary>Response DTO (e.g. GetWidgetResponse, WidgetResponse).</summary>
+    Response,
+
+    /// <summary>Create request DTO (e.g. CreateWidgetRequestBody, CreateWidgetRequest).</summary>
+    Create,
+
+    /// <summary>Update request DTO (e.g. UpdateWidgetRequestBody, UpdateWidgetRequest).</summary>
+    Update,
 }
