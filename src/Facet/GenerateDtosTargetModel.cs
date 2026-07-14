@@ -29,6 +29,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
     public bool IncludeFields { get; }
     public bool GenerateConstructors { get; }
     public bool GenerateProjections { get; }
+    public bool GenerateReadOnlyProperties { get; }
+    public string? PropertySuffix { get; }
     public string? ConvertEnumsTo { get; }
     public ImmutableArray<string> ExcludeProperties { get; }
     public ImmutableArray<FacetMember> Members { get; }
@@ -102,6 +104,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         bool includeFields,
         bool generateConstructors,
         bool generateProjections,
+        bool generateReadOnlyProperties,
+        string? propertySuffix,
         string? convertEnumsTo,
         ImmutableArray<string> excludeProperties,
         ImmutableArray<FacetMember> members,
@@ -125,6 +129,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
         IncludeFields = includeFields;
         GenerateConstructors = generateConstructors;
         GenerateProjections = generateProjections;
+        GenerateReadOnlyProperties = generateReadOnlyProperties;
+        PropertySuffix = propertySuffix;
         ConvertEnumsTo = convertEnumsTo;
         ExcludeProperties = excludeProperties;
         Members = members;
@@ -156,6 +162,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             IncludeFields,
             GenerateConstructors,
             GenerateProjections,
+            GenerateReadOnlyProperties,
+            PropertySuffix,
             ConvertEnumsTo,
             ExcludeProperties,
             Members,
@@ -188,6 +196,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             IncludeFields,
             GenerateConstructors,
             GenerateProjections,
+            GenerateReadOnlyProperties,
+            PropertySuffix,
             ConvertEnumsTo,
             ExcludeProperties,
             members,
@@ -219,6 +229,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             IncludeFields,
             GenerateConstructors,
             GenerateProjections,
+            GenerateReadOnlyProperties,
+            PropertySuffix,
             ConvertEnumsTo,
             ExcludeProperties,
             Members,
@@ -248,6 +260,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             && IncludeFields == other.IncludeFields
             && GenerateConstructors == other.GenerateConstructors
             && GenerateProjections == other.GenerateProjections
+            && GenerateReadOnlyProperties == other.GenerateReadOnlyProperties
+            && PropertySuffix == other.PropertySuffix
             && ConvertEnumsTo == other.ConvertEnumsTo
             && ExcludeProperties.SequenceEqual(other.ExcludeProperties)
             && Members.SequenceEqual(other.Members)
@@ -279,6 +293,8 @@ internal sealed class GenerateDtosTargetModel : IEquatable<GenerateDtosTargetMod
             hash = hash * 31 + IncludeFields.GetHashCode();
             hash = hash * 31 + GenerateConstructors.GetHashCode();
             hash = hash * 31 + GenerateProjections.GetHashCode();
+            hash = hash * 31 + GenerateReadOnlyProperties.GetHashCode();
+            hash = hash * 31 + (PropertySuffix?.GetHashCode() ?? 0);
             hash = hash * 31 + (ConvertEnumsTo?.GetHashCode() ?? 0);
             hash = hash * 31 + UseFullName.GetHashCode();
             hash = hash * 31 + ExcludeNavigationProperties.GetHashCode();

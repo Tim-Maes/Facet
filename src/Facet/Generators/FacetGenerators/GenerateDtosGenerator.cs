@@ -398,6 +398,8 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                 model.IncludeFields,
                 model.GenerateConstructors,
                 model.GenerateProjections,
+                model.GenerateReadOnlyProperties,
+                model.PropertySuffix,
                 model.ConvertEnumsTo,
                 model.ExcludeProperties,
                 model.Members,
@@ -429,6 +431,8 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
             var includeFields = GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
             var generateConstructors = GetNamedArg(attribute.NamedArguments, "GenerateConstructors", true);
             var generateProjections = GetNamedArg(attribute.NamedArguments, "GenerateProjections", true);
+            var generateReadOnlyProperties = GetNamedArg(attribute.NamedArguments, "GenerateReadOnlyProperties", false);
+            var propertySuffix = GetNamedArg<string?>(attribute.NamedArguments, "PropertySuffix", null);
             var useFullName = GetNamedArg(attribute.NamedArguments, "UseFullName", false);
             var convertEnumsTo = ExtractConvertEnumsTo(attribute.NamedArguments);
             var preset = GetNamedArg(attribute.NamedArguments, "Preset", DtoPreset.None);
@@ -443,8 +447,9 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
             if (preset == DtoPreset.ResponsePartial)
             {
                 if (!explicitArgs.Contains("OutputType")) outputType = OutputType.PartialClass;
-                if (!explicitArgs.Contains("GenerateConstructors")) generateConstructors = false;
+                if (!explicitArgs.Contains("GenerateConstructors")) generateConstructors = true;
                 if (!explicitArgs.Contains("GenerateProjections")) generateProjections = false;
+                if (!explicitArgs.Contains("GenerateReadOnlyProperties")) generateReadOnlyProperties = true;
             }
             else if (preset == DtoPreset.RequestPartial)
             {
@@ -539,6 +544,25 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                 includeProperties.Add(entityProp);
             excludeProperties.ExceptWith(includeProperties);
 
+            // Apply PropertySuffix: append suffix (e.g. "UTC") to all DateTime/DateTimeOffset
+            // property names that aren't already renamed explicitly. This must happen after
+            // exclusions so suffixed audit fields that were excluded stay excluded.
+            if (!string.IsNullOrWhiteSpace(propertySuffix))
+            {
+                var allMembersForSuffix = GeneratorUtilities.GetAllMembersWithModifiers(sourceSymbol);
+                foreach (var (member, _, _) in allMembersForSuffix)
+                {
+                    if (member is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } sp
+                        && !excludeProperties.Contains(sp.Name)
+                        && !renameMap.ContainsKey(sp.Name)
+                        && IsDateTimeType(sp.Type))
+                    {
+                        renameMap[sp.Name] = sp.Name + propertySuffix;
+                        includeProperties.Add(sp.Name);
+                    }
+                }
+            }
+
             var members = new List<FacetMember>();
             var addedMembers = new HashSet<string>();
 
@@ -609,6 +633,8 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                 includeFields,
                 generateConstructors,
                 generateProjections,
+                generateReadOnlyProperties,
+                propertySuffix,
                 convertEnumsTo,
                 excludeProperties.ToImmutableArray(),
                 members.ToImmutableArray(),
@@ -766,8 +792,16 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         var isPartial = IsPartial(model.OutputType);
         var hasInitOnlyProperties = members.Any(m => m.IsInitOnly);
         var hasReadOnlyFields = members.Any(m => m.IsReadOnly);
+        var needsCs8618Suppress = model.GenerateReadOnlyProperties && !isInterface;
 
         GenerateDtoFileHeader(sb, model);
+
+        if (needsCs8618Suppress)
+        {
+            sb.AppendLine("#pragma warning disable CS8618");
+            sb.AppendLine();
+        }
+
         GenerateDtoTypeDeclaration(sb, model, dtoName, sourceTypeName, purpose, dtoType);
 
         GenerateDtoMembers(sb, model, members);
@@ -793,6 +827,11 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         }
 
         sb.AppendLine("}");
+
+        if (needsCs8618Suppress)
+        {
+            sb.AppendLine("#pragma warning restore CS8618");
+        }
 
         return sb.ToString();
     }
@@ -873,7 +912,7 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         {
             if (member.Kind == FacetMemberKind.Property)
             {
-                GenerateDtoProperty(sb, member, isInterface);
+                GenerateDtoProperty(sb, member, isInterface, model.GenerateReadOnlyProperties);
             }
             else if (!isInterface)
             {
@@ -882,7 +921,7 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         }
     }
 
-    private static void GenerateDtoProperty(StringBuilder sb, FacetMember member, bool isInterface)
+    private static void GenerateDtoProperty(StringBuilder sb, FacetMember member, bool isInterface, bool readOnlyProperties = false)
     {
         if (isInterface)
         {
@@ -896,18 +935,24 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         {
             propDef += " { get; init; }";
         }
+        else if (readOnlyProperties)
+        {
+            propDef += " { get; init; }";
+        }
         else
         {
             propDef += " { get; set; }";
         }
 
-        // Suppress CS8618 for generated non-nullable refs.
-        if (!member.IsValueType && !member.IsRequired && !NullabilityAnalyzer.IsNullableTypeName(member.TypeName))
+        // Suppress CS8618 for generated non-nullable refs — only needed when properties have setters
+        // (read-only properties are assigned via constructor or object initializer, not defaulted).
+        if (!member.IsValueType && !member.IsRequired && !NullabilityAnalyzer.IsNullableTypeName(member.TypeName) && !readOnlyProperties)
         {
             propDef += " = default!;";
         }
 
-        if (member.IsRequired)
+        // `required` only makes sense with setters or init — read-only properties can't be required.
+        if (member.IsRequired && !readOnlyProperties)
         {
             propDef = $"required {propDef}";
         }
@@ -947,19 +992,22 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
 
     private static void GenerateDtoConstructors(StringBuilder sb, GenerateDtosTargetModel model, string dtoName, string sourceTypeName, ImmutableArray<FacetMember> members, bool hasInitOnlyProperties, bool hasReadOnlyFields)
     {
+        var isPartial = IsPartial(model.OutputType);
+
         sb.AppendLine();
         sb.AppendLine($"    /// <summary>");
         sb.AppendLine($"    /// Initializes a new instance of the <see cref=\"{dtoName}\"/> class from the specified <see cref=\"{sourceTypeName}\"/>.");
         sb.AppendLine($"    /// </summary>");
         sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{sourceTypeName}\"/> object to copy data from.</param>");
 
-        var hasRequiredProperties = model.Members.Any(m => m.IsRequired);
+        var hasRequiredProperties = !model.GenerateReadOnlyProperties && model.Members.Any(m => m.IsRequired);
         if (hasRequiredProperties)
         {
             sb.AppendLine("    [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]");
         }
 
-        sb.AppendLine($"    public {dtoName}({model.SourceTypeName} source)");
+        var constructorAccess = isPartial ? "internal" : "public";
+        sb.AppendLine($"    {constructorAccess} {dtoName}({model.SourceTypeName} source)");
         sb.AppendLine("    {");
 
         var assignableMembers = members.Where(x => !x.IsInitOnly && !x.IsReadOnly).ToArray();
@@ -968,7 +1016,8 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         {
             foreach (var member in assignableMembers)
             {
-                var sourceExpression = $"source.{member.Name}";
+                var sourcePropName = !string.IsNullOrEmpty(member.SourcePropertyName) ? member.SourcePropertyName : member.Name;
+                var sourceExpression = $"source.{sourcePropName}";
                 var mappedExpression = ConvertSourceToDtoExpression(sourceExpression, member, forProjection: false);
                 sb.AppendLine($"        this.{member.Name} = {mappedExpression};");
             }
@@ -977,6 +1026,11 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         {
             sb.AppendLine("        // No assignable members to initialize from source");
             sb.AppendLine("        // (all members are either init-only properties or readonly fields with default values)");
+        }
+
+        if (isPartial)
+        {
+            sb.AppendLine("        OnInitialized(source);");
         }
 
         sb.AppendLine("    }");
@@ -989,7 +1043,18 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         sb.AppendLine("    {");
         sb.AppendLine("    }");
 
-        if (hasInitOnlyProperties || hasReadOnlyFields)
+        if (isPartial)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Hook called after the entity-to-DTO constructor copies all generated properties.");
+            sb.AppendLine($"    /// Implement this in a partial class to set computed or navigation-derived properties.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{sourceTypeName}\"/> object.</param>");
+            sb.AppendLine($"    partial void OnInitialized({model.SourceTypeName} source);");
+        }
+
+        if (hasInitOnlyProperties || hasReadOnlyFields || model.GenerateReadOnlyProperties)
         {
             GenerateDtoFromSourceFactory(sb, model, dtoName, sourceTypeName, members, hasReadOnlyFields);
         }
@@ -999,7 +1064,7 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
     {
         sb.AppendLine();
         sb.AppendLine($"    /// <summary>");
-        sb.AppendLine($"    /// Creates a new instance of <see cref=\"{dtoName}\"/> from the specified <see cref=\"{sourceTypeName}\"/> with init-only properties.");
+        sb.AppendLine($"    /// Creates a new instance of <see cref=\"{dtoName}\"/> from the specified <see cref=\"{sourceTypeName}\"/>.");
         sb.AppendLine($"    /// </summary>");
         sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{sourceTypeName}\"/> object to copy data from.</param>");
         sb.AppendLine($"    /// <returns>A new <see cref=\"{dtoName}\"/> instance with all properties initialized from the source.</returns>");
@@ -1013,20 +1078,30 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
 
         sb.AppendLine($"    public static {dtoName} FromSource({model.SourceTypeName} source)");
         sb.AppendLine("    {");
-        sb.AppendLine($"        return new {dtoName}");
-        sb.AppendLine("        {");
 
-        var initializableMembers = members.Where(m => !m.IsReadOnly).ToArray();
-        for (int i = 0; i < initializableMembers.Length; i++)
+        if (model.GenerateReadOnlyProperties && model.GenerateConstructors)
         {
-            var member = initializableMembers[i];
-            var comma = i == initializableMembers.Length - 1 ? "" : ",";
-            var sourceExpression = $"source.{member.Name}";
-            var mappedExpression = ConvertSourceToDtoExpression(sourceExpression, member, forProjection: false);
-            sb.AppendLine($"            {member.Name} = {mappedExpression}{comma}");
+            sb.AppendLine($"        return new {dtoName}(source);");
+        }
+        else
+        {
+            sb.AppendLine($"        return new {dtoName}");
+            sb.AppendLine("        {");
+
+            var initializableMembers = members.Where(m => !m.IsReadOnly).ToArray();
+            for (int i = 0; i < initializableMembers.Length; i++)
+            {
+                var member = initializableMembers[i];
+                var comma = i == initializableMembers.Length - 1 ? "" : ",";
+                var sourcePropName = !string.IsNullOrEmpty(member.SourcePropertyName) ? member.SourcePropertyName : member.Name;
+                var sourceExpression = $"source.{sourcePropName}";
+                var mappedExpression = ConvertSourceToDtoExpression(sourceExpression, member, forProjection: false);
+                sb.AppendLine($"            {member.Name} = {mappedExpression}{comma}");
+            }
+
+            sb.AppendLine("        };");
         }
 
-        sb.AppendLine("        };");
         sb.AppendLine("    }");
     }
 
@@ -1048,7 +1123,7 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         sb.AppendLine($"    /// </example>");
         sb.AppendLine($"    public static Expression<Func<{model.SourceTypeName}, {dtoName}>> Projection =>");
 
-        if (hasInitOnlyProperties || hasReadOnlyFields)
+        if (hasInitOnlyProperties || hasReadOnlyFields || model.GenerateReadOnlyProperties)
         {
             sb.AppendLine($"        source => new {dtoName}");
             sb.AppendLine("        {");
@@ -1058,7 +1133,8 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
             {
                 var member = initializableMembers[i];
                 var comma = i == initializableMembers.Length - 1 ? "" : ",";
-                var sourceExpression = $"source.{member.Name}";
+                var sourcePropName = !string.IsNullOrEmpty(member.SourcePropertyName) ? member.SourcePropertyName : member.Name;
+                var sourceExpression = $"source.{sourcePropName}";
                 var mappedExpression = ConvertSourceToDtoExpression(sourceExpression, member, forProjection: true);
                 sb.AppendLine($"            {member.Name} = {mappedExpression}{comma}");
             }
@@ -1345,6 +1421,18 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
 
     private static bool IsSupportedEnumConversion(string? convertEnumsTo)
         => convertEnumsTo is "string" or "int";
+
+    private static bool IsDateTimeType(ITypeSymbol type)
+    {
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+            type = nullable.TypeArguments[0];
+
+        if (type.SpecialType == SpecialType.System_DateTime)
+            return true;
+
+        var fullName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        return fullName == "global::System.DateTimeOffset";
+    }
 
     private static string GetConvertedEnumType(string convertEnumsTo, bool isNullable)
     {

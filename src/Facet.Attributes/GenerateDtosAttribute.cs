@@ -199,6 +199,26 @@ public class GenerateDtosAttribute : Attribute
     public bool GenerateProjections { get; set; } = true;
 
     /// <summary>
+    /// When true, generated properties use <c>{ get; }</c> (no setter) instead of
+    /// <c>{ get; set; }</c>. The <see cref="DtoPreset.ResponsePartial"/> preset sets this
+    /// to true by default — response DTOs are read-only projections. When false (default),
+    /// all generated properties are <c>{ get; set; }</c>.
+    /// </summary>
+    public bool GenerateReadOnlyProperties { get; set; } = false;
+
+    /// <summary>
+    /// When set, appends this suffix to all <see cref="DateTime"/> and <see cref="DateTimeOffset"/>
+    /// property names in the generated DTO (including nullable variants). This is a convenience
+    /// over <see cref="RenameProperties"/> for the common pattern of suffixing audit date fields
+    /// with "UTC". Explicit <see cref="RenameProperties"/> entries always take precedence.
+    /// <para>
+    /// Example: <c>PropertySuffix = "UTC"</c> renames <c>CreatedDate</c> → <c>CreatedDateUTC</c>,
+    /// <c>UpdatedDate</c> → <c>UpdatedDateUTC</c>, etc.
+    /// </para>
+    /// </summary>
+    public string? PropertySuffix { get; set; }
+
+    /// <summary>
     /// When set, all enum properties from the source type will be converted to the specified type
     /// in generated DTOs. Supported values are <see cref="string"/> and <see cref="int"/>.
     /// When null (default), enum properties retain their original enum types.
@@ -320,6 +340,19 @@ public class GenerateAuditableDtosAttribute : Attribute
     /// Whether to generate projection expressions for the DTOs (default: true).
     /// </summary>
     public bool GenerateProjections { get; set; } = true;
+
+    /// <summary>
+    /// When true, generated properties use <c>{ get; }</c> (no setter) instead of
+    /// <c>{ get; set; }</c>. The <see cref="DtoPreset.ResponsePartial"/> preset sets this
+    /// to true by default — response DTOs are read-only projections.
+    /// </summary>
+    public bool GenerateReadOnlyProperties { get; set; } = false;
+
+    /// <summary>
+    /// When set, appends this suffix to all DateTime/DateTimeOffset property names.
+    /// See <see cref="GenerateDtosAttribute.PropertySuffix"/> for details.
+    /// </summary>
+    public string? PropertySuffix { get; set; }
 
     /// <summary>
     /// If true, generated files will use the full type name (namespace + containing types)
