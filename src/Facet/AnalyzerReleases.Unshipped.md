@@ -7,3 +7,10 @@ Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
 FAC023 | Usage | Warning | GenerateToSource is set to true, but ToSource cannot be generated
 FAC025 | Performance | Warning | MaxDepthToSource value is unusual
+FAC101 | Generator | Error | GenerateDtos OutputType combines multiple concrete output kinds
+FAC102 | Generator | Error | GenerateDtos OutputType sets the Partial modifier without an output kind
+FAC103 | Generator | Error | EF model manifest could not be read
+FAC104 | Generator | Error | EF model manifest version is not supported
+FAC105 | Generator | Error | GenerateDtos source type is not in the EF model manifest (no heuristic fallback)
+FAC106 | Generator | Warning | Property is unknown to the EF model manifest
+FAC109 | Migration | Info | Handwritten DTO migration complexity score (Info = easy, Warning = needs behavior changes)

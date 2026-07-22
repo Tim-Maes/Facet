@@ -88,7 +88,9 @@ public class GenerateDtosOutputTypeFlagsTests
         updateRecord!.GetMethod("<Clone>$").Should().NotBeNull("the generated type should be a record");
         updateRecord.GetProperty("DisplayLabel").Should().NotBeNull("the hand-written partial half should merge in");
 
-        var sourceCtor = updateRecord.GetConstructor(new[] { typeof(TestPartialRecordEntity) });
+        var sourceCtor = updateRecord.GetConstructor(
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null, new[] { typeof(TestPartialRecordEntity) }, modifiers: null);
         sourceCtor.Should().NotBeNull("Partial keeps the generated source-copy constructor");
 
         var copyCtor = updateRecord.GetConstructor(
