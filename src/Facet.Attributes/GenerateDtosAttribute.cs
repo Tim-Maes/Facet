@@ -249,6 +249,13 @@ public class GenerateDtosAttribute : Attribute
     /// in the attribute always override preset defaults.
     /// </summary>
     public DtoPreset Preset { get; set; } = DtoPreset.None;
+
+    /// <summary>
+    /// When set, emits a <c>[TsInterface(Name = "...")]</c> attribute on the generated
+    /// DTO class for Reinforced.Typings. This controls the TypeScript interface name
+    /// without requiring a hand-written attribute in the partial class.
+    /// </summary>
+    public string? TsInterfaceName { get; set; }
 }
 
 /// <summary>

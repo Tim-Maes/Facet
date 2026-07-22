@@ -400,6 +400,7 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                 model.GenerateProjections,
                 model.GenerateReadOnlyProperties,
                 model.PropertySuffix,
+                model.TsInterfaceName,
                 model.ConvertEnumsTo,
                 model.ExcludeProperties,
                 model.Members,
@@ -433,6 +434,7 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
             var generateProjections = GetNamedArg(attribute.NamedArguments, "GenerateProjections", true);
             var generateReadOnlyProperties = GetNamedArg(attribute.NamedArguments, "GenerateReadOnlyProperties", false);
             var propertySuffix = GetNamedArg<string?>(attribute.NamedArguments, "PropertySuffix", null);
+            var tsInterfaceName = GetNamedArg<string?>(attribute.NamedArguments, "TsInterfaceName", null);
             var useFullName = GetNamedArg(attribute.NamedArguments, "UseFullName", false);
             var convertEnumsTo = ExtractConvertEnumsTo(attribute.NamedArguments);
             var preset = GetNamedArg(attribute.NamedArguments, "Preset", DtoPreset.None);
@@ -636,6 +638,7 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                 generateProjections,
                 generateReadOnlyProperties,
                 propertySuffix,
+                tsInterfaceName,
                 convertEnumsTo,
                 excludeProperties.ToImmutableArray(),
                 members.ToImmutableArray(),
@@ -880,6 +883,12 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
         sb.AppendLine($"/// <summary>");
         sb.AppendLine($"/// Generated {purpose} DTO contract for {sourceTypeName}.");
         sb.AppendLine($"/// </summary>");
+
+        // Emit [TsInterface] attribute for Reinforced.Typings when TsInterfaceName is set.
+        if (!string.IsNullOrEmpty(model.TsInterfaceName) && GetKind(model.OutputType) != OutputType.Interface)
+        {
+            sb.AppendLine($"[Reinforced.Typings.Attributes.TsInterface(Name = \"{model.TsInterfaceName}\")]");
+        }
 
         if (GetKind(model.OutputType) != OutputType.Interface)
         {
