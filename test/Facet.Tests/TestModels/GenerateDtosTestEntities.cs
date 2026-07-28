@@ -244,3 +244,9 @@ public class TestPartialStructInterfaceEntity
 public partial interface IUpdateModTestPartialStructInterfaceEntityRequest
 {
 }
+
+// ExcludeNavigationProperties is driven by the EF model manifest and has no heuristic
+// fallback, so it cannot be exercised through statically-compiled entities here (there is no
+// manifest AdditionalFile for this test project — such an entity would be a FAC105 error).
+// Its behavior is covered by the driver-based GenerateDtosManifestNavigationTests /
+// GenerateDtosManifestDiagnosticsTests, which supply an in-memory manifest.
