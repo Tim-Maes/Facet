@@ -151,8 +151,8 @@ public class GenerateDtosMigrationComplexityAnalyzerTests
         fac109!.Severity.Should().Be(DiagnosticSeverity.Info,
             "all properties are get/set and match entity scalars");
         fac109.GetMessage().Should().Contain("WidgetResponse");
-        fac109.GetMessage().Should().Contain("low-complexity");
-        fac109.GetMessage().Should().Contain("3 entity-shaped properties");
+        fac109.GetMessage().Should().Contain("entity 'Widget'");
+        fac109.GetMessage().Should().Contain("3 entity-shaped props");
     }
 
     [Fact]
@@ -181,7 +181,7 @@ public class GenerateDtosMigrationComplexityAnalyzerTests
     // ─── Tests: Medium Migration (Warning severity) ────────────────────────────
 
     [Fact]
-    public void ReportsFac109_Warning_ForDtoWithReadOnlyProperties()
+    public void ReportsFac109_Info_ForDtoWithReadOnlyProperties()
     {
         var source = GadgetEntity + """
             
@@ -201,15 +201,15 @@ public class GenerateDtosMigrationComplexityAnalyzerTests
 
         var fac109 = diagnostics.FirstOrDefault(d => d.Id == "FAC109");
         fac109.Should().NotBeNull("GadgetResponse matches entity Gadget");
-        fac109!.Severity.Should().Be(DiagnosticSeverity.Warning,
-            "has a read-only property that needs behavior change");
+        fac109!.Severity.Should().Be(DiagnosticSeverity.Info,
+            "read-only properties are handled by GenerateReadOnlyProperties ({ get; init; })");
         fac109.GetMessage().Should().Contain("GadgetResponse");
-        fac109.GetMessage().Should().Contain("behavior changes");
         fac109.GetMessage().Should().Contain("read-only");
+        fac109.GetMessage().Should().Contain("init-only");
     }
 
     [Fact]
-    public void ReportsFac109_Warning_ForDtoWithComputedProperties()
+    public void ReportsFac109_Info_ForDtoWithComputedProperties()
     {
         var source = GadgetEntity + """
             
@@ -234,9 +234,10 @@ public class GenerateDtosMigrationComplexityAnalyzerTests
 
         var fac109 = diagnostics.FirstOrDefault(d => d.Id == "FAC109");
         fac109.Should().NotBeNull();
-        fac109!.Severity.Should().Be(DiagnosticSeverity.Warning,
-            "has a computed property (non-auto) that needs behavior change");
+        fac109!.Severity.Should().Be(DiagnosticSeverity.Info,
+            "computed properties are handled by OnInitialized hook in the partial");
         fac109.GetMessage().Should().Contain("computed");
+        fac109.GetMessage().Should().Contain("OnInitialized");
     }
 
     // ─── Tests: No Diagnostic Expected ─────────────────────────────────────────
@@ -391,7 +392,7 @@ public class GenerateDtosMigrationComplexityAnalyzerTests
 
         var fac109 = diagnostics.First(d => d.Id == "FAC109");
         fac109.GetMessage().Should().Contain("lines saveable");
-        // 3 entity-shaped props × 2 + 10 = 16
-        fac109.GetMessage().Should().Contain("16");
+        // 3 entity-shaped props × 3 + 15 = 24
+        fac109.GetMessage().Should().Contain("24");
     }
 }
