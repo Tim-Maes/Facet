@@ -251,11 +251,12 @@ public class GenerateDtosAttribute : Attribute
     public DtoPreset Preset { get; set; } = DtoPreset.None;
 
     /// <summary>
-    /// When set, emits a <c>[TsInterface(Name = "...")]</c> attribute on the generated
-    /// DTO class for Reinforced.Typings. This controls the TypeScript interface name
-    /// without requiring a hand-written attribute in the partial class.
+    /// Raw attribute strings to emit on each generated DTO class/record/struct (not interfaces).
+    /// Each string is written verbatim before the type declaration, e.g.
+    /// <c>AdditionalAttributes = new[] { "[TsInterface(Name = \"IUserDto\")]" }</c>.
+    /// This avoids coupling Facet to any specific downstream code generator.
     /// </summary>
-    public string? TsInterfaceName { get; set; }
+    public string[] AdditionalAttributes { get; set; } = Array.Empty<string>();
 }
 
 /// <summary>
@@ -366,4 +367,11 @@ public class GenerateAuditableDtosAttribute : Attribute
     /// to avoid collisions. Default is false (shorter file names).
     /// </summary>
     public bool UseFullName { get; set; } = false;
+
+    /// <summary>
+    /// Raw attribute strings to emit on each generated DTO class/record/struct (not interfaces).
+    /// Each string is written verbatim before the type declaration, e.g.
+    /// <c>AdditionalAttributes = new[] { "[TsInterface(Name = \"IUserDto\")]" }</c>.
+    /// </summary>
+    public string[] AdditionalAttributes { get; set; } = Array.Empty<string>();
 }

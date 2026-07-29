@@ -250,3 +250,40 @@ public partial interface IUpdateModTestPartialStructInterfaceEntityRequest
 // manifest AdditionalFile for this test project — such an entity would be a FAC105 error).
 // Its behavior is covered by the driver-based GenerateDtosManifestNavigationTests /
 // GenerateDtosManifestDiagnosticsTests, which supply an in-memory manifest.
+
+// ── AdditionalAttributes ─────────────────────────────────────────────────────
+
+[GenerateDtos(Types = DtoTypes.Response, OutputType = OutputType.Class,
+    AdditionalAttributes = new[] { "[System.Serializable]" })]
+public class TestAdditionalAttributesEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+// Multiple attributes should all be emitted verbatim.
+[GenerateDtos(Types = DtoTypes.Response, OutputType = OutputType.Record,
+    AdditionalAttributes = new[] { "[System.Serializable]", "[System.ComponentModel.DefaultProperty(\"Name\")]" })]
+public class TestAdditionalAttributesMultiEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+// AdditionalAttributes should NOT be emitted on Interface outputs.
+[GenerateDtos(Types = DtoTypes.Response, OutputType = OutputType.Interface | OutputType.Class,
+    AdditionalAttributes = new[] { "[System.Serializable]" })]
+public class TestAdditionalAttributesInterfaceEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+// Empty AdditionalAttributes should produce no attributes (no crash).
+[GenerateDtos(Types = DtoTypes.Response, OutputType = OutputType.Class,
+    AdditionalAttributes = new string[0])]
+public class TestAdditionalAttributesEmptyEntity
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
