@@ -62,7 +62,7 @@
 		<PackageVersion Include="SourceGenerator.Foundations.Contracts" Version="2.0.16" />
 
 		<!-- Generator dependencies (embedded into the analyzer by SourceGenerator.Foundations) -->
-		<PackageVersion Include="System.Text.Json" Version="8.0.5" />
+		<PackageVersion Include="System.Text.Json" Version="10.0.10" />
 
 		<!-- SourceLink for debugging support -->
 		<PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.301" />
