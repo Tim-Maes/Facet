@@ -24,6 +24,12 @@ Facet includes comprehensive Roslyn analyzers that provide real-time feedback in
 | [FAC016](#fac016) | Warning | Performance | Unusual MaxDepth in [Flatten] |
 | [FAC017](#fac017) | Info | Usage | LeafOnly naming collision risk |
 | [FAC022](#fac022) | Warning | SourceTracking | Source entity structure changed |
+| [FAC101](#fac101) | Error | Generator | OutputType combines multiple concrete kinds |
+| [FAC102](#fac102) | Error | Generator | OutputType sets Partial without a kind |
+| [FAC103](#fac103) | Error | Generator | EF model manifest could not be read |
+| [FAC104](#fac104) | Error | Generator | EF model manifest version not supported |
+| [FAC105](#fac105) | Error | Generator | Source type not in the EF model manifest |
+| [FAC106](#fac106) | Warning | Generator | Property unknown to the EF model manifest |
 
 ---
 
@@ -482,6 +488,82 @@ public class Product { }
 [GenerateDtos(Types = DtoTypes.Create | DtoTypes.Update | DtoTypes.Response)]
 public class Product { }
 ```
+
+---
+
+### FAC101
+
+**OutputType combines multiple concrete output kinds**
+
+- **Severity**: Error
+- **Category**: Generator
+
+`OutputType` is a flags value, but concrete kinds (Class, Record, Struct, RecordStruct) all generate identically-named types and would collide. Combine at most one concrete kind with `OutputType.Interface` and/or the `Partial` modifier.
+
+```csharp
+[GenerateDtos(OutputType = OutputType.Class | OutputType.Record)]     // ❌ FAC101
+[GenerateDtos(OutputType = OutputType.Interface | OutputType.Record)] // ✅ OK
+```
+
+---
+
+### FAC102
+
+**OutputType sets the Partial modifier without an output kind**
+
+- **Severity**: Error
+- **Category**: Generator
+
+`Partial` only modifies how requested kinds are emitted; on its own there is nothing to generate.
+
+```csharp
+[GenerateDtos(OutputType = OutputType.Partial)]                      // ❌ FAC102
+[GenerateDtos(OutputType = OutputType.Record | OutputType.Partial)]  // ✅ OK
+```
+
+---
+
+### FAC103
+
+**EF model manifest could not be read**
+
+- **Severity**: Error
+- **Category**: Generator
+
+A `*.facetmodel.json` file wired up as an AdditionalFile is not readable as a manifest (malformed JSON, wrong shape). The file is ignored in full — never half-applied — and reported here rather than silently skipped. A rejected file also does not count as a wired manifest, so it does not flip the `ExcludeNavigationProperties` default: this error stands alone instead of being buried under a FAC105 per source type. Regenerate the manifest (`dotnet ef migrations add`/`remove`) or remove it from AdditionalFiles.
+
+---
+
+### FAC104
+
+**EF model manifest version is not supported**
+
+- **Severity**: Error
+- **Category**: Generator
+
+The manifest was written by a Facet.Extensions.EFCore version whose format this generator does not read — a package version mismatch. Align the Facet and Facet.Extensions.EFCore versions and regenerate the manifest.
+
+---
+
+### FAC105
+
+**GenerateDtos source type is not in the EF model manifest**
+
+- **Severity**: Error
+- **Category**: Generator
+
+`ExcludeNavigationProperties` is driven entirely by the EF model manifest — there is **no heuristic fallback** — and it defaults to true for every `[GenerateDtos]` attribute in a project that wires a manifest into `<AdditionalFiles>`. A shaped source type with no manifest entry cannot be generated safely, so this is a hard error: the type is absent from the accepted manifests (regenerate with `dotnet ef migrations add`), or it is not an EF entity — set `ExcludeNavigationProperties = false` on it; an explicit value always wins over the wired-manifest default. For **explicitly** shaped types this error also catches a mistyped `<AdditionalFiles>` path, since a glob that matches nothing supplies no manifests at all. Under the wired-manifest default, a mistyped glob instead means no wired manifest, no shaping, and no diagnostic — pin `ExcludeNavigationProperties = true` on one representative entity if you want that failure loud. The message states whether the requirement came from an explicit `ExcludeNavigationProperties = true` or from the wired-manifest default.
+
+---
+
+### FAC106
+
+**Property is unknown to the EF model manifest**
+
+- **Severity**: Warning
+- **Category**: Generator
+
+The manifest records every member the model has an opinion on (mapped, navigation, owned, skip navigation, ignored, service). A settable property outside that set is unknown to the model — almost always a property added after the manifest was last generated, which would otherwise silently vanish from generated DTOs. Regenerate the manifest, or mark the property `[NotMapped]`/`Ignore()` if the model genuinely does not map it (which also documents the intent). This stays a warning so mid-development edits (property added, migration not yet run) don't block the build; escalate for CI with `<WarningsAsErrors>$(WarningsAsErrors);FAC106</WarningsAsErrors>`.
 
 ---
 

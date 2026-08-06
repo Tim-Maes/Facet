@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using SGF;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -11,12 +12,23 @@ using System.Threading;
 
 namespace Facet.Generators;
 
-[Generator(LanguageNames.CSharp)]
-public sealed class GenerateDtosGenerator : IIncrementalGenerator
+// SGF (SourceGenerator.Foundations) hoists this class behind a generated internal
+// GenerateDtosGeneratorHoist that carries [Generator]: callbacks get exception isolation and
+// a logger, and assembly-embedded dependencies (System.Text.Json for the EF model manifest)
+// are resolved before this code runs — analyzers cannot otherwise carry NuGet dependencies
+// into compiler hosts.
+[IncrementalGenerator]
+public sealed class GenerateDtosGenerator : IncrementalGenerator
 {
+    public GenerateDtosGenerator() : base(nameof(GenerateDtosGenerator))
+    {
+    }
+
     private const string GenerateDtosAttributeName = "Facet.GenerateDtosAttribute";
     
     private const string GenerateAuditableDtosAttributeName = "Facet.GenerateAuditableDtosAttribute";
+
+    private const string GenerateDtosForAttributeName = "Facet.GenerateDtosForAttribute";
 
     private static readonly DiagnosticDescriptor GeneratorErrorRule = new DiagnosticDescriptor(
         "FAC100",
@@ -26,6 +38,69 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "The GenerateDtos source generator encountered an unexpected error while processing this type.");
+
+    private static readonly DiagnosticDescriptor ConflictingOutputTypesRule = new DiagnosticDescriptor(
+        "FAC101",
+        "GenerateDtos OutputType combines multiple concrete output kinds",
+        "GenerateDtos on '{0}' sets OutputType to '{1}', which combines multiple concrete output kinds; they would all generate the same type names and collide. Combine OutputType.Interface and the Partial modifier with at most one of Class, Record, Struct, or RecordStruct.",
+        "Generator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Concrete output kinds (Class, Record, Struct, RecordStruct) all generate identically-named types, so at most one may be set. Only OutputType.Interface composes with a concrete kind, because its generated names carry an 'I' prefix; Partial is a modifier and combines with any kind.");
+
+    private static readonly DiagnosticDescriptor PartialWithoutKindRule = new DiagnosticDescriptor(
+        "FAC102",
+        "GenerateDtos OutputType sets the Partial modifier without an output kind",
+        "GenerateDtos on '{0}' sets OutputType to '{1}': Partial is a modifier and must be combined with at least one output kind (Class, Record, Struct, RecordStruct, or Interface).",
+        "Generator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The Partial flag only modifies how the requested kinds are emitted; on its own there is nothing to generate, which is more likely a mistake than an intentional no-op.");
+
+    private static readonly DiagnosticDescriptor ManifestMalformedRule = new DiagnosticDescriptor(
+        "FAC103",
+        "EF model manifest could not be read",
+        "EF model manifest '{0}' could not be read: {1}. The file is ignored in full; regenerate it (dotnet ef migrations add/remove) or remove it from AdditionalFiles.",
+        "Generator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "A committed *.facetmodel.json file wired up as an AdditionalFile is not readable as a manifest. It is ignored in full and does not count as a wired manifest — so it does not flip the ExcludeNavigationProperties default, and this error stands alone instead of being buried under a FAC105 cascade (explicitly shaped types it should have covered still surface as FAC105).");
+
+    private static readonly DiagnosticDescriptor ManifestVersionRule = new DiagnosticDescriptor(
+        "FAC104",
+        "EF model manifest version is not supported",
+        "EF model manifest '{0}' declares {1}. The file is ignored in full; align the Facet and Facet.Extensions.EFCore package versions and regenerate the manifest.",
+        "Generator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The manifest was written by a Facet.Extensions.EFCore version whose format this generator does not read — a package version mismatch. It is ignored in full and does not count as a wired manifest, so it does not flip the ExcludeNavigationProperties default; explicitly shaped types it should have covered still surface as FAC105.");
+
+    private static readonly DiagnosticDescriptor TypeNotInManifestRule = new DiagnosticDescriptor(
+        "FAC105",
+        "GenerateDtos source type is not in the EF model manifest",
+        "'{0}' {1}, which requires an EF model manifest entry for the type, but none was found. If the type is an EF entity, generate the manifest: register Facet.Extensions.EFCore's design-time services (FacetEfDesignTime property in the DbContext project), run 'dotnet ef migrations add', and double-check the AdditionalFiles path — a glob matching nothing is silently empty. If it is not an entity, set ExcludeNavigationProperties = false on the attribute.",
+        "Generator",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "ExcludeNavigationProperties is driven entirely by the EF model manifest — there is no heuristic fallback — and defaults to true for every [GenerateDtos] attribute in a project that wires a manifest into AdditionalFiles. A source type with no manifest entry (because no manifest was supplied at all, or because this type is absent from the manifests present) cannot be shaped and is a hard error. Non-entity source types opt out per attribute with ExcludeNavigationProperties = false.");
+
+    private static readonly DiagnosticDescriptor PropertyNotInManifestRule = new DiagnosticDescriptor(
+        "FAC106",
+        "Property is unknown to the EF model manifest",
+        "Property '{0}' on '{1}' does not appear in the EF model manifest entry for the type — the manifest most likely predates the property, and it will be dropped from generated DTOs. Regenerate the manifest (dotnet ef migrations add/remove), or mark the property [NotMapped]/Ignore() if the model genuinely does not map it.",
+        "Generator",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "The manifest records every member the model has an opinion on (mapped, navigation, owned, skip navigation, ignored, service). A settable property outside that set is unknown to the model — almost always one added after the manifest was last generated, which would otherwise silently vanish from DTOs. Escalate with WarningsAsErrors for strict builds.");
+
+    private static readonly DiagnosticDescriptor CoverageRule = new DiagnosticDescriptor(
+        "FAC107",
+        "Facet DTO coverage",
+        "Facet DTO coverage: {0} of {1} entities from the EF model manifest have [GenerateDtos] configured. Uncovered: {2}",
+        "Generator",
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: true,
+        description: "Reports how many EF model entities have DTO generation configured versus the total in the manifest, listing up to 10 uncovered entity names. Only fires when a manifest is wired into the project. Suppress with #pragma warning disable FAC107 if the uncovered entities are intentionally excluded.");
 
     private static readonly HashSet<string> DefaultAuditFields = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
     {
@@ -38,7 +113,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         "Id"
     };
 
-    public void Initialize(IncrementalGeneratorInitializationContext context)
+    public override void OnInitialize(SgfInitializationContext context)
     {
         var generateDtosTargets = context.SyntaxProvider
             .ForAttributeWithMetadataName(
@@ -56,23 +131,110 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             .Where(static m => m is not null)
             .SelectMany(static (models, _) => models!);
 
+        var generateDtosForTargets = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                GenerateDtosForAttributeName,
+                predicate: static (node, _) => node is CompilationUnitSyntax,
+                transform: static (ctx, token) => GetGenerateDtosForModels(ctx, token))
+            .Where(static m => m is not null)
+            .SelectMany(static (models, _) => models!);
+
+        // EF model manifests (*.facetmodel.json, written beside the model snapshot by
+        // Facet.Extensions.EFCore on every migrations add/remove) drive
+        // ExcludeNavigationProperties: they carry the EF model's own navigation designation.
+        // AdditionalFiles are invisible to the syntax transform, so the member set is resolved
+        // here, against the manifest.
+        var efModelManifest = context.AdditionalTextsProvider
+            .Where(static file => file.Path.EndsWith(EfModelManifest.FileExtension, StringComparison.OrdinalIgnoreCase))
+            .Select(static (file, token) => (file.Path, Text: file.GetText(token)?.ToString() ?? string.Empty))
+            .Collect()
+            .Select((files, _) =>
+            {
+                var manifest = EfModelManifest.Parse(files);
+                if (files.Length > 0)
+                {
+                    Logger.Debug($"EF model manifest: {manifest.EntityCount} entity types from {files.Length} file(s), {manifest.Issues.Length} rejected");
+                }
+
+                return manifest;
+            });
+
         var allTargets = generateDtosTargets.Collect()
             .Combine(generateAuditableDtosTargets.Collect())
-            .Select(static (combined, _) => combined.Left.Concat(combined.Right));
+            .Combine(generateDtosForTargets.Collect())
+            .Select(static (combined, _) => combined.Left.Left.Concat(combined.Left.Right).Concat(combined.Right))
+            .Combine(efModelManifest);
 
-        context.RegisterSourceOutput(allTargets, (spc, models) =>
+        context.RegisterSourceOutput(allTargets, (spc, pair) =>
         {
-            foreach (var model in models)
+            var (models, manifest) = pair;
+            var modelList = models.Where(m => m != null).Cast<GenerateDtosTargetModel>().ToList();
+
+            // The Optional<T> JSON converter is generated (not shipped in Facet.Attributes)
+            // so Facet adds no System.Text.Json package dependency; emit it once per
+            // compilation when any Patch DTO needs it.
+            bool NeedsPatchWireSupport(GenerateDtosTargetModel m) =>
+                m.Issue == OutputTypeIssue.None
+                && (m.Types & DtoTypes.Patch) != 0
+                && GetKind(m.OutputType) != OutputType.Interface;
+
+            if (modelList.Any(m => NeedsPatchWireSupport(m) && m.SupportsSystemTextJson))
             {
-                if (model != null)
+                spc.AddSource("FacetOptionalJsonSupport.g.cs", SourceText.From(OptionalJsonSupportSource, Encoding.UTF8));
+            }
+
+            if (modelList.Any(m => NeedsPatchWireSupport(m) && m.SupportsNewtonsoftJson))
+            {
+                spc.AddSource("FacetOptionalNewtonsoftJsonSupport.g.cs", SourceText.From(OptionalNewtonsoftJsonSupportSource, Encoding.UTF8));
+            }
+
+            // A rejected manifest file is a broken build input: report it once per
+            // compilation. Types it should have covered then surface as FAC105.
+            foreach (var issue in manifest.Issues)
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    issue.Kind == ManifestIssueKind.UnsupportedVersion ? ManifestVersionRule : ManifestMalformedRule,
+                    Location.None,
+                    issue.FilePath,
+                    issue.Detail));
+            }
+
+            // Attribute expansion yields several models per attribute (one per output kind),
+            // so manifest-coverage diagnostics deduplicate per source type / property.
+            var reportedCoverage = new HashSet<string>(StringComparer.Ordinal);
+
+            // Track which source types have [GenerateDtos] configured (deduplicated —
+            // multiple OutputType bits or DtoTypes on the same entity expand to several
+            // models but count as one configured entity for FAC107 coverage).
+            var configuredTypes = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var pendingModel in modelList)
+            {
+                if (pendingModel != null)
                 {
                     spc.CancellationToken.ThrowIfCancellationRequested();
+
+                    configuredTypes.Add(Shared.GeneratorUtilities.StripGlobalPrefix(pendingModel.SourceTypeName));
+
+                    var model = ResolveNavigationExclusions(spc, pendingModel, manifest, reportedCoverage);
+
+                    if (model.Issue != OutputTypeIssue.None)
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(
+                            model.Issue == OutputTypeIssue.PartialWithoutKind ? PartialWithoutKindRule : ConflictingOutputTypesRule,
+                            model.AttributeLocation?.ToLocation() ?? Location.None,
+                            GetSimpleTypeName(model.SourceTypeName),
+                            model.OutputType.ToString()));
+                        continue;
+                    }
+
                     try
                     {
                         GenerateDtosForModel(spc, model);
                     }
                     catch (Exception ex)
                     {
+                        Logger.Error(ex, $"Error generating DTOs for '{GetSimpleTypeName(model.SourceTypeName)}'");
                         var diagnostic = Diagnostic.Create(
                             GeneratorErrorRule,
                             Location.None,
@@ -82,6 +244,33 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                     }
                 }
             }
+
+            // FAC107: coverage report — how many manifest entities have [GenerateDtos]
+            // configured vs. the total. Only fires when a manifest is wired in and there
+            // are uncovered entities.
+            if (manifest.HasAcceptedManifests && manifest.EntityCount > 0)
+            {
+                var uncovered = new List<string>();
+                foreach (var entityName in manifest.GetEntityNames())
+                {
+                    if (!configuredTypes.Contains(entityName))
+                        uncovered.Add(GetSimpleNameFromFullName(entityName));
+                }
+
+                if (uncovered.Count > 0)
+                {
+                    var preview = string.Join(", ", uncovered.Take(10));
+                    if (uncovered.Count > 10)
+                        preview += $", … ({uncovered.Count} total)";
+
+                    spc.ReportDiagnostic(Diagnostic.Create(
+                        CoverageRule,
+                        Location.None,
+                        configuredTypes.Count,
+                        manifest.EntityCount,
+                        preview));
+                }
+            }
         });
     }
 
@@ -89,24 +278,89 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     {
         token.ThrowIfCancellationRequested();
         if (context.TargetSymbol is not INamedTypeSymbol sourceSymbol) return null;
-        if (context.Attributes.Length == 0) return null;
+
+        return BuildModels(context.Attributes, _ => sourceSymbol, context.SemanticModel.Compilation, forceExcludeAuditFields, token);
+    }
+
+    /// <summary>
+    /// Assembly-level entry point: <c>[assembly: GenerateDtosFor(typeof(Entity), ...)]</c>
+    /// generates into the DECLARING assembly, with the source entity resolved from the
+    /// attribute's constructor argument — typically a type from a referenced assembly, so
+    /// contract DTOs can live downstream of the domain project.
+    /// </summary>
+    private static IEnumerable<GenerateDtosTargetModel>? GetGenerateDtosForModels(GeneratorAttributeSyntaxContext context, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        if (context.TargetSymbol is not IAssemblySymbol) return null;
+
+        return BuildModels(
+            context.Attributes,
+            static attr => attr.ConstructorArguments.Length == 1
+                ? attr.ConstructorArguments[0].Value as INamedTypeSymbol
+                : null,
+            context.SemanticModel.Compilation,
+            forceExcludeAuditFields: false,
+            token);
+    }
+
+    private static IEnumerable<GenerateDtosTargetModel>? BuildModels(
+        ImmutableArray<AttributeData> attributes,
+        Func<AttributeData, INamedTypeSymbol?> sourceSelector,
+        Compilation compilation,
+        bool forceExcludeAuditFields,
+        CancellationToken token)
+    {
+        if (attributes.Length == 0) return null;
 
         var models = new List<GenerateDtosTargetModel>();
 
-        foreach (var attribute in context.Attributes)
+        foreach (var attribute in attributes)
         {
             token.ThrowIfCancellationRequested();
 
-            var model = GetDtosModel(context, attribute, sourceSymbol, forceExcludeAuditFields, token);
-            if (model != null)
+            if (sourceSelector(attribute) is not INamedTypeSymbol sourceSymbol) continue;
+
+            var model = GetDtosModel(attribute, sourceSymbol, compilation, forceExcludeAuditFields, token);
+            if (model == null) continue;
+
+            // OutputType is a [Flags] value: kind bits (Class/Record/Struct/RecordStruct/
+            // Interface) select what to emit, and the Partial modifier applies to every
+            // selected kind. Expand into one model per kind (each carrying the modifier) so
+            // downstream passes see a single kind. Sibling interface pairing below then
+            // links Interface + concrete bits the same way separate attributes would.
+            var outputTypes = DecomposeOutputTypes(model.OutputType);
+
+            // Concrete kinds all generate the same type names, so combining more than one
+            // can never compile; keep the un-expanded model as a marker and report FAC101
+            // at generation time instead of emitting colliding sources.
+            if (outputTypes.Count(t => GetKind(t) != OutputType.Interface) > 1)
+            {
+                models.Add(model.WithIssue(OutputTypeIssue.ConflictingConcreteKinds));
+                continue;
+            }
+
+            // The Partial modifier with no kind to modify would silently generate nothing —
+            // more likely a mistake than an intentional no-op, so fail loudly instead.
+            if (outputTypes.Count == 0 && IsPartial(model.OutputType))
+            {
+                models.Add(model.WithIssue(OutputTypeIssue.PartialWithoutKind));
+                continue;
+            }
+            if (outputTypes.Count == 1 && outputTypes[0] == model.OutputType)
             {
                 models.Add(model);
+                continue;
+            }
+
+            foreach (var outputType in outputTypes)
+            {
+                models.Add(model.WithOutputType(outputType));
             }
         }
 
         if (models.Count == 0) return null;
 
-        var interfaceModels = models.Where(m => m.OutputType == OutputType.Interface).ToList();
+        var interfaceModels = models.Where(m => GetKind(m.OutputType) == OutputType.Interface).ToList();
         if (interfaceModels.Count == 0)
         {
             return models;
@@ -115,11 +369,15 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         for (int i = 0; i < models.Count; i++)
         {
             var model = models[i];
-            if (model.OutputType != OutputType.PartialClass) continue;
+            // Every concrete output kind (class, record, struct, record struct — partial or
+            // not) can implement the sibling interface; skip interface models themselves and
+            // invalid-mask markers (which generate nothing).
+            if (GetKind(model.OutputType) == OutputType.Interface || model.Issue != OutputTypeIssue.None) continue;
 
             DtoTypes siblingMask = DtoTypes.None;
             foreach (var iface in interfaceModels)
             {
+                if (iface.SourceTypeName != model.SourceTypeName) continue;
                 if (iface.Prefix != model.Prefix) continue;
                 if (iface.Suffix != model.Suffix) continue;
                 if (iface.TargetNamespace != model.TargetNamespace) continue;
@@ -140,17 +398,27 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 model.IncludeFields,
                 model.GenerateConstructors,
                 model.GenerateProjections,
+                model.GenerateReadOnlyProperties,
+                model.PropertySuffix,
                 model.ConvertEnumsTo,
+                model.AdditionalAttributes,
                 model.ExcludeProperties,
                 model.Members,
                 model.UseFullName,
-                siblingMask);
+                model.ExcludeNavigationProperties,
+                model.IncludeProperties,
+                model.SettableProperties,
+                model.AttributeLocation,
+                siblingMask,
+                model.Issue,
+                model.SupportsSystemTextJson,
+                model.SupportsNewtonsoftJson);
         }
 
         return models;
     }
 
-    private static GenerateDtosTargetModel? GetDtosModel(GeneratorAttributeSyntaxContext context, AttributeData attribute, INamedTypeSymbol sourceSymbol, bool forceExcludeAuditFields, CancellationToken token)
+    private static GenerateDtosTargetModel? GetDtosModel(AttributeData attribute, INamedTypeSymbol sourceSymbol, Compilation compilation, bool forceExcludeAuditFields, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
 
@@ -164,10 +432,78 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             var includeFields = GetNamedArg(attribute.NamedArguments, "IncludeFields", false);
             var generateConstructors = GetNamedArg(attribute.NamedArguments, "GenerateConstructors", true);
             var generateProjections = GetNamedArg(attribute.NamedArguments, "GenerateProjections", true);
+            var generateReadOnlyProperties = GetNamedArg(attribute.NamedArguments, "GenerateReadOnlyProperties", false);
+            var propertySuffix = GetNamedArg<string?>(attribute.NamedArguments, "PropertySuffix", null);
             var useFullName = GetNamedArg(attribute.NamedArguments, "UseFullName", false);
             var convertEnumsTo = ExtractConvertEnumsTo(attribute.NamedArguments);
-            
+            var preset = GetNamedArg(attribute.NamedArguments, "Preset", DtoPreset.None);
+            var additionalAttributes = ImmutableArray<string>.Empty;
+            var additionalAttrsArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "AdditionalAttributes");
+            if (additionalAttrsArg.Value.Kind == TypedConstantKind.Array && !additionalAttrsArg.Value.IsNull)
+            {
+                additionalAttributes = additionalAttrsArg.Value.Values
+                    .Select(v => v.Value?.ToString() ?? string.Empty)
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .ToImmutableArray();
+            }
             var excludeAuditFields = forceExcludeAuditFields || GetNamedArg(attribute.NamedArguments, "ExcludeAuditFields", false);
+
+            // Track which properties were explicitly set so presets don't override them.
+            var explicitArgs = new HashSet<string>(
+                attribute.NamedArguments.Select(kvp => kvp.Key),
+                StringComparer.Ordinal);
+
+            // Apply preset defaults — explicit attribute values always win.
+            if (preset == DtoPreset.ResponsePartial)
+            {
+                if (!explicitArgs.Contains("OutputType")) outputType = OutputType.PartialClass;
+                if (!explicitArgs.Contains("GenerateConstructors")) generateConstructors = true;
+                if (!explicitArgs.Contains("GenerateProjections")) generateProjections = false;
+                if (!explicitArgs.Contains("GenerateReadOnlyProperties")) generateReadOnlyProperties = true;
+            }
+            else if (preset == DtoPreset.RequestPartial)
+            {
+                if (!explicitArgs.Contains("OutputType")) outputType = OutputType.PartialClass;
+                if (!explicitArgs.Contains("ExcludeAuditFields") && !forceExcludeAuditFields) excludeAuditFields = true;
+                if (!explicitArgs.Contains("Suffix")) suffix = "Body";
+            }
+            else if (preset == DtoPreset.InterfaceRequest)
+            {
+                if (!explicitArgs.Contains("OutputType")) outputType = OutputType.Interface;
+                if (!explicitArgs.Contains("ExcludeAuditFields") && !forceExcludeAuditFields) excludeAuditFields = true;
+                if (!explicitArgs.Contains("Suffix")) suffix = "Body";
+            }
+
+            var supportsSystemTextJson = compilation
+                .GetTypeByMetadataName("System.Text.Json.Serialization.JsonConverterAttribute") is not null;
+            var supportsNewtonsoftJson = compilation
+                .GetTypeByMetadataName("Newtonsoft.Json.JsonConverterAttribute") is not null;
+            // Tri-state: an attribute that leaves ExcludeNavigationProperties unset defaults
+            // to shaping exactly when the project wires an EF model manifest into
+            // AdditionalFiles — resolved at generation time, where manifests are visible.
+            bool? excludeNavigationProperties = attribute.NamedArguments
+                .Where(kvp => kvp.Key == "ExcludeNavigationProperties")
+                .Select(kvp => kvp.Value.Value as bool?)
+                .FirstOrDefault();
+
+            // The obsolete [GenerateAuditableDtos] declares neither ExcludeNavigationProperties
+            // nor IncludeProperties, so the wired-manifest default must not reach it: there
+            // would be no per-type opt-out, and FAC105 would advise a named argument that does
+            // not compile on that attribute. It keeps its legacy unshaped behavior.
+            if (forceExcludeAuditFields)
+            {
+                excludeNavigationProperties = false;
+            }
+
+            var includeProperties = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            var includePropertiesArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "IncludeProperties");
+            if (includePropertiesArg.Value.Kind == TypedConstantKind.Array && !includePropertiesArg.Value.IsNull)
+            {
+                foreach (var v in includePropertiesArg.Value.Values)
+                {
+                    if (v.Value?.ToString() is { } name) includeProperties.Add(name);
+                }
+            }
 
             var userExcludeProperties = new List<string>();
             var excludePropertiesArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "ExcludeProperties");
@@ -184,6 +520,24 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
             var excludeProperties = new HashSet<string>(userExcludeProperties, System.StringComparer.OrdinalIgnoreCase);
 
+            // Parse RenameProperties: "EntityProp:DtoProp" pairs that rename entity properties
+            // in the generated DTO while keeping the source mapping intact.
+            var renameMap = new Dictionary<string, string>(StringComparer.Ordinal);
+            var renameArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "RenameProperties");
+            if (renameArg.Value.Kind == TypedConstantKind.Array && !renameArg.Value.IsNull)
+            {
+                foreach (var v in renameArg.Value.Values)
+                {
+                    var pair = v.Value?.ToString();
+                    if (pair is not null && pair.Contains(':'))
+                    {
+                        var parts = pair.Split(new[] { ':' }, 2);
+                        if (parts.Length == 2 && !string.IsNullOrWhiteSpace(parts[0]) && !string.IsNullOrWhiteSpace(parts[1]))
+                            renameMap[parts[0].Trim()] = parts[1].Trim();
+                    }
+                }
+            }
+
             if (excludeAuditFields)
             {
                 foreach (var field in DefaultAuditFields)
@@ -192,10 +546,45 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 }
             }
 
+            // IncludeProperties is the escape hatch: names listed there survive every
+            // automatic and explicit exclusion (the Create-DTO Id convention excepted).
+            // Renamed properties also survive — otherwise ExcludeAuditFields would drop
+            // e.g. "CreatedDate" before the rename to "CreatedDateUTC" can apply.
+            foreach (var entityProp in renameMap.Keys)
+                includeProperties.Add(entityProp);
+            excludeProperties.ExceptWith(includeProperties);
+
+            // Apply PropertySuffix: append suffix (e.g. "UTC") to all DateTime/DateTimeOffset
+            // property names that aren't already renamed explicitly. This must happen after
+            // exclusions so suffixed audit fields that were excluded stay excluded.
+            if (!string.IsNullOrWhiteSpace(propertySuffix))
+            {
+                var allMembersForSuffix = GeneratorUtilities.GetAllMembersWithModifiers(sourceSymbol);
+                foreach (var (member, _, _) in allMembersForSuffix)
+                {
+                    if (member is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } sp
+                        && !excludeProperties.Contains(sp.Name)
+                        && !renameMap.ContainsKey(sp.Name)
+                        && IsDateTimeType(sp.Type)
+                        && !sp.Name.EndsWith(propertySuffix, System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        renameMap[sp.Name] = sp.Name + propertySuffix;
+                        includeProperties.Add(sp.Name);
+                    }
+                }
+            }
+
             var members = new List<FacetMember>();
             var addedMembers = new HashSet<string>();
 
             var allMembersWithModifiers = GeneratorUtilities.GetAllMembersWithModifiers(sourceSymbol);
+
+            // Properties EF could plausibly map (settable, or get-only collections), for the
+            // manifest completeness check (FAC106). Computed get-only properties are excluded:
+            // the model never maps them, so their absence from a manifest means nothing.
+            // Collected unless shaping is explicitly off — an unset value may still resolve
+            // to shaping once the manifest is in view.
+            var settableProperties = new List<string>();
 
             foreach (var (member, isInitOnly, isRequired) in allMembersWithModifiers)
             {
@@ -205,28 +594,38 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
                 if (member is IPropertySymbol { DeclaredAccessibility: Accessibility.Public } p)
                 {
+                    if (excludeNavigationProperties != false
+                        && (p.SetMethod != null || GeneratorUtilities.TryGetCollectionElementType(p.Type, out _, out _)))
+                    {
+                        settableProperties.Add(p.Name);
+                    }
+
+                    var dtoName = renameMap.TryGetValue(p.Name, out var renamed) ? renamed : p.Name;
                     members.Add(CreateGenerateDtoMember(
-                        p.Name,
+                        dtoName,
                         p.Type,
                         FacetMemberKind.Property,
                         isInitOnly,
                         isRequired,
                         false,
-                        convertEnumsTo));
-                    addedMembers.Add(p.Name);
+                        convertEnumsTo,
+                        sourcePropertyName: p.Name));
+                    addedMembers.Add(dtoName);
                 }
                 else if (includeFields && member is IFieldSymbol { DeclaredAccessibility: Accessibility.Public } f)
                 {
                     bool isReadOnly = f.IsReadOnly;
+                    var dtoName = renameMap.TryGetValue(f.Name, out var renamed) ? renamed : f.Name;
                     members.Add(CreateGenerateDtoMember(
-                        f.Name,
+                        dtoName,
                         f.Type,
                         FacetMemberKind.Field,
                         false,
                         isRequired,
                         isReadOnly,
-                        convertEnumsTo));
-                    addedMembers.Add(f.Name);
+                        convertEnumsTo,
+                        sourcePropertyName: f.Name));
+                    addedMembers.Add(dtoName);
                 }
             }
 
@@ -245,10 +644,19 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 includeFields,
                 generateConstructors,
                 generateProjections,
+                generateReadOnlyProperties,
+                propertySuffix,
                 convertEnumsTo,
+                additionalAttributes,
                 excludeProperties.ToImmutableArray(),
                 members.ToImmutableArray(),
-                useFullName);
+                useFullName,
+                excludeNavigationProperties,
+                includeProperties.ToImmutableArray(),
+                settableProperties.ToImmutableArray(),
+                SourceLocationInfo.FromAttribute(attribute),
+                supportsSystemTextJson: supportsSystemTextJson,
+                supportsNewtonsoftJson: supportsNewtonsoftJson);
         }
         catch (Exception ex)
         {
@@ -257,14 +665,14 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
     }
 
-    private static void GenerateDtosForModel(SourceProductionContext context, GenerateDtosTargetModel model)
+    private static void GenerateDtosForModel(SgfSourceProductionContext context, GenerateDtosTargetModel model)
     {
         context.CancellationToken.ThrowIfCancellationRequested();
 
         var sourceTypeName = GetSimpleTypeName(model.SourceTypeName);
         
         // Keep a custom Prefix between I and the entity name.
-        var interfaceLeader = model.OutputType == OutputType.Interface ? "I" : "";
+        var interfaceLeader = GetKind(model.OutputType) == OutputType.Interface ? "I" : "";
 
         if ((model.Types & DtoTypes.Create) != 0)
         {
@@ -311,7 +719,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
 
         // Patch DTO interfaces are skipped because ApplyTo needs a method body.
-        if ((model.Types & DtoTypes.Patch) != 0 && model.OutputType != OutputType.Interface)
+        if ((model.Types & DtoTypes.Patch) != 0 && GetKind(model.OutputType) != OutputType.Interface)
         {
             var patchMembers = FilterMembers(model.Members, model.ExcludeProperties);
             var patchDtoName = BuildDtoName(sourceTypeName, "", "Patch", model.Prefix, model.Suffix);
@@ -361,6 +769,12 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         return parts[parts.Length - 1];
     }
 
+    private static string GetSimpleNameFromFullName(string fullName)
+    {
+        var parts = fullName.Split('.');
+        return parts[parts.Length - 1];
+    }
+
     /// <summary>
     /// Filters members by exclusion lists, returning only members not in any exclusion set.
     /// </summary>
@@ -386,12 +800,20 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     {
         var sb = new StringBuilder();
         var sourceTypeName = GetSimpleTypeName(model.SourceTypeName);
-        var isInterface = model.OutputType == OutputType.Interface;
-        var isPartialClass = model.OutputType == OutputType.PartialClass;
+        var isInterface = GetKind(model.OutputType) == OutputType.Interface;
+        var isPartial = IsPartial(model.OutputType);
         var hasInitOnlyProperties = members.Any(m => m.IsInitOnly);
         var hasReadOnlyFields = members.Any(m => m.IsReadOnly);
+        var needsCs8618Suppress = model.GenerateReadOnlyProperties && !isInterface;
 
         GenerateDtoFileHeader(sb, model);
+
+        if (needsCs8618Suppress)
+        {
+            sb.AppendLine("#pragma warning disable CS8618");
+            sb.AppendLine();
+        }
+
         GenerateDtoTypeDeclaration(sb, model, dtoName, sourceTypeName, purpose, dtoType);
 
         GenerateDtoMembers(sb, model, members);
@@ -403,8 +825,8 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
                 GenerateDtoConstructors(sb, model, dtoName, sourceTypeName, members, hasInitOnlyProperties, hasReadOnlyFields);
             }
 
-            // PartialClass output leaves mapping members to the user-defined partial.
-            if (!isPartialClass)
+            // Partial output leaves mapping members to the user-defined partial half.
+            if (!isPartial)
             {
                 if (model.GenerateProjections)
                 {
@@ -417,6 +839,11 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
 
         sb.AppendLine("}");
+
+        if (needsCs8618Suppress)
+        {
+            sb.AppendLine("#pragma warning restore CS8618");
+        }
 
         return sb.ToString();
     }
@@ -446,22 +873,36 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
     private static void GenerateDtoTypeDeclaration(StringBuilder sb, GenerateDtosTargetModel model, string dtoName, string sourceTypeName, string purpose, DtoTypes dtoType)
     {
-        var keyword = model.OutputType switch
+        var keyword = GetKind(model.OutputType) switch
         {
             OutputType.Class => "class",
             OutputType.Record => "record",
             OutputType.RecordStruct => "record struct",
             OutputType.Struct => "struct",
             OutputType.Interface => "interface",
-            OutputType.PartialClass => "partial class",
             _ => "record"
         };
+
+        if (IsPartial(model.OutputType))
+        {
+            keyword = "partial " + keyword;
+        }
 
         sb.AppendLine($"/// <summary>");
         sb.AppendLine($"/// Generated {purpose} DTO contract for {sourceTypeName}.");
         sb.AppendLine($"/// </summary>");
 
-        if (model.OutputType != OutputType.Interface)
+        // Emit user-supplied additional attributes verbatim (not on interfaces).
+        if (GetKind(model.OutputType) != OutputType.Interface)
+        {
+            foreach (var attr in model.AdditionalAttributes)
+            {
+                if (!string.IsNullOrWhiteSpace(attr))
+                    sb.AppendLine(attr);
+            }
+        }
+
+        if (GetKind(model.OutputType) != OutputType.Interface)
         {
             if (model.ConvertEnumsTo != null)
             {
@@ -474,9 +915,10 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             }
         }
 
-        // Partial classes implement sibling interfaces like ICreateUserRequest.
+        // Concrete outputs implement sibling interfaces like ICreateUserRequest —
+        // records, structs, and record structs can all declare interface bases.
         var baseList = "";
-        if (model.OutputType == OutputType.PartialClass && (model.SiblingInterfaceTypes & dtoType) != 0)
+        if (GetKind(model.OutputType) != OutputType.Interface && (model.SiblingInterfaceTypes & dtoType) != 0)
         {
             baseList = $" : I{dtoName}";
         }
@@ -487,12 +929,12 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
     private static void GenerateDtoMembers(StringBuilder sb, GenerateDtosTargetModel model, ImmutableArray<FacetMember> members)
     {
-        var isInterface = model.OutputType == OutputType.Interface;
+        var isInterface = GetKind(model.OutputType) == OutputType.Interface;
         foreach (var member in members)
         {
             if (member.Kind == FacetMemberKind.Property)
             {
-                GenerateDtoProperty(sb, member, isInterface);
+                GenerateDtoProperty(sb, member, isInterface, model.GenerateReadOnlyProperties);
             }
             else if (!isInterface)
             {
@@ -501,7 +943,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
     }
 
-    private static void GenerateDtoProperty(StringBuilder sb, FacetMember member, bool isInterface)
+    private static void GenerateDtoProperty(StringBuilder sb, FacetMember member, bool isInterface, bool readOnlyProperties = false)
     {
         if (isInterface)
         {
@@ -515,18 +957,24 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
             propDef += " { get; init; }";
         }
+        else if (readOnlyProperties)
+        {
+            propDef += " { get; init; }";
+        }
         else
         {
             propDef += " { get; set; }";
         }
 
-        // Suppress CS8618 for generated non-nullable refs.
-        if (!member.IsValueType && !member.IsRequired && !NullabilityAnalyzer.IsNullableTypeName(member.TypeName))
+        // Suppress CS8618 for generated non-nullable refs — only needed when properties have setters
+        // (read-only properties are assigned via constructor or object initializer, not defaulted).
+        if (!member.IsValueType && !member.IsRequired && !NullabilityAnalyzer.IsNullableTypeName(member.TypeName) && !readOnlyProperties)
         {
             propDef += " = default!;";
         }
 
-        if (member.IsRequired)
+        // `required` only makes sense with setters or init — read-only properties can't be required.
+        if (member.IsRequired && !readOnlyProperties)
         {
             propDef = $"required {propDef}";
         }
@@ -566,19 +1014,22 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
     private static void GenerateDtoConstructors(StringBuilder sb, GenerateDtosTargetModel model, string dtoName, string sourceTypeName, ImmutableArray<FacetMember> members, bool hasInitOnlyProperties, bool hasReadOnlyFields)
     {
+        var isPartial = IsPartial(model.OutputType);
+
         sb.AppendLine();
         sb.AppendLine($"    /// <summary>");
         sb.AppendLine($"    /// Initializes a new instance of the <see cref=\"{dtoName}\"/> class from the specified <see cref=\"{sourceTypeName}\"/>.");
         sb.AppendLine($"    /// </summary>");
         sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{sourceTypeName}\"/> object to copy data from.</param>");
 
-        var hasRequiredProperties = model.Members.Any(m => m.IsRequired);
+        var hasRequiredProperties = !model.GenerateReadOnlyProperties && model.Members.Any(m => m.IsRequired);
         if (hasRequiredProperties)
         {
             sb.AppendLine("    [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]");
         }
 
-        sb.AppendLine($"    public {dtoName}({model.SourceTypeName} source)");
+        var constructorAccess = isPartial ? "internal" : "public";
+        sb.AppendLine($"    {constructorAccess} {dtoName}({model.SourceTypeName} source)");
         sb.AppendLine("    {");
 
         var assignableMembers = members.Where(x => !x.IsInitOnly && !x.IsReadOnly).ToArray();
@@ -587,7 +1038,8 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
             foreach (var member in assignableMembers)
             {
-                var sourceExpression = $"source.{member.Name}";
+                var sourcePropName = !string.IsNullOrEmpty(member.SourcePropertyName) ? member.SourcePropertyName : member.Name;
+                var sourceExpression = $"source.{sourcePropName}";
                 var mappedExpression = ConvertSourceToDtoExpression(sourceExpression, member, forProjection: false);
                 sb.AppendLine($"        this.{member.Name} = {mappedExpression};");
             }
@@ -596,6 +1048,11 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         {
             sb.AppendLine("        // No assignable members to initialize from source");
             sb.AppendLine("        // (all members are either init-only properties or readonly fields with default values)");
+        }
+
+        if (isPartial)
+        {
+            sb.AppendLine("        OnInitialized(source);");
         }
 
         sb.AppendLine("    }");
@@ -608,7 +1065,18 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine("    {");
         sb.AppendLine("    }");
 
-        if (hasInitOnlyProperties || hasReadOnlyFields)
+        if (isPartial)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"    /// <summary>");
+            sb.AppendLine($"    /// Hook called after the entity-to-DTO constructor copies all generated properties.");
+            sb.AppendLine($"    /// Implement this in a partial class to set computed or navigation-derived properties.");
+            sb.AppendLine($"    /// </summary>");
+            sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{sourceTypeName}\"/> object.</param>");
+            sb.AppendLine($"    partial void OnInitialized({model.SourceTypeName} source);");
+        }
+
+        if (hasInitOnlyProperties || hasReadOnlyFields || model.GenerateReadOnlyProperties)
         {
             GenerateDtoFromSourceFactory(sb, model, dtoName, sourceTypeName, members, hasReadOnlyFields);
         }
@@ -618,7 +1086,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
     {
         sb.AppendLine();
         sb.AppendLine($"    /// <summary>");
-        sb.AppendLine($"    /// Creates a new instance of <see cref=\"{dtoName}\"/> from the specified <see cref=\"{sourceTypeName}\"/> with init-only properties.");
+        sb.AppendLine($"    /// Creates a new instance of <see cref=\"{dtoName}\"/> from the specified <see cref=\"{sourceTypeName}\"/>.");
         sb.AppendLine($"    /// </summary>");
         sb.AppendLine($"    /// <param name=\"source\">The source <see cref=\"{sourceTypeName}\"/> object to copy data from.</param>");
         sb.AppendLine($"    /// <returns>A new <see cref=\"{dtoName}\"/> instance with all properties initialized from the source.</returns>");
@@ -632,20 +1100,30 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
         sb.AppendLine($"    public static {dtoName} FromSource({model.SourceTypeName} source)");
         sb.AppendLine("    {");
-        sb.AppendLine($"        return new {dtoName}");
-        sb.AppendLine("        {");
 
-        var initializableMembers = members.Where(m => !m.IsReadOnly).ToArray();
-        for (int i = 0; i < initializableMembers.Length; i++)
+        if (model.GenerateReadOnlyProperties && model.GenerateConstructors)
         {
-            var member = initializableMembers[i];
-            var comma = i == initializableMembers.Length - 1 ? "" : ",";
-            var sourceExpression = $"source.{member.Name}";
-            var mappedExpression = ConvertSourceToDtoExpression(sourceExpression, member, forProjection: false);
-            sb.AppendLine($"            {member.Name} = {mappedExpression}{comma}");
+            sb.AppendLine($"        return new {dtoName}(source);");
+        }
+        else
+        {
+            sb.AppendLine($"        return new {dtoName}");
+            sb.AppendLine("        {");
+
+            var initializableMembers = members.Where(m => !m.IsReadOnly).ToArray();
+            for (int i = 0; i < initializableMembers.Length; i++)
+            {
+                var member = initializableMembers[i];
+                var comma = i == initializableMembers.Length - 1 ? "" : ",";
+                var sourcePropName = !string.IsNullOrEmpty(member.SourcePropertyName) ? member.SourcePropertyName : member.Name;
+                var sourceExpression = $"source.{sourcePropName}";
+                var mappedExpression = ConvertSourceToDtoExpression(sourceExpression, member, forProjection: false);
+                sb.AppendLine($"            {member.Name} = {mappedExpression}{comma}");
+            }
+
+            sb.AppendLine("        };");
         }
 
-        sb.AppendLine("        };");
         sb.AppendLine("    }");
     }
 
@@ -667,7 +1145,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         sb.AppendLine($"    /// </example>");
         sb.AppendLine($"    public static Expression<Func<{model.SourceTypeName}, {dtoName}>> Projection =>");
 
-        if (hasInitOnlyProperties || hasReadOnlyFields)
+        if (hasInitOnlyProperties || hasReadOnlyFields || model.GenerateReadOnlyProperties)
         {
             sb.AppendLine($"        source => new {dtoName}");
             sb.AppendLine("        {");
@@ -677,7 +1155,8 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             {
                 var member = initializableMembers[i];
                 var comma = i == initializableMembers.Length - 1 ? "" : ",";
-                var sourceExpression = $"source.{member.Name}";
+                var sourcePropName = !string.IsNullOrEmpty(member.SourcePropertyName) ? member.SourcePropertyName : member.Name;
+                var sourceExpression = $"source.{sourcePropName}";
                 var mappedExpression = ConvertSourceToDtoExpression(sourceExpression, member, forProjection: true);
                 sb.AppendLine($"            {member.Name} = {mappedExpression}{comma}");
             }
@@ -764,15 +1243,19 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             sb.AppendLine();
         }
 
-        var keyword = model.OutputType switch
+        var keyword = GetKind(model.OutputType) switch
         {
             OutputType.Class => "class",
             OutputType.Record => "record",
             OutputType.RecordStruct => "record struct",
             OutputType.Struct => "struct",
-            OutputType.PartialClass => "partial class",
             _ => "record"
         };
+
+        if (IsPartial(model.OutputType))
+        {
+            keyword = "partial " + keyword;
+        }
 
         sb.AppendLine($"/// <summary>");
         sb.AppendLine($"/// Generated Patch DTO for {sourceTypeName} that supports partial updates.");
@@ -786,6 +1269,21 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             if (member.Kind == FacetMemberKind.Property)
             {
                 sb.AppendLine($"    /// <summary>Optional value for {member.Name}.</summary>");
+                // RFC 7396 (JSON Merge Patch) wire semantics: an absent property never
+                // reaches a converter, so the Optional stays unspecified; an explicit
+                // null becomes a specified null (or a 400 for non-nullable value types).
+                // Unspecified values are skipped when serializing. Both serializers honor
+                // per-property converter attributes, so no startup registration is needed.
+                if (model.SupportsSystemTextJson)
+                {
+                    sb.AppendLine($"    [global::System.Text.Json.Serialization.JsonConverter(typeof(global::Facet.Generated.OptionalJsonConverterFactory))]");
+                    sb.AppendLine($"    [global::System.Text.Json.Serialization.JsonIgnore(Condition = global::System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]");
+                }
+                if (model.SupportsNewtonsoftJson)
+                {
+                    sb.AppendLine($"    [global::Newtonsoft.Json.JsonConverter(typeof(global::Facet.Generated.OptionalNewtonsoftJsonConverter))]");
+                    sb.AppendLine($"    [global::Newtonsoft.Json.JsonProperty(DefaultValueHandling = global::Newtonsoft.Json.DefaultValueHandling.Ignore)]");
+                }
                 sb.AppendLine($"    public global::Facet.Optional<{member.TypeName}> {member.Name} {{ get; set; }}");
             }
         }
@@ -840,7 +1338,8 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         bool isInitOnly,
         bool isRequired,
         bool isReadOnly,
-        string? convertEnumsTo)
+        string? convertEnumsTo,
+        string? sourcePropertyName = null)
     {
         var isCollection = GeneratorUtilities.TryGetCollectionElementType(typeSymbol, out var elementType, out var collectionWrapper);
         var originalTypeName = GeneratorUtilities.GetTypeNameWithNullability(typeSymbol);
@@ -912,7 +1411,7 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
             null,
             false,
             true,
-            name,
+            sourcePropertyName ?? name,
             false,
             null,
             null,
@@ -944,6 +1443,18 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
 
     private static bool IsSupportedEnumConversion(string? convertEnumsTo)
         => convertEnumsTo is "string" or "int";
+
+    private static bool IsDateTimeType(ITypeSymbol type)
+    {
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+            type = nullable.TypeArguments[0];
+
+        if (type.SpecialType == SpecialType.System_DateTime)
+            return true;
+
+        var fullName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        return fullName == "global::System.DateTimeOffset";
+    }
 
     private static string GetConvertedEnumType(string convertEnumsTo, bool isNullable)
     {
@@ -1171,4 +1682,252 @@ public sealed class GenerateDtosGenerator : IIncrementalGenerator
         }
     }
 
+    private static readonly OutputType[] OutputKinds =
+    {
+        OutputType.Class,
+        OutputType.Record,
+        OutputType.Struct,
+        OutputType.RecordStruct,
+        OutputType.Interface,
+    };
+
+    /// <summary>The kind bits of an <see cref="OutputType"/>, with the Partial modifier stripped.</summary>
+    private static OutputType GetKind(OutputType value) => value & ~OutputType.Partial;
+
+    /// <summary>Whether the <see cref="OutputType.Partial"/> modifier is set.</summary>
+    private static bool IsPartial(OutputType value) => (value & OutputType.Partial) != 0;
+
+    /// <summary>
+    /// Generated System.Text.Json support for <c>Facet.Optional&lt;T&gt;</c> giving Patch DTOs
+    /// RFC 7396 (JSON Merge Patch) wire semantics. Generated into the consuming assembly —
+    /// like strongly-typed-ID libraries do for their converters — so Facet.Attributes takes
+    /// no System.Text.Json package dependency.
+    /// </summary>
+    private const string OptionalJsonSupportSource = """
+// <auto-generated>
+//     This code was generated by the Facet GenerateDtos source generator.
+//     Changes to this file may cause incorrect behavior and will be lost if
+//     the code is regenerated.
+// </auto-generated>
+
+#nullable enable
+
+using System;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace Facet.Generated;
+
+/// <summary>
+/// Creates converters giving <see cref="global::Facet.Optional{T}"/> JSON Merge Patch
+/// (RFC 7396) semantics: an absent property stays unspecified, an explicit null becomes
+/// a specified null (or a JsonException — surfaced by ASP.NET Core as HTTP 400 — for
+/// non-nullable value types), and a value becomes a specified value.
+/// </summary>
+internal sealed class OptionalJsonConverterFactory : JsonConverterFactory
+{
+    public override bool CanConvert(Type typeToConvert)
+        => typeToConvert.IsGenericType
+           && typeToConvert.GetGenericTypeDefinition() == typeof(global::Facet.Optional<>);
+
+    public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
+    {
+        var valueType = typeToConvert.GetGenericArguments()[0];
+        return (JsonConverter)Activator.CreateInstance(
+            typeof(OptionalJsonConverter<>).MakeGenericType(valueType))!;
+    }
+}
+
+internal sealed class OptionalJsonConverter<T> : JsonConverter<global::Facet.Optional<T>>
+{
+    // A null token must reach Read so it can become a *specified* null; without this,
+    // System.Text.Json would reject null for the non-nullable Optional<T> struct itself.
+    public override bool HandleNull => true;
+
+    public override global::Facet.Optional<T> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        // An absent property never invokes a converter — the field keeps
+        // default(Optional<T>), i.e. unspecified. Reaching this method means the
+        // property was present, so the result is always specified. Null into a
+        // non-nullable value type throws JsonException here.
+        var value = JsonSerializer.Deserialize<T>(ref reader, options);
+        return new global::Facet.Optional<T>(value!);
+    }
+
+    public override void Write(Utf8JsonWriter writer, global::Facet.Optional<T> value, JsonSerializerOptions options)
+    {
+        // Unspecified values are normally skipped via [JsonIgnore(WhenWritingDefault)]
+        // on the generated properties; if one is serialized directly anyway, null is
+        // the closest wire representation.
+        if (!value.HasValue)
+        {
+            writer.WriteNullValue();
+            return;
+        }
+
+        JsonSerializer.Serialize(writer, value.Value, options);
+    }
+}
+""";
+
+    /// <summary>
+    /// Generated Newtonsoft.Json support for <c>Facet.Optional&lt;T&gt;</c> — the Json.NET
+    /// counterpart of <see cref="OptionalJsonSupportSource"/>, for apps whose MVC pipeline
+    /// binds bodies through Json.NET (AddNewtonsoftJson). Json.NET honors per-property
+    /// [JsonConverter] attributes, so no serializer registration is needed.
+    /// </summary>
+    private const string OptionalNewtonsoftJsonSupportSource = """
+// <auto-generated>
+//     This code was generated by the Facet GenerateDtos source generator.
+//     Changes to this file may cause incorrect behavior and will be lost if
+//     the code is regenerated.
+// </auto-generated>
+
+#nullable enable
+
+using System;
+using Newtonsoft.Json;
+
+namespace Facet.Generated;
+
+/// <summary>
+/// Gives <see cref="global::Facet.Optional{T}"/> JSON Merge Patch (RFC 7396) semantics
+/// under Newtonsoft.Json: an absent property never invokes a converter (the field keeps
+/// default(Optional&lt;T&gt;), i.e. unspecified); an explicit null becomes a specified null,
+/// or a JsonSerializationException — surfaced by ASP.NET Core as HTTP 400 — for
+/// non-nullable value types.
+/// </summary>
+internal sealed class OptionalNewtonsoftJsonConverter : JsonConverter
+{
+    public override bool CanConvert(Type objectType)
+        => objectType.IsGenericType
+           && objectType.GetGenericTypeDefinition() == typeof(global::Facet.Optional<>);
+
+    public override object ReadJson(JsonReader reader, Type objectType, object? existingValue, JsonSerializer serializer)
+    {
+        var valueType = objectType.GetGenericArguments()[0];
+
+        if (reader.TokenType == JsonToken.Null
+            && valueType.IsValueType
+            && Nullable.GetUnderlyingType(valueType) == null)
+        {
+            throw new JsonSerializationException(
+                $"Cannot convert null to non-nullable {valueType.Name}. Omit the property to leave the value unchanged.");
+        }
+
+        var value = reader.TokenType == JsonToken.Null ? null : serializer.Deserialize(reader, valueType);
+        return Activator.CreateInstance(objectType, value)!;
+    }
+
+    public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
+    {
+        // Unspecified values are normally skipped via [JsonProperty(DefaultValueHandling =
+        // Ignore)] on the generated properties; if one is serialized directly anyway, null
+        // is the closest wire representation.
+        var hasValue = value is not null
+            && (bool)value.GetType().GetProperty("HasValue")!.GetValue(value)!;
+        if (!hasValue)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        serializer.Serialize(writer, value!.GetType().GetProperty("Value")!.GetValue(value));
+    }
+}
+""";
+
+    /// <summary>
+    /// Splits a [Flags] <see cref="OutputType"/> value into its individual output kinds,
+    /// re-applying the <see cref="OutputType.Partial"/> modifier to each (so PartialClass —
+    /// the Class | Partial alias — decomposes to itself, and Record | Interface | Partial
+    /// decomposes to a partial record plus a partial interface).
+    /// <see cref="OutputType.None"/> (or a kindless value) yields an empty list.
+    /// </summary>
+    private static List<OutputType> DecomposeOutputTypes(OutputType value)
+    {
+        var result = new List<OutputType>();
+        var modifier = value & OutputType.Partial;
+
+        foreach (var kind in OutputKinds)
+        {
+            if ((value & kind) != 0)
+            {
+                result.Add(kind | modifier);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Resolves ExcludeNavigationProperties into a final member list from the EF model
+    /// manifest — the sole source of truth; there is no heuristic fallback. An attribute that
+    /// leaves the flag unset defaults to shaping exactly when a manifest is wired into the
+    /// compilation: adding the AdditionalFiles glob is the project-level opt-in, and explicit
+    /// values win in both directions. When the source type has a manifest entry, exactly the
+    /// mapped scalar and complex properties are kept, so navigations, skip navigations, owned
+    /// references, and EF-ignored properties all drop. A property the model has no opinion on
+    /// is reported as FAC106 (stale manifest). A type with no manifest entry at all is
+    /// reported as FAC105 (error): the DTO cannot be shaped. IncludeProperties always wins.
+    /// </summary>
+    private static GenerateDtosTargetModel ResolveNavigationExclusions(
+        SgfSourceProductionContext spc,
+        GenerateDtosTargetModel model,
+        EfModelManifest manifest,
+        HashSet<string> reportedCoverage)
+    {
+        if (!(model.ExcludeNavigationProperties ?? manifest.HasAcceptedManifests))
+        {
+            return model;
+        }
+
+        var includeProperties = new HashSet<string>(model.IncludeProperties, StringComparer.OrdinalIgnoreCase);
+
+        var sourceClrName = Shared.GeneratorUtilities.StripGlobalPrefix(model.SourceTypeName);
+        if (manifest.TryGetEntity(sourceClrName, out var entity))
+        {
+            foreach (var propertyName in model.SettableProperties)
+            {
+                if (entity!.Known.Contains(propertyName)) continue;
+                if (includeProperties.Contains(propertyName)) continue;
+                if (!reportedCoverage.Add($"{sourceClrName}.{propertyName}")) continue;
+
+                spc.ReportDiagnostic(Diagnostic.Create(
+                    PropertyNotInManifestRule,
+                    model.AttributeLocation?.ToLocation() ?? Location.None,
+                    propertyName,
+                    GetSimpleTypeName(model.SourceTypeName)));
+            }
+
+            // Fields are not EF-mapped members; the manifest has no opinion on them, so they
+            // keep the behavior IncludeFields already gave them.
+            // When a property is renamed (e.g. CreatedDate → CreatedDateUtc), m.Name is the
+            // DTO name but the manifest/keep/include sets use the source entity name — so
+            // check SourcePropertyName as well.
+            return model.WithResolvedMembers(model.Members
+                .Where(m => m.Kind != FacetMemberKind.Property
+                    || entity!.Keep.Contains(m.Name)
+                    || entity!.Keep.Contains(m.SourcePropertyName)
+                    || includeProperties.Contains(m.Name)
+                    || includeProperties.Contains(m.SourcePropertyName))
+                .ToImmutableArray());
+        }
+
+        // No manifest entry — the model has said nothing about this type, so the DTO shape is
+        // undefined. This is a hard error, not a silent guess: emit no exclusion (keep every
+        // member so downstream code still compiles) and let FAC105 be the signal.
+        if (reportedCoverage.Add(sourceClrName))
+        {
+            spc.ReportDiagnostic(Diagnostic.Create(
+                TypeNotInManifestRule,
+                model.AttributeLocation?.ToLocation() ?? Location.None,
+                GetSimpleTypeName(model.SourceTypeName),
+                model.ExcludeNavigationProperties == true
+                    ? "sets ExcludeNavigationProperties"
+                    : "defaults to ExcludeNavigationProperties = true because an EF model manifest is wired into this project"));
+        }
+
+        return model.WithResolvedMembers(model.Members);
+    }
 }

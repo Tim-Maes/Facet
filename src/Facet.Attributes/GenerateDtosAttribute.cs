@@ -19,36 +19,84 @@ public enum DtoTypes
 }
 
 /// <summary>
-/// Specifies the output type for generated DTOs.
+/// Flags specifying the output(s) for generated DTOs: four concrete <em>kinds</em>
+/// (<see cref="Class"/>, <see cref="Record"/>, <see cref="Struct"/>, <see cref="RecordStruct"/>),
+/// the <see cref="Interface"/> kind, and one <em>modifier</em> (<see cref="Partial"/>) that
+/// composes with any kind. Combine kinds to emit several outputs from a single
+/// <see cref="GenerateDtosAttribute"/> — most usefully <c>Interface | Record | Partial</c>,
+/// which produces an extensible contract + implementation pair.
+/// Combining multiple <em>concrete</em> kinds (e.g. <c>Class | Record</c>) is rejected with
+/// error <c>FAC101</c>: they would all generate identically-named types and collide. Only
+/// <see cref="Interface"/> composes with a concrete kind (its names carry an <c>I</c> prefix).
+/// <see cref="Partial"/> with no kind is rejected with error <c>FAC102</c>.
 /// </summary>
+[Flags]
 public enum OutputType
 {
-    Class = 0,
-    Record = 1,
-    Struct = 2,
-    RecordStruct = 3,
+    /// <summary>
+    /// Generates nothing. Present only as the required zero value for a flags enum;
+    /// specify at least one output kind.
+    /// </summary>
+    None = 0,
+    Class = 1,
+    Record = 2,
+    Struct = 4,
+    RecordStruct = 8,
     /// <summary>
     /// Generates an interface declaring the entity-mapped properties as get-only members.
     /// Useful when you want compile-time enforcement that a hand-written DTO contains all
     /// the entity's properties (the DTO declares <c>: IMyEntityCreateRequest</c> and the
     /// compiler fails until every interface member is satisfied) without surrendering the
     /// DTO's own shape (construction syntax, validation attributes, extra non-entity fields).
+    /// When combined with a concrete kind (e.g. <c>Interface | Record</c>), the concrete output
+    /// declares the generated interface as a base, so consuming code can accept the interface —
+    /// which also makes request DTOs easy to mock in tests (e.g. with Moq or NSubstitute)
+    /// instead of constructing full concrete instances.
     /// Constructors, projections, and ToSource methods are not emitted on interface output.
     /// Not supported for Patch DTOs (their ApplyTo method requires a concrete implementation).
     /// </summary>
-    Interface = 4,
+    Interface = 16,
     /// <summary>
-    /// Generates a <c>partial class</c> (not sealed) with get/set properties and the same constructors
-    /// as <see cref="Class"/>, but without projection, <c>ToSource</c>, or <c>BackTo</c> methods.
-    /// Designed to be extended by a hand-written partial file in the same project — that is where
-    /// callers add validation attributes, computed members, custom constructors, or mapping logic.
-    /// When a sibling <c>[GenerateDtos]</c> attribute on the same type uses
-    /// <see cref="Interface"/> for the matching DTO type, the generated partial class also declares
-    /// the matching generated interface as a base (e.g. <c>: ICreateUserRequest</c>) so the two
-    /// outputs compose into a contract + implementation pair.
-    /// Not supported for Patch DTOs (their <c>ApplyTo</c> method already lives on a concrete type).
+    /// Modifier, not a kind: emits every requested kind as <c>partial</c> so a hand-written
+    /// partial half in the same project can extend it — validation attributes, computed
+    /// members, custom constructors, or mapping logic. Constructors are still generated for
+    /// concrete kinds, but projection, <c>ToSource</c>, and <c>BackTo</c> are omitted: a
+    /// hand-written half may add members the generator can't see, so a generator-owned
+    /// mapping would be silently incomplete. Applies to <see cref="Interface"/> too
+    /// (<c>partial interface</c>), making generated contracts user-extensible.
+    /// Must be combined with at least one kind; <see cref="Partial"/> alone is rejected
+    /// with error <c>FAC102</c>.
     /// </summary>
-    PartialClass = 5
+    Partial = 32,
+    /// <summary>
+    /// Back-compat alias for <c>Class | Partial</c>. Prefer composing the
+    /// <see cref="Partial"/> modifier explicitly.
+    /// </summary>
+    PartialClass = Class | Partial
+}
+
+/// <summary>
+/// Presets that apply common defaults for generated DTOs. Explicit values in the
+/// attribute always override preset defaults.
+/// </summary>
+public enum DtoPreset
+{
+    /// <summary>No preset — use built-in defaults.</summary>
+    None = 0,
+    /// <summary>
+    /// Response DTO as a partial class: OutputType.PartialClass,
+    /// GenerateConstructors=false, GenerateProjections=false.
+    /// </summary>
+    ResponsePartial = 1,
+    /// <summary>
+    /// Request DTO as a partial class: OutputType.PartialClass,
+    /// ExcludeAuditFields=true, Suffix="Body".
+    /// </summary>
+    RequestPartial = 2,
+    /// <summary>
+    /// Request interface: OutputType.Interface, ExcludeAuditFields=true, Suffix="Body".
+    /// </summary>
+    InterfaceRequest = 3,
 }
 
 /// <summary>
@@ -64,7 +112,11 @@ public class GenerateDtosAttribute : Attribute
     public DtoTypes Types { get; set; } = DtoTypes.All;
 
     /// <summary>
-    /// The output type for generated DTOs (default: Record).
+    /// The output kind(s) for generated DTOs (default: Record). This is a flags value:
+    /// combine kinds to emit several outputs from this single attribute, sharing every
+    /// other option — e.g. <c>OutputType.Interface | OutputType.PartialClass</c> emits
+    /// the contract + implementation pair (the partial class declares the generated
+    /// interface as a base) without duplicating the attribute.
     /// </summary>
     public OutputType OutputType { get; set; } = OutputType.Record;
 
@@ -77,6 +129,40 @@ public class GenerateDtosAttribute : Attribute
     /// Properties to exclude from all generated DTOs.
     /// </summary>
     public string[] ExcludeProperties { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// When true, keeps exactly the properties EF Core maps as data (scalar columns and
+    /// complex/value-object members) and drops navigations, skip navigations, owned
+    /// references, and EF-ignored properties — removing ORM navigation/back-reference
+    /// properties from generated DTOs without listing each one in
+    /// <see cref="ExcludeProperties"/>.
+    /// <para>
+    /// This is driven entirely by the EF model: it requires a <c>*.facetmodel.json</c>
+    /// manifest (written beside the model snapshot by Facet.Extensions.EFCore's design-time
+    /// services on every <c>dotnet ef migrations add</c>/<c>remove</c>) exposed to the
+    /// generator as an AdditionalFile. Because it follows the model's own designation,
+    /// value-converted entity-typed columns survive and <c>[NotMapped]</c> properties drop —
+    /// neither of which a type-shape guess could get right. A source type with no manifest
+    /// entry is a compile error (FAC105); there is no heuristic fallback.
+    /// </para>
+    /// <para>
+    /// Left unset, this defaults to whether the project wires a manifest into
+    /// AdditionalFiles: a manifest-wired project shapes every generated DTO, a project
+    /// without one copies properties as-is. An explicit value wins in both directions —
+    /// most usefully <c>false</c> on a non-entity source type in a manifest-wired project.
+    /// Aggregate children that should stay in the DTO despite being navigations can be
+    /// forced back in via <see cref="IncludeProperties"/>.
+    /// </para>
+    /// </summary>
+    public bool ExcludeNavigationProperties { get; set; }
+
+    /// <summary>
+    /// Properties to keep in every generated DTO regardless of <see cref="ExcludeProperties"/>,
+    /// <see cref="ExcludeAuditFields"/>, or <see cref="ExcludeNavigationProperties"/> — the
+    /// escape hatch for aggregate children (e.g. an owned parameter collection edited together
+    /// with its parent) that the EF model designates a navigation.
+    /// </summary>
+    public string[] IncludeProperties { get; set; } = Array.Empty<string>();
 
     /// <summary>
     /// When true, automatically excludes common audit fields from generated DTOs.
@@ -113,6 +199,26 @@ public class GenerateDtosAttribute : Attribute
     public bool GenerateProjections { get; set; } = true;
 
     /// <summary>
+    /// When true, generated properties use <c>{ get; }</c> (no setter) instead of
+    /// <c>{ get; set; }</c>. The <see cref="DtoPreset.ResponsePartial"/> preset sets this
+    /// to true by default — response DTOs are read-only projections. When false (default),
+    /// all generated properties are <c>{ get; set; }</c>.
+    /// </summary>
+    public bool GenerateReadOnlyProperties { get; set; } = false;
+
+    /// <summary>
+    /// When set, appends this suffix to all <see cref="DateTime"/> and <see cref="DateTimeOffset"/>
+    /// property names in the generated DTO (including nullable variants). This is a convenience
+    /// over <see cref="RenameProperties"/> for the common pattern of suffixing audit date fields
+    /// with "UTC". Explicit <see cref="RenameProperties"/> entries always take precedence.
+    /// <para>
+    /// Example: <c>PropertySuffix = "UTC"</c> renames <c>CreatedDate</c> → <c>CreatedDateUTC</c>,
+    /// <c>UpdatedDate</c> → <c>UpdatedDateUTC</c>, etc.
+    /// </para>
+    /// </summary>
+    public string? PropertySuffix { get; set; }
+
+    /// <summary>
     /// When set, all enum properties from the source type will be converted to the specified type
     /// in generated DTOs. Supported values are <see cref="string"/> and <see cref="int"/>.
     /// When null (default), enum properties retain their original enum types.
@@ -124,6 +230,59 @@ public class GenerateDtosAttribute : Attribute
     /// to avoid collisions. Default is false (shorter file names).
     /// </summary>
     public bool UseFullName { get; set; } = false;
+
+    /// <summary>
+    /// Pairs of "EntityPropertyName:DtoPropertyName" that rename entity properties in the
+    /// generated DTO. The generated property uses <c>DtoPropertyName</c> as its name but
+    /// maps to <c>EntityPropertyName</c> in constructors and projections. This avoids
+    /// needing a hand-written partial class just to rename a few properties.
+    /// <para>
+    /// Example: <c>RenameProperties = new[] { "ActionReason:Reason", "ActionResult:Result" }</c>
+    /// generates <c>public MaintenanceActionReason Reason { get; set; }</c> mapped from
+    /// <c>source.ActionReason</c>.
+    /// </para>
+    /// </summary>
+    public string[] RenameProperties { get; set; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Applies common defaults for the given DTO kind. Explicit property values
+    /// in the attribute always override preset defaults.
+    /// </summary>
+    public DtoPreset Preset { get; set; } = DtoPreset.None;
+
+    /// <summary>
+    /// Raw attribute strings to emit on each generated DTO class/record/struct (not interfaces).
+    /// Each string is written verbatim before the type declaration, e.g.
+    /// <c>AdditionalAttributes = new[] { "[TsInterface(Name = \"IUserDto\")]" }</c>.
+    /// This avoids coupling Facet to any specific downstream code generator.
+    /// </summary>
+    public string[] AdditionalAttributes { get; set; } = Array.Empty<string>();
+}
+
+/// <summary>
+/// Assembly-level counterpart of <see cref="GenerateDtosAttribute"/>: generates DTOs for
+/// <see cref="SourceType"/> into the assembly that DECLARES this attribute rather than the
+/// assembly that declares the entity. Place it in the project where the DTOs should live
+/// (e.g. a web-contracts layer referencing the domain), keeping the domain assembly free of
+/// generated contract types:
+/// <code>
+/// [assembly: GenerateDtosFor(typeof(Schedule),
+///     Types = DtoTypes.Create | DtoTypes.Update,
+///     OutputType = OutputType.Interface | OutputType.Record | OutputType.Partial)]
+/// </code>
+/// All options of <see cref="GenerateDtosAttribute"/> apply. Interface/concrete sibling
+/// pairing links outputs for the same <see cref="SourceType"/> only.
+/// </summary>
+[AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
+public sealed class GenerateDtosForAttribute : GenerateDtosAttribute
+{
+    /// <summary>The entity type (typically from a referenced assembly) to generate DTOs for.</summary>
+    public Type SourceType { get; }
+
+    public GenerateDtosForAttribute(Type sourceType)
+    {
+        SourceType = sourceType;
+    }
 }
 
 /// <summary>
@@ -191,8 +350,28 @@ public class GenerateAuditableDtosAttribute : Attribute
     public bool GenerateProjections { get; set; } = true;
 
     /// <summary>
+    /// When true, generated properties use <c>{ get; }</c> (no setter) instead of
+    /// <c>{ get; set; }</c>. The <see cref="DtoPreset.ResponsePartial"/> preset sets this
+    /// to true by default — response DTOs are read-only projections.
+    /// </summary>
+    public bool GenerateReadOnlyProperties { get; set; } = false;
+
+    /// <summary>
+    /// When set, appends this suffix to all DateTime/DateTimeOffset property names.
+    /// See <see cref="GenerateDtosAttribute.PropertySuffix"/> for details.
+    /// </summary>
+    public string? PropertySuffix { get; set; }
+
+    /// <summary>
     /// If true, generated files will use the full type name (namespace + containing types)
     /// to avoid collisions. Default is false (shorter file names).
     /// </summary>
     public bool UseFullName { get; set; } = false;
+
+    /// <summary>
+    /// Raw attribute strings to emit on each generated DTO class/record/struct (not interfaces).
+    /// Each string is written verbatim before the type declaration, e.g.
+    /// <c>AdditionalAttributes = new[] { "[TsInterface(Name = \"IUserDto\")]" }</c>.
+    /// </summary>
+    public string[] AdditionalAttributes { get; set; } = Array.Empty<string>();
 }
