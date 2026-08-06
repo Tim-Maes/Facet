@@ -3,7 +3,7 @@ name: Publish to GitHub Packages
 on:
   push:
     branches:
-      - feature/generate-dtos-verbosity
+      - master
   workflow_dispatch:
 
 concurrency:
