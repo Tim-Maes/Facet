@@ -24,6 +24,7 @@
 
     <ItemGroup>
         <!-- Reference to Facet.Attributes (will become a package dependency) -->
+        <PackageReference Include="System.Collections.Immutable" VersionOverride="10.0.10" />
         <ProjectReference Include="..\Facet.Attributes\Facet.Attributes.csproj"
                           PrivateAssets="none"
                           ReferenceOutputAssembly="true" />
