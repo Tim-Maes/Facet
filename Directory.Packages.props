@@ -7,9 +7,9 @@
 		<PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
 		<PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0" />
 		<PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.0" />
-		<PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
 		<PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.0" />
-		<PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.11" />
 		<PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
 		<PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
 		<PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.0" />
@@ -62,13 +62,13 @@
 		<PackageVersion Include="SourceGenerator.Foundations.Contracts" Version="2.0.16" />
 
 		<!-- Generator dependencies (embedded into the analyzer by SourceGenerator.Foundations) -->
-		<PackageVersion Include="System.Text.Json" Version="8.0.5" />
+		<PackageVersion Include="System.Text.Json" Version="10.0.11" />
 
 		<!-- SourceLink for debugging support -->
 		<PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.301" />
 
 		<!-- Testing Dependencies -->
-		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
 		<PackageVersion Include="xunit" Version="2.9.3" />
 		<PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
 		<PackageVersion Include="FluentAssertions" Version="8.10.0" />
