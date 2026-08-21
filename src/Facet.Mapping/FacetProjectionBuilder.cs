@@ -33,8 +33,19 @@ public sealed class FacetProjectionBuilder<TSource, TTarget>
         var sourceParam = Expression.Parameter(typeof(TSource), "source");
         var bindings = new List<MemberBinding>();
 
-        foreach (var (member, lambdaExpr) in Mappings)
+        // De-duplicate by member name: last mapping wins (allows ConfigureProjection to override auto-matched members)
+        var seen = new Dictionary<string, int>();
+        for (int i = 0; i < Mappings.Count; i++)
         {
+            var (member, _) = Mappings[i];
+            seen[member.Name] = i;
+        }
+
+        for (int i = 0; i < Mappings.Count; i++)
+        {
+            var (member, lambdaExpr) = Mappings[i];
+            if (seen[member.Name] != i) continue; // Skip if a later mapping overrides this one
+
             // Replace the lambda's parameter with our sourceParam
             var body = ParameterReplacer.Replace(lambdaExpr, sourceParam);
             bindings.Add(Expression.Bind(member, body));

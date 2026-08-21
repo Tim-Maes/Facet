@@ -337,6 +337,12 @@ internal static class FacetMapCodeBuilder
         var src = model.SourceTypeName;
         var tgt = model.TargetTypeName;
 
+        // Get auto-matched members that should be included in the projection
+        var sourcePropertyNames = GetSourcePropertyNames(model);
+        var projectionMembers = model.Members
+            .Where(m => m.MapFromIncludeInProjection && !m.IsNestedFacet)
+            .ToList();
+
         sb.AppendLine();
         sb.AppendLine($"{indent}private static Expression<Func<{src}, {tgt}>>? __projectionExpression;");
         sb.AppendLine();
@@ -350,9 +356,36 @@ internal static class FacetMapCodeBuilder
         sb.AppendLine($"{indent}{{");
         sb.AppendLine($"{indent}    return global::System.Threading.LazyInitializer.EnsureInitialized(ref __projectionExpression, () =>");
         sb.AppendLine($"{indent}    {{");
-        sb.AppendLine($"{indent}        var __builder = new global::Facet.Mapping.FacetProjectionBuilder<{src}, {tgt}>();");
-        sb.AppendLine($"{indent}        {model.ConfigurationTypeName}.ConfigureProjection(__builder);");
-        sb.AppendLine($"{indent}        return __builder.BuildProjectionExpression();");
+
+        if (projectionMembers.Count > 0)
+        {
+            // Build an inline base projection with auto-matched members, then merge with config bindings
+            sb.AppendLine($"{indent}        // Start with auto-matched member bindings as the base projection");
+            sb.AppendLine($"{indent}        Expression<Func<{src}, {tgt}>> __baseProjection = source => new {tgt}");
+            sb.AppendLine($"{indent}        {{");
+            for (int i = 0; i < projectionMembers.Count; i++)
+            {
+                var member = projectionMembers[i];
+                var value = GetProjectionValueExpression(member, "source", sourcePropertyNames);
+                var trailing = i < projectionMembers.Count - 1 ? "," : "";
+                sb.AppendLine($"{indent}            {member.Name} = {value}{trailing}");
+            }
+            sb.AppendLine($"{indent}        }};");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        var __builder = new global::Facet.Mapping.FacetProjectionBuilder<{src}, {tgt}>();");
+            sb.AppendLine($"{indent}        {model.ConfigurationTypeName}.ConfigureProjection(__builder);");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}        // Merge: start with base projection bindings, let config override");
+            sb.AppendLine($"{indent}        return global::Facet.Mapping.FacetProjectionMerger.Merge(__baseProjection, __builder);");
+        }
+        else
+        {
+            // No auto-matched members, just use config directly
+            sb.AppendLine($"{indent}        var __builder = new global::Facet.Mapping.FacetProjectionBuilder<{src}, {tgt}>();");
+            sb.AppendLine($"{indent}        {model.ConfigurationTypeName}.ConfigureProjection(__builder);");
+            sb.AppendLine($"{indent}        return __builder.BuildProjectionExpression();");
+        }
+
         sb.AppendLine($"{indent}    }})!;");
         sb.AppendLine($"{indent}}}");
     }

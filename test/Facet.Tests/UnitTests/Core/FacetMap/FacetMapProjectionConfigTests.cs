@@ -87,4 +87,69 @@ public class FacetMapProjectionConfigTests
         dto.IntakeReference.Should().BeNull("ProductionLine is null, so IntakeReference should be null");
         dto.TransferReference.Should().BeNull("ProductionLine is null, so TransferReference should be null");
     }
+
+    [Fact]
+    public void ToTarget_CompositeRetrievalDto_ShouldMapNestedDtos()
+    {
+        // DDD pattern: composite retrieval DTO with nested DTOs, all from same source entity
+        var entity = new InventoryItemEntity420
+        {
+            Id = 1,
+            Identifier = "INV-001",
+            Count = 10,
+            WeightInKg = 5.5m,
+            ProducedTime = new DateTime(2026, 1, 1),
+            OverrideProducedTime = new DateTime(2026, 6, 1),
+            StoreroomLocationNumber = "A-1",
+            StoreroomId = 42
+        };
+
+        // Test individual DTO mappers
+        var itemDto = entity.ToInventoryItemDto420();
+        itemDto.Should().NotBeNull();
+        itemDto.Id.Should().Be(1);
+        itemDto.Identifier.Should().Be("INV-001");
+        itemDto.ProducedTime.Should().Be(new DateTime(2026, 6, 1), "Should use OverrideProducedTime when available");
+
+        var overviewDto = entity.ToInventoryManagerOverviewDto420();
+        overviewDto.Should().NotBeNull();
+        overviewDto.Identifier.Should().Be("INV-001");
+        overviewDto.StoreroomId.Should().Be(42);
+        overviewDto.ProducedTime.Should().Be(new DateTime(2026, 6, 1));
+
+        // Test composite retrieval mapper
+        var retrievalDto = entity.ToInventoryRetrievalDto420();
+        retrievalDto.Should().NotBeNull();
+        retrievalDto.InventoryItemDto.Should().NotBeNull();
+        retrievalDto.InventoryItemDto.Id.Should().Be(1);
+        retrievalDto.InventoryManagerOverviewDto.Should().NotBeNull();
+        retrievalDto.InventoryManagerOverviewDto.StoreroomId.Should().Be(42);
+    }
+
+    [Fact]
+    public void Projection_CompositeRetrievalDto_ShouldBeAvailable()
+    {
+        // The composite retrieval mapper should generate a projection property
+        var projection = InventoryRetrievalDto420Mapper.InventoryItemEntity420ToInventoryRetrievalDto420Projection;
+        projection.Should().NotBeNull();
+
+        var entity = new InventoryItemEntity420
+        {
+            Id = 2,
+            Identifier = "INV-002",
+            Count = 5,
+            WeightInKg = 3.0m,
+            ProducedTime = new DateTime(2026, 1, 1),
+            StoreroomLocationNumber = "B-2",
+            StoreroomId = 99
+        };
+
+        var compiled = projection.Compile();
+        var result = compiled(entity);
+        result.Should().NotBeNull();
+        result.InventoryItemDto.Should().NotBeNull();
+        result.InventoryItemDto.Id.Should().Be(2);
+        result.InventoryManagerOverviewDto.Should().NotBeNull();
+        result.InventoryManagerOverviewDto.StoreroomId.Should().Be(99);
+    }
 }

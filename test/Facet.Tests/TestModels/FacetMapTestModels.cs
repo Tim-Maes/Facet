@@ -511,3 +511,92 @@ public class WarehouseItemMapConfig : Facet.Mapping.IFacetProjectionMapConfigura
 
 [FacetMap(typeof(WarehouseItemEntity), typeof(WarehouseItemDto), Configuration = typeof(WarehouseItemMapConfig), GenerateProjection = true)]
 public static partial class WarehouseItemMapper;
+
+// ========================================
+// DDD-style composite retrieval DTO with nested complex objects
+// Tests the scenario where:
+// 1. Multiple DTOs map from the same source entity
+// 2. A composite "retrieval" DTO contains nested DTOs as properties
+// 3. The composite mapper uses IFacetProjectionMapConfiguration to reference other mappers' projections
+// ========================================
+
+// Source entity
+public class InventoryItemEntity420
+{
+    public long Id { get; set; }
+    public string Identifier { get; set; } = string.Empty;
+    public int? Count { get; set; }
+    public decimal? WeightInKg { get; set; }
+    public DateTime ProducedTime { get; set; }
+    public DateTime? OverrideProducedTime { get; set; }
+    public string StoreroomLocationNumber { get; set; } = string.Empty;
+    public long StoreroomId { get; set; }
+}
+
+// DTO 1: basic item DTO
+public class InventoryItemDto420
+{
+    public long Id { get; set; }
+    public string Identifier { get; set; } = string.Empty;
+    public int? Count { get; set; }
+    public decimal? WeightInKg { get; set; }
+    public DateTime ProducedTime { get; set; }
+}
+
+// DTO 2: overview DTO with computed fields
+public class InventoryManagerOverviewDto420
+{
+    public string Identifier { get; set; } = string.Empty;
+    public int? Count { get; set; }
+    public string StoreroomLocationNumber { get; set; } = string.Empty;
+    public long StoreroomId { get; set; }
+    public DateTime ProducedTime { get; set; }
+}
+
+// Composite retrieval DTO: contains both nested DTOs
+public class InventoryRetrievalDto420
+{
+    public InventoryItemDto420 InventoryItemDto { get; set; } = null!;
+    public InventoryManagerOverviewDto420 InventoryManagerOverviewDto { get; set; } = null!;
+}
+
+// Config for DTO 1 mapper
+public class InventoryItemDto420MapConfig : Facet.Mapping.IFacetProjectionMapConfiguration<InventoryItemEntity420, InventoryItemDto420>
+{
+    public static void ConfigureProjection(Facet.Mapping.IFacetProjectionBuilder<InventoryItemEntity420, InventoryItemDto420> builder)
+    {
+        builder.Map(target => target.ProducedTime, source => source.OverrideProducedTime ?? source.ProducedTime);
+    }
+}
+
+// Mapper for DTO 1
+[FacetMap(typeof(InventoryItemEntity420), typeof(InventoryItemDto420), Configuration = typeof(InventoryItemDto420MapConfig), GenerateProjection = true)]
+public static partial class InventoryItemDto420Mapper;
+
+// Config for DTO 2 mapper
+public class InventoryManagerOverviewDto420MapConfig : Facet.Mapping.IFacetProjectionMapConfiguration<InventoryItemEntity420, InventoryManagerOverviewDto420>
+{
+    public static void ConfigureProjection(Facet.Mapping.IFacetProjectionBuilder<InventoryItemEntity420, InventoryManagerOverviewDto420> builder)
+    {
+        builder.Map(target => target.ProducedTime, source => source.OverrideProducedTime ?? source.ProducedTime);
+    }
+}
+
+// Mapper for DTO 2
+[FacetMap(typeof(InventoryItemEntity420), typeof(InventoryManagerOverviewDto420), Configuration = typeof(InventoryManagerOverviewDto420MapConfig), GenerateProjection = true)]
+public static partial class InventoryManagerOverviewDto420Mapper;
+
+// Config for composite retrieval mapper - references other mappers' projections directly
+public class InventoryRetrievalDto420MapConfig : Facet.Mapping.IFacetProjectionMapConfiguration<InventoryItemEntity420, InventoryRetrievalDto420>
+{
+    public static void ConfigureProjection(Facet.Mapping.IFacetProjectionBuilder<InventoryItemEntity420, InventoryRetrievalDto420> builder)
+    {
+        // Pass projection from other mapper directly - this is the DDD pattern
+        builder.Map(target => target.InventoryItemDto, InventoryItemDto420Mapper.InventoryItemEntity420ToInventoryItemDto420Projection);
+        builder.Map(target => target.InventoryManagerOverviewDto, InventoryManagerOverviewDto420Mapper.InventoryItemEntity420ToInventoryManagerOverviewDto420Projection);
+    }
+}
+
+// Mapper for composite retrieval DTO
+[FacetMap(typeof(InventoryItemEntity420), typeof(InventoryRetrievalDto420), Configuration = typeof(InventoryRetrievalDto420MapConfig), GenerateProjection = true)]
+public static partial class InventoryRetrievalDto420Mapper;
