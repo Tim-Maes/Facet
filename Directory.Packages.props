@@ -7,7 +7,7 @@
 		<PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
 		<PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0" />
 		<PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.0" />
-		<PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
+		<PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
 		<PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.0" />
 		<PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.10" />
 		<PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
