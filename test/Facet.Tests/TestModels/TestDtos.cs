@@ -145,7 +145,7 @@ public partial class ProductAsyncDto
     public string Availability { get; set; } = string.Empty;
 }
 
-public class UserDtoHybridMapper : IFacetMapConfigurationHybrid<User, UserDto>
+public class UserDtoHybridMapper : IFacetMapConfiguration<User, UserDto>, IFacetMapConfigurationAsync<User, UserDto>
 {
     public static void Map(User source, UserDto target)
     {

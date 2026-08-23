@@ -311,7 +311,7 @@ internal static class FacetMapCodeBuilder
         sb.AppendLine($"{indent}    {{");
 
         var projectionMembers = model.Members
-            .Where(m => m.MapFromIncludeInProjection && !m.IsNestedFacet)
+            .Where(m => m.MapFromIncludeInProjection)
             .ToList();
 
         for (int i = 0; i < projectionMembers.Count; i++)
@@ -319,7 +319,15 @@ internal static class FacetMapCodeBuilder
             var member = projectionMembers[i];
             var trailing = i < projectionMembers.Count - 1 ? "," : "";
 
-            var value = GetProjectionValueExpression(member, "source", sourcePropertyNames);
+            string value;
+            if (member.IsNestedFacet)
+            {
+                value = GetNestedFacetProjectionExpression(member, "source");
+            }
+            else
+            {
+                value = GetProjectionValueExpression(member, "source", sourcePropertyNames);
+            }
             sb.AppendLine($"{indent}        {member.Name} = {value}{trailing}");
         }
 
@@ -340,7 +348,7 @@ internal static class FacetMapCodeBuilder
         // Get auto-matched members that should be included in the projection
         var sourcePropertyNames = GetSourcePropertyNames(model);
         var projectionMembers = model.Members
-            .Where(m => m.MapFromIncludeInProjection && !m.IsNestedFacet)
+            .Where(m => m.MapFromIncludeInProjection)
             .ToList();
 
         sb.AppendLine();
@@ -366,7 +374,15 @@ internal static class FacetMapCodeBuilder
             for (int i = 0; i < projectionMembers.Count; i++)
             {
                 var member = projectionMembers[i];
-                var value = GetProjectionValueExpression(member, "source", sourcePropertyNames);
+                string value;
+                if (member.IsNestedFacet)
+                {
+                    value = GetNestedFacetProjectionExpression(member, "source");
+                }
+                else
+                {
+                    value = GetProjectionValueExpression(member, "source", sourcePropertyNames);
+                }
                 var trailing = i < projectionMembers.Count - 1 ? "," : "";
                 sb.AppendLine($"{indent}            {member.Name} = {value}{trailing}");
             }
@@ -498,6 +514,41 @@ internal static class FacetMapCodeBuilder
         }
 
         return expression;
+    }
+
+    /// <summary>
+    /// Gets a projection-safe expression for nested facet members.
+    /// Uses extension method calls (x.ToNestedType()) which work when the projection is compiled.
+    /// For EF Core IQueryable projections with nested facets, use IFacetProjectionMapConfiguration instead.
+    /// </summary>
+    private static string GetNestedFacetProjectionExpression(FacetMapMember member, string sourceParam)
+    {
+        bool isNullable = member.TypeName.EndsWith("?");
+        var extensionMethod = $"To{member.NestedTargetTypeSimpleName}";
+
+        if (member.IsCollection && member.CollectionWrapper != null)
+        {
+            // Collection nested: source.Items.Select(x => x.ToNestedTarget()).ToList()
+            var projection = $"{sourceParam}.{member.SourcePropertyName}.Select(x => x.{extensionMethod}())";
+            var collectionExpression = WrapCollectionProjection(projection, member.CollectionWrapper);
+
+            if (isNullable)
+            {
+                return $"{sourceParam}.{member.SourcePropertyName} != null ? {collectionExpression} : null";
+            }
+
+            return $"{sourceParam}.{member.SourcePropertyName} != null ? {collectionExpression} : default!";
+        }
+        else
+        {
+            // Single nested: source.Nav != null ? source.Nav.ToNestedTarget() : null
+            if (isNullable)
+            {
+                return $"{sourceParam}.{member.SourcePropertyName} != null ? {sourceParam}.{member.SourcePropertyName}.{extensionMethod}() : null";
+            }
+
+            return $"{sourceParam}.{member.SourcePropertyName} != null ? {sourceParam}.{member.SourcePropertyName}.{extensionMethod}() : default!";
+        }
     }
 
     /// <summary>

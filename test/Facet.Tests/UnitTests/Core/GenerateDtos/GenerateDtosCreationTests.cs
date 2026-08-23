@@ -119,7 +119,7 @@ public class GenerateDtosCreationTests
     }
 
     [Fact]
-    public void GenerateAuditableDtos_ShouldExcludeAuditFields_Automatically()
+    public void GenerateDtos_WithExcludeAuditFields_ShouldExcludeAuditFields_Automatically()
     {
         var assembly = Assembly.GetAssembly(typeof(TestProduct));
         var createType = assembly?.GetType("Facet.Tests.TestModels.CreateTestProductRequest");

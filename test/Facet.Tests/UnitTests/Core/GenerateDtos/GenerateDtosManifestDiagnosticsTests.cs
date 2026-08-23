@@ -296,15 +296,12 @@ public class GenerateDtosManifestDiagnosticsTests
     }
 
     [Fact]
-    public void GenerateAuditableDtos_ManifestWired_IsExemptFromTheDefault()
+    public void GenerateDtos_WithExcludeAuditFields_ManifestWired_IsExemptFromTheDefault()
     {
-        // The obsolete attribute declares neither ExcludeNavigationProperties nor
-        // IncludeProperties, so the flipped default must not reach it: FAC105's remedy
-        // ("set ExcludeNavigationProperties = false") would not even compile there.
+        // ExcludeAuditFields with ExcludeNavigationProperties = false opts out of
+        // manifest shaping, so FAC105's remedy does not apply.
         var diagnostics = RunGenerator(Entities + """
-            #pragma warning disable CS0618
-            [GenerateAuditableDtos(Types = DtoTypes.Update)]
-            #pragma warning restore CS0618
+            [GenerateDtos(Types = DtoTypes.Update, ExcludeNavigationProperties = false)]
             public class Parent
             {
                 public int Id { get; set; }
@@ -319,7 +316,7 @@ public class GenerateDtosManifestDiagnosticsTests
             """);
 
         diagnostics.Should().NotContain(d => d.Id == "FAC105" || d.Id == "FAC106",
-            "the attribute cannot express the opt-out, so it keeps its legacy unshaped behavior");
+            "explicit ExcludeNavigationProperties = false opts out of manifest shaping");
     }
 
     [Fact]

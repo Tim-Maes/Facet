@@ -216,12 +216,12 @@ public class IncludePropertyTests
     }
 
     [Fact]
-    public void BackTo_WithInclude_ShouldCreateSourceWithDefaultValues()
+    public void ToSource_WithInclude_ShouldCreateSourceWithDefaultValues()
     {
         var user = TestDataFactory.CreateUser("Back", "To");
         var dto = user.ToFacet<User, UserIncludeDto>();
 
-        var backToSource = dto.BackTo();
+        var backToSource = dto.ToSource();
 
         backToSource.Should().NotBeNull();
         backToSource.FirstName.Should().Be("Back");

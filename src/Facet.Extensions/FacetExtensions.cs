@@ -155,12 +155,6 @@ public static class FacetExtensions
     /// <param name="facet">The facet instance to map.</param>
     /// <returns>A new <typeparamref name="TFacetSource"/> instance populated from <paramref name="facet"/>.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="facet"/> is <c>null</c>.</exception>
-    [Obsolete("Use ToSource instead. This method will be removed in a future version.")]
-    public static TFacetSource BackTo<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TFacet, TFacetSource>(this TFacet facet)
-        where TFacet : class
-        where TFacetSource : class
-        => ToSource<TFacet, TFacetSource>(facet);
-
     /// <summary>
     /// Converts the specified facet object to an instance of the source type that the facet was created from.
     /// </summary>
@@ -214,13 +208,6 @@ public static class FacetExtensions
     /// the declared source type for the facet.</description></item> <item><description>The
     /// conversion process fails due to a missing ToSource method on the facet.</description></item>
     /// </list></exception>
-    [Obsolete("Use ToSource instead. This method will be removed in a future version.")]
-    [RequiresUnreferencedCode("This method uses MakeGenericMethod which is not compatible with trimming. Use the strongly-typed ToSource<TFacet, TFacetSource> overload instead.")]
-    [RequiresDynamicCode("This method uses MakeGenericMethod which requires dynamic code generation. Use the strongly-typed ToSource<TFacet, TFacetSource> overload instead.")]
-    public static TFacetSource BackTo<TFacetSource>(this object facet)
-        where TFacetSource : class
-        => ToSource<TFacetSource>(facet);
-
     /// <summary>
     /// Maps an <see cref="IEnumerable{TSource}"/> to an <see cref="IEnumerable{TTarget}"/>
     /// via the generated constructor of the facet type.

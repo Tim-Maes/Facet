@@ -485,7 +485,7 @@ public class CircularReferenceTests
     }
 
     [Fact]
-    public void BackTo_Should_Handle_Circular_References_Without_Error()
+    public void ToSource_Should_Handle_Circular_References_Without_Error()
     {
         var author = new Author
         {
