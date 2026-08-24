@@ -65,7 +65,7 @@
 		<PackageVersion Include="System.Text.Json" Version="10.0.11" />
 
 		<!-- SourceLink for debugging support -->
-		<PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.301" />
+		<PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.400" />
 
 		<!-- Testing Dependencies -->
 		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
