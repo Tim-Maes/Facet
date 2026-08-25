@@ -346,9 +346,12 @@ internal static class FacetMapCodeBuilder
         var tgt = model.TargetTypeName;
 
         // Get auto-matched members that should be included in the projection
+        // Exclude nested facets from the base projection used with Merge - nested facets use
+        // extension method calls which can't be re-parameterized in expression tree merging.
+        // Users should handle nested facets via builder.Map() in their ConfigureProjection.
         var sourcePropertyNames = GetSourcePropertyNames(model);
         var projectionMembers = model.Members
-            .Where(m => m.MapFromIncludeInProjection)
+            .Where(m => m.MapFromIncludeInProjection && !m.IsNestedFacet)
             .ToList();
 
         sb.AppendLine();
