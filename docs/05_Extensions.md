@@ -149,6 +149,34 @@ var orders = await dbContext.Orders.ToFacetsAsync<OrderDto>();
 // Automatically includes Items collection and ShippingAddress!
 ```
 
+### SelectFacet with FacetMap Types
+
+`SelectFacet` works with both `[Facet]`-attributed types and `[FacetMap]`-generated mappings. FacetMap projections (which live on marker classes) are automatically discovered by scanning loaded assemblies for `[FacetMap]` attributes.
+
+```csharp
+using Facet.Extensions;
+
+// Works with [Facet] types (projection lives on target type)
+var dtos = dbContext.Users.SelectFacet<UserDto>().ToList();
+
+// Also works with [FacetMap] types (projection discovered from marker class)
+var dtos = dbContext.OrderLines.SelectFacet<OrderLine, OrderLineDto>().ToList();
+var dtos = dbContext.OrderLines.SelectFacet<OrderLineDto>().ToList();
+```
+
+This enables generic patterns where the projection type isn't known at compile time:
+
+```csharp
+protected IAsyncEnumerable<TOut> ProjectOrCastAsyncEnumerable<TOut>(IQueryable<T> queryable) where TOut : class
+{
+    return typeof(TOut) == typeof(T)
+        ? queryable.Cast<TOut>().AsAsyncEnumerable()
+        : queryable.SelectFacet<T, TOut>().AsAsyncEnumerable();
+}
+```
+
+No additional registration or configuration is needed — the discovery is automatic and results are cached.
+
 ### Reverse Mapping: ApplyFacet
 
 For general-purpose patch/update scenarios

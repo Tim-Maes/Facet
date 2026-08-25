@@ -45,10 +45,6 @@ With **Facet.Mapping**, you can go further and define custom logic like combinin
 2. Define a `MapAsync` method.
 3. Use the async extension methods to perform mapping operations.
 
-### Hybrid Mapping
-1. Implement `IFacetMapConfigurationHybrid<TSource, TTarget>` (static) or `IFacetMapConfigurationHybridInstance<TSource, TTarget>` (instance).
-2. Define both `Map` and `MapAsync` methods for optimal performance.
-
 ---
 
 ## Install
@@ -228,35 +224,6 @@ public class UserController : ControllerBase
 }
 ```
 
-### Hybrid Mapping with Dependency Injection
-
-```csharp
-public class UserHybridMapperWithDI : IFacetMapConfigurationHybridInstance<User, UserDto>
-{
-    private readonly IProfilePictureService _profilePictureService;
-    private readonly IReputationService _reputationService;
-
-    public UserHybridMapperWithDI(IProfilePictureService profilePictureService, IReputationService reputationService)
-    {
-        _profilePictureService = profilePictureService;
-        _reputationService = reputationService;
-    }
-
-    // Fast synchronous operations
-    public void Map(User source, UserDto target)
-    {
-        target.FullName = $"{source.FirstName} {source.LastName}";
-        target.Email = source.Email.ToLower();
-    }
-
-    // Expensive asynchronous operations with injected services
-    public async Task MapAsync(User source, UserDto target, CancellationToken cancellationToken = default)
-    {
-        target.ProfilePicture = await _profilePictureService.GetProfilePictureAsync(source.Id, cancellationToken);
-        target.ReputationScore = await _reputationService.CalculateReputationAsync(source.Email, cancellationToken);
-    }
-}
-
 ### Reverse Mapping (DTO > Entity)
 
 Use `IFacetToSourceConfiguration<TFacet, TSource>` to customise the generated `ToSource()` method, useful when a property requires non-trivial conversion on the way back (e.g. serialising a parsed object back to a JSON string stored in the entity).
@@ -318,6 +285,4 @@ var dtos = await context.Users
     .ToListAsync();
 ```
 
-// Usage
-var userDto = await user.ToFacetHybridAsync(hybridMapperWithDI);
 ```

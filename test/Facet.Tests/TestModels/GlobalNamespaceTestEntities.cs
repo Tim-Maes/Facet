@@ -11,7 +11,7 @@ public class TestGlobalNamespaceEntity
     public bool IsActive { get; set; }
 }
 
-[GenerateAuditableDtos(Types = DtoTypes.All, OutputType = OutputType.Class)]
+[GenerateDtos(Types = DtoTypes.All, OutputType = OutputType.Class, ExcludeAuditFields = true)]
 public class TestGlobalAuditableEntity
 {
     public int Id { get; set; }

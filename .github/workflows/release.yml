@@ -73,10 +73,10 @@ jobs:
       uses: NuGet/login@v1
       id: nuget-login
       with:
-        user: ${{ secrets.NUGET_USER }}
+        user: Tim-Maes
 
     - name: Publish to NuGet
-      run: dotnet nuget push "./artifacts/*.nupkg" --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+      run: dotnet nuget push "./artifacts/*.nupkg" --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate --no-symbols
     
     - name: Commit version update
       run: |

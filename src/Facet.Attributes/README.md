@@ -17,8 +17,9 @@ You should **not** need to install `Facet.Attributes` directly unless you're bui
 ## Attributes Included
 
 - `[Facet]` - Generate facets/DTOs from source types
+- `[FacetMap]` - Generate extension methods for mapping between existing types across assemblies
 - `[Flatten]` - Generate flattened projections with nested properties as top-level properties
-- `[MapFrom]` - Custom property mapping
+- `[MapFrom]` - Custom property mapping (rename source property)
 - `[MapWhen]` - Conditional property mapping
 - `[GenerateDtos]` - Batch DTO generation
 - `[Wrapper]` - Generate wrapper types

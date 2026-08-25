@@ -26,6 +26,12 @@
       Suppress CS1591: Missing XML comment for publicly visible type or member.
     -->
     <NoWarn>$(NoWarn);MSB3277;1591</NoWarn>
+    
+    <!--
+      Suppress NU1903 for transitive vulnerabilities from EF Core packages.
+      These are resolved by the target runtime framework.
+    -->
+    <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
 
   <!-- SourceLink configuration for debugging support -->

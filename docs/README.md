@@ -31,6 +31,7 @@ Welcome to the Facet documentation! This index will help you navigate all availa
 - [Source Signature Change Tracking](16_SourceSignature.md): Track source entity changes with compile-time signature verification
 - [Enum Conversion](20_ConvertEnumsTo.md): Convert enum properties to string or int with ConvertEnumsTo
 - [Global Configuration Defaults](21_GlobalConfigurationDefaults.md): Override default attribute settings globally using MSBuild properties
+- [FacetMap Attribute](22_FacetMapAttribute.md): Generate extension methods for mapping between existing types across assemblies
 
  ## Ecosystem packages
 - [Facet.Extensions.EFCore](../src/Facet.Extensions.EFCore/README.md): EF Core Async Extension Methods

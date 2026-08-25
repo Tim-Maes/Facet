@@ -25,8 +25,6 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
     }
 
     private const string GenerateDtosAttributeName = "Facet.GenerateDtosAttribute";
-    
-    private const string GenerateAuditableDtosAttributeName = "Facet.GenerateAuditableDtosAttribute";
 
     private const string GenerateDtosForAttributeName = "Facet.GenerateDtosForAttribute";
 
@@ -123,14 +121,6 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
             .Where(static m => m is not null)
             .SelectMany(static (models, _) => models!);
 
-        var generateAuditableDtosTargets = context.SyntaxProvider
-            .ForAttributeWithMetadataName(
-                GenerateAuditableDtosAttributeName,
-                predicate: static (node, _) => node is TypeDeclarationSyntax,
-                transform: static (ctx, token) => GetGenerateDtosModels(ctx, token, forceExcludeAuditFields: true))
-            .Where(static m => m is not null)
-            .SelectMany(static (models, _) => models!);
-
         var generateDtosForTargets = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 GenerateDtosForAttributeName,
@@ -160,9 +150,8 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
             });
 
         var allTargets = generateDtosTargets.Collect()
-            .Combine(generateAuditableDtosTargets.Collect())
             .Combine(generateDtosForTargets.Collect())
-            .Select(static (combined, _) => combined.Left.Left.Concat(combined.Left.Right).Concat(combined.Right))
+            .Select(static (combined, _) => combined.Left.Concat(combined.Right))
             .Combine(efModelManifest);
 
         context.RegisterSourceOutput(allTargets, (spc, pair) =>
@@ -485,15 +474,6 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                 .Where(kvp => kvp.Key == "ExcludeNavigationProperties")
                 .Select(kvp => kvp.Value.Value as bool?)
                 .FirstOrDefault();
-
-            // The obsolete [GenerateAuditableDtos] declares neither ExcludeNavigationProperties
-            // nor IncludeProperties, so the wired-manifest default must not reach it: there
-            // would be no per-type opt-out, and FAC105 would advise a named argument that does
-            // not compile on that attribute. It keeps its legacy unshaped behavior.
-            if (forceExcludeAuditFields)
-            {
-                excludeNavigationProperties = false;
-            }
 
             var includeProperties = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
             var includePropertiesArg = attribute.NamedArguments.FirstOrDefault(kvp => kvp.Key == "IncludeProperties");
@@ -834,7 +814,6 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
                 }
 
                 GenerateDtoToSource(sb, model, dtoName, sourceTypeName, members);
-                GenerateDtoBackTo(sb, model, dtoName, sourceTypeName);
             }
         }
 
@@ -1215,17 +1194,6 @@ public sealed class GenerateDtosGenerator : IncrementalGenerator
 
         sb.AppendLine("        };");
         sb.AppendLine("    }");
-    }
-
-    private static void GenerateDtoBackTo(StringBuilder sb, GenerateDtosTargetModel model, string dtoName, string sourceTypeName)
-    {
-        sb.AppendLine();
-        sb.AppendLine($"    /// <summary>");
-        sb.AppendLine($"    /// Converts this instance of <see cref=\"{dtoName}\"/> back to an instance of the source type <see cref=\"{sourceTypeName}\"/>.");
-        sb.AppendLine($"    /// </summary>");
-        sb.AppendLine($"    /// <returns>An instance of <see cref=\"{sourceTypeName}\"/> with properties mapped from this DTO.</returns>");
-        sb.AppendLine("    [global::System.Obsolete(\"Use ToSource() instead. This method will be removed in a future version.\")]");
-        sb.AppendLine($"    public {model.SourceTypeName} BackTo() => ToSource();");
     }
 
     private static string GeneratePatchDtoCode(GenerateDtosTargetModel model, string dtoName, ImmutableArray<FacetMember> members)

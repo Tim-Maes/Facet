@@ -54,17 +54,6 @@ internal static class ToSourceGenerator
             sb.AppendLine("    }");
         }
 
-        if (!isCustomName)
-        {
-            sb.AppendLine();
-            sb.AppendLine("    /// <summary>");
-            sb.AppendLine($"    /// Converts this instance of <see cref=\"{model.Name}\"/> to an instance of the source type.");
-            sb.AppendLine("    /// </summary>");
-            sb.AppendLine($"    /// <returns>An instance of the source type with properties mapped from this instance.</returns>");
-            sb.AppendLine("    [global::System.Obsolete(\"Use ToSource() instead. This method will be removed in a future version.\")]");
-            sb.AppendLine($"    public {newMod}{model.SourceTypeName} BackTo() => {methodName}();");
-        }
-
         if (hasDepthLimit)
         {
             sb.AppendLine();

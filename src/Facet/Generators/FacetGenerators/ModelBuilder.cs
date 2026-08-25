@@ -1060,7 +1060,7 @@ private static Dictionary<string, (string targetName, string source, bool revers
         // FromSource only hides when the parameter type matches; BaseHidesFromSource handles that.
         var nameHiddenMembers = new System.Collections.Generic.HashSet<string>
         {
-            "ToSource", "BackTo", "Projection"
+            "ToSource", "Projection"
         };
 
         var baseType = targetSymbol.BaseType;
@@ -1158,7 +1158,7 @@ private static Dictionary<string, (string targetName, string source, bool revers
 
             foreach (var member in baseType.GetMembers())
             {
-                if ((member.Name == "ToSource" || member.Name == "BackTo" || member.Name == "ApplyToSource") &&
+                if ((member.Name == "ToSource" || member.Name == "ApplyToSource") &&
                     member.DeclaredAccessibility == Accessibility.Public)
                     return true;
             }

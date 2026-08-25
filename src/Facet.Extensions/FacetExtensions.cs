@@ -56,6 +56,27 @@ public static class FacetExtensions
         _adaptedProjectionByElementAndTarget = new();
 
     /// <summary>
+    /// Registers a projection expression for use with <see cref="SelectFacet{TSource, TTarget}(IQueryable{TSource})"/>
+    /// and <see cref="SelectFacet{TTarget}(IQueryable)"/>. Use this when automatic discovery doesn't
+    /// find your FacetMap projections (e.g., when the mapper assembly is loaded lazily).
+    /// </summary>
+    /// <typeparam name="TSource">The source entity type.</typeparam>
+    /// <typeparam name="TTarget">The target DTO type.</typeparam>
+    /// <param name="projection">The projection expression to register.</param>
+    /// <example>
+    /// <code>
+    /// // Register explicitly if auto-discovery doesn't work
+    /// FacetExtensions.RegisterProjection(OrderLineMappings.OrderLineToOrderLineDtoProjection);
+    /// </code>
+    /// </example>
+    public static void RegisterProjection<TSource, TTarget>(Expression<Func<TSource, TTarget>> projection)
+        where TTarget : class
+    {
+        if (projection is null) throw new ArgumentNullException(nameof(projection));
+        FacetProjectionRegistry.Register(projection);
+    }
+
+    /// <summary>
     /// Maps a single source instance to the specified facet type by invoking its generated constructor.
     /// If the constructor fails (e.g., due to required init-only properties), attempts to use a static FromSource factory method.
     /// </summary>
@@ -134,12 +155,6 @@ public static class FacetExtensions
     /// <param name="facet">The facet instance to map.</param>
     /// <returns>A new <typeparamref name="TFacetSource"/> instance populated from <paramref name="facet"/>.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="facet"/> is <c>null</c>.</exception>
-    [Obsolete("Use ToSource instead. This method will be removed in a future version.")]
-    public static TFacetSource BackTo<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicMethods)] TFacet, TFacetSource>(this TFacet facet)
-        where TFacet : class
-        where TFacetSource : class
-        => ToSource<TFacet, TFacetSource>(facet);
-
     /// <summary>
     /// Converts the specified facet object to an instance of the source type that the facet was created from.
     /// </summary>
@@ -193,13 +208,6 @@ public static class FacetExtensions
     /// the declared source type for the facet.</description></item> <item><description>The
     /// conversion process fails due to a missing ToSource method on the facet.</description></item>
     /// </list></exception>
-    [Obsolete("Use ToSource instead. This method will be removed in a future version.")]
-    [RequiresUnreferencedCode("This method uses MakeGenericMethod which is not compatible with trimming. Use the strongly-typed ToSource<TFacet, TFacetSource> overload instead.")]
-    [RequiresDynamicCode("This method uses MakeGenericMethod which requires dynamic code generation. Use the strongly-typed ToSource<TFacet, TFacetSource> overload instead.")]
-    public static TFacetSource BackTo<TFacetSource>(this object facet)
-        where TFacetSource : class
-        => ToSource<TFacetSource>(facet);
-
     /// <summary>
     /// Maps an <see cref="IEnumerable{TSource}"/> to an <see cref="IEnumerable{TTarget}"/>
     /// via the generated constructor of the facet type.
@@ -370,17 +378,25 @@ public static class FacetExtensions
             prop = typeof(TTarget).GetProperty(
                 projectionPropertyName,
                 BindingFlags.Public | BindingFlags.Static);
-
-            if (prop is null)
-            {
-                throw new InvalidOperationException(
-                    $"Type {typeof(TTarget).Name} does not define a public static Projection property or {projectionPropertyName} property. " +
-                    $"Ensure the facet is decorated with [Facet(typeof({typeof(TSource).Name}))].");
-            }
         }
 
-        var expr = (Expression<Func<TSource, TTarget>>)prop.GetValue(null)!;
-        return source.Select(expr);
+        if (prop is not null)
+        {
+            var expr = (Expression<Func<TSource, TTarget>>)prop.GetValue(null)!;
+            return source.Select(expr);
+        }
+
+        // Fallback: check the FacetProjectionRegistry for FacetMap-registered projections
+        if (FacetProjectionRegistry.TryGetProjection(typeof(TSource), typeof(TTarget), out var registeredProjection))
+        {
+            var expr = (Expression<Func<TSource, TTarget>>)registeredProjection!;
+            return source.Select(expr);
+        }
+
+        throw new InvalidOperationException(
+            $"Type {typeof(TTarget).Name} does not define a public static Projection property or ProjectionFrom{typeof(TSource).Name} property, " +
+            $"and no FacetMap projection is registered for {typeof(TSource).Name} -> {typeof(TTarget).Name}. " +
+            $"Ensure the facet is decorated with [Facet(typeof({typeof(TSource).Name}))] or a [FacetMap] mapping exists with GenerateProjection = true.");
     }
 
     /// <summary>
@@ -486,25 +502,31 @@ public static class FacetExtensions
             prop = targetType.GetProperty(projectionPropertyName, BindingFlags.Public | BindingFlags.Static);
         }
 
-        if (prop == null)
+        if (prop != null)
         {
-            // Multi-source facet: no matching projection found.
-            // The caller must use the two-generic-parameter SelectFacet<TSource, TTarget> instead.
-            throw new InvalidOperationException(
-                $"Type {targetType.Name} does not define a public static Projection property. " +
-                $"This may be a multi-source facet with multiple [Facet] attributes. " +
-                $"For multi-source facets, use SelectFacet<TSource, {targetType.Name}>() instead of SelectFacet<{targetType.Name}>(), " +
-                $"or use the source-specific projection property (e.g., ProjectionFrom{{SourceName}}).");
+            var value = prop.GetValue(null)
+                       ?? throw new InvalidOperationException($"{targetType.Name}.Projection returned null.");
+
+            if (value is not LambdaExpression lambda)
+                throw new InvalidOperationException($"{targetType.Name}.Projection must be an Expression<Func<..., {targetType.Name}>>.");
+
+            _declaredProjectionByTarget[cacheKey] = lambda;
+            return lambda;
         }
 
-        var value = prop.GetValue(null)
-                   ?? throw new InvalidOperationException($"{targetType.Name}.Projection returned null.");
+        // Fallback: check the FacetProjectionRegistry for FacetMap-registered projections
+        if (sourceElementType != null && FacetProjectionRegistry.TryGetProjectionForTarget(targetType, sourceElementType, out var registeredProjection))
+        {
+            _declaredProjectionByTarget[cacheKey] = registeredProjection!;
+            return registeredProjection!;
+        }
 
-        if (value is not LambdaExpression lambda)
-            throw new InvalidOperationException($"{targetType.Name}.Projection must be an Expression<Func<..., {targetType.Name}>>.");
-
-        _declaredProjectionByTarget[cacheKey] = lambda;
-        return lambda;
+        throw new InvalidOperationException(
+            $"Type {targetType.Name} does not define a public static Projection property, " +
+            $"and no FacetMap projection is registered for this type. " +
+            $"Ensure the type is decorated with [Facet(typeof(...))] or a [FacetMap] mapping exists with GenerateProjection = true. " +
+            $"For multi-source facets, use SelectFacet<TSource, {targetType.Name}>() instead of SelectFacet<{targetType.Name}>(), " +
+            $"or use the source-specific projection property (e.g., ProjectionFrom{{SourceName}}).");
     }
 
     private static LambdaExpression GetOrBuildAdaptedProjection(Type elementType, Type targetType, LambdaExpression declaredProjection)

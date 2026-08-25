@@ -45,7 +45,6 @@ public class GenerateDtosCoverageAnalyzer : DiagnosticAnalyzer
 
     private const string GenerateDtosAttributeName = "Facet.GenerateDtosAttribute";
     private const string GenerateDtosForAttributeName = "Facet.GenerateDtosForAttribute";
-    private const string GenerateAuditableDtosAttributeName = "Facet.GenerateAuditableDtosAttribute";
 
     private static readonly SymbolDisplayFormat FullyQualifiedFormat =
         SymbolDisplayFormat.FullyQualifiedFormat;
@@ -117,8 +116,7 @@ public class GenerateDtosCoverageAnalyzer : DiagnosticAnalyzer
             foreach (var attr in namedType.GetAttributes())
             {
                 var attrName = attr.AttributeClass?.ToDisplayString();
-                if (attrName != GenerateDtosAttributeName &&
-                    attrName != GenerateAuditableDtosAttributeName)
+                if (attrName != GenerateDtosAttributeName)
                     continue;
 
                 var types = GetDtoTypesFromAttribute(attr);

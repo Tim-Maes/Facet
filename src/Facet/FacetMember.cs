@@ -1,10 +1,11 @@
-﻿using System;
+﻿using Facet.Generators.Shared;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace Facet;
 
-internal sealed class FacetMember : IEquatable<FacetMember>
+internal sealed class FacetMember : IEquatable<FacetMember>, IMappableMember
 {
     public string Name { get; }
     public string TypeName { get; }

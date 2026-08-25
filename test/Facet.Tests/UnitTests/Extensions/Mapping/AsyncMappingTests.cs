@@ -180,7 +180,7 @@ public class AsyncMappingTests
     {
         var user = TestDataFactory.CreateUser("John", "Doe", "john@example.com", new DateTime(1990, 1, 1));
 
-        var result = await user.ToFacetHybridAsync<UserDto, UserDtoHybridMapper>();
+        var result = await user.ToFacetHybridAsync<User, UserDto, UserDtoHybridMapper, UserDtoHybridMapper>();
 
         result.Should().NotBeNull();
         result.Id.Should().Be(user.Id);
@@ -199,7 +199,7 @@ public class AsyncMappingTests
         var cts = new CancellationTokenSource();
         cts.Cancel(); 
 
-        var act = () => user.ToFacetHybridAsync<UserDto, UserDtoHybridMapper>(cts.Token);
+        var act = () => user.ToFacetHybridAsync<User, UserDto, UserDtoHybridMapper, UserDtoHybridMapper>(cts.Token);
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
@@ -209,7 +209,7 @@ public class AsyncMappingTests
         var birthDate = DateTime.Today.AddYears(-30).AddDays(-100); 
         var user = TestDataFactory.CreateUser("Alice", "Johnson", dateOfBirth: birthDate);
 
-        var result = await user.ToFacetHybridAsync<UserDto, UserDtoHybridMapper>();
+        var result = await user.ToFacetHybridAsync<User, UserDto, UserDtoHybridMapper, UserDtoHybridMapper>();
 
         result.Age.Should().Be(30);
         result.FullName.Should().Be("Alice Johnson (Hybrid)");
@@ -250,7 +250,7 @@ public class AsyncMappingTests
     {
         User nullUser = null!;
 
-        var act = () => nullUser.ToFacetHybridAsync<UserDto, UserDtoHybridMapper>();
+        var act = () => nullUser.ToFacetHybridAsync<User, UserDto, UserDtoHybridMapper, UserDtoHybridMapper>();
         await act.Should().ThrowAsync<ArgumentNullException>()
             .WithMessage("*source*");
     }

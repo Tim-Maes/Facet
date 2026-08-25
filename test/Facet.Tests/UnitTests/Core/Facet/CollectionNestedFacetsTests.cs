@@ -193,7 +193,7 @@ public class CollectionNestedFacetsTests
     }
 
     [Fact]
-    public void BackTo_ShouldMapListCollectionBackToSource()
+    public void ToSource_ShouldMapListCollectionBackToSource()
     {
         var order = new OrderEntity
         {

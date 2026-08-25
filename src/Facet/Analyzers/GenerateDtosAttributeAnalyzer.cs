@@ -59,8 +59,7 @@ public class GenerateDtosAttributeAnalyzer : DiagnosticAnalyzer
 
         var dtoAttributes = namedType.GetAttributes()
             .Where(attr =>
-                attr.AttributeClass?.ToDisplayString() == "Facet.GenerateDtosAttribute" ||
-                attr.AttributeClass?.ToDisplayString() == "Facet.GenerateAuditableDtosAttribute")
+                attr.AttributeClass?.ToDisplayString() == "Facet.GenerateDtosAttribute")
             .ToList();
 
         if (!dtoAttributes.Any())

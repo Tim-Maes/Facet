@@ -322,14 +322,11 @@ public class GenerateDtosManifestNavigationTests
     }
 
     [Fact]
-    public void GenerateAuditableDtos_ManifestWired_KeepsLegacyShape()
+    public void GenerateDtos_WithExcludeAuditFields_ManifestWired_KeepsLegacyShape()
     {
-        // The obsolete attribute has no way to express or opt out of manifest shaping, so a
-        // wired manifest must not change what it generates.
+        // ExcludeNavigationProperties = false opts out of manifest shaping.
         var dto = GenerateUpdateDto(Entities + """
-            #pragma warning disable CS0618
-            [GenerateAuditableDtos(Types = DtoTypes.Update)]
-            #pragma warning restore CS0618
+            [GenerateDtos(Types = DtoTypes.Update, ExcludeNavigationProperties = false)]
             public class Parent
             {
                 public int Id { get; set; }
@@ -343,7 +340,7 @@ public class GenerateDtosManifestNavigationTests
             }
             """);
 
-        dto.Should().Contain("Owner", "the obsolete attribute is exempt from the wired-manifest default");
+        dto.Should().Contain("Owner", "explicit ExcludeNavigationProperties = false keeps the navigation property");
     }
 
     [Fact]

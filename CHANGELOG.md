@@ -9,6 +9,10 @@ All notable changes to Facet are documented in this file.
 - Added `SetAccessor` parameter to `[Facet]` with `PropertySetAccessor` enum (`Preserve` / `Set` / `Init`) to override the set accessor emitted on all generated properties (#381). Supports the immutable builder pattern: one mutable facet for building, one init-only facet as the frozen read model.
 - Each facet type now emits two generated files by default: `{Type}.Properties.g.cs` (property declarations) and `{Type}.Mappings.g.cs` (constructors, projections, and conversion methods). Opt out globally by setting `<Facet_SplitGeneratedFiles>false</Facet_SplitGeneratedFiles>` in your `.csproj` or `Directory.Build.props` to restore the previous single-file output.
 
+### Fixed
+
+- `SelectFacet<TOut>()` and `SelectFacet<TSource, TTarget>()` now work with `[FacetMap]`-generated projections. Previously, these generic projection methods only discovered projections defined directly on the target type (via `[Facet]`). FacetMap projections, which live on marker classes, are now automatically discovered via assembly scanning. This enables generic repository/service patterns like `queryable.SelectFacet<T, TOut>()` to work seamlessly with FacetMap types.
+
 ## [6.6.3] - 2026-05-22
 
 ### Fixed

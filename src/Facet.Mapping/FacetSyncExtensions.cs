@@ -81,33 +81,4 @@ public static class FacetSyncExtensions
         
         return source.Select(item => item.ToFacet(mapper)).ToList();
     }
-
-    /// <summary>
-    /// Maps a single instance using a hybrid mapper instance that implements both sync and async interfaces.
-    /// Only applies the synchronous mapping part.
-    /// </summary>
-    /// <typeparam name="TSource">The source type</typeparam>
-    /// <typeparam name="TTarget">The target type (must have parameterless constructor)</typeparam>
-    /// <param name="source">The source instance</param>
-    /// <param name="mapper">The hybrid mapper instance (supports dependency injection)</param>
-    /// <returns>The mapped target instance</returns>
-    /// <exception cref="ArgumentNullException">Thrown when source or mapper is null</exception>
-    /// <remarks>
-    /// This method uses the obsolete IFacetMapConfigurationHybridInstance interface.
-    /// Consider implementing both IFacetMapConfigurationInstance and IFacetMapConfigurationAsyncInstance directly.
-    /// </remarks>
-#pragma warning disable CS0618 // Type or member is obsolete
-    public static TTarget ToFacetSync<TSource, TTarget>(
-        this TSource source,
-        IFacetMapConfigurationHybridInstance<TSource, TTarget> mapper)
-        where TTarget : class, new()
-    {
-        if (source == null) throw new ArgumentNullException(nameof(source));
-        if (mapper == null) throw new ArgumentNullException(nameof(mapper));
-
-        var target = new TTarget();
-        mapper.Map(source, target);
-        return target;
-    }
-#pragma warning restore CS0618 // Type or member is obsolete
 }

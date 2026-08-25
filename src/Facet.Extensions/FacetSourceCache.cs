@@ -38,14 +38,6 @@ internal static class FacetSourceCache<[DynamicallyAccessedMembers(DynamicallyAc
             Type.EmptyTypes,
             null);
 
-        // Fall back to BackTo for backwards compatibility with older generated code
-        toEntityMethod ??= typeof(TFacet).GetMethod(
-            "BackTo",
-            BindingFlags.Public | BindingFlags.Instance,
-            null,
-            Type.EmptyTypes,
-            null);
-
         if (toEntityMethod != null && toEntityMethod.ReturnType == typeof(TFacetSource))
         {
             // Use compiled expression instead of DynamicMethod for AOT/trimming compatibility
