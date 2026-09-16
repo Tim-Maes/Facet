@@ -57,4 +57,9 @@
     self-contained even when consumed as a ProjectReference.
   -->
 
+  <!-- Override transitive dependency with vulnerable version from EFCore.Design -->
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.Xml" />
+  </ItemGroup>
+
 </Project>

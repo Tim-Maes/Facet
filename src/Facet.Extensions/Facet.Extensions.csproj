@@ -17,8 +17,8 @@
         <ProjectReference Include="..\Facet\Facet.csproj" />
     </ItemGroup>
 
-    <!-- Resolve System.Collections.Immutable version conflict for net8.0 -->
-    <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <!-- Resolve System.Collections.Immutable version conflict -->
+    <ItemGroup Condition="'$(TargetFramework)' == 'net8.0' or '$(TargetFramework)' == 'net9.0'">
         <PackageReference Include="System.Collections.Immutable" />
     </ItemGroup>
 
