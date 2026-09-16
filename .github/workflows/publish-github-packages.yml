@@ -13,7 +13,7 @@ concurrency:
 env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
   DOTNET_NOLOGO: true
-  NUGET_SOURCE: https://nuget.pkg.github.com/immense/index.json
+  NUGET_SOURCE: https://nuget.pkg.github.com/Tim-Maes/index.json
 
 jobs:
   pack-and-publish:
