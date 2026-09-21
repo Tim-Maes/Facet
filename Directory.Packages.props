@@ -63,7 +63,7 @@
 		<PackageVersion Include="SourceGenerator.Foundations.Contracts" Version="2.0.16" />
 
 		<!-- Generator dependencies (embedded into the analyzer by SourceGenerator.Foundations) -->
-		<PackageVersion Include="System.Text.Json" Version="10.0.11" />
+		<PackageVersion Include="System.Text.Json" Version="10.0.12" />
 
 		<!-- Security vulnerability fix: override transitive dependency from EF Core Design -->
 		<PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.12" />
