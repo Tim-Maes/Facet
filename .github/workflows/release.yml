@@ -64,7 +64,7 @@ jobs:
       run: dotnet test --configuration Release --no-build --verbosity normal
     
     - name: Pack NuGet packages
-      run: dotnet pack --configuration Release --no-build --include-symbols -p:SymbolPackageFormat=snupkg --output ./artifacts
+      run: dotnet pack --configuration Release --no-build --output ./artifacts
     
     - name: List generated packages
       run: ls -la ./artifacts/

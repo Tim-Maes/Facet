@@ -77,7 +77,7 @@ jobs:
         run: dotnet build --configuration Release --no-restore -p:Version=${{ steps.preview_version.outputs.PREVIEW_VERSION }}
 
       - name: Pack NuGet packages
-        run: dotnet pack --configuration Release --no-build -p:Version=${{ steps.preview_version.outputs.PREVIEW_VERSION }} --include-symbols -p:SymbolPackageFormat=snupkg --output ./artifacts
+        run: dotnet pack --configuration Release --no-build -p:Version=${{ steps.preview_version.outputs.PREVIEW_VERSION }} --output ./artifacts
 
       - name: List generated packages
         run: Get-ChildItem ./artifacts | Select-Object Name | Format-Table
