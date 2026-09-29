@@ -9,6 +9,10 @@ All notable changes to Facet are documented in this file.
 - Added `SetAccessor` parameter to `[Facet]` with `PropertySetAccessor` enum (`Preserve` / `Set` / `Init`) to override the set accessor emitted on all generated properties (#381). Supports the immutable builder pattern: one mutable facet for building, one init-only facet as the frozen read model.
 - Each facet type now emits two generated files by default: `{Type}.Properties.g.cs` (property declarations) and `{Type}.Mappings.g.cs` (constructors, projections, and conversion methods). Opt out globally by setting `<Facet_SplitGeneratedFiles>false</Facet_SplitGeneratedFiles>` in your `.csproj` or `Directory.Build.props` to restore the previous single-file output.
 
+### Fixed
+
+- `CopyDocs` no longer drops inline markup from the copied documentation. `<see cref="..."/>` and `<see langword="..."/>` used to vanish from the sentence (a summary read "see ." in Swagger/Scalar), `<c>` and `<para>` lost their markup, and an escaped `&lt;` was written back unescaped (CS1570 in the consuming project). Crefs are copied in documentation-ID form (`P:Namespace.Type.Member`), which the compiler does not rebind, so a facet in another namespace than its source still gets no CS1574 (#45). A `paramref`/`typeparamref` to a parameter the facet does not have becomes `<c>name</c>`.
+
 ## [6.6.3] - 2026-05-22
 
 ### Fixed
