@@ -391,64 +391,13 @@ internal static class CodeGenerationHelpers
             if (root == null)
                 return string.Empty;
 
-            var summary = root.Element("summary");
-            if (summary != null)
+            foreach (var elementName in new[] { "summary", "value", "remarks", "example" })
             {
-                lines.Add("/// <summary>");
-                var summaryText = summary.Value.Trim();
-                if (!string.IsNullOrEmpty(summaryText))
+                var element = root.Element(elementName);
+                if (element != null)
                 {
-                    foreach (var line in summaryText.Split('\n'))
-                    {
-                        lines.Add($"/// {line.Trim()}");
-                    }
+                    AppendDocumentationElement(lines, element);
                 }
-                lines.Add("/// </summary>");
-            }
-
-            var value = root.Element("value");
-            if (value != null)
-            {
-                lines.Add("/// <value>");
-                var valueText = value.Value.Trim();
-                if (!string.IsNullOrEmpty(valueText))
-                {
-                    foreach (var line in valueText.Split('\n'))
-                    {
-                        lines.Add($"/// {line.Trim()}");
-                    }
-                }
-                lines.Add("/// </value>");
-            }
-
-            var remarks = root.Element("remarks");
-            if (remarks != null)
-            {
-                lines.Add("/// <remarks>");
-                var remarksText = remarks.Value.Trim();
-                if (!string.IsNullOrEmpty(remarksText))
-                {
-                    foreach (var line in remarksText.Split('\n'))
-                    {
-                        lines.Add($"/// {line.Trim()}");
-                    }
-                }
-                lines.Add("/// </remarks>");
-            }
-
-            var example = root.Element("example");
-            if (example != null)
-            {
-                lines.Add("/// <example>");
-                var exampleText = example.Value.Trim();
-                if (!string.IsNullOrEmpty(exampleText))
-                {
-                    foreach (var line in exampleText.Split('\n'))
-                    {
-                        lines.Add($"/// {line.Trim()}");
-                    }
-                }
-                lines.Add("/// </example>");
             }
 
             return lines.Count > 0 ? string.Join("\n", lines) : string.Empty;
@@ -457,6 +406,48 @@ internal static class CodeGenerationHelpers
         {
             return string.Empty;
         }
+    }
+
+    /// <summary>
+    /// Writes one documentation element as <c>///</c> lines, keeping its inline markup.
+    /// </summary>
+    /// <remarks>
+    /// The content is copied as XML, not as <see cref="System.Xml.Linq.XElement.Value"/>: that property
+    /// concatenates the text nodes only, so a <c>&lt;see cref="..."/&gt;</c> or
+    /// <c>&lt;see langword="null"/&gt;</c> vanished from the sentence, <c>&lt;c&gt;</c> and
+    /// <c>&lt;para&gt;</c> lost their markup, and an escaped <c>&amp;lt;</c> was written back unescaped,
+    /// which is malformed XML in the generated comment.
+    /// <para>
+    /// Crefs stay resolvable: Roslyn hands out the comment with every <c>cref</c> already turned into a
+    /// documentation ID (<c>P:Namespace.Type.Member</c>), and the compiler takes an ID-form cref verbatim
+    /// instead of binding it in the facet's namespace — so a facet in another namespace than its source
+    /// gets no CS1574 (the reason the text used to be flattened, #45).
+    /// </para>
+    /// <para>
+    /// A <c>paramref</c> or <c>typeparamref</c> points at a parameter of the source member that the
+    /// generated member does not have, so it becomes <c>&lt;c&gt;name&lt;/c&gt;</c>.
+    /// </para>
+    /// </remarks>
+    private static void AppendDocumentationElement(List<string> lines, System.Xml.Linq.XElement element)
+    {
+        foreach (var reference in element.Descendants()
+                     .Where(descendant => descendant.Name == "paramref" || descendant.Name == "typeparamref")
+                     .ToList())
+        {
+            reference.ReplaceWith(new System.Xml.Linq.XElement("c", (string?)reference.Attribute("name") ?? string.Empty));
+        }
+
+        var content = string.Concat(element.Nodes().Select(node => node.ToString(System.Xml.Linq.SaveOptions.DisableFormatting))).Trim();
+
+        lines.Add($"/// <{element.Name}>");
+        if (!string.IsNullOrEmpty(content))
+        {
+            foreach (var line in content.Split('\n'))
+            {
+                lines.Add($"/// {line.Trim()}");
+            }
+        }
+        lines.Add($"/// </{element.Name}>");
     }
 
     /// <summary>
