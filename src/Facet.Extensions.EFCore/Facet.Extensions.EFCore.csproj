@@ -44,6 +44,7 @@
     <!-- Override transitive dependency with vulnerable version from EFCore.Design -->
     <ItemGroup>
         <PackageReference Include="System.Security.Cryptography.Xml" />
+        <PackageReference Include="System.Text.Json" />
     </ItemGroup>
 
 </Project>
