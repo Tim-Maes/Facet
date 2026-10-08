@@ -21,5 +21,12 @@
     <CompilerVisibleProperty Include="Facet_MaxDepth" />
     <CompilerVisibleProperty Include="Facet_MaxDepthToSource" />
     <CompilerVisibleProperty Include="Facet_PreserveReferences" />
+    <CompilerVisibleProperty Include="Facet_CopyAttributesMode" />
+    <!-- Raw values, for a project that sets them in an .editorconfig rather than MSBuild. -->
+    <CompilerVisibleProperty Include="Facet_CopyAttributesExclude" />
+    <CompilerVisibleProperty Include="Facet_CopyAttributesInclude" />
+    <!-- Semicolon-normalised by Facet.targets; preferred when present. -->
+    <CompilerVisibleProperty Include="_Facet_CopyAttributesExclude" />
+    <CompilerVisibleProperty Include="_Facet_CopyAttributesInclude" />
   </ItemGroup>
 </Project>

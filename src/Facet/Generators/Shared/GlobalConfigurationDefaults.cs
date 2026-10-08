@@ -1,4 +1,5 @@
 ﻿using Microsoft.CodeAnalysis;
+using System.Collections.Immutable;
 using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace Facet.Generators.Shared;
@@ -112,6 +113,25 @@ internal sealed class GlobalConfigurationDefaults
     /// </summary>
     public bool SplitGeneratedFiles { get; }
 
+    /// <summary>
+    /// Extra attribute patterns <c>CopyAttributes</c> must not copy, from
+    /// <c>Facet_CopyAttributesExclude</c>. Additive to the built-in list of persistence attributes
+    /// in <see cref="AttributeCopyPolicy"/>.
+    /// </summary>
+    public ImmutableArray<string> CopyAttributesExclude { get; }
+
+    /// <summary>
+    /// Attribute patterns <c>CopyAttributes</c> must copy even when something would otherwise
+    /// exclude them, from <c>Facet_CopyAttributesInclude</c>. Overrides the built-in list.
+    /// </summary>
+    public ImmutableArray<string> CopyAttributesInclude { get; }
+
+    /// <summary>
+    /// Project-wide default for <c>CopyAttributesMode</c>, from <c>Facet_CopyAttributesMode</c>
+    /// (default: <c>Preserve</c>, which is the behaviour Facet had before the mode existed).
+    /// </summary>
+    public AttributeCopyMode CopyAttributesMode { get; }
+
     private GlobalConfigurationDefaults(
         bool generateConstructor,
         bool generateParameterlessConstructor,
@@ -129,7 +149,10 @@ internal sealed class GlobalConfigurationDefaults
         int maxDepth,
         bool preserveReferences,
         int maxDepthToSource,
-        bool splitGeneratedFiles)
+        bool splitGeneratedFiles,
+        ImmutableArray<string> copyAttributesExclude,
+        ImmutableArray<string> copyAttributesInclude,
+        AttributeCopyMode copyAttributesMode)
     {
         GenerateConstructor = generateConstructor;
         GenerateParameterlessConstructor = generateParameterlessConstructor;
@@ -148,6 +171,9 @@ internal sealed class GlobalConfigurationDefaults
         PreserveReferences = preserveReferences;
         MaxDepthToSource = maxDepthToSource;
         SplitGeneratedFiles = splitGeneratedFiles;
+        CopyAttributesExclude = copyAttributesExclude;
+        CopyAttributesInclude = copyAttributesInclude;
+        CopyAttributesMode = copyAttributesMode;
     }
 
     /// <summary>
@@ -173,7 +199,16 @@ internal sealed class GlobalConfigurationDefaults
             maxDepth: GetIntOption(globalOptions, "build_property.Facet_MaxDepth", defaultValue: FacetConstants.DefaultMaxDepth),
             preserveReferences: GetBoolOption(globalOptions, "build_property.Facet_PreserveReferences", defaultValue: FacetConstants.DefaultPreserveReferences),
             maxDepthToSource: GetIntOption(globalOptions, "build_property.Facet_MaxDepthToSource", defaultValue: 0),
-            splitGeneratedFiles: GetBoolOption(globalOptions, "build_property.Facet_SplitGeneratedFiles", defaultValue: true));
+            splitGeneratedFiles: GetBoolOption(globalOptions, "build_property.Facet_SplitGeneratedFiles", defaultValue: true),
+            // The underscore-prefixed values are Facet.targets' semicolon-normalised copies; the
+            // raw ones are the fallback for a project configuring this through .editorconfig.
+            copyAttributesExclude: AttributeCopyPolicy.ParsePatternList(
+                GetStringOption(globalOptions, "build_property._Facet_CopyAttributesExclude")
+                ?? GetStringOption(globalOptions, "build_property.Facet_CopyAttributesExclude")),
+            copyAttributesInclude: AttributeCopyPolicy.ParsePatternList(
+                GetStringOption(globalOptions, "build_property._Facet_CopyAttributesInclude")
+                ?? GetStringOption(globalOptions, "build_property.Facet_CopyAttributesInclude")),
+            copyAttributesMode: GetEnumOption(globalOptions, "build_property.Facet_CopyAttributesMode", AttributeCopyMode.Preserve));
     }
 
     private static bool GetBoolOption(AnalyzerConfigOptions? options, string key, bool defaultValue)
@@ -185,6 +220,26 @@ internal sealed class GlobalConfigurationDefaults
             return result;
 
         return defaultValue;
+    }
+
+    private static AttributeCopyMode GetEnumOption(
+        AnalyzerConfigOptions? options,
+        string key,
+        AttributeCopyMode defaultValue)
+    {
+        var value = GetStringOption(options, key);
+
+        return value is not null && System.Enum.TryParse<AttributeCopyMode>(value, ignoreCase: true, out var parsed)
+            ? parsed
+            : defaultValue;
+    }
+
+    private static string? GetStringOption(AnalyzerConfigOptions? options, string key)
+    {
+        if (options == null)
+            return null;
+
+        return options.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
     }
 
     private static int GetIntOption(AnalyzerConfigOptions? options, string key, int defaultValue)

@@ -16,9 +16,12 @@ internal static class AttributeProcessor
     /// Extracts copiable attributes from a member symbol.
     /// Filters out internal compiler attributes and non-copiable attributes.
     /// </summary>
-    public static List<string> ExtractCopiableAttributes(ISymbol member, FacetMemberKind targetKind)
+    public static List<string> ExtractCopiableAttributes(
+        ISymbol member,
+        FacetMemberKind targetKind,
+        AttributeCopyPolicy? policy = null)
     {
-        var (attributes, _) = ExtractCopiableAttributesWithNamespaces(member, targetKind);
+        var (attributes, _) = ExtractCopiableAttributesWithNamespaces(member, targetKind, policy);
         return attributes;
     }
 
@@ -26,8 +29,13 @@ internal static class AttributeProcessor
     /// Extracts copiable attributes from a member symbol along with their namespaces.
     /// Filters out internal compiler attributes and non-copiable attributes.
     /// </summary>
-    public static (List<string> attributes, HashSet<string> namespaces) ExtractCopiableAttributesWithNamespaces(ISymbol member, FacetMemberKind targetKind)
+    public static (List<string> attributes, HashSet<string> namespaces) ExtractCopiableAttributesWithNamespaces(
+        ISymbol member,
+        FacetMemberKind targetKind,
+        AttributeCopyPolicy? policy = null)
     {
+        policy ??= AttributeCopyPolicy.Default;
+
         var copiableAttributes = new List<string>();
         var attributeNamespaces = new HashSet<string>();
 
@@ -37,11 +45,10 @@ internal static class AttributeProcessor
 
             var attributeFullName = attr.AttributeClass.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-            if (attributeFullName.StartsWith("global::System.Runtime.CompilerServices.")) continue;
-
-            if (attributeFullName == "global::System.ComponentModel.DataAnnotations.ValidationAttribute") continue;
-
-            if (IsSourceGeneratorTriggerAttribute(attributeFullName)) continue;
+            // Persistence attributes, other generators' trigger attributes, and anything the
+            // project or type excluded. Copying an attribute copies its assembly reference, so
+            // this is what keeps EF Core out of a generated contract type.
+            if (!policy.ShouldCopy(attributeFullName)) continue;
 
             var attributeTargets = GetAttributeTargets(attr.AttributeClass);
             if (targetKind == FacetMemberKind.Property && !attributeTargets.HasFlag(AttributeTargets.Property)) continue;
@@ -326,30 +333,4 @@ internal static class AttributeProcessor
         }
     }
 
-    /// <summary>
-    /// Namespace prefixes of attributes that are consumed by other source generators to trigger
-    /// code generation. Copying these to a Facet-generated DTO would cause analyzer errors
-    /// because the DTO is not set up for that source generator's pipeline.
-    /// See GitHub issue #277.
-    /// </summary>
-    private static readonly string[] SourceGeneratorTriggerNamespacePrefixes = new[]
-    {
-        "global::CommunityToolkit.Mvvm.",
-    };
-
-    /// <summary>
-    /// Determines whether an attribute is a source-generator-triggering attribute that should
-    /// not be copied to generated DTOs. These attributes are consumed by other source generators
-    /// and copying them would cause analyzer errors on the target type.
-    /// </summary>
-    private static bool IsSourceGeneratorTriggerAttribute(string attributeFullName)
-    {
-        foreach (var prefix in SourceGeneratorTriggerNamespacePrefixes)
-        {
-            if (attributeFullName.StartsWith(prefix))
-                return true;
-        }
-
-        return false;
-    }
 }

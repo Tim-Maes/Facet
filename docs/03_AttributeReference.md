@@ -1,4 +1,4 @@
-# Facet Attribute Reference
+﻿# Facet Attribute Reference
 
 The `[Facet]` attribute is used to declare a new projection (facet) type based on an existing source type.
 
@@ -36,6 +36,9 @@ public partial class MyFacet { }
 | `PreserveRequiredProperties`   | `bool`    | Preserve required modifiers from source properties (default: true for records). |
 | `NullableProperties`           | `bool`    | Make all properties nullable in the generated facet (default: false). |
 | `CopyAttributes`               | `bool`    | Copy attributes from source type members to generated facet members (default: false). See [Attribute Copying](#attribute-copying) below. |
+| `CopyAttributesMode`           | `AttributeCopyMode` | `Preserve` (default) copies everything it copied before; `ContractSafe` also skips attributes whose assembly is a package the consumer may not have. FAC109 reports which those are. |
+| `CopyAttributesExclude`        | `string[]?` | Attributes `CopyAttributes` must not copy, on top of the built-in list of persistence attributes. A namespace wildcard (`Acme.Infra.*`), a fully qualified name, or a bare name; the trailing `Attribute` is optional. |
+| `CopyAttributesInclude`        | `string[]?` | Attributes `CopyAttributes` must copy even when something would exclude them — the built-in list included. Same pattern forms. |
 | `CopyDocs`                     | `bool`    | Copy XML documentation comments from source type members to generated facet members (default: true). See [XML Documentation Copying](#xml-documentation-copying) below. |
 | `UseFullName`                  | `bool`    | Use full type name in generated file names to avoid collisions (default: false). |
 | `MaxDepth`                     | `int`     | Maximum depth for nested facet recursion to prevent stack overflow (default: 10). Set to 0 for unlimited (not recommended). See [Circular Reference Protection](#circular-reference-protection) below. |

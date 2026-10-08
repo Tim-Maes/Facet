@@ -1,4 +1,4 @@
-# Global Configuration Defaults
+﻿# Global Configuration Defaults
 
 ## Overview
 
@@ -34,6 +34,9 @@ The following property controls **generator-level** output behaviour (no per-typ
 | Property | Default | MSBuild Property |
 |----------|---------|------------------|
 | *(generator)* Split output | `true` | `Facet_SplitGeneratedFiles` |
+| *(generator)* Attribute copy mode | `Preserve` | `Facet_CopyAttributesMode` |
+| *(generator)* Extra attributes never copied | — | `Facet_CopyAttributesExclude` |
+| *(generator)* Attributes always copied | — | `Facet_CopyAttributesInclude` |
 
 When `Facet_SplitGeneratedFiles` is `true` (the default), each type emits two files: `*.Properties.g.cs` and `*.Mappings.g.cs`. Set it to `false` to restore single-file output. See [Generated Files Output](12_GeneratedFilesOutput.md) for details.
 
@@ -192,3 +195,8 @@ Preserve validation and serialization attributes from source types:
 - [Attribute Reference](03_AttributeReference.md) - Complete list of attribute properties
 - [GenerateDtosAttribute](09_GenerateDtosAttribute.md) - DTO generation
 - [WrapperAttribute](14_WrapperAttribute.md) - Wrapper generation
+
+Both copy-attribute lists accept `;`- or `,`-separated values. Facet normalises `;` for you, which
+matters because generator properties reach the compiler through a generated `.editorconfig`, and
+that format treats `;` as the start of a comment — an unnormalised semicolon list would arrive
+truncated at its first entry.
