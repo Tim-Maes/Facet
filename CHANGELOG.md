@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to Facet are documented in this file.
 
@@ -6,11 +6,15 @@ All notable changes to Facet are documented in this file.
 
 ### Added
 
+- Added `<Facet_GenerateMappings>false</Facet_GenerateMappings>`, which suppresses the `*.Mappings.g.cs` half of the split output so a facet type is emitted with its properties and nothing naming its source type.
+- Added `<Facet_EmitAttributeMetadata>false</Facet_EmitAttributeMetadata>`. Facet's attributes are now `[Conditional("FACET_KEEP_ATTRIBUTES")]`, and `Facet.Attributes.targets` defines that symbol unless this property is `false` — so existing projects are unchanged. Set it to `false` and the `typeof` in `[Facet(typeof(X))]` no longer reaches the attribute blob, which lets the compiler drop the otherwise-unused reference to `X`'s assembly. Together the two let a contract assembly carry only the facet shapes; see [Contract Assemblies](docs/22_ContractAssemblies.md). Note that `Facet.Extensions`' reflection-based `ToSource<T>()`/`BackTo<T>()` read `Facet.FacetAttribute` at runtime and cannot resolve the source type in an assembly that opts out.
+- Added FAC116 and FAC117, which close the two silent ways a contract assembly fails to be one. FAC116 reports a generated property still typed from the source layer — what happens when `NestedFacets` is not set, and the reference comes back despite the mappings and attributes being suppressed. FAC117 reports a `Configuration`, `BeforeMapConfiguration`, `AfterMapConfiguration` or `ToSourceConfiguration` on a `[Facet]` in a project that suppresses its mappings: the members that would call the hook are never generated, so it compiles and does nothing. Both apply only where `Facet_GenerateMappings` is `false`.
 - Added `SetAccessor` parameter to `[Facet]` with `PropertySetAccessor` enum (`Preserve` / `Set` / `Init`) to override the set accessor emitted on all generated properties (#381). Supports the immutable builder pattern: one mutable facet for building, one init-only facet as the frozen read model.
 - Each facet type now emits two generated files by default: `{Type}.Properties.g.cs` (property declarations) and `{Type}.Mappings.g.cs` (constructors, projections, and conversion methods). Opt out globally by setting `<Facet_SplitGeneratedFiles>false</Facet_SplitGeneratedFiles>` in your `.csproj` or `Directory.Build.props` to restore the previous single-file output.
 
 ### Fixed
 
+- `Facet.Attributes` now ships a `Facet.Attributes.targets` that defines `FACET_KEEP_ATTRIBUTES`. Without it, a project referencing the attributes package without the generator lost its `[Facet]` attributes from metadata silently, and had no targets file through which to turn them back on.
 - `CopyDocs` no longer drops inline markup from the copied documentation. `<see cref="..."/>` and `<see langword="..."/>` used to vanish from the sentence (a summary read "see ." in Swagger/Scalar), `<c>` and `<para>` lost their markup, and an escaped `&lt;` was written back unescaped (CS1570 in the consuming project). Crefs are copied in documentation-ID form (`P:Namespace.Type.Member`), which the compiler does not rebind, so a facet in another namespace than its source still gets no CS1574 (#45). A `paramref`/`typeparamref` to a parameter the facet does not have becomes `<c>name</c>`.
 - `[GenerateDtos]` no longer fails with CS8784 ("Generator 'GenerateDtosGeneratorHoist' failed to initialize … FileNotFoundException … SourceGenerator.Foundations.Contracts") when the compiler server already holds a Facet of 6.6.8 or older, e.g. from another solution built on the same machine. The DTOs were then not generated at all (CS0246 wherever they are used). Fixed in SourceGenerator.Foundations 2.0.17, which resolves embedded assemblies by name and version instead of by simple name.
 

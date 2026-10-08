@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
   <img
     src="https://raw.githubusercontent.com/Tim-Maes/Facet/master/assets/Facet.png"
     alt="Facet logo"
@@ -43,6 +43,7 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 - [What is being generated?](docs/07_WhatIsBeingGenerated.md)
 - [Configure generated files output location](docs/12_GeneratedFilesOutput.md)
 - [Global configuration defaults](docs/21_GlobalConfigurationDefaults.md) - Override attribute defaults project-wide
+- [Contract assemblies](docs/22_ContractAssemblies.md) - Shape a contract assembly that references nothing it was shaped from
 - [Changelog](CHANGELOG.md)
 
 ## :handshake: Community

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 
 namespace Facet;
 
@@ -45,6 +46,7 @@ namespace Facet;
 /// </code>
 /// </example>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]
+[Conditional(FacetConditionalSymbols.KeepAttributes)]
 public sealed class MapFromAttribute : Attribute
 {
     /// <summary>
