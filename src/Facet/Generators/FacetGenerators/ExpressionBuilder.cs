@@ -374,32 +374,7 @@ internal static class ExpressionBuilder
     }
 
     private static string WrapCollectionProjection(string projection, string collectionWrapper, string? elementTypeName = null)
-    {
-        return collectionWrapper switch
-        {
-            FacetConstants.CollectionWrappers.List => $"{projection}.ToList()",
-            FacetConstants.CollectionWrappers.IList => $"{projection}.ToList()",
-            FacetConstants.CollectionWrappers.ICollection => $"{projection}.ToList()",
-            FacetConstants.CollectionWrappers.IReadOnlyList => $"{projection}.ToList()",
-            FacetConstants.CollectionWrappers.IReadOnlyCollection => $"{projection}.ToList()",
-            FacetConstants.CollectionWrappers.IEnumerable => projection,
-            FacetConstants.CollectionWrappers.Array => $"{projection}.ToArray()",
-            FacetConstants.CollectionWrappers.Collection when elementTypeName != null =>
-                $"new global::System.Collections.ObjectModel.Collection<{elementTypeName}>({projection}.ToList())",
-            FacetConstants.CollectionWrappers.Collection => $"{projection}.ToList()",
-            FacetConstants.CollectionWrappers.ImmutableArray => $"{projection}.ToImmutableArray()",
-            FacetConstants.CollectionWrappers.ImmutableList => $"{projection}.ToImmutableList()",
-            FacetConstants.CollectionWrappers.ImmutableHashSet => $"{projection}.ToImmutableHashSet()",
-            FacetConstants.CollectionWrappers.ImmutableSortedSet => $"{projection}.ToImmutableSortedSet()",
-            FacetConstants.CollectionWrappers.ImmutableQueue => $"global::System.Collections.Immutable.ImmutableQueue.CreateRange({projection})",
-            FacetConstants.CollectionWrappers.ImmutableStack => $"global::System.Collections.Immutable.ImmutableStack.CreateRange({projection})",
-            FacetConstants.CollectionWrappers.IImmutableList => $"{projection}.ToImmutableList()",
-            FacetConstants.CollectionWrappers.IImmutableSet => $"{projection}.ToImmutableHashSet()",
-            FacetConstants.CollectionWrappers.IImmutableQueue => $"global::System.Collections.Immutable.ImmutableQueue.CreateRange({projection})",
-            FacetConstants.CollectionWrappers.IImmutableStack => $"global::System.Collections.Immutable.ImmutableStack.CreateRange({projection})",
-            _ => projection
-        };
-    }
+        => GeneratorUtilities.WrapCollectionProjection(projection, collectionWrapper, elementTypeName);
 
     private static bool IsExpression(string source) => ExpressionHelper.IsExpression(source);
     private static string TransformExpression(string expression, string sourceVariableName, HashSet<string>? sourcePropertyNames = null) => ExpressionHelper.TransformExpression(expression, sourceVariableName, sourcePropertyNames);
