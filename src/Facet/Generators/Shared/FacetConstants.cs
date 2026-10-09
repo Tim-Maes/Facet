@@ -55,6 +55,12 @@ internal static class FacetConstants
     public const string FacetMapperAttributeFullName = "Facet.FacetMapperAttribute";
 
     /// <summary>
+    /// The fully qualified name of the FacetMappersForAssemblyAttribute, which registers a mapper
+    /// for every facet a referenced assembly's contract manifest declares.
+    /// </summary>
+    public const string FacetMappersForAssemblyAttributeFullName = "Facet.FacetMappersForAssemblyAttribute";
+
+    /// <summary>
     /// The metadata name of the IFacetMapConfigurationInstance open generic interface — the
     /// non-static variant, which a mapper can accept as a parameter so the configuration can be
     /// resolved from a container.

@@ -79,13 +79,26 @@ public sealed class FacetMapperGenerator : IIncrementalGenerator
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var registrations = context.SyntaxProvider
+        var explicitRegistrations = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 FacetConstants.FacetMapperAttributeFullName,
                 predicate: static (node, _) => node is CompilationUnitSyntax,
                 transform: static (ctx, token) => FacetMapperModelBuilder.BuildModels(ctx, token))
-            .SelectMany(static (results, _) => results)
-            .Collect();
+            .SelectMany(static (results, _) => results);
+
+        // [assembly: FacetMappersForAssembly] registers every pair a referenced assembly's contract
+        // manifest declares, so the pairs are written down once (as [Facet]) rather than twice.
+        // A pair also stated explicitly is left to the explicit registration.
+        var manifestRegistrations = context.SyntaxProvider
+            .ForAttributeWithMetadataName(
+                FacetConstants.FacetMappersForAssemblyAttributeFullName,
+                predicate: static (node, _) => node is CompilationUnitSyntax,
+                transform: static (ctx, token) => FacetMapperModelBuilder.BuildModelsFromManifest(ctx, token))
+            .SelectMany(static (results, _) => results);
+
+        var registrations = explicitRegistrations.Collect()
+            .Combine(manifestRegistrations.Collect())
+            .Select(static (pair, _) => pair.Left.AddRange(pair.Right));
 
         context.RegisterSourceOutput(registrations, static (spc, results) =>
         {

@@ -36,6 +36,7 @@ The following property controls **generator-level** output behaviour (no per-typ
 | *(generator)* Split output | `true` | `Facet_SplitGeneratedFiles` |
 | *(generator)* Emit the mappings half | `true` | `Facet_GenerateMappings` |
 | *(generator)* Emit attributes into metadata | `true` | `Facet_EmitAttributeMetadata` |
+| *(generator)* Emit the contract manifest | `true` | `Facet_EmitContractManifest` |
 
 When `Facet_SplitGeneratedFiles` is `true` (the default), each type emits two files: `*.Properties.g.cs` and `*.Mappings.g.cs`. Set it to `false` to restore single-file output. See [Generated Files Output](12_GeneratedFilesOutput.md) for details.
 

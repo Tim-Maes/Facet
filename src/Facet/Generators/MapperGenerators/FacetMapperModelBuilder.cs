@@ -79,22 +79,131 @@ internal static class FacetMapperModelBuilder
 
         foreach (var attribute in compilation.Assembly.GetAttributes())
         {
-            if (attribute.AttributeClass?.ToDisplayString() != FacetConstants.FacetMapperAttributeFullName)
-                continue;
+            var attributeName = attribute.AttributeClass?.ToDisplayString();
 
-            if (!TryGetTypeArguments(attribute, out var sourceType, out var facetType))
-                continue;
+            if (attributeName == FacetConstants.FacetMapperAttributeFullName)
+            {
+                if (!TryGetTypeArguments(attribute, out var sourceType, out var facetType))
+                    continue;
 
-            var key = MapperRegistration.MakePairKey(GlobalName(sourceType!), GlobalName(facetType!));
-            if (!pairs.ContainsKey(key))
-                pairs.Add(key, facetType!);
+                var key = MapperRegistration.MakePairKey(GlobalName(sourceType!), GlobalName(facetType!));
+                if (!pairs.ContainsKey(key))
+                    pairs.Add(key, facetType!);
+            }
+            else if (attributeName == FacetConstants.FacetMappersForAssemblyAttributeFullName)
+            {
+                // Nested members resolve against whatever is registered, including the pairs a
+                // contract assembly's manifest contributes.
+                foreach (var (_, source, facet) in ReadManifestPairs(attribute, compilation))
+                {
+                    var key = MapperRegistration.MakePairKey(GlobalName(source), GlobalName(facet));
+                    if (!pairs.ContainsKey(key))
+                        pairs.Add(key, facet);
+                }
+            }
         }
 
         return pairs;
     }
 
+    /// <summary>
+    /// Resolves the (facet, source) pairs a <c>[assembly: FacetMappersForAssembly]</c> target assembly
+    /// records in its contract manifest, skipping any the attribute excludes or whose types can no
+    /// longer be resolved.
+    /// </summary>
+    private static List<(string FacetFullName, INamedTypeSymbol Source, INamedTypeSymbol Facet)> ReadManifestPairs(
+        AttributeData attribute,
+        CSharpCompilation compilation)
+    {
+        var resolved = new List<(string, INamedTypeSymbol, INamedTypeSymbol)>();
 
+        if (attribute.ConstructorArguments.Length < 1
+            || attribute.ConstructorArguments[0].Value is not INamedTypeSymbol marker)
+        {
+            return resolved;
+        }
 
+        var exclude = AttributeParser.GetStringArrayNamedArg(attribute.NamedArguments, "Exclude") ?? ImmutableArray<string>.Empty;
+
+        foreach (var (facetFullName, sourceFullName) in ContractManifest.Read(marker.ContainingAssembly))
+        {
+            if (exclude.Contains(facetFullName) || exclude.Contains(SimpleName(facetFullName)))
+                continue;
+
+            var facet = compilation.GetTypeByMetadataName(facetFullName);
+            var source = compilation.GetTypeByMetadataName(sourceFullName);
+
+            if (facet is null || source is null)
+                continue;
+
+            resolved.Add((facetFullName, source, facet));
+        }
+
+        return resolved;
+    }
+
+    /// <summary>
+    /// Builds a registration per manifest pair, for every <c>[assembly: FacetMappersForAssembly]</c> in
+    /// this compilation unit. A pair also stated explicitly with <c>[assembly: FacetMapper]</c> is
+    /// skipped, so the explicit registration (with its own name, exclusions or configuration) wins.
+    /// </summary>
+    public static ImmutableArray<MapperBuildResult> BuildModelsFromManifest(
+        GeneratorAttributeSyntaxContext context,
+        CancellationToken token)
+    {
+        var compilation = (CSharpCompilation)context.SemanticModel.Compilation;
+        var registeredPairs = CollectRegisteredPairs(compilation);
+        var explicitPairs = CollectExplicitPairKeys(compilation);
+
+        var results = ImmutableArray.CreateBuilder<MapperBuildResult>();
+
+        foreach (var attribute in context.Attributes)
+        {
+            token.ThrowIfCancellationRequested();
+
+            var generateProjection = GetBoolArgument(attribute, "GenerateProjection", defaultValue: true);
+            var generateToSource = GetBoolArgument(attribute, "GenerateToSource", defaultValue: false);
+            var declaredNamespace = GetStringArgument(attribute, "Namespace");
+            var location = SourceLocationInfo.FromAttribute(attribute);
+
+            foreach (var (_, source, facet) in ReadManifestPairs(attribute, compilation))
+            {
+                if (explicitPairs.Contains(MapperRegistration.MakePairKey(GlobalName(source), GlobalName(facet))))
+                    continue;
+
+                results.Add(BuildModelFor(
+                    source,
+                    facet,
+                    compilation,
+                    registeredPairs,
+                    exclude: new HashSet<string>(),
+                    mapperName: null,
+                    mapperNamespace: declaredNamespace,
+                    generateProjection: generateProjection,
+                    generateToSource: generateToSource,
+                    configuration: MapperConfiguration.None,
+                    location: location));
+            }
+        }
+
+        return results.ToImmutable();
+    }
+
+    private static HashSet<string> CollectExplicitPairKeys(CSharpCompilation compilation)
+    {
+        var keys = new HashSet<string>();
+
+        foreach (var attribute in compilation.Assembly.GetAttributes())
+        {
+            if (attribute.AttributeClass?.ToDisplayString() != FacetConstants.FacetMapperAttributeFullName)
+                continue;
+
+            if (TryGetTypeArguments(attribute, out var source, out var facet))
+                keys.Add(MapperRegistration.MakePairKey(GlobalName(source!), GlobalName(facet!)));
+        }
+
+        return keys;
+    }
 
 
     private static string SimpleName(string fullName)

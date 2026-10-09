@@ -81,6 +81,16 @@ expression, so a query still projects the whole graph in a single statement. See
 [Assembly-Level Mapper Registration](03_AttributeReference.md#assembly-level-mapper-registration)
 for the full surface, the hooks, and the diagnostics.
 
+One line registers every facet the contract assembly declares, so a pair is named once rather than
+once per side:
+
+```csharp
+[assembly: FacetMappersForAssembly(typeof(UserResponse))]
+```
+
+Add a facet in the contract assembly and its mapper appears with no edit here; anything left
+uncovered is reported as FAC115, so the two sides cannot drift apart silently.
+
 You can equally write the mapper by hand. Facet's generated facets are built for it: their members
 are settable and the generated projection is an object initializer, so a hand-written static class
 can both populate one and project to one in a query.
@@ -117,11 +127,13 @@ configuration for the whole compilation.
 |---|---|---|
 | `Facet_GenerateMappings` | `true` | `false` suppresses `*.Mappings.g.cs`. Needs `Facet_SplitGeneratedFiles` (also default `true`). |
 | `Facet_EmitAttributeMetadata` | `true` | `false` keeps Facet's attributes out of the compiled assembly. |
+| `Facet_EmitContractManifest` | `true` | `false` omits the `AssemblyMetadata` record of this assembly's pairs, disabling `FacetMappersForAssembly` and FAC115. |
 
 | Diagnostic | Severity | Meaning |
 |---|---|---|
 | FAC116 | Warning | A generated property is still typed from the layer the facet was shaped from. |
 | FAC117 | Warning | A mapping hook is configured on a facet whose mappings are suppressed, so it cannot run. |
+| FAC115 | Warning | A facet in a mapped contract assembly has no mapper. |
 
 See also [Generated Files Output](12_GeneratedFilesOutput.md) and
 [Global Configuration Defaults](21_GlobalConfigurationDefaults.md).

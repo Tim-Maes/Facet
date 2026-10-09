@@ -9,13 +9,14 @@ using Microsoft.CodeAnalysis.Diagnostics;
 namespace Facet.Tests.UnitTests.Features;
 
 /// <summary>
-/// Tests for the diagnostics that guard a contract assembly: FAC116 (a property still typed from
-/// the source layer) and FAC117 (a mapping hook that cannot run because the mappings are
-/// suppressed).
+/// Tests for the diagnostics that guard a layered build: FAC115 (a facet with no mapper), FAC116
+/// (a contract property still typed from the source layer) and FAC117 (a mapping hook that cannot
+/// run because the mappings are suppressed).
 /// </summary>
 /// <remarks>
-/// Both need a real second assembly — the source layer the contract must not reference — so it is
-/// compiled separately and referenced as metadata rather than parsed into the same compilation.
+/// Each needs a real second assembly — a contract assembly's manifest, or a source layer the
+/// contract must not reference — so the source layer is compiled separately and referenced as
+/// metadata rather than parsed into the same compilation.
 /// </remarks>
 public class ContractDiagnosticsTests
 {
@@ -135,7 +136,7 @@ public class ContractDiagnosticsTests
 
         fac117.Should().HaveCount(1);
         fac117[0].GetMessage().Should().Contain("Configuration and AfterMapConfiguration");
-        fac117[0].GetMessage().Should().Contain("has no effect");
+        fac117[0].GetMessage().Should().Contain("FacetMapper");
     }
 
     [Fact]
@@ -155,6 +156,57 @@ public class ContractDiagnosticsTests
         diagnostics.Should().NotContain(d => d.Id == "FAC117");
     }
 
+    [Fact]
+    public void Fac115_ReportsAFacetWithNoMapper()
+    {
+        // A contract assembly recording two pairs; the mapper assembly registers only one.
+        var diagnostics = AnalyzeAgainstContract(
+            manifest: new[]
+            {
+                ("ApiModels.UserApiModel", "AppLayer.UserUseCaseModel"),
+                ("ApiModels.AddressApiModel", "AppLayer.AddressUseCaseModel"),
+            },
+            mapperSource: """
+                using Facet;
+                [assembly: FacetMapper(typeof(ApiModels.UserApiModel), typeof(ApiModels.UserApiModel))]
+                """);
+
+        var fac115 = diagnostics.Where(d => d.Id == "FAC115").ToList();
+
+        fac115.Should().HaveCount(1);
+        fac115[0].GetMessage().Should().Contain("ApiModels.AddressApiModel");
+        fac115[0].GetMessage().Should().Contain("AppLayer.AddressUseCaseModel");
+    }
+
+    [Fact]
+    public void Fac115_IsSilentWithoutAnyRegistration()
+    {
+        // The gate that keeps ordinary Facet users from hearing about mappers at all.
+        var diagnostics = AnalyzeAgainstContract(
+            manifest: new[] { ("ApiModels.UserApiModel", "AppLayer.UserUseCaseModel") },
+            mapperSource: "namespace Consumer { public class Nothing { } }");
+
+        diagnostics.Should().NotContain(d => d.Id == "FAC115");
+    }
+
+    [Fact]
+    public void Fac115_IsSilencedByExclude()
+    {
+        var diagnostics = AnalyzeAgainstContract(
+            manifest: new[]
+            {
+                ("ApiModels.UserApiModel", "AppLayer.UserUseCaseModel"),
+                ("ApiModels.AddressApiModel", "AppLayer.AddressUseCaseModel"),
+            },
+            mapperSource: """
+                using Facet;
+                [assembly: FacetMappersForAssembly(typeof(ApiModels.UserApiModel),
+                    Exclude = new[] { "ApiModels.AddressApiModel" })]
+                """);
+
+        diagnostics.Should().NotContain(d => d.Id == "FAC115");
+    }
+
     // --- harness ---
 
     private static ImmutableArray<Diagnostic> Analyze(string contractSource, bool generateMappings = false)
@@ -170,6 +222,29 @@ public class ContractDiagnosticsTests
         {
             ["build_property.Facet_GenerateMappings"] = generateMappings ? "true" : "false",
         });
+    }
+
+    private static ImmutableArray<Diagnostic> AnalyzeAgainstContract(
+        (string Facet, string Source)[] manifest,
+        string mapperSource)
+    {
+        // The contract assembly: its facets plus the AssemblyMetadata record of its pairs, which is
+        // what FAC115 reads. Written out by hand here rather than generated, so the test pins the
+        // manifest format the analyzer depends on.
+        var entries = string.Join("\n", manifest.Select(m =>
+            $"[assembly: System.Reflection.AssemblyMetadata(\"Facet.Contract.{m.Facet}\", \"{m.Source}\")]"));
+
+        var types = string.Join("\n", manifest.Select(m =>
+            $"namespace {Namespace(m.Facet)} {{ public class {Name(m.Facet)} {{ }} }}"));
+
+        var contract = Compile("ApiModels", entries + "\n" + types, BaseReferences());
+
+        var references = BaseReferences();
+        references.Add(contract.ToMetadataReference());
+
+        var mapper = Compile("ApiMappers", mapperSource, references);
+
+        return Run(mapper, new FacetMapperCoverageAnalyzer(), new Dictionary<string, string>());
     }
 
     private static List<MetadataReference> BaseReferences()
@@ -208,6 +283,10 @@ public class ContractDiagnosticsTests
             .WithAnalyzers(ImmutableArray.Create(analyzer), options)
             .GetAnalyzerDiagnosticsAsync().Result;
     }
+
+    private static string Namespace(string fullName) => fullName.Substring(0, fullName.LastIndexOf('.'));
+
+    private static string Name(string fullName) => fullName.Substring(fullName.LastIndexOf('.') + 1);
 
     private sealed class TestConfigOptionsProvider : AnalyzerConfigOptionsProvider
     {

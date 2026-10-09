@@ -9,8 +9,10 @@ using Facet.Tests.ExternalLib;
 // type they were shaped from. Every mapping below is therefore generated here, into this
 // assembly, which is the whole point of [assembly: FacetMapper].
 
-[assembly: FacetMapper(typeof(ExternalAddress), typeof(ExternalAddressContract))]
-[assembly: FacetMapper(typeof(ExternalOrder), typeof(ExternalOrderContract))]
+// One line covering every facet the contract assembly records in its manifest. No pair is named
+// twice, so adding a facet over there cannot drift out of step with a registration over here.
+[assembly: FacetMappersForAssembly(typeof(ExternalCustomerContract),
+    Exclude = new[] { nameof(ExternalEntityContract) })]
 
 [assembly: FacetMapper(typeof(ExternalCustomer), typeof(ExternalCustomerContract),
     Configuration = typeof(Facet.Tests.UnitTests.Features.CustomerMapping),
@@ -60,6 +62,48 @@ namespace Facet.Tests.UnitTests.Features
 
     public class FacetMapperTests
     {
+        [Fact]
+        public void ContractAssembly_RecordsItsPairsInAManifest()
+        {
+            // Strings on AssemblyMetadata, so the record survives an assembly that emits no Facet
+            // attributes at all — which is what makes auto-registration and FAC115 possible.
+            var manifest = typeof(ExternalOrderContract).Assembly
+                .GetCustomAttributes<System.Reflection.AssemblyMetadataAttribute>()
+                .Where(a => a.Key?.StartsWith("Facet.Contract.") == true)
+                .ToDictionary(a => a.Key!, a => a.Value);
+
+            manifest.Should().ContainKey("Facet.Contract.Facet.Tests.ExternalLib.ExternalOrderContract")
+                .WhoseValue.Should().Be("Facet.Tests.ExternalLib.ExternalOrder");
+        }
+
+        [Fact]
+        public void MappersForAssembly_RegistersEveryFacetWithoutNamingThem()
+        {
+            // Neither of these has an [assembly: FacetMapper] of its own — the single
+            // FacetMappersForAssembly line is what generated their mappers.
+            MapperType("ExternalOrderContractMapper").Should().NotBeNull();
+            MapperType("ExternalAddressContractMapper").Should().NotBeNull();
+        }
+
+        [Fact]
+        public void MappersForAssembly_SkipsAnExcludedFacet_LeavingItToTheExplicitRegistration()
+        {
+            // Excluded from the blanket line, then registered explicitly with GenerateToSource.
+            var mapper = MapperType("ExternalEntityContractMapper");
+
+            mapper.Should().NotBeNull();
+            mapper!.GetMethod("ToExternalDomainEntity").Should().NotBeNull(
+                "the explicit registration is the one that applies, and it sets GenerateToSource");
+        }
+
+        [Fact]
+        public void ExplicitRegistration_WinsOverTheBlanketOne()
+        {
+            // Only one mapper exists for the customer pair, and it is the configured one: the
+            // hooks ran, which the blanket registration would not have done.
+            NewCustomer().ToExternalCustomerContract().Name.Should().Be("Ada![map][after]");
+        }
+
         [Fact]
         public void Mapper_IsCompiledIntoThisAssembly_NotTheFacetsOwn()
         {

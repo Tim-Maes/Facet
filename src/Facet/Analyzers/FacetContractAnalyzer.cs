@@ -32,11 +32,11 @@ public class FacetContractAnalyzer : DiagnosticAnalyzer
     public static readonly DiagnosticDescriptor InertConfigurationRule = new DiagnosticDescriptor(
         "FAC117",
         "Facet mapping hook cannot run because mappings are suppressed",
-        "'{0}' sets {1}, but this project sets Facet_GenerateMappings to false, so the members that would call it are never generated and the hook has no effect. Move the custom mapping to the project that holds the mapping for this facet, which is the only one that can see both layers.",
+        "'{0}' sets {1}, but this project sets Facet_GenerateMappings to false, so the members that would call it are never generated and the hook has no effect. Move the custom mapping to the Configuration on the [assembly: FacetMapper] registration, where it can see both layers.",
         "Usage",
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "A [Facet] hook — Configuration, BeforeMapConfiguration, AfterMapConfiguration or ToSourceConfiguration — is invoked from the constructor, FromSource or ToSource, all of which live in the mappings half that Facet_GenerateMappings=false suppresses. The hook therefore compiles and does nothing. In a layered build the custom mapping belongs with the mapping itself, in the project that references both the source layer and the contracts; that project is also the only one whose configuration type can name both types in a single signature.");
+        description: "A [Facet] hook — Configuration, BeforeMapConfiguration, AfterMapConfiguration or ToSourceConfiguration — is invoked from the constructor, FromSource or ToSource, all of which live in the mappings half that Facet_GenerateMappings=false suppresses. The hook therefore compiles and does nothing. The mapper-side equivalent on [assembly: FacetMapper] is where custom mapping belongs for a layered build, and is better placed anyway: it lives in the assembly that references both layers, so its configuration type can name both of them in one signature.");
 
     private const string FacetAttributeName = "Facet.FacetAttribute";
 

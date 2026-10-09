@@ -1109,3 +1109,38 @@ whole graph stays a single translatable expression. The collection shapes accept
 | FAC112 | Warning | `GenerateToSource` set, but the source type has no parameterless constructor. |
 | FAC113 | Warning | Two registrations generate the same class name; set `Name`. |
 | FAC114 | Warning | The facet is a `[Facet]` type in this same compilation, so its generated members are invisible to this generator. |
+
+### FacetMappersForAssembly
+
+Naming each pair twice — once as `[Facet]`, once as `[assembly: FacetMapper]` — is two places to
+keep in step, and forgetting the second is silent: a contract facet has no mapping members of its
+own to go missing. This removes the second copy.
+
+```csharp
+[assembly: FacetMappersForAssembly(typeof(UserResponse))]   // any type from the contract assembly
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `contractAssemblyMarker` | `Type` | Any type from the contract assembly; it identifies the assembly (constructor argument). |
+| `Exclude` | `string[]?` | Facet names to skip, simple or fully qualified. |
+| `GenerateProjection` | `bool` | As on `FacetMapper` (default: true). |
+| `GenerateToSource` | `bool` | As on `FacetMapper` (default: false). |
+| `Namespace` | `string?` | Namespace for the generated classes. |
+
+It reads the contract manifest a facet assembly records — `AssemblyMetadata` entries holding two
+strings, so they survive `Facet_EmitAttributeMetadata=false` without reintroducing a reference:
+
+```csharp
+[assembly: AssemblyMetadata("Facet.Contract.ApiModels.UserResponse", "AppLayer.UserUseCaseModel")]
+```
+
+`AssemblyMetadataAttribute` is in the framework every project already references, so the record
+costs no dependency of any kind. Omit it with
+`<Facet_EmitContractManifest>false</Facet_EmitContractManifest>`, at the cost of this attribute and
+FAC115.
+
+An explicit `[assembly: FacetMapper]` for a pair wins, which is how one facet gets its own `Name`,
+`Exclude` or `Configuration` while the rest are covered wholesale. Anything left uncovered is
+reported as **FAC115** — but only in an assembly that already maps something from that contract
+assembly, so a project using Facet the ordinary way never hears from it.

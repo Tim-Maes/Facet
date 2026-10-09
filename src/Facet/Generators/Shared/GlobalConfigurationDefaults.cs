@@ -121,6 +121,13 @@ internal sealed class GlobalConfigurationDefaults
     /// </summary>
     public bool GenerateMappings { get; }
 
+    /// <summary>
+    /// Whether to record this assembly's (facet, source) pairs as <c>AssemblyMetadata</c>
+    /// entries (default: true). See <see cref="ContractManifest"/> for why they are strings.
+    /// Set via <c>Facet_EmitContractManifest</c>.
+    /// </summary>
+    public bool EmitContractManifest { get; }
+
     private GlobalConfigurationDefaults(
         bool generateConstructor,
         bool generateParameterlessConstructor,
@@ -139,7 +146,8 @@ internal sealed class GlobalConfigurationDefaults
         bool preserveReferences,
         int maxDepthToSource,
         bool splitGeneratedFiles,
-        bool generateMappings)
+        bool generateMappings,
+        bool emitContractManifest)
     {
         GenerateConstructor = generateConstructor;
         GenerateParameterlessConstructor = generateParameterlessConstructor;
@@ -159,6 +167,7 @@ internal sealed class GlobalConfigurationDefaults
         MaxDepthToSource = maxDepthToSource;
         SplitGeneratedFiles = splitGeneratedFiles;
         GenerateMappings = generateMappings;
+        EmitContractManifest = emitContractManifest;
     }
 
     /// <summary>
@@ -185,7 +194,8 @@ internal sealed class GlobalConfigurationDefaults
             preserveReferences: GetBoolOption(globalOptions, "build_property.Facet_PreserveReferences", defaultValue: FacetConstants.DefaultPreserveReferences),
             maxDepthToSource: GetIntOption(globalOptions, "build_property.Facet_MaxDepthToSource", defaultValue: 0),
             splitGeneratedFiles: GetBoolOption(globalOptions, "build_property.Facet_SplitGeneratedFiles", defaultValue: true),
-            generateMappings: GetBoolOption(globalOptions, "build_property.Facet_GenerateMappings", defaultValue: true));
+            generateMappings: GetBoolOption(globalOptions, "build_property.Facet_GenerateMappings", defaultValue: true),
+            emitContractManifest: GetBoolOption(globalOptions, "build_property.Facet_EmitContractManifest", defaultValue: true));
     }
 
     private static bool GetBoolOption(AnalyzerConfigOptions? options, string key, bool defaultValue)
