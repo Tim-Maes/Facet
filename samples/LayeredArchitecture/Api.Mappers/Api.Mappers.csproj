@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Api.Mappers</AssemblyName>
+    <RootNamespace>Api.Mappers</RootNamespace>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Facet\Facet.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\src\Facet.Attributes\Facet.Attributes.csproj" />
+    <!-- Needed only because this project uses the mapping-hook interfaces. -->
+    <ProjectReference Include="..\..\..\src\Facet.Mapping\Facet.Mapping.csproj" />
+
+    <ProjectReference Include="..\Application\Application.csproj" />
+    <ProjectReference Include="..\Api.Contracts\Api.Contracts.csproj" />
+  </ItemGroup>
+
+  <!-- See the note in Api.Contracts.csproj. -->
+  <Import Project="..\..\..\src\Facet\Facet.props" />
+  <Import Project="..\..\..\src\Facet\Facet.targets" />
+
+  <ItemGroup>
+    <Compile Remove="Generated\**" />
+    <None Include="Generated\**" />
+  </ItemGroup>
+
+</Project>

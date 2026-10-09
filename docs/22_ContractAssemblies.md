@@ -135,5 +135,10 @@ configuration for the whole compilation.
 | FAC117 | Warning | A mapping hook is configured on a facet whose mappings are suppressed, so it cannot run. |
 | FAC115 | Warning | A facet in a mapped contract assembly has no mapper. |
 
-See also [Generated Files Output](12_GeneratedFilesOutput.md) and
-[Global Configuration Defaults](21_GlobalConfigurationDefaults.md).
+A worked example of all of this, which proves the result by printing its own contract assembly's
+references, is in [samples/LayeredArchitecture](../samples/LayeredArchitecture). It builds with the
+repository: `dotnet run --project Api.Host`.
+
+See also [Generated Files Output](12_GeneratedFilesOutput.md),
+[Global Configuration Defaults](21_GlobalConfigurationDefaults.md) and
+[Assembly-Level Mapper Registration](03_AttributeReference.md#assembly-level-mapper-registration).

@@ -1,0 +1,3 @@
+# EmitCompilerGeneratedFiles output. On for this sample so the generated code can be browsed in
+# the IDE, but it is build output and regenerated every build.
+Generated/
