@@ -15,6 +15,7 @@ using Facet.Tests.ExternalLib;
     Exclude = new[] { nameof(ExternalEntityContract) })]
 
 [assembly: FacetMapper(typeof(ExternalCustomer), typeof(ExternalCustomerContract),
+    GenerateToSource = true,
     Configuration = typeof(Facet.Tests.UnitTests.Features.CustomerMapping),
     BeforeMapConfiguration = typeof(Facet.Tests.UnitTests.Features.CustomerMapping),
     AfterMapConfiguration = typeof(Facet.Tests.UnitTests.Features.CustomerMapping))]
@@ -204,6 +205,65 @@ namespace Facet.Tests.UnitTests.Features
 
             roundTripped.Name.Should().Be("Grace");
             roundTripped.Description.Should().Be("reversed", "the hook overwrites the mapped value");
+        }
+
+        [Fact]
+        public void ApplyTo_WritesOntoTheInstanceItIsGiven()
+        {
+            var existing = new ExternalCustomer { Id = 1, Name = "stale" };
+
+            var returned = NewCustomer().ToExternalCustomerContract().ApplyTo(existing);
+
+            returned.Should().BeSameAs(existing, "it updates rather than replaces");
+            existing.Id.Should().Be(7);
+        }
+
+        [Fact]
+        public void ApplyTo_UpdatesANestedMemberWithoutReplacingIt()
+        {
+            // The whole reason ApplyTo exists: the nested instance keeps its identity, so whatever
+            // was tracking it still is. Replacing it would read as an insert plus an orphan.
+            var nested = new ExternalAddress { Street = "old", City = "old" };
+            var existing = new ExternalCustomer { Address = nested };
+
+            NewCustomer().ToExternalCustomerContract().ApplyTo(existing);
+
+            existing.Address.Should().BeSameAs(nested);
+            existing.Address!.City.Should().Be("Cambridge");
+        }
+
+        [Fact]
+        public void ApplyTo_LeavesAbsentNestedMembersAlone()
+        {
+            // Creating the child is a decision about the aggregate, not about mapping.
+            var existing = new ExternalCustomer { Address = null };
+
+            NewCustomer().ToExternalCustomerContract().ApplyTo(existing);
+
+            existing.Address.Should().BeNull();
+        }
+
+        [Fact]
+        public void ApplyTo_DoesNotReconcileCollections()
+        {
+            var orders = new List<ExternalOrder> { new() { Total = 1m } };
+            var existing = new ExternalCustomer { Orders = orders };
+
+            NewCustomer().ToExternalCustomerContract().ApplyTo(existing);
+
+            existing.Orders.Should().BeSameAs(orders);
+            existing.Orders.Should().HaveCount(1,
+                "reconciling needs a key and a policy the generator does not have");
+        }
+
+        [Fact]
+        public void ApplyTo_RunsToSourceConfigurationLast()
+        {
+            var entity = new ExternalDomainEntity { Description = "original" };
+
+            new ExternalEntityContract { Description = "from facet" }.ApplyTo(entity);
+
+            entity.Description.Should().Be("reversed", "the hook overwrites the mapped value");
         }
 
         [Fact]

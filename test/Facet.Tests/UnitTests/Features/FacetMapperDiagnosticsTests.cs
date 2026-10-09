@@ -10,7 +10,8 @@ namespace Facet.Tests.UnitTests.Features;
 /// <summary>
 /// Driver-based tests for the mapper generator's own diagnostics: FAC110 (a facet property left
 /// unmapped), FAC111 (an unusable registration), FAC112 (no reverse mapping possible), FAC113 (two
-/// mappers that would share a name) and FAC114 (a facet in this same compilation).
+/// mappers that would share a name), FAC114 (a facet in this same compilation) and FAC118 (what the
+/// reverse mapping leaves behind).
 /// </summary>
 /// <remarks>
 /// Run against a compilation built here rather than against the test assembly's own build, so each
@@ -231,6 +232,90 @@ public class FacetMapperDiagnosticsTests
 
         diagnostics.Should().NotContain(d => d.Id == "FAC110",
             "the shared materialiser covers this collection shape");
+    }
+
+    [Fact]
+    public void Fac118_StatesWhatTheReverseMappingCannotCarry()
+    {
+        var diagnostics = Run("""
+            using Facet;
+            [assembly: FacetMapper(typeof(MapperDiag.Child), typeof(MapperDiag.ChildFacet))]
+            [assembly: FacetMapper(typeof(MapperDiag.Parent), typeof(MapperDiag.ParentFacet),
+                GenerateToSource = true)]
+
+            namespace MapperDiag;
+
+            public class Child { public string Name { get; set; } = ""; }
+            public class ChildFacet { public string Name { get; set; } = ""; }
+
+            public class Parent
+            {
+                public int Id { get; set; }
+                public string ReadOnlyValue { get; } = "";
+                public Child? Child { get; set; }
+                public System.Collections.Generic.List<Child> Children { get; set; } = new();
+            }
+
+            public class ParentFacet
+            {
+                public int Id { get; set; }
+                public string ReadOnlyValue { get; set; } = "";
+                public ChildFacet? Child { get; set; }
+                public System.Collections.Generic.List<ChildFacet> Children { get; set; } = new();
+            }
+            """);
+
+        var fac118 = diagnostics.Where(d => d.Id == "FAC118").ToList();
+
+        fac118.Should().HaveCount(1);
+        fac118[0].Severity.Should().Be(DiagnosticSeverity.Info);
+
+        var message = fac118[0].GetMessage();
+        message.Should().Contain("'ReadOnlyValue' (the source property has no public setter)");
+        message.Should().Contain("'Child' (a nested facet cannot be reversed by construction");
+        message.Should().Contain("'Children' (reconciling a collection needs a key");
+        message.Should().Contain("ApplyTo");
+    }
+
+    [Fact]
+    public void Fac118_IsSilentWhenEverythingReverses()
+    {
+        var diagnostics = Run("""
+            using Facet;
+            [assembly: FacetMapper(typeof(MapperDiag.Source), typeof(MapperDiag.Target),
+                GenerateToSource = true)]
+
+            namespace MapperDiag;
+
+            public class Source { public int Id { get; set; } }
+            public class Target { public int Id { get; set; } }
+            """);
+
+        diagnostics.Should().NotContain(d => d.Id == "FAC118");
+    }
+
+    [Fact]
+    public void Fac112_PointsAtApplyTo_WhenTheSourceCannotBeConstructed()
+    {
+        // ApplyTo does not construct anything, so it is generated even here — which is worth
+        // saying in the diagnostic rather than leaving the user thinking the reverse is impossible.
+        var diagnostics = Run("""
+            using Facet;
+            [assembly: FacetMapper(typeof(MapperDiag.Source), typeof(MapperDiag.Target),
+                GenerateToSource = true)]
+
+            namespace MapperDiag;
+
+            public class Source
+            {
+                public Source(int id) { Id = id; }
+                public int Id { get; set; }
+            }
+
+            public class Target { public int Id { get; set; } }
+            """);
+
+        diagnostics.Single(d => d.Id == "FAC112").GetMessage().Should().Contain("ApplyTo");
     }
 
     private static ImmutableArray<Diagnostic> Run(string source)

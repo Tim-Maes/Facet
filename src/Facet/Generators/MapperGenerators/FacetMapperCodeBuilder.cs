@@ -64,6 +64,9 @@ internal static class FacetMapperCodeBuilder
         if (registration.GenerateToSource && registration.SourceHasParameterlessConstructor)
             members.Add(BuildToSource(registration));
 
+        if (registration.GenerateToSource)
+            members.Add(BuildApplyTo(registration, lookup));
+
         sb.Append(string.Join("\n", members));
         sb.AppendLine("}");
 
@@ -289,14 +292,8 @@ internal static class FacetMapperCodeBuilder
     /// </summary>
     private static string BuildToSource(MapperRegistration registration)
     {
-        var reversible = registration.Members
-            .Where(m => m.Kind == MappedMemberKind.Direct && m.SourceIsSettable)
-            .ToList();
-
-        var skipped = registration.Members
-            .Where(m => m.Kind != MappedMemberKind.Direct || !m.SourceIsSettable)
-            .Select(m => m.Name)
-            .ToList();
+        var reversible = registration.ReverseMappableMembers.ToList();
+        var skipped = registration.ReverseSkippedMembers.Select(m => m.Name).ToList();
 
         var sb = new StringBuilder();
 
@@ -343,7 +340,129 @@ internal static class FacetMapperCodeBuilder
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Emits the update-shaped reverse mapping: the mapped members written onto a source instance
+    /// the caller already has.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the reverse direction that can handle a nested member, and the reason is identity.
+    /// <c>To{Source}</c> constructs, so a nested facet would have to become a brand-new child
+    /// object — which an ORM reads as an insert, with the child that was there before left an
+    /// orphan. Writing onto the instance already on the target changes its values and nothing else.
+    /// </para>
+    /// <para>
+    /// A nested member is therefore updated only where the target already has one; a null stays
+    /// null rather than being filled in, because creating the child is a decision about the
+    /// aggregate, not about mapping. Collections are not touched at all: reconciling one needs a
+    /// key and a policy for added and removed elements. <c>ToSourceConfiguration</c> runs last and
+    /// is where either belongs.
+    /// </para>
+    /// </remarks>
+    private static string BuildApplyTo(
+        MapperRegistration registration,
+        Dictionary<string, MapperRegistration> lookup)
+    {
+        var skipped = registration.ReverseSkippedMembers.Select(m => m.Name).ToList();
+        var sb = new StringBuilder();
 
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine($"    /// Writes this <see cref=\"{XmlRef(registration.FacetTypeName)}\"/> onto an existing");
+        sb.AppendLine($"    /// <see cref=\"{XmlRef(registration.SourceTypeName)}\"/>, leaving its identity intact.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    /// <remarks>");
+        sb.AppendLine("    /// Prefer this to <c>To" + registration.SourceSimpleName + "</c> when updating something that already");
+        sb.AppendLine("    /// exists: it assigns to the instance you pass rather than constructing a replacement, so a");
+        sb.AppendLine("    /// change-tracked entity stays the entity it was.");
+
+        if (skipped.Count > 0)
+        {
+            sb.AppendLine("    /// <para>");
+            sb.AppendLine($"    /// Collections are never reconciled here. Left untouched: {string.Join(", ", skipped)}.");
+            sb.AppendLine("    /// </para>");
+        }
+
+        sb.AppendLine("    /// </remarks>");
+        sb.AppendLine("    /// <param name=\"facet\">The values to write.</param>");
+        sb.AppendLine("    /// <param name=\"target\">The instance to write them onto.</param>");
+        sb.AppendLine("    /// <returns><paramref name=\"target\"/>, for chaining.</returns>");
+        sb.AppendLine("    /// <exception cref=\"ArgumentNullException\">Either argument is null.</exception>");
+        sb.AppendLine($"    public static {registration.SourceTypeName} ApplyTo(");
+        sb.AppendLine($"        this {registration.FacetTypeName} facet,");
+        sb.AppendLine($"        {registration.SourceTypeName} target)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        if (facet is null) throw new ArgumentNullException(nameof(facet));");
+        sb.AppendLine("        if (target is null) throw new ArgumentNullException(nameof(target));");
+        sb.AppendLine();
+
+        foreach (var member in registration.ReverseMappableMembers)
+            sb.AppendLine($"        target.{member.Name} = facet.{member.Name};");
+
+        foreach (var member in registration.Members.Where(m => m.Kind == MappedMemberKind.NestedFacet))
+            AppendNestedApply(sb, member, lookup, new HashSet<string> { registration.PairKey }, depth: 0);
+
+        if (registration.Configuration.ToSourceTypeName is not null)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"        {registration.Configuration.ToSourceTypeName}.Map(facet, target);");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("        return target;");
+        sb.AppendLine("    }");
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Writes a nested facet onto the nested instance the target already holds, recursing while
+    /// both sides have something to write to.
+    /// </summary>
+    private static void AppendNestedApply(
+        StringBuilder sb,
+        MappedMember member,
+        Dictionary<string, MapperRegistration> lookup,
+        HashSet<string> path,
+        int depth,
+        string facetPath = "facet",
+        string targetPath = "target")
+    {
+        var key = MapperRegistration.MakePairKey(member.NestedSourceTypeName!, member.NestedFacetTypeName!);
+
+        if (depth >= FacetConstants.DefaultMaxMapperInlineDepth || path.Contains(key) || !lookup.TryGetValue(key, out var nested))
+            return;
+
+        var reversible = nested.ReverseMappableMembers.ToList();
+        var nestedFacet = $"{facetPath}.{member.Name}";
+        var nestedTarget = $"{targetPath}.{member.Name}";
+        var nestedChildren = nested.Members.Where(m => m.Kind == MappedMemberKind.NestedFacet).ToList();
+
+        if (reversible.Count == 0 && nestedChildren.Count == 0)
+            return;
+
+        var indent = new string(' ', 8 + (depth * 4));
+
+        sb.AppendLine();
+        sb.AppendLine($"{indent}// Updated in place: replacing it would detach the instance already there.");
+        sb.AppendLine($"{indent}if ({nestedFacet} is not null && {nestedTarget} is not null)");
+        sb.AppendLine($"{indent}{{");
+
+        foreach (var nestedMember in reversible)
+            sb.AppendLine($"{indent}    {nestedTarget}.{nestedMember.Name} = {nestedFacet}.{nestedMember.Name};");
+
+        path.Add(key);
+        try
+        {
+            foreach (var child in nestedChildren)
+                AppendNestedApply(sb, child, lookup, path, depth + 1, nestedFacet, nestedTarget);
+        }
+        finally
+        {
+            path.Remove(key);
+        }
+
+        sb.AppendLine($"{indent}}}");
+    }
 
     /// <summary>
     /// Builds <c>new Facet { ... }</c> against <paramref name="receiver"/>, inlining nested facet

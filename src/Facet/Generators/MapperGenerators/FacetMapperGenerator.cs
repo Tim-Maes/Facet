@@ -53,11 +53,11 @@ public sealed class FacetMapperGenerator : IIncrementalGenerator
     private static readonly DiagnosticDescriptor ToSourceNotPossibleRule = new DiagnosticDescriptor(
         "FAC112",
         "Facet mapper cannot generate a reverse mapping",
-        "The mapper from '{0}' to '{1}' sets GenerateToSource, but '{0}' has no accessible parameterless constructor. The reverse mapping is omitted.",
+        "The mapper from '{0}' to '{1}' sets GenerateToSource, but '{0}' has no accessible parameterless constructor, so To{2} is omitted. ApplyTo is still generated, and writes onto an instance you supply.",
         "Generator",
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
-        description: "The reverse mapping is emitted as an object initializer, which needs a parameterless constructor on the source type. Declare one, or drop GenerateToSource and map back by hand.");
+        description: "The constructing reverse mapping is emitted as an object initializer, which needs a parameterless constructor on the source type. ApplyTo does not construct anything and is generated regardless, so a source type that is only ever updated rather than created needs no change.");
 
     private static readonly DiagnosticDescriptor DuplicateMapperRule = new DiagnosticDescriptor(
         "FAC113",
@@ -76,6 +76,15 @@ public sealed class FacetMapperGenerator : IIncrementalGenerator
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true,
         description: "Roslyn runs all generators against the same input compilation, so one generator never observes another's output. A facet type in the same compilation therefore appears to have only the members written by hand, and the generated mapper silently skips the rest. This generator is for facets read from metadata — which is also the only configuration in which it is useful, since a facet in this assembly can simply carry its own mappings.");
+
+    private static readonly DiagnosticDescriptor ReverseSkippedMembersRule = new DiagnosticDescriptor(
+        "FAC118",
+        "Facet mapper reverse mapping leaves members at their defaults",
+        "The reverse mapping from '{1}' to '{0}' does not carry {2}. Use ApplyTo to write onto an existing instance, or ToSourceConfiguration to map them yourself.",
+        "Generator",
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: true,
+        description: "A reverse mapping carries back the members it can assign without guessing: a directly assignable member whose source property has a setter. Nested facets and collections are left alone, because reversing them by construction detaches them from whatever tracked the originals, and reconciling a collection needs a key and a policy for added and removed elements. The forward direction reports its unmapped members as FAC110; this is the same statement for the reverse direction, so the gap is visible in build output rather than only in the generated documentation.");
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -172,7 +181,23 @@ public sealed class FacetMapperGenerator : IIncrementalGenerator
                         ToSourceNotPossibleRule,
                         registration.Location?.ToLocation() ?? Location.None,
                         GeneratorUtilities.StripGlobalPrefix(registration.SourceTypeName),
-                        GeneratorUtilities.StripGlobalPrefix(registration.FacetTypeName)));
+                        GeneratorUtilities.StripGlobalPrefix(registration.FacetTypeName),
+                        registration.SourceSimpleName));
+                }
+
+                if (registration.GenerateToSource)
+                {
+                    var skipped = registration.ReverseSkippedMembers.ToList();
+
+                    if (skipped.Count > 0)
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(
+                            ReverseSkippedMembersRule,
+                            registration.Location?.ToLocation() ?? Location.None,
+                            GeneratorUtilities.StripGlobalPrefix(registration.SourceTypeName),
+                            GeneratorUtilities.StripGlobalPrefix(registration.FacetTypeName),
+                            string.Join("; ", skipped.Select(m => $"'{m.Name}' ({m.Reason})"))));
+                    }
                 }
 
                 var code = FacetMapperCodeBuilder.Generate(registration, lookup);

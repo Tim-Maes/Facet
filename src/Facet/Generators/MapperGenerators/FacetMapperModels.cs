@@ -239,6 +239,37 @@ internal sealed class MapperRegistration : IEquatable<MapperRegistration>
     public static string MakePairKey(string sourceTypeName, string facetTypeName)
         => sourceTypeName + "->" + facetTypeName;
 
+    /// <summary>
+    /// Members the reverse mapping can carry back: a direct member whose source property is
+    /// publicly settable.
+    /// </summary>
+    public IEnumerable<MappedMember> ReverseMappableMembers =>
+        Members.Where(m => m.Kind == MappedMemberKind.Direct && m.SourceIsSettable);
+
+    /// <summary>
+    /// Members the reverse mapping leaves at their default, and why each is excluded.
+    /// </summary>
+    /// <remarks>
+    /// A nested member is excluded because reversing it by construction is wrong whenever the
+    /// target is tracked by an ORM — a fresh child instance reads as an insert and the previous one
+    /// as an orphan. <c>ApplyTo</c> handles the nested case by writing onto the instance already
+    /// there, and <c>ToSourceConfiguration</c> is where a policy beyond that belongs.
+    /// </remarks>
+    public IEnumerable<(string Name, string Reason)> ReverseSkippedMembers =>
+        Members
+            .Where(m => m.Kind != MappedMemberKind.Direct || !m.SourceIsSettable)
+            .Select(m => (
+                m.Name,
+                m.Kind switch
+                {
+                    MappedMemberKind.NestedFacet =>
+                        "a nested facet cannot be reversed by construction without detaching it from "
+                        + "whatever tracks the original; ApplyTo writes onto the existing instance instead",
+                    MappedMemberKind.NestedFacetCollection =>
+                        "reconciling a collection needs a key and a policy for added and removed "
+                        + "elements, which only the application can decide",
+                    _ => "the source property has no public setter",
+                }));
 
     public bool Equals(MapperRegistration? other) =>
         other is not null

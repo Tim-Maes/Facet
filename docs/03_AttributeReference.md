@@ -1054,7 +1054,8 @@ public static class UserResponseMapper
     public static UserResponse ToUserResponse(this UserUseCaseModel source,
         IFacetMapConfigurationInstance<UserUseCaseModel, UserResponse> configuration);
     public static IQueryable<UserResponse> SelectUserResponse(this IQueryable<UserUseCaseModel> source);
-    public static UserUseCaseModel ToUserUseCaseModel(this UserResponse facet);   // GenerateToSource
+    public static UserUseCaseModel ToUserUseCaseModel(this UserResponse facet);        // GenerateToSource
+    public static UserUseCaseModel ApplyTo(this UserResponse facet, UserUseCaseModel target);
 }
 ```
 
@@ -1066,7 +1067,7 @@ public static class UserResponseMapper
 | `Name` | `string?` | Generated class name. Defaults to `{FacetType}Mapper`; set it when one facet is mapped from several sources, since the default collides (FAC113). |
 | `Namespace` | `string?` | Namespace for the generated class. Defaults to the facet type's own, so the extension methods are in scope wherever the facet is. |
 | `GenerateProjection` | `bool` | Emit `Projection` and the `IQueryable` overload (default: true). |
-| `GenerateToSource` | `bool` | Emit the reverse mapping (default: false). Needs a parameterless constructor on the source type, else FAC112. |
+| `GenerateToSource` | `bool` | Emit the reverse mappings (default: false): `To{Source}`, which constructs and so carries only the flat members, and `ApplyTo`, which writes onto an instance you supply and updates nested members in place. FAC118 lists what the reverse direction leaves out; `To{Source}` additionally needs a parameterless constructor on the source type, else FAC112. |
 | `Configuration` | `Type?` | Custom mapping. `IFacetMapConfiguration` runs in `To{Facet}`; `IFacetProjectionMapConfiguration` is merged into `Projection` **and** applied in `To{Facet}`. |
 | `BeforeMapConfiguration` | `Type?` | `IFacetBeforeMapConfiguration`, run before the mapped members are assigned. `To{Facet}` only. |
 | `AfterMapConfiguration` | `Type?` | `IFacetAfterMapConfiguration`, run last. `To{Facet}` only. |
@@ -1109,6 +1110,30 @@ whole graph stays a single translatable expression. The collection shapes accept
 | FAC112 | Warning | `GenerateToSource` set, but the source type has no parameterless constructor. |
 | FAC113 | Warning | Two registrations generate the same class name; set `Name`. |
 | FAC114 | Warning | The facet is a `[Facet]` type in this same compilation, so its generated members are invisible to this generator. |
+| FAC118 | Info | The reverse mapping leaves members at their defaults, and why. |
+
+### Mapping back
+
+`GenerateToSource` emits two reverse mappings, and the difference between them is identity.
+
+`To{Source}` **constructs**, so it carries back only the flat members. A nested child would have to
+be a new object, which an ORM reads as an insert with the previous child left an orphan — so it is
+not attempted, and FAC118 lists what was left out.
+
+`ApplyTo` **writes onto an instance you already have**, which is the shape an update needs:
+
+```csharp
+var tracked = db.Users.Single(u => u.Id == id);
+response.ApplyTo(tracked);          // same entity, same child objects, new values
+db.SaveChanges();
+```
+
+A nested member is updated in place wherever the target already has one, so the child keeps its
+identity; where the target's child is null it stays null, because creating it is a decision about
+the aggregate rather than about mapping. Collections are never reconciled — deciding what an added
+or removed element means needs a key and a policy. `ApplyTo` constructs nothing, so it is generated
+even for a source type with no accessible parameterless constructor, where `To{Source}` cannot be.
+`ToSourceConfiguration` runs last in both.
 
 ### FacetMappersForAssembly
 

@@ -21,3 +21,4 @@ FAC112 | Generator | Warning | Facet mapper cannot generate a reverse mapping
 FAC113 | Generator | Warning | Two Facet mappers would generate the same class
 FAC114 | Generator | Warning | Facet mapper cannot see a facet declared in the same compilation
 FAC115 | Coverage | Warning | Facet has no mapper in an assembly that maps its contract assembly
+FAC118 | Generator | Info | Facet mapper reverse mapping leaves members at their defaults
