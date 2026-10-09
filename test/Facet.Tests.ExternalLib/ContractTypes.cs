@@ -40,3 +40,12 @@ public partial class ExternalOrderContract;
 [Facet(typeof(ExternalCustomer),
     NestedFacets = new[] { typeof(ExternalAddressContract), typeof(ExternalOrderContract) })]
 public partial class ExternalCustomerContract;
+
+// Contracts over the two entities this project already had, so the mapper tests can cover an
+// exclusion and a reverse mapping without inventing more source types.
+
+[Facet(typeof(ExternalSource))]
+public partial class ExternalSourceContract;
+
+[Facet(typeof(ExternalDomainEntity))]
+public partial class ExternalEntityContract;

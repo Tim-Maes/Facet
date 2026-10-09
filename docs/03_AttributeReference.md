@@ -1,4 +1,4 @@
-# Facet Attribute Reference
+﻿# Facet Attribute Reference
 
 The `[Facet]` attribute is used to declare a new projection (facet) type based on an existing source type.
 
@@ -1031,3 +1031,81 @@ public partial class ImmutableFoo
 ---
 
 See [Custom Mapping](04_CustomMapping.md) for advanced scenarios.
+
+## Assembly-Level Mapper Registration
+
+`[Facet]` generates its mapping members as a partial half of the facet type, and a partial type
+cannot span assemblies — so those members are always in the facet's own assembly, which drags the
+source type's assembly in with them. `[assembly: FacetMapper]` moves the mapping to an assembly
+that is allowed to see both layers. See [Contract Assemblies](22_ContractAssemblies.md).
+
+```csharp
+// in the mappers project, which references both the application layer and the contracts
+[assembly: FacetMapper(typeof(UserUseCaseModel), typeof(UserResponse))]
+```
+
+Generates a free-standing static class — no partial, so no same-assembly constraint:
+
+```csharp
+public static class UserResponseMapper
+{
+    public static Expression<Func<UserUseCaseModel, UserResponse>> Projection { get; }
+    public static UserResponse ToUserResponse(this UserUseCaseModel source);
+    public static UserResponse ToUserResponse(this UserUseCaseModel source,
+        IFacetMapConfigurationInstance<UserUseCaseModel, UserResponse> configuration);
+    public static IQueryable<UserResponse> SelectUserResponse(this IQueryable<UserUseCaseModel> source);
+    public static UserUseCaseModel ToUserUseCaseModel(this UserResponse facet);   // GenerateToSource
+}
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `sourceType` | `Type` | The type to map from (constructor argument). |
+| `facetType` | `Type` | The facet type to map to (constructor argument). |
+| `exclude` | `string[]` | Facet property names to leave unmapped (constructor argument). |
+| `Name` | `string?` | Generated class name. Defaults to `{FacetType}Mapper`; set it when one facet is mapped from several sources, since the default collides (FAC113). |
+| `Namespace` | `string?` | Namespace for the generated class. Defaults to the facet type's own, so the extension methods are in scope wherever the facet is. |
+| `GenerateProjection` | `bool` | Emit `Projection` and the `IQueryable` overload (default: true). |
+| `GenerateToSource` | `bool` | Emit the reverse mapping (default: false). Needs a parameterless constructor on the source type, else FAC112. |
+| `Configuration` | `Type?` | Custom mapping. `IFacetMapConfiguration` runs in `To{Facet}`; `IFacetProjectionMapConfiguration` is merged into `Projection` **and** applied in `To{Facet}`. |
+| `BeforeMapConfiguration` | `Type?` | `IFacetBeforeMapConfiguration`, run before the mapped members are assigned. `To{Facet}` only. |
+| `AfterMapConfiguration` | `Type?` | `IFacetAfterMapConfiguration`, run last. `To{Facet}` only. |
+| `ToSourceConfiguration` | `Type?` | `IFacetToSourceConfiguration`, run inside the reverse mapping. |
+
+### Which path a hook reaches
+
+Forced by what an expression tree can hold, not chosen:
+
+| Hook | `To{Facet}` | `Projection` |
+|---|---|---|
+| `IFacetMapConfiguration.Map` | yes | **no** — imperative |
+| `IFacetProjectionMapConfiguration.ConfigureProjection` | yes | **yes** — merged into the bindings |
+| `BeforeMap` / `AfterMap` | yes | no |
+
+A `ConfigureProjection` rule is folded into the projection's object initializer rather than applied
+after it, so the query still translates. The same rules are compiled to assignments for
+`To{Facet}`, keeping one declaration for both paths — which is why that method is annotated
+`[RequiresDynamicCode]`: compiling an expression tree needs it, though `Projection` itself does not.
+
+When any hook is present the mapper constructs the instance and populates it in order
+(`BeforeMap` → mapped members → projection rules → `Map` → `AfterMap`) rather than using a single
+object initializer, because `BeforeMap` has to see the instance first.
+
+### Member matching
+
+By name, because the facet is read from metadata where its own `[Facet]`/`[MapFrom]` attributes need
+not be present — so `MapFrom`, `MapWhen` and `ConvertEnumsTo` on the facet do not reach the mapper.
+Use a `Configuration` for anything the name match cannot do. A property the generator cannot fill is
+reported as FAC110 rather than silently defaulted.
+
+Nested facets and collections of them are inlined, provided their own pair is registered too, so the
+whole graph stays a single translatable expression. The collection shapes accepted are the same ones
+`[Facet]` accepts, since both use the same shared helper.
+
+| Diagnostic | Severity | Meaning |
+|---|---|---|
+| FAC110 | Warning | A facet property is left unmapped, with the reason. |
+| FAC111 | Error | The registration names types no mapper can be built between. |
+| FAC112 | Warning | `GenerateToSource` set, but the source type has no parameterless constructor. |
+| FAC113 | Warning | Two registrations generate the same class name; set `Name`. |
+| FAC114 | Warning | The facet is a `[Facet]` type in this same compilation, so its generated members are invisible to this generator. |

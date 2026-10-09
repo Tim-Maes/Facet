@@ -15,3 +15,8 @@ FAC105 | Generator | Error | GenerateDtos source type is not in the EF model man
 FAC106 | Generator | Warning | Property is unknown to the EF model manifest
 FAC116 | Usage | Warning | Contract facet exposes a type from the layer it was shaped from
 FAC117 | Usage | Warning | Facet mapping hook cannot run because mappings are suppressed
+FAC110 | Generator | Warning | Facet mapper leaves a property unmapped
+FAC111 | Generator | Error | Facet mapper registration is not usable
+FAC112 | Generator | Warning | Facet mapper cannot generate a reverse mapping
+FAC113 | Generator | Warning | Two Facet mappers would generate the same class
+FAC114 | Generator | Warning | Facet mapper cannot see a facet declared in the same compilation

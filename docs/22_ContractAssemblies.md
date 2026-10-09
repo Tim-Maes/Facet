@@ -1,4 +1,4 @@
-# Contract Assemblies
+﻿# Contract Assemblies
 
 How to shape an API contract with Facet without the contract assembly referencing the layer it was
 shaped from — the configuration a clean/onion/hexagonal architecture wants, and the subject of
@@ -68,26 +68,22 @@ written in a project that references both layers — a mappers project that depe
 application layer and on the contracts.
 
 A C# partial type cannot span assemblies, so the mapping cannot be another half of the facet type.
-It has to be something free-standing, such as a static class of extension methods:
+It has to be something free-standing — which is what `[assembly: FacetMapper]` generates:
 
 ```csharp
-// in the mappers project
-public static class UserResponseMapper
-{
-    public static Expression<Func<UserUseCaseModel, UserResponse>> Projection =>
-        source => new UserResponse { Id = source.Id, Name = source.Name };
-
-    public static UserResponse ToUserResponse(this UserUseCaseModel source) => new()
-    {
-        Id = source.Id,
-        Name = source.Name,
-    };
-}
+// in the mappers project, which references both layers
+[assembly: FacetMapper(typeof(UserUseCaseModel), typeof(UserResponse))]
 ```
 
-Facet's generated facets are built for this: their members are settable and the generated
-projection is an object initializer, so a hand-written mapper can both populate one and project to
-one in a query.
+That emits a static `UserResponseMapper` carrying `Projection`, `ToUserResponse`,
+`SelectUserResponse` and optionally the reverse direction. Nested registrations are inlined into one
+expression, so a query still projects the whole graph in a single statement. See
+[Assembly-Level Mapper Registration](03_AttributeReference.md#assembly-level-mapper-registration)
+for the full surface, the hooks, and the diagnostics.
+
+You can equally write the mapper by hand. Facet's generated facets are built for it: their members
+are settable and the generated projection is an object initializer, so a hand-written static class
+can both populate one and project to one in a query.
 
 ## How the attributes are kept out of metadata
 

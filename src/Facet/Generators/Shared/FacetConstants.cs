@@ -49,6 +49,34 @@ internal static class FacetConstants
     public const string WrapperAttributeFullName = "Facet.WrapperAttribute";
 
     /// <summary>
+    /// The fully qualified name of the FacetMapperAttribute, the assembly-level registration that
+    /// drives cross-assembly mapper generation.
+    /// </summary>
+    public const string FacetMapperAttributeFullName = "Facet.FacetMapperAttribute";
+
+    /// <summary>
+    /// The metadata name of the IFacetMapConfigurationInstance open generic interface — the
+    /// non-static variant, which a mapper can accept as a parameter so the configuration can be
+    /// resolved from a container.
+    /// </summary>
+    public const string MapConfigurationInstanceInterfaceFullName = "Facet.Mapping.IFacetMapConfigurationInstance`2";
+
+    /// <summary>
+    /// The metadata name of the IFacetBeforeMapConfiguration open generic interface.
+    /// </summary>
+    public const string BeforeMapConfigurationInterfaceFullName = "Facet.Mapping.IFacetBeforeMapConfiguration`2";
+
+    /// <summary>
+    /// The metadata name of the IFacetAfterMapConfiguration open generic interface.
+    /// </summary>
+    public const string AfterMapConfigurationInterfaceFullName = "Facet.Mapping.IFacetAfterMapConfiguration`2";
+
+    /// <summary>
+    /// The metadata name of the IFacetToSourceConfiguration open generic interface.
+    /// </summary>
+    public const string ToSourceConfigurationInterfaceFullName = "Facet.Mapping.IFacetToSourceConfiguration`2";
+
+    /// <summary>
     /// The fully qualified name of the MapFromAttribute.
     /// </summary>
     public const string MapFromAttributeFullName = "Facet.MapFromAttribute";
@@ -62,6 +90,14 @@ internal static class FacetConstants
     /// The default maximum depth for nested facet traversal to prevent stack overflow.
     /// </summary>
     public const int DefaultMaxDepth = 10;
+
+    /// <summary>
+    /// How deep a generated mapper inlines nested facet initializers before giving up. A cycle is
+    /// caught by a path check, so this only bounds a legitimately deep graph. Separate from
+    /// <see cref="DefaultMaxDepth"/>, which bounds the facet generator's own nested traversal and
+    /// is user-configurable; this one is a structural limit on emitted code.
+    /// </summary>
+    public const int DefaultMaxMapperInlineDepth = 16;
 
     /// <summary>
     /// The default setting for preserving object references during mapping to detect circular references.
