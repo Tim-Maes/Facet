@@ -11,4 +11,19 @@
     <!-- Suppress CS1591 (missing XML comment) warnings that come with GenerateDocumentationFile -->
     <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
+
+  <!--
+    Facet_CopyAttributesExclude/Include are lists, and a list in MSBuild is semicolon-separated.
+    But CompilerVisibleProperty values reach the generator through a generated .editorconfig, and
+    that format treats ';' as the start of a comment — so a semicolon-separated value arrives
+    silently truncated at the first entry. These normalise to commas, which survive, and the
+    generator accepts either separator so an .editorconfig written by hand still works.
+  -->
+  <PropertyGroup>
+    <_Facet_CopyAttributesExclude Condition="'$(Facet_CopyAttributesExclude)' != ''"
+      >$(Facet_CopyAttributesExclude.Replace(';', ','))</_Facet_CopyAttributesExclude>
+    <_Facet_CopyAttributesInclude Condition="'$(Facet_CopyAttributesInclude)' != ''"
+      >$(Facet_CopyAttributesInclude.Replace(';', ','))</_Facet_CopyAttributesInclude>
+  </PropertyGroup>
+
 </Project>

@@ -98,7 +98,16 @@ internal static class ModelBuilder
         var preserveInitOnly = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.PreserveInitOnlyProperties, preserveInitOnlyDefault);
         var preserveRequired = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.PreserveRequiredProperties, preserveRequiredDefault);
         var nullableProperties = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.NullableProperties, globalDefaults.NullableProperties);
-        var copyAttributes = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.CopyAttributes, globalDefaults.CopyAttributes);
+        // Null means "do not copy"; otherwise the policy carries which attributes may cross.
+        var copyAttributes =
+            AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.CopyAttributes, globalDefaults.CopyAttributes)
+                ? AttributeCopyPolicy.Create(
+                    (AttributeCopyMode)AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.CopyAttributesMode, (int)globalDefaults.CopyAttributesMode),
+                    globalDefaults.CopyAttributesExclude,
+                    globalDefaults.CopyAttributesInclude,
+                    AttributeParser.GetStringArrayNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.CopyAttributesExclude),
+                    AttributeParser.GetStringArrayNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.CopyAttributesInclude))
+                : null;
         var copyDocs = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.CopyDocs, globalDefaults.CopyDocs);
         var inheritDocs = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.InheritDocs, globalDefaults.InheritDocs);
         var maxDepth = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.MaxDepth, globalDefaults.MaxDepth);
@@ -285,7 +294,7 @@ internal static class ModelBuilder
             useFullName,
             excludedRequiredMembers,
             nullableProperties,
-            copyAttributes,
+            copyAttributes is not null,
             maxDepth,
             preserveReferences,
             baseClassMemberNames,
@@ -320,7 +329,7 @@ internal static class ModelBuilder
         bool preserveInitOnly,
         bool preserveRequired,
         bool nullableProperties,
-        bool copyAttributes,
+        AttributeCopyPolicy? copyAttributes,
         bool copyDocs,
         bool inheritDocs,
         Dictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings,
@@ -407,7 +416,7 @@ internal static class ModelBuilder
         bool preserveInitOnly,
         bool preserveRequired,
         bool nullableProperties,
-        bool copyAttributes,
+        AttributeCopyPolicy? copyAttributes,
         bool copyDocs,
         bool inheritDocs,
         Dictionary<string, (string childFacetTypeName, string sourceTypeName)> nestedFacetMappings,
@@ -512,9 +521,9 @@ internal static class ModelBuilder
 
         List<string> attributes;
         List<string> attributeNamespaces;
-        if (copyAttributes)
+        if (copyAttributes is not null)
         {
-            var (attrs, namespaces) = AttributeProcessor.ExtractCopiableAttributesWithNamespaces(property, FacetMemberKind.Property);
+            var (attrs, namespaces) = AttributeProcessor.ExtractCopiableAttributesWithNamespaces(property, FacetMemberKind.Property, copyAttributes);
             attributes = attrs;
             attributeNamespaces = namespaces.ToList();
         }
@@ -727,7 +736,7 @@ internal static class ModelBuilder
         bool isRequired,
         bool preserveRequired,
         bool nullableProperties,
-        bool copyAttributes,
+        AttributeCopyPolicy? copyAttributes,
         bool copyDocs,
         bool inheritDocs,
         ExternalXmlDocProvider? externalDocProvider,
@@ -765,9 +774,9 @@ internal static class ModelBuilder
 
         List<string> attributes;
         List<string> attributeNamespaces;
-        if (copyAttributes)
+        if (copyAttributes is not null)
         {
-            var (attrs, namespaces) = AttributeProcessor.ExtractCopiableAttributesWithNamespaces(field, FacetMemberKind.Field);
+            var (attrs, namespaces) = AttributeProcessor.ExtractCopiableAttributesWithNamespaces(field, FacetMemberKind.Field, copyAttributes);
             attributes = attrs;
             attributeNamespaces = namespaces.ToList();
         }

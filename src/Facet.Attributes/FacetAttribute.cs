@@ -139,6 +139,42 @@ public sealed class FacetAttribute : Attribute
     public bool NullableProperties { get; set; } = false;
 
     /// <summary>
+    /// Additional attributes that <see cref="CopyAttributes"/> must not copy, on top of the
+    /// built-in list of persistence attributes.
+    /// </summary>
+    /// <remarks>
+    /// Each entry is a namespace wildcard (<c>Acme.Infrastructure.*</c>), a fully qualified type
+    /// name, or a bare type name; the trailing <c>Attribute</c> is optional. Adds to any
+    /// <c>Facet_CopyAttributesExclude</c> set for the project.
+    /// </remarks>
+    /// <summary>
+    /// Which attributes <c>CopyAttributes</c> carries across
+    /// (default: <see cref="AttributeCopyMode.Preserve"/>, the behaviour Facet had before this
+    /// existed). Set <see cref="AttributeCopyMode.ContractSafe"/> to skip attributes whose
+    /// assembly is a package the consumer may not have. FAC109 reports the ones that would be.
+    /// </summary>
+    public AttributeCopyMode CopyAttributesMode { get; set; } = AttributeCopyMode.Preserve;
+
+    public string[]? CopyAttributesExclude { get; set; }
+
+    /// <summary>
+    /// Attributes that <see cref="CopyAttributes"/> must copy even though something would
+    /// otherwise exclude them — including Facet's own built-in list.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Facet excludes persistence attributes from the copy by default, because copying one writes
+    /// its assembly into the generated type's metadata: a DTO carrying <c>[Precision]</c> cannot
+    /// be reflected over unless EF Core is deployed with it. Use this when a particular attribute
+    /// really is part of your contract after all.
+    /// </para>
+    /// <para>
+    /// Same pattern forms as <see cref="CopyAttributesExclude"/>.
+    /// </para>
+    /// </remarks>
+    public string[]? CopyAttributesInclude { get; set; }
+
+    /// <summary>
     /// An array of nested facet types that represent nested objects within the source type.
     /// When specified, the generator will automatically map properties of the source type to these nested facets.
     /// </summary>

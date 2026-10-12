@@ -12,11 +12,17 @@ public sealed class WrapperGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
+        var globalOptions = context.AnalyzerConfigOptionsProvider
+            .Select(static (provider, _) => GlobalConfigurationDefaults.FromOptions(provider.GlobalOptions));
+
         var wrappers = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 FacetConstants.WrapperAttributeFullName,
                 predicate: static (node, _) => node is TypeDeclarationSyntax,
-                transform: static (ctx, token) => WrapperModelBuilder.BuildModel(ctx, token))
+                transform: static (ctx, token) => (ctx, token))
+            .Combine(globalOptions)
+            .Select(static (combined, _) =>
+                WrapperModelBuilder.BuildModel(combined.Left.ctx, combined.Right, combined.Left.token))
             .Where(static m => m is not null);
 
         context.RegisterSourceOutput(wrappers, static (spc, model) =>
