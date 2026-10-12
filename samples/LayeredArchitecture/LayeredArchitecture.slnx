@@ -1,0 +1,19 @@
+<Solution>
+  <!-- The sample, in dependency order. Set Api.Host as the startup project. -->
+  <Project Path="Application/Application.csproj" />
+  <Project Path="Api.Contracts/Api.Contracts.csproj" />
+  <Project Path="Api.Mappers/Api.Mappers.csproj" />
+  <Project Path="Api.Host/Api.Host.csproj" />
+
+  <!--
+    Facet itself. The sample references these projects rather than the NuGet packages, so that it
+    builds straight from the repository — and a ProjectReference target has to be in the solution
+    or Visual Studio cannot restore it (NU1105). They are grouped here to keep them out of the
+    way; you do not need to build them separately.
+  -->
+  <Folder Name="/Facet (referenced by the sample)/">
+    <Project Path="../../src/Facet/Facet.csproj" />
+    <Project Path="../../src/Facet.Attributes/Facet.Attributes.csproj" />
+    <Project Path="../../src/Facet.Mapping/Facet.Mapping.csproj" />
+  </Folder>
+</Solution>

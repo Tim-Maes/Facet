@@ -62,4 +62,8 @@
     <PackageReference Include="System.Security.Cryptography.Xml" />
   </ItemGroup>
 
+  <PropertyGroup Condition="'$(Facet_EmitAttributeMetadata)' != 'false'">
+    <DefineConstants>$(DefineConstants);FACET_KEEP_ATTRIBUTES</DefineConstants>
+  </PropertyGroup>
+
 </Project>

@@ -1,0 +1,18 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <!--
+      The repository root uses Central Package Management, which would reject the explicit
+      versions below. A sample should look like an ordinary consumer's project, so it states its
+      own. Setting ManagePackageVersionsCentrally alone is not enough: the root
+      Directory.Packages.props sets it back to true and is imported after this file, so stopping
+      that import is what actually opts out.
+    -->
+    <ImportDirectoryPackagesProps>false</ImportDirectoryPackagesProps>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

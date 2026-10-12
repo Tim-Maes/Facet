@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 
 namespace Facet;
 
@@ -14,6 +15,7 @@ namespace Facet;
 /// </para>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false, Inherited = false)]
+[Conditional(FacetConditionalSymbols.KeepAttributes)]
 public sealed class FlattenAttribute : Attribute
 {
     /// <summary>

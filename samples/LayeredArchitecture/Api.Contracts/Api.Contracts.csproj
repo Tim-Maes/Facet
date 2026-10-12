@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>Api.Contracts</AssemblyName>
+    <RootNamespace>Api.Contracts</RootNamespace>
+
+    <!-- Do not emit the *.Mappings.g.cs half: its constructor, FromSource and Projection would
+         each name an Application type. The mapping lives in Api.Mappers instead. -->
+    <Facet_GenerateMappings>false</Facet_GenerateMappings>
+
+    <!-- Do not emit Facet's attributes into metadata: the typeof() in [Facet(typeof(X))] is
+         otherwise written into the attribute blob, which pins a reference to X's assembly. -->
+    <Facet_EmitAttributeMetadata>false</Facet_EmitAttributeMetadata>
+
+    <!-- Browse the generated files to see what the two settings above actually change. -->
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Facet as an analyzer, exactly as the package delivers it. -->
+    <ProjectReference Include="..\..\..\src\Facet\Facet.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\src\Facet.Attributes\Facet.Attributes.csproj" />
+
+    <!-- Compile-time only. The generator has to read the source type's members to shape the
+         facet, but PrivateAssets stops the reference flowing to consumers and Private="false"
+         stops the DLL being copied next to this one. -->
+    <ProjectReference Include="..\Application\Application.csproj"
+                      PrivateAssets="all" Private="false" />
+  </ItemGroup>
+
+  <!--
+    A PackageReference imports these two for you; a ProjectReference does not. Facet.props makes
+    the Facet_* properties above visible to the generator, and Facet.targets defines the symbol
+    that keeps Facet's [Conditional] attributes in metadata unless Facet_EmitAttributeMetadata
+    says otherwise. Importing them here is what lets the sample show only the properties a real
+    consumer writes.
+  -->
+  <Import Project="..\..\..\src\Facet\Facet.props" />
+  <Import Project="..\..\..\src\Facet\Facet.targets" />
+
+  <ItemGroup>
+    <Compile Remove="Generated\**" />
+    <None Include="Generated\**" />
+  </ItemGroup>
+
+</Project>

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 
 namespace Facet;
 
@@ -6,6 +7,7 @@ namespace Facet;
 /// Indicates that this class should be generated based on a source type.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = true)]
+[Conditional(FacetConditionalSymbols.KeepAttributes)]
 public sealed class FacetAttribute : Attribute
 {
     /// <summary>

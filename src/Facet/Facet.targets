@@ -11,4 +11,22 @@
     <!-- Suppress CS1591 (missing XML comment) warnings that come with GenerateDocumentationFile -->
     <NoWarn>$(NoWarn);1591</NoWarn>
   </PropertyGroup>
+
+  <!--
+    Facet's attributes are [Conditional(FACET_KEEP_ATTRIBUTES)]: the generator reads them from the
+    semantic model either way, but emitting them writes the typeof() argument into the attribute
+    blob, which pins an AssemblyRef to the source type's assembly into this project's output.
+    The symbol is defined by default so existing projects keep the attribute in metadata; a
+    contract assembly that must not reference its source layer sets Facet_EmitAttributeMetadata
+    to false. Set here rather than in Facet.props so it survives a project-level DefineConstants.
+
+    Facet.Attributes.targets defines the same symbol — that is where it belongs, since the
+    [Conditional] is on a type in that package, and a project may reference the attributes without
+    the generator. This copy is kept for a project that takes Facet while excluding the transitive
+    build assets; defining the constant twice is harmless.
+  -->
+  <PropertyGroup Condition="'$(Facet_EmitAttributeMetadata)' != 'false'">
+    <DefineConstants>$(DefineConstants);FACET_KEEP_ATTRIBUTES</DefineConstants>
+  </PropertyGroup>
+
 </Project>
