@@ -62,8 +62,15 @@
 		<PackageVersion Include="SourceGenerator.Foundations" Version="2.0.17" />
 		<PackageVersion Include="SourceGenerator.Foundations.Contracts" Version="2.0.17" />
 
-		<!-- Generator dependencies (embedded into the analyzer by SourceGenerator.Foundations) -->
-		<PackageVersion Include="System.Text.Json" Version="10.0.11" />
+		<!--
+		  Generator dependencies (embedded into the analyzer by SourceGenerator.Foundations).
+		  Do NOT bump to a major version newer than what the oldest supported IDE host ships:
+		  System.Text.Json 9+/10 references System.Collections.Immutable >= 9/10, which the
+		  compiler host (not SGF) supplies. Visual Studio's in-IDE Roslyn host provides an older
+		  SCI, so the generator fails to load at design time (CS0246 on generated types) while
+		  'dotnet build' on a newer SDK still succeeds.
+		-->
+		<PackageVersion Include="System.Text.Json" Version="8.0.5" />
 
 		<!-- Security vulnerability fix: override transitive dependency from EF Core Design -->
 		<PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.12" />
