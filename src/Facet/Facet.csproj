@@ -72,6 +72,14 @@
         <SGFExcludeAssemblyName Include="System.Composition.Hosting.dll" />
         <SGFExcludeAssemblyName Include="System.Composition.Runtime.dll" />
         <SGFExcludeAssemblyName Include="System.Composition.TypedParts.dll" />
+
+        <!--
+          System.IO.Hashing 10.x arrives only transitively via Microsoft.SourceLink.GitHub (build-time
+          tooling) and the generator never uses it. Embedding it makes the analyzer reference
+          System.Memory/System.Runtime.CompilerServices.Unsafe versions Visual Studio's Roslyn host
+          cannot bind, so the generator fails to load at design time (CS0246 on generated types).
+        -->
+        <SGFExcludeAssemblyName Include="System.IO.Hashing.dll" />
     </ItemGroup>
 
     <ItemGroup>

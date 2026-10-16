@@ -1,12 +1,21 @@
 name: Release
-run-name: '[Release] ${{ github.event.release.tag_name }}'
+run-name: ${{ github.event_name == 'release' && format('[Release] {0}', github.event.release.tag_name) || format('[Preview] PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title) }}
 
+# NuGet Trusted Publishing policies are bound to a single workflow file name, so the
+# preview publish lives here (not in its own file) to be covered by the same policy.
 on:
   release:
     types: [published]
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+      - master
+      - develop
 
 permissions:
   contents: write
+  pull-requests: write
   id-token: write
 
 env:
@@ -15,6 +24,7 @@ env:
 
 jobs:
   release:
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     
     steps:
@@ -99,3 +109,116 @@ jobs:
           git commit -m "Bump version to ${{ steps.get_version.outputs.VERSION }}"
           git push origin master
         fi
+
+  publish-preview:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: pwsh
+    concurrency:
+      group: preview-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    # Fork PRs (and dependabot PRs, which use a separate restricted secret store)
+    # run without repository secrets or a writable token, so NuGet login fails on
+    # the empty NUGET_USER and the PR comment couldn't be posted either. Skip the
+    # job instead of failing it — external contributions otherwise always show a
+    # red X they cannot fix. Build/test coverage for those PRs comes from the
+    # build and test workflows, which need no secrets.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Read base version from Directory.Build.props
+        id: base_version
+        shell: bash
+        run: |
+          VERSION=$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props)
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Base version: $VERSION"
+
+      - name: Compute preview version
+        id: preview_version
+        shell: bash
+        run: |
+          PREVIEW_VERSION="${{ steps.base_version.outputs.VERSION }}-preview.pr${{ github.event.pull_request.number }}.${{ github.run_number }}"
+          echo "PREVIEW_VERSION=$PREVIEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Preview version: $PREVIEW_VERSION"
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore -p:Version=${{ steps.preview_version.outputs.PREVIEW_VERSION }}
+
+      - name: Pack NuGet packages
+        run: dotnet pack --configuration Release --no-build -p:Version=${{ steps.preview_version.outputs.PREVIEW_VERSION }} --output ./artifacts
+
+      - name: List generated packages
+        run: Get-ChildItem ./artifacts | Select-Object Name | Format-Table
+
+      - name: NuGet login (Trusted Publishing)
+        uses: NuGet/login@v1
+        id: nuget-login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Publish preview packages to NuGet
+        run: dotnet nuget push "./artifacts/*.nupkg" --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Comment preview version on PR
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const version = '${{ steps.preview_version.outputs.PREVIEW_VERSION }}';
+            const body = [
+              '## 📦 Preview packages published',
+              '',
+              `Version: \`${version}\``,
+              '',
+              'Install with:',
+              '```',
+              `dotnet add package Facet --version ${version}`,
+              '```',
+              '',
+              '_This pre-release is published automatically from this PR and will be overwritten on the next push._',
+            ].join('\n');
+
+            // Update existing bot comment if present, otherwise create a new one
+            const { data: comments } = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            const botComment = comments.find(
+              c => c.user.type === 'Bot' && c.body.includes('Preview packages published')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                comment_id: botComment.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body,
+              });
+            }
