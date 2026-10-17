@@ -51,7 +51,9 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 {
                     var (propsCode, mapsCode) = CodeBuilder.GenerateForGroupSplit(modelsForTarget, facetLookup);
                     spc.AddSource($"{group.Key}.Properties.g.cs", SourceText.From(propsCode, Encoding.UTF8));
-                    spc.AddSource($"{group.Key}.Mappings.g.cs", SourceText.From(mapsCode, Encoding.UTF8));
+
+                    if (globalConfig.GenerateMappings)
+                        spc.AddSource($"{group.Key}.Mappings.g.cs", SourceText.From(mapsCode, Encoding.UTF8));
                 }
                 else
                 {

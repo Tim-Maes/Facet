@@ -1,4 +1,4 @@
-# Facet Documentation Index
+﻿# Facet Documentation Index
 
 Welcome to the Facet documentation! This index will help you navigate all available guides and references for using Facet and its extensions.
 
@@ -31,6 +31,7 @@ Welcome to the Facet documentation! This index will help you navigate all availa
 - [Source Signature Change Tracking](16_SourceSignature.md): Track source entity changes with compile-time signature verification
 - [Enum Conversion](20_ConvertEnumsTo.md): Convert enum properties to string or int with ConvertEnumsTo
 - [Global Configuration Defaults](21_GlobalConfigurationDefaults.md): Override default attribute settings globally using MSBuild properties
+- [Contract Assemblies](22_ContractAssemblies.md): Shape a contract assembly that does not reference the layer it was shaped from
 
  ## Ecosystem packages
 - [Facet.Extensions.EFCore](../src/Facet.Extensions.EFCore/README.md): EF Core Async Extension Methods

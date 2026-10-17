@@ -13,3 +13,5 @@ FAC103 | Generator | Error | EF model manifest could not be read
 FAC104 | Generator | Error | EF model manifest version is not supported
 FAC105 | Generator | Error | GenerateDtos source type is not in the EF model manifest (no heuristic fallback)
 FAC106 | Generator | Warning | Property is unknown to the EF model manifest
+FAC116 | Usage | Warning | Contract facet exposes a type from the layer it was shaped from
+FAC117 | Usage | Warning | Facet mapping hook cannot run because mappings are suppressed

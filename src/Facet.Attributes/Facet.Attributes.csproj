@@ -14,6 +14,20 @@
 
     <ItemGroup>
         <None Include="README.md" Pack="true" PackagePath="" />
+
+        <!--
+          Defines FACET_KEEP_ATTRIBUTES in the consuming project, so the [Conditional] attributes
+          in this package stay in metadata by default. buildTransitive as well as build, so that a
+          project reaching this package through Facet gets it too.
+        -->
+        <None Include="Facet.Attributes.targets"
+              Pack="true"
+              PackagePath="build/Facet.Attributes.targets"
+              Visible="false" />
+        <None Include="Facet.Attributes.targets"
+              Pack="true"
+              PackagePath="buildTransitive/Facet.Attributes.targets"
+              Visible="false" />
     </ItemGroup>
 
 </Project>
