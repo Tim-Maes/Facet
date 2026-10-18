@@ -51,13 +51,27 @@ public sealed class FacetGenerator : IIncrementalGenerator
                 {
                     var (propsCode, mapsCode) = CodeBuilder.GenerateForGroupSplit(modelsForTarget, facetLookup);
                     spc.AddSource($"{group.Key}.Properties.g.cs", SourceText.From(propsCode, Encoding.UTF8));
-                    spc.AddSource($"{group.Key}.Mappings.g.cs", SourceText.From(mapsCode, Encoding.UTF8));
+
+                    if (globalConfig.GenerateMappings)
+                        spc.AddSource($"{group.Key}.Mappings.g.cs", SourceText.From(mapsCode, Encoding.UTF8));
                 }
                 else
                 {
                     var code = CodeBuilder.GenerateForGroup(modelsForTarget, facetLookup);
                     spc.AddSource($"{group.Key}.g.cs", SourceText.From(code, Encoding.UTF8));
                 }
+            }
+
+            // The pairs, recorded as strings that name no types, so they survive an assembly built
+            // with Facet_EmitAttributeMetadata=false. See ContractManifest.
+            if (globalConfig.EmitContractManifest)
+            {
+                var manifest = ContractManifest.Generate(
+                    models.Where(m => m is not null)
+                          .Select(m => (m!.FullName, GeneratorUtilities.StripGlobalPrefix(m.SourceTypeName))));
+
+                if (manifest is not null)
+                    spc.AddSource("Facet.ContractManifest.g.cs", SourceText.From(manifest, Encoding.UTF8));
             }
         });
     }

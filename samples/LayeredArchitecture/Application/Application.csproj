@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><AssemblyName>Application</AssemblyName></PropertyGroup>
+  <ItemGroup>
+    <!-- Deliberately here: the sample shows this never reaching the contract assembly. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
+  </ItemGroup>
+</Project>

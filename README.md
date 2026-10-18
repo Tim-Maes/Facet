@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
   <img
     src="https://raw.githubusercontent.com/Tim-Maes/Facet/master/assets/Facet.png"
     alt="Facet logo"
@@ -43,6 +43,8 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 - [What is being generated?](docs/07_WhatIsBeingGenerated.md)
 - [Configure generated files output location](docs/12_GeneratedFilesOutput.md)
 - [Global configuration defaults](docs/21_GlobalConfigurationDefaults.md) - Override attribute defaults project-wide
+- [Contract assemblies](docs/22_ContractAssemblies.md) - Shape a contract assembly that references nothing it was shaped from
+- [Layered architecture sample](samples/LayeredArchitecture) - A runnable four-project example that prints its own assembly references
 - [Changelog](CHANGELOG.md)
 
 ## :handshake: Community
@@ -80,6 +82,7 @@ Instead of manually creating each facet, **Facet** auto-generates them from a si
 - **`[Flatten]`** - collapse nested object graphs into top-level properties
 - **`[Wrapper]`** - reference-based delegation for facades, ViewModels, and decorators
 - **`[GenerateDtos]`** - auto-generate full CRUD DTO sets (Create, Update, Response, Query, Upsert, Patch)
+- **`[assembly: FacetMapper]`** - generate the mapping as a static class in another assembly, so a contract assembly can hold the facet shapes and reference neither the layer it was shaped from nor Facet itself; `[assembly: FacetMappersForAssembly]` covers every facet a referenced assembly declares in one line
 - **Source signature tracking** - compile-time warning when a source entity's structure changes
 - **Inheritance** - traverses base classes; suppresses duplicates when facets inherit base types
 - **Expression transformation** - remap predicates and selectors from entity types to their projections

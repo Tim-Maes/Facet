@@ -1,4 +1,4 @@
-# Facet Attribute Reference
+﻿# Facet Attribute Reference
 
 The `[Facet]` attribute is used to declare a new projection (facet) type based on an existing source type.
 
@@ -1031,3 +1031,141 @@ public partial class ImmutableFoo
 ---
 
 See [Custom Mapping](04_CustomMapping.md) for advanced scenarios.
+
+## Assembly-Level Mapper Registration
+
+`[Facet]` generates its mapping members as a partial half of the facet type, and a partial type
+cannot span assemblies — so those members are always in the facet's own assembly, which drags the
+source type's assembly in with them. `[assembly: FacetMapper]` moves the mapping to an assembly
+that is allowed to see both layers. See [Contract Assemblies](22_ContractAssemblies.md).
+
+```csharp
+// in the mappers project, which references both the application layer and the contracts
+[assembly: FacetMapper(typeof(UserUseCaseModel), typeof(UserResponse))]
+```
+
+Generates a free-standing static class — no partial, so no same-assembly constraint:
+
+```csharp
+public static class UserResponseMapper
+{
+    public static Expression<Func<UserUseCaseModel, UserResponse>> Projection { get; }
+    public static UserResponse ToUserResponse(this UserUseCaseModel source);
+    public static UserResponse ToUserResponse(this UserUseCaseModel source,
+        IFacetMapConfigurationInstance<UserUseCaseModel, UserResponse> configuration);
+    public static IQueryable<UserResponse> SelectUserResponse(this IQueryable<UserUseCaseModel> source);
+    public static UserUseCaseModel ToUserUseCaseModel(this UserResponse facet);        // GenerateToSource
+    public static UserUseCaseModel ApplyTo(this UserResponse facet, UserUseCaseModel target);
+}
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `sourceType` | `Type` | The type to map from (constructor argument). |
+| `facetType` | `Type` | The facet type to map to (constructor argument). |
+| `exclude` | `string[]` | Facet property names to leave unmapped (constructor argument). |
+| `Name` | `string?` | Generated class name. Defaults to `{FacetType}Mapper`; set it when one facet is mapped from several sources, since the default collides (FAC113). |
+| `Namespace` | `string?` | Namespace for the generated class. Defaults to the facet type's own, so the extension methods are in scope wherever the facet is. |
+| `GenerateProjection` | `bool` | Emit `Projection` and the `IQueryable` overload (default: true). |
+| `GenerateToSource` | `bool` | Emit the reverse mappings (default: false): `To{Source}`, which constructs and so carries only the flat members, and `ApplyTo`, which writes onto an instance you supply and updates nested members in place. FAC118 lists what the reverse direction leaves out; `To{Source}` additionally needs a parameterless constructor on the source type, else FAC112. |
+| `Configuration` | `Type?` | Custom mapping. `IFacetMapConfiguration` runs in `To{Facet}`; `IFacetProjectionMapConfiguration` is merged into `Projection` **and** applied in `To{Facet}`. |
+| `BeforeMapConfiguration` | `Type?` | `IFacetBeforeMapConfiguration`, run before the mapped members are assigned. `To{Facet}` only. |
+| `AfterMapConfiguration` | `Type?` | `IFacetAfterMapConfiguration`, run last. `To{Facet}` only. |
+| `ToSourceConfiguration` | `Type?` | `IFacetToSourceConfiguration`, run inside the reverse mapping. |
+
+### Which path a hook reaches
+
+Forced by what an expression tree can hold, not chosen:
+
+| Hook | `To{Facet}` | `Projection` |
+|---|---|---|
+| `IFacetMapConfiguration.Map` | yes | **no** — imperative |
+| `IFacetProjectionMapConfiguration.ConfigureProjection` | yes | **yes** — merged into the bindings |
+| `BeforeMap` / `AfterMap` | yes | no |
+
+A `ConfigureProjection` rule is folded into the projection's object initializer rather than applied
+after it, so the query still translates. The same rules are compiled to assignments for
+`To{Facet}`, keeping one declaration for both paths — which is why that method is annotated
+`[RequiresDynamicCode]`: compiling an expression tree needs it, though `Projection` itself does not.
+
+When any hook is present the mapper constructs the instance and populates it in order
+(`BeforeMap` → mapped members → projection rules → `Map` → `AfterMap`) rather than using a single
+object initializer, because `BeforeMap` has to see the instance first.
+
+### Member matching
+
+By name, because the facet is read from metadata where its own `[Facet]`/`[MapFrom]` attributes need
+not be present — so `MapFrom`, `MapWhen` and `ConvertEnumsTo` on the facet do not reach the mapper.
+Use a `Configuration` for anything the name match cannot do. A property the generator cannot fill is
+reported as FAC110 rather than silently defaulted.
+
+Nested facets and collections of them are inlined, provided their own pair is registered too, so the
+whole graph stays a single translatable expression. The collection shapes accepted are the same ones
+`[Facet]` accepts, since both use the same shared helper.
+
+| Diagnostic | Severity | Meaning |
+|---|---|---|
+| FAC110 | Warning | A facet property is left unmapped, with the reason. |
+| FAC111 | Error | The registration names types no mapper can be built between. |
+| FAC112 | Warning | `GenerateToSource` set, but the source type has no parameterless constructor. |
+| FAC113 | Warning | Two registrations generate the same class name; set `Name`. |
+| FAC114 | Warning | The facet is a `[Facet]` type in this same compilation, so its generated members are invisible to this generator. |
+| FAC118 | Info | The reverse mapping leaves members at their defaults, and why. |
+
+### Mapping back
+
+`GenerateToSource` emits two reverse mappings, and the difference between them is identity.
+
+`To{Source}` **constructs**, so it carries back only the flat members. A nested child would have to
+be a new object, which an ORM reads as an insert with the previous child left an orphan — so it is
+not attempted, and FAC118 lists what was left out.
+
+`ApplyTo` **writes onto an instance you already have**, which is the shape an update needs:
+
+```csharp
+var tracked = db.Users.Single(u => u.Id == id);
+response.ApplyTo(tracked);          // same entity, same child objects, new values
+db.SaveChanges();
+```
+
+A nested member is updated in place wherever the target already has one, so the child keeps its
+identity; where the target's child is null it stays null, because creating it is a decision about
+the aggregate rather than about mapping. Collections are never reconciled — deciding what an added
+or removed element means needs a key and a policy. `ApplyTo` constructs nothing, so it is generated
+even for a source type with no accessible parameterless constructor, where `To{Source}` cannot be.
+`ToSourceConfiguration` runs last in both.
+
+### FacetMappersForAssembly
+
+Naming each pair twice — once as `[Facet]`, once as `[assembly: FacetMapper]` — is two places to
+keep in step, and forgetting the second is silent: a contract facet has no mapping members of its
+own to go missing. This removes the second copy.
+
+```csharp
+[assembly: FacetMappersForAssembly(typeof(UserResponse))]   // any type from the contract assembly
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `contractAssemblyMarker` | `Type` | Any type from the contract assembly; it identifies the assembly (constructor argument). |
+| `Exclude` | `string[]?` | Facet names to skip, simple or fully qualified. |
+| `GenerateProjection` | `bool` | As on `FacetMapper` (default: true). |
+| `GenerateToSource` | `bool` | As on `FacetMapper` (default: false). |
+| `Namespace` | `string?` | Namespace for the generated classes. |
+
+It reads the contract manifest a facet assembly records — `AssemblyMetadata` entries holding two
+strings, so they survive `Facet_EmitAttributeMetadata=false` without reintroducing a reference:
+
+```csharp
+[assembly: AssemblyMetadata("Facet.Contract.ApiModels.UserResponse", "AppLayer.UserUseCaseModel")]
+```
+
+`AssemblyMetadataAttribute` is in the framework every project already references, so the record
+costs no dependency of any kind. Omit it with
+`<Facet_EmitContractManifest>false</Facet_EmitContractManifest>`, at the cost of this attribute and
+FAC115.
+
+An explicit `[assembly: FacetMapper]` for a pair wins, which is how one facet gets its own `Name`,
+`Exclude` or `Configuration` while the rest are covered wholesale. Anything left uncovered is
+reported as **FAC115** — but only in an assembly that already maps something from that contract
+assembly, so a project using Facet the ordinary way never hears from it.

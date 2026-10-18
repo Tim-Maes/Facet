@@ -103,6 +103,28 @@ internal static class AttributeParser
             .Value.Value is T t ? t : defaultValue;
 
     /// <summary>
+    /// Gets a <c>string[]</c> named argument, or null when it is absent, null, or not an array.
+    /// </summary>
+    public static ImmutableArray<string>? GetStringArrayNamedArg(
+        ImmutableArray<KeyValuePair<string, TypedConstant>> args,
+        string name)
+    {
+        var arg = args.FirstOrDefault(kv => kv.Key == name).Value;
+
+        if (arg.Kind != TypedConstantKind.Array || arg.IsNull)
+            return null;
+
+        var builder = ImmutableArray.CreateBuilder<string>();
+        foreach (var value in arg.Values)
+        {
+            if (value.Value is string s && !string.IsNullOrWhiteSpace(s))
+                builder.Add(s);
+        }
+
+        return builder.ToImmutable();
+    }
+
+    /// <summary>
     /// Checks if a named argument exists in the attribute.
     /// </summary>
     public static bool HasNamedArg(

@@ -6,6 +6,22 @@
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
+
+    <!--
+      This project doubles as a contract assembly, so that the facets it declares can be asserted
+      to carry no mapping members and no reference to Facet.Attributes.
+    -->
+    <Facet_GenerateMappings>false</Facet_GenerateMappings>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- A ProjectReference does not import Facet.props, so the property is exposed by hand. -->
+    <CompilerVisibleProperty Include="Facet_GenerateMappings" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Facet\Facet.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\src\Facet.Attributes\Facet.Attributes.csproj" />
+  </ItemGroup>
 
 </Project>
