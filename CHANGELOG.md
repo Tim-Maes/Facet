@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to Facet are documented in this file.
 
@@ -6,11 +6,19 @@ All notable changes to Facet are documented in this file.
 
 ### Added
 
+- Added `CopyAttributesMode` to `[Facet]` and `[Wrapper]`, with `Facet_CopyAttributesMode` project-wide. `AttributeCopyMode.Preserve` is the default and copies exactly what Facet copied before. `AttributeCopyMode.ContractSafe` also skips attributes whose assembly is a package the consumer may not have — `Microsoft.EntityFrameworkCore.*` and the equivalents for MongoDB, NHibernate, Dapper.Contrib, linq2db and ServiceStack — because copying one writes that package into the generated type's metadata and a consumer reflecting over the property then throws `FileNotFoundException`. Neither mode touches attributes the shared framework carries: `[Column]`, `[Table]` and `[Key]` resolve wherever `[Required]` does.
+- Added FAC109 (info), which reports each attribute `CopyAttributes` would carry from a package assembly, naming the attribute, the member, the assembly it would pin, and how to stop it. This is what makes the hazard visible while the default still preserves existing behaviour. Reported at info rather than warning deliberately: the attribute resolves fine wherever the package is deployed, and a new warning on upgrade would break any build using `TreatWarningsAsErrors`.
+- Added `CopyAttributesExclude` and `CopyAttributesInclude` to `[Facet]` and `[Wrapper]`, with `Facet_CopyAttributesExclude`/`Facet_CopyAttributesInclude` as the project-wide equivalents. Patterns may be a namespace wildcard (`Acme.Persistence.*`), a fully qualified type name, or a bare type name, with the trailing `Attribute` optional; an include overrides any exclusion, Facet's built-in list included.
 - Added `SetAccessor` parameter to `[Facet]` with `PropertySetAccessor` enum (`Preserve` / `Set` / `Init`) to override the set accessor emitted on all generated properties (#381). Supports the immutable builder pattern: one mutable facet for building, one init-only facet as the frozen read model.
 - Each facet type now emits two generated files by default: `{Type}.Properties.g.cs` (property declarations) and `{Type}.Mappings.g.cs` (constructors, projections, and conversion methods). Opt out globally by setting `<Facet_SplitGeneratedFiles>false</Facet_SplitGeneratedFiles>` in your `.csproj` or `Directory.Build.props` to restore the previous single-file output.
 
+### Changed
+
+- `[Wrapper]` now honours `Facet_CopyAttributesExclude`, `Facet_CopyAttributesInclude` and `Facet_CopyAttributesMode`. It still does not inherit the project-wide `Facet_CopyAttributes`, which stays opt-in per wrapper as before.
+
 ### Fixed
 
+- A list-valued generator property separated by `;` arrived truncated at its first entry, because `CompilerVisibleProperty` values reach the generator through a generated `.editorconfig` and that format treats `;` as the start of a comment. `Facet.targets` now normalises `;` to `,`.
 - `CopyDocs` no longer drops inline markup from the copied documentation. `<see cref="..."/>` and `<see langword="..."/>` used to vanish from the sentence (a summary read "see ." in Swagger/Scalar), `<c>` and `<para>` lost their markup, and an escaped `&lt;` was written back unescaped (CS1570 in the consuming project). Crefs are copied in documentation-ID form (`P:Namespace.Type.Member`), which the compiler does not rebind, so a facet in another namespace than its source still gets no CS1574 (#45). A `paramref`/`typeparamref` to a parameter the facet does not have becomes `<c>name</c>`.
 - `[GenerateDtos]` no longer fails with CS8784 ("Generator 'GenerateDtosGeneratorHoist' failed to initialize … FileNotFoundException … SourceGenerator.Foundations.Contracts") when the compiler server already holds a Facet of 6.6.8 or older, e.g. from another solution built on the same machine. The DTOs were then not generated at all (CS0246 wherever they are used). Fixed in SourceGenerator.Foundations 2.0.17, which resolves embedded assemblies by name and version instead of by simple name.
 

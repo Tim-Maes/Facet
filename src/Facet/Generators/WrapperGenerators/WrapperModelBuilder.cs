@@ -15,7 +15,10 @@ internal static class WrapperModelBuilder
     /// <summary>
     /// Builds a WrapperTargetModel from the generator attribute syntax context.
     /// </summary>
-    public static WrapperTargetModel? BuildModel(GeneratorAttributeSyntaxContext context, CancellationToken token)
+    public static WrapperTargetModel? BuildModel(
+        GeneratorAttributeSyntaxContext context,
+        GlobalConfigurationDefaults globalDefaults,
+        CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         if (context.TargetSymbol is not INamedTypeSymbol targetSymbol) return null;
@@ -31,7 +34,16 @@ internal static class WrapperModelBuilder
         var (included, isIncludeMode) = AttributeParser.ExtractIncludedMembers(attribute);
 
         var includeFields = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.IncludeFields, false);
-        var copyAttributes = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.CopyAttributes, false);
+        // Null means "do not copy"; otherwise the policy carries which attributes may cross.
+        var copyAttributes =
+            AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.CopyAttributes, false)
+                ? AttributeCopyPolicy.Create(
+                    (AttributeCopyMode)AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.CopyAttributesMode, (int)globalDefaults.CopyAttributesMode),
+                    globalDefaults.CopyAttributesExclude,
+                    globalDefaults.CopyAttributesInclude,
+                    AttributeParser.GetStringArrayNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.CopyAttributesExclude),
+                    AttributeParser.GetStringArrayNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.CopyAttributesInclude))
+                : null;
         var useFullName = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.UseFullName, false);
         var readOnly = AttributeParser.GetNamedArg(attribute.NamedArguments, FacetConstants.AttributeNames.ReadOnly, false);
 
@@ -78,7 +90,7 @@ internal static class WrapperModelBuilder
             typeXmlDocumentation,
             containingTypes,
             useFullName,
-            copyAttributes,
+            copyAttributes is not null,
             readOnly);
     }
 
@@ -90,7 +102,7 @@ internal static class WrapperModelBuilder
         HashSet<string> included,
         bool isIncludeMode,
         bool includeFields,
-        bool copyAttributes,
+        AttributeCopyPolicy? copyAttributes,
         Dictionary<string, (string childWrapperTypeName, string sourceTypeName)> nestedWrapperMappings,
         ExternalXmlDocProvider? externalDocProvider,
         CancellationToken token)
@@ -127,7 +139,7 @@ internal static class WrapperModelBuilder
 
     private static void ProcessProperty(
         IPropertySymbol property,
-        bool copyAttributes,
+        AttributeCopyPolicy? copyAttributes,
         Dictionary<string, (string childWrapperTypeName, string sourceTypeName)> nestedWrapperMappings,
         ExternalXmlDocProvider? externalDocProvider,
         List<FacetMember> members,
@@ -150,9 +162,9 @@ internal static class WrapperModelBuilder
 
         List<string> attributes;
         List<string> attributeNamespaces;
-        if (copyAttributes)
+        if (copyAttributes is not null)
         {
-            var (attrs, namespaces) = AttributeProcessor.ExtractCopiableAttributesWithNamespaces(property, FacetMemberKind.Property);
+            var (attrs, namespaces) = AttributeProcessor.ExtractCopiableAttributesWithNamespaces(property, FacetMemberKind.Property, copyAttributes);
             attributes = attrs;
             attributeNamespaces = namespaces.ToList();
         }
@@ -192,7 +204,7 @@ internal static class WrapperModelBuilder
 
     private static void ProcessField(
         IFieldSymbol field,
-        bool copyAttributes,
+        AttributeCopyPolicy? copyAttributes,
         Dictionary<string, (string childWrapperTypeName, string sourceTypeName)> nestedWrapperMappings,
         ExternalXmlDocProvider? externalDocProvider,
         List<FacetMember> members,
@@ -215,9 +227,9 @@ internal static class WrapperModelBuilder
 
         List<string> attributes;
         List<string> attributeNamespaces;
-        if (copyAttributes)
+        if (copyAttributes is not null)
         {
-            var (attrs, namespaces) = AttributeProcessor.ExtractCopiableAttributesWithNamespaces(field, FacetMemberKind.Field);
+            var (attrs, namespaces) = AttributeProcessor.ExtractCopiableAttributesWithNamespaces(field, FacetMemberKind.Field, copyAttributes);
             attributes = attrs;
             attributeNamespaces = namespaces.ToList();
         }

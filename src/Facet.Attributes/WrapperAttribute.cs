@@ -57,6 +57,26 @@ public sealed class WrapperAttribute : Attribute
     public Type[]? NestedWrappers { get; set; }
 
     /// <summary>
+    /// Additional attributes that <c>CopyAttributes</c> must not copy, on top of the built-in list
+    /// of persistence attributes. See <see cref="FacetAttribute.CopyAttributesExclude"/>.
+    /// </summary>
+    /// <summary>
+    /// Which attributes <c>CopyAttributes</c> carries across
+    /// (default: <see cref="AttributeCopyMode.Preserve"/>, the behaviour Facet had before this
+    /// existed). Set <see cref="AttributeCopyMode.ContractSafe"/> to skip attributes whose
+    /// assembly is a package the consumer may not have. FAC109 reports the ones that would be.
+    /// </summary>
+    public AttributeCopyMode CopyAttributesMode { get; set; } = AttributeCopyMode.Preserve;
+
+    public string[]? CopyAttributesExclude { get; set; }
+
+    /// <summary>
+    /// Attributes that <c>CopyAttributes</c> must copy even though something would otherwise
+    /// exclude them. See <see cref="FacetAttribute.CopyAttributesInclude"/>.
+    /// </summary>
+    public string[]? CopyAttributesInclude { get; set; }
+
+    /// <summary>
     /// When true, copies attributes from the source type members to the generated wrapper members.
     /// Only copies attributes that are valid on the target (excludes internal compiler attributes and non-copiable attributes).
     /// Default is false.

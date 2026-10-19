@@ -1,4 +1,4 @@
-# Wrapper Attribute - Reference-Based Property Delegation
+﻿# Wrapper Attribute - Reference-Based Property Delegation
 
 ## Overview
 
@@ -76,7 +76,10 @@ Console.WriteLine(user.FirstName); // "Jane"
 | `IncludeFields` | `bool` | `false` | Include public fields from source type |
 | `ReadOnly` | `bool` | `false` | Generate get-only properties (immutable facade) |
 | `NestedWrappers` | `Type[]?` | `null` | Wrapper types for nested complex properties |
-| `CopyAttributes` | `bool` | `false` | Copy validation attributes from source to wrapper |
+| `CopyAttributes` | `bool` | `false` | Copy validation attributes from source to wrapper. Persistence attributes are excluded by default — see [Attribute copying](#attribute-copying) below. |
+| `CopyAttributesMode` | `AttributeCopyMode` | `Preserve` | `ContractSafe` also skips package-assembly attributes |
+| `CopyAttributesExclude` | `string[]?` | `null` | Attributes `CopyAttributes` must not copy, on top of the built-in list |
+| `CopyAttributesInclude` | `string[]?` | `null` | Attributes `CopyAttributes` must copy, overriding any exclusion |
 | `UseFullName` | `bool` | `false` | Use full type name for generated file |
 
 ## Include/Exclude Patterns
@@ -642,3 +645,27 @@ The following features are planned for future releases:
 - [Facet Attribute](03_AttributeReference.md) - For value-copying behavior
 - [Advanced Scenarios](06_AdvancedScenarios.md) - Complex patterns
 - [Quick Start](02_QuickStart.md) - Getting started with Facet
+
+## Attribute copying
+
+`CopyAttributes` shares its policy with `[Facet]`, including `CopyAttributesMode`. Under the default
+`Preserve` every attribute that could be copied before still is; `ContractSafe` additionally skips
+attributes whose assembly is a package the consumer may not have — `Microsoft.EntityFrameworkCore.*`
+(`[Precision]`, `[Comment]`, `[Index]`, `[Owned]`) and the equivalents for MongoDB, NHibernate,
+Dapper.Contrib, linq2db and ServiceStack. Copying one of those writes that package into the
+wrapper's metadata, and a consumer reflecting over the property then fails to load it. FAC109
+reports each one, so the hazard is visible without the default changing.
+
+Neither mode touches what the shared framework carries, `[Column]`, `[Table]` and `[Key]`
+included — they resolve wherever `[Required]` does, so copying them pins no extra reference. If you
+would rather keep storage detail off a contract, say so:
+
+```xml
+<PropertyGroup>
+  <Facet_CopyAttributesExclude>System.ComponentModel.DataAnnotations.Schema.*;Key;Timestamp</Facet_CopyAttributesExclude>
+</PropertyGroup>
+```
+
+`Facet_CopyAttributes`, `Facet_CopyAttributesExclude` and `Facet_CopyAttributesInclude` apply here
+as they do to `[Facet]`. A wrapper that is itself a mapped entity opts a package attribute back in
+with `CopyAttributesInclude`.
