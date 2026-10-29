@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 
 namespace Facet;
 
@@ -18,6 +19,7 @@ namespace Facet;
 /// affect the underlying source object.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false)]
+[Conditional(FacetConditionalSymbols.KeepAttributes)]
 public sealed class WrapperAttribute : Attribute
 {
     /// <summary>

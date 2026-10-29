@@ -1,4 +1,4 @@
-# Global Configuration Defaults
+﻿# Global Configuration Defaults
 
 ## Overview
 
@@ -34,6 +34,9 @@ The following property controls **generator-level** output behaviour (no per-typ
 | Property | Default | MSBuild Property |
 |----------|---------|------------------|
 | *(generator)* Split output | `true` | `Facet_SplitGeneratedFiles` |
+| *(generator)* Emit the mappings half | `true` | `Facet_GenerateMappings` |
+| *(generator)* Emit attributes into metadata | `true` | `Facet_EmitAttributeMetadata` |
+| *(generator)* Emit the contract manifest | `true` | `Facet_EmitContractManifest` |
 
 When `Facet_SplitGeneratedFiles` is `true` (the default), each type emits two files: `*.Properties.g.cs` and `*.Mappings.g.cs`. Set it to `false` to restore single-file output. See [Generated Files Output](12_GeneratedFilesOutput.md) for details.
 
@@ -192,3 +195,7 @@ Preserve validation and serialization attributes from source types:
 - [Attribute Reference](03_AttributeReference.md) - Complete list of attribute properties
 - [GenerateDtosAttribute](09_GenerateDtosAttribute.md) - DTO generation
 - [WrapperAttribute](14_WrapperAttribute.md) - Wrapper generation
+
+`Facet_GenerateMappings` and `Facet_EmitAttributeMetadata` exist together: they let a contract
+assembly carry only the facet shapes, with its mapping written in a project that references both
+layers. See [Contract Assemblies](22_ContractAssemblies.md).

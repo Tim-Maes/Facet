@@ -1,0 +1,22 @@
+<Project>
+  <!--
+    Automatically imported by MSBuild when the Facet.Attributes package is referenced.
+
+    Facet's attributes are [Conditional(FacetConditionalSymbols.KeepAttributes)]: the source
+    generator reads them from the semantic model whether or not they are emitted, but emitting one
+    writes its typeof() argument into the custom attribute blob, which pins an AssemblyRef to the
+    source type's assembly into the compiled output. Defining the symbol here keeps the attributes
+    in metadata, which is the pre-existing behaviour and so the default.
+
+    This lives in Facet.Attributes rather than Facet because the [Conditional] is on a type in
+    THIS package: a project referencing the attributes without the generator would otherwise lose
+    its attributes from metadata silently, with no targets file to configure it back on.
+
+    Set <Facet_EmitAttributeMetadata>false</Facet_EmitAttributeMetadata> to drop them, and let the
+    compiler elide the references that only the attribute arguments were keeping alive.
+  -->
+  <PropertyGroup Condition="'$(Facet_EmitAttributeMetadata)' != 'false'">
+    <DefineConstants>$(DefineConstants);FACET_KEEP_ATTRIBUTES</DefineConstants>
+  </PropertyGroup>
+
+</Project>
