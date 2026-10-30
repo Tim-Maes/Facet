@@ -274,6 +274,13 @@ clean branch.
 dotnet add MyApp.Persistence package Facet.Extensions.EFCore
 ```
 
+`dotnet ef` also needs `Microsoft.EntityFrameworkCore.Design` in your startup project, as in any
+EF Core migrations setup. Facet does not bring it in, so it never ships with your app:
+
+```bash
+dotnet add MyApp.Web package Microsoft.EntityFrameworkCore.Design
+```
+
 ```xml
 <PropertyGroup>
   <FacetEfDesignTime>true</FacetEfDesignTime>

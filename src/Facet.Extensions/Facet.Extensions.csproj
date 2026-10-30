@@ -14,12 +14,16 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Facet\Facet.csproj" />
-    </ItemGroup>
-
-    <!-- Resolve System.Collections.Immutable version conflict -->
-    <ItemGroup Condition="'$(TargetFramework)' == 'net8.0' or '$(TargetFramework)' == 'net9.0'">
-        <PackageReference Include="System.Collections.Immutable" />
+        <!--
+          Becomes the Facet package dependency, keeping generator and runtime helpers in step.
+          The generator assembly is routed into an item type nothing consumes, so it is neither
+          compiled against (the Facet package ships no lib/ for consumers either) nor run as an
+          analyzer on this library. As a plain reference it pulled Roslyn's
+          System.Collections.Immutable into this build, which then had to be pinned and leaked
+          to every consumer. ReferenceOutputAssembly="false" would avoid that too, but pack then
+          drops the package dependency.
+        -->
+        <ProjectReference Include="..\Facet\Facet.csproj" OutputItemType="FacetGeneratorOutput" />
     </ItemGroup>
 
 </Project>

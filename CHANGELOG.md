@@ -9,6 +9,11 @@ All notable changes to Facet are documented in this file.
 - Added `SetAccessor` parameter to `[Facet]` with `PropertySetAccessor` enum (`Preserve` / `Set` / `Init`) to override the set accessor emitted on all generated properties (#381). Supports the immutable builder pattern: one mutable facet for building, one init-only facet as the frozen read model.
 - Each facet type now emits two generated files by default: `{Type}.Properties.g.cs` (property declarations) and `{Type}.Mappings.g.cs` (constructors, projections, and conversion methods). Opt out globally by setting `<Facet_SplitGeneratedFiles>false</Facet_SplitGeneratedFiles>` in your `.csproj` or `Directory.Build.props` to restore the previous single-file output.
 
+### Changed
+
+- `Facet.Extensions.EFCore` no longer passes `Microsoft.EntityFrameworkCore.Design` on to your app. It was meant to be design-time only, but every app using the package shipped it, along with Roslyn and MSBuild assemblies (a minimal .NET 8 app goes from 56 files / 29 MB of output to 19 files / 3.4 MB). **Action needed** if you run `dotnet ef` and your startup project does not reference `Microsoft.EntityFrameworkCore.Design` itself: add it, as EF Core migrations require.
+- `Facet.Extensions`, `Facet.Extensions.EFCore`, `Facet.Extensions.EFCore.Mapping` and `Facet.Mapping.Expressions` no longer force `System.Collections.Immutable` 10.x onto .NET 8/9 apps or `System.Security.Cryptography.Xml` 10.0.12 onto any app. Both were build-only workarounds, and Cryptography.Xml 10.0.12 (with its Cryptography.Pkcs dependency) now has known high-severity advisories.
+
 ### Fixed
 
 - **Security:** `Facet.Dashboard`'s `RequireAuthentication` / `AuthenticationPolicy` now also protect the JSON API endpoint (`{RoutePrefix}/api/facets`). Previously only the HTML page required authorization, so the JSON API, enabled by default, served the full source and facet model to anonymous callers.
