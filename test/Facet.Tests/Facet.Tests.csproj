@@ -13,6 +13,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Facet.Dashboard endpoint tests build a WebApplication -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio">
@@ -48,6 +52,7 @@
     <ProjectReference Include="..\..\src\Facet.Extensions.EFCore\Facet.Extensions.EFCore.csproj" />
     <ProjectReference Include="..\..\src\Facet.Extensions.EFCore.Mapping\Facet.Extensions.EFCore.Mapping.csproj" />
     <ProjectReference Include="..\..\src\Facet.Mapping.Expressions\Facet.Mapping.Expressions.csproj" />
+    <ProjectReference Include="..\..\src\Facet.Dashboard\Facet.Dashboard.csproj" />
     <ProjectReference Include="..\Facet.Tests.ExternalLib\Facet.Tests.ExternalLib.csproj" />
   </ItemGroup>
 

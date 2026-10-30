@@ -74,6 +74,8 @@ builder.Services.AddFacetDashboard(options =>
 });
 ```
 
+Authentication applies to both the dashboard page and the JSON API endpoint.
+
 ### Additional Assemblies
 
 By default, the dashboard scans the entry assembly and its references. You can add additional assemblies:

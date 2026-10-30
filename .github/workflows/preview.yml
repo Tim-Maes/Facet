@@ -1,19 +1,22 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 
 name: Publish Preview
-run-name: '[Preview] PR #${{ github.event.pull_request.number }} — ${{ github.event.pull_request.title }}'
+run-name: '[Preview] PR #${{ inputs.pr }}'
 
+# Manual only: nuget.org versions are permanent, so a preview is published when a
+# maintainer asks for one (Actions → Publish Preview → Run workflow), not on every push.
+# Run it from the default branch so the trusted workflow file, not the PR's copy of it,
+# holds the NuGet publishing rights.
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    branches:
-      - main
-      - master
-      - develop
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: 'Pull request number to publish a preview package for'
+        required: true
+        type: number
 
-# Cancel any in-progress publish for the same PR when a new commit is pushed
 concurrency:
-  group: preview-${{ github.event.pull_request.number }}
+  group: preview-${{ inputs.pr }}
   cancel-in-progress: true
 
 permissions:
@@ -32,18 +35,34 @@ defaults:
 jobs:
   publish-preview:
     runs-on: ubuntu-latest
-    # Fork PRs (and dependabot PRs, which use a separate restricted secret store)
-    # run without repository secrets or a writable token, so NuGet login fails on
-    # the empty NUGET_USER and the PR comment couldn't be posted either. Skip the
-    # job instead of failing it — external contributions otherwise always show a
-    # red X they cannot fix. Build/test coverage for those PRs comes from the
-    # build and test workflows, which need no secrets.
-    if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.actor != 'dependabot[bot]'
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     steps:
+      # Only open PRs from branches in this repository: fork code is never published
+      # under the Facet package IDs.
+      - name: Resolve pull request
+        id: pr
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: Number('${{ inputs.pr }}'),
+            });
+            if (pr.state !== 'open') {
+              core.setFailed(`PR #${pr.number} is ${pr.state}; previews are only published for open PRs.`);
+              return;
+            }
+            if (pr.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
+              core.setFailed(`PR #${pr.number} comes from a fork; previews are only published for branches in this repository.`);
+              return;
+            }
+            core.setOutput('sha', pr.head.sha);
+            core.info(`Publishing PR #${pr.number} "${pr.title}" at ${pr.head.sha}`);
+
       - uses: actions/checkout@v7
         with:
+          ref: ${{ steps.pr.outputs.sha }}
           fetch-depth: 0
 
       - name: Setup .NET
@@ -66,7 +85,7 @@ jobs:
         id: preview_version
         shell: bash
         run: |
-          PREVIEW_VERSION="${{ steps.base_version.outputs.VERSION }}-preview.pr${{ github.event.pull_request.number }}.${{ github.run_number }}"
+          PREVIEW_VERSION="${{ steps.base_version.outputs.VERSION }}-preview.pr${{ inputs.pr }}.${{ github.run_number }}"
           echo "PREVIEW_VERSION=$PREVIEW_VERSION" >> "$GITHUB_OUTPUT"
           echo "Preview version: $PREVIEW_VERSION"
 
@@ -95,6 +114,7 @@ jobs:
         uses: actions/github-script@v9
         with:
           script: |
+            const issue_number = Number('${{ inputs.pr }}');
             const version = '${{ steps.preview_version.outputs.PREVIEW_VERSION }}';
             const body = [
               '## 📦 Preview packages published',
@@ -106,12 +126,12 @@ jobs:
               `dotnet add package Facet --version ${version}`,
               '```',
               '',
-              '_This pre-release is published automatically from this PR and will be overwritten on the next push._',
+              '_Published manually from this PR. Run the **Publish Preview** workflow again to publish a newer preview; earlier versions stay on NuGet._',
             ].join('\n');
 
             // Update existing bot comment if present, otherwise create a new one
             const { data: comments } = await github.rest.issues.listComments({
-              issue_number: context.issue.number,
+              issue_number,
               owner: context.repo.owner,
               repo: context.repo.repo,
             });
@@ -129,7 +149,7 @@ jobs:
               });
             } else {
               await github.rest.issues.createComment({
-                issue_number: context.issue.number,
+                issue_number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 body,
