@@ -14,13 +14,24 @@
         <PackageReference Include="Microsoft.EntityFrameworkCore" />
         <!--
           Design-time-only surface (IDesignTimeServices, MigrationsScaffolder) used by the
-          Design/ folder. EFCore.Design marks itself developmentDependency, so it does not
-          flow to consumers as a package dependency; 'dotnet ef' loads it into the
-          design-time host itself, which is the only time the Design/ types are touched.
+          Design/ folder. PrivateAssets="all" keeps it out of the package's dependencies:
+          developmentDependency only applies when a package is installed directly, so without
+          it every consuming app shipped EFCore.Design and its Roslyn/MSBuild closure. Apps
+          that run 'dotnet ef' already reference EFCore.Design themselves (the tool requires
+          it), and the design-time host is the only place the Design/ types are touched.
         -->
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
         <ProjectReference Include="..\Facet.Extensions\Facet.Extensions.csproj" />
     </ItemGroup>
+
+    <!--
+      MSB3277 on net8.0 only: EFCore.Design 8 brings Roslyn 4.5, while the generator project
+      (reaching this build as a transitive project reference) is built against Roslyn 4.8.
+      Neither is part of this package's output or dependencies, so the conflict is build-local.
+    -->
+    <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0'">
+        <NoWarn>$(NoWarn);MSB3277</NoWarn>
+    </PropertyGroup>
 
     <ItemGroup>
         <None Include="FacetEfCoreExtensions.cs" />
@@ -36,14 +47,12 @@
         <None Include="buildTransitive\Facet.Extensions.EFCore.targets" Pack="true" PackagePath="buildTransitive\" />
     </ItemGroup>
 
-    <!-- Resolve System.Collections.Immutable version conflict -->
-    <ItemGroup Condition="'$(TargetFramework)' == 'net8.0' or '$(TargetFramework)' == 'net9.0'">
-        <PackageReference Include="System.Collections.Immutable" />
-    </ItemGroup>
-
-    <!-- Override transitive dependency with vulnerable version from EFCore.Design -->
+    <!--
+      Override the vulnerable System.Security.Cryptography.Xml that EFCore.Design brings in.
+      Private like EFCore.Design itself: it only matters for this build.
+    -->
     <ItemGroup>
-        <PackageReference Include="System.Security.Cryptography.Xml" />
+        <PackageReference Include="System.Security.Cryptography.Xml" PrivateAssets="all" />
     </ItemGroup>
 
 </Project>
