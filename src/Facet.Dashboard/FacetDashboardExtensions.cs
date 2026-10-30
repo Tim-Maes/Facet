@@ -45,20 +45,23 @@ public static class FacetDashboardExtensions
 
         var routePrefix = options.RoutePrefix.TrimEnd('/');
 
+        // Every endpoint the dashboard maps, so authentication covers all of them
+        var endpoints = new List<IEndpointConventionBuilder>();
+
         // Main dashboard HTML page
-        var dashboardEndpoint = app.MapGet(routePrefix, async context =>
+        endpoints.Add(app.MapGet(routePrefix, async context =>
         {
             var dashboardService = context.RequestServices.GetRequiredService<FacetDashboardService>();
             var html = dashboardService.GetDashboardHtml();
             
             context.Response.ContentType = "text/html; charset=utf-8";
             await context.Response.WriteAsync(html);
-        });
+        }));
 
         // JSON API endpoint
         if (options.EnableJsonApi)
         {
-            app.MapGet($"{routePrefix}/api/facets", async context =>
+            endpoints.Add(app.MapGet($"{routePrefix}/api/facets", async context =>
             {
                 var dashboardService = context.RequestServices.GetRequiredService<FacetDashboardService>();
                 var facets = dashboardService.GetFacetMappings();
@@ -122,17 +125,20 @@ public static class FacetDashboardExtensions
 
                 context.Response.ContentType = "application/json; charset=utf-8";
                 await context.Response.WriteAsync(JsonSerializer.Serialize(result, jsonOptions));
-            });
+            }));
         }
 
         // Apply authentication if configured
-        if (options.RequireAuthentication && !string.IsNullOrEmpty(options.AuthenticationPolicy))
+        foreach (var endpoint in endpoints)
         {
-            dashboardEndpoint.RequireAuthorization(options.AuthenticationPolicy);
-        }
-        else if (options.RequireAuthentication)
-        {
-            dashboardEndpoint.RequireAuthorization();
+            if (options.RequireAuthentication && !string.IsNullOrEmpty(options.AuthenticationPolicy))
+            {
+                endpoint.RequireAuthorization(options.AuthenticationPolicy);
+            }
+            else if (options.RequireAuthentication)
+            {
+                endpoint.RequireAuthorization();
+            }
         }
 
         return app;

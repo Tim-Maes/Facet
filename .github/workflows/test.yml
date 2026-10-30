@@ -1,12 +1,10 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 
 name: test
-run-name: '[Test] ${{ github.event.head_commit.message || github.event.pull_request.title || github.event.workflow_run.display_title || github.ref_name }}'
+run-name: '[Test] ${{ github.event.head_commit.message || github.event.pull_request.title || github.ref_name }}'
+# No workflow_run trigger: it runs in the base repository's context (secrets, write token)
+# and would build fork PR code there. pull_request runs fork code with a read-only token.
 on:
-  workflow_run:
-    workflows: ["build"]
-    types:
-      - completed
   pull_request:
     branches:
       - "*"
@@ -17,7 +15,6 @@ on:
 permissions:
   contents: read
   checks: write
-  pull-requests: write
 
 env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
@@ -30,14 +27,10 @@ defaults:
 jobs:
   test:
     runs-on: ubuntu-latest
-    if: |
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
-      (github.event_name != 'workflow_run')
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -64,9 +57,13 @@ jobs:
           path: TestResults/*.trx
           retention-days: 7
 
+      # Fork PRs get a read-only token, so creating the check run would fail; the .trx
+      # artifact above still carries their results.
       - name: Publish Test Results
         uses: dorny/test-reporter@v3
-        if: success() || failure()
+        if: >-
+          (success() || failure()) &&
+          (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
         with:
           name: Unit Test Results
           path: TestResults/*.trx

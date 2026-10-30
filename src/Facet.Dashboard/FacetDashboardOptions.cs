@@ -28,6 +28,7 @@ public sealed class FacetDashboardOptions
 
     /// <summary>
     /// Gets or sets whether the dashboard requires authentication.
+    /// Applies to the dashboard page and the JSON API endpoint.
     /// Default is false.
     /// </summary>
     public bool RequireAuthentication { get; set; } = false;
