@@ -352,35 +352,18 @@ public static class FacetExtensions
     /// <exception cref="InvalidOperationException">
     /// Thrown when <typeparamref name="TTarget"/> does not define a static <c>Projection</c> property.
     /// </exception>
+    /// <remarks>
+    /// <typeparamref name="TSource"/> may derive from the facet's declared source type (for example an
+    /// EF Core table-per-hierarchy subtype); the projection's parameter is then adapted with a cast.
+    /// </remarks>
     public static IQueryable<TTarget> SelectFacet<TSource, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TTarget>(this IQueryable<TSource> source)
         where TTarget : class
     {
         if (source is null) throw new ArgumentNullException(nameof(source));
 
-        // First try the standard "Projection" property (single-source facets)
-        var prop = typeof(TTarget).GetProperty(
-            "Projection",
-            BindingFlags.Public | BindingFlags.Static);
-
-        // If no standard Projection, try ProjectionFrom{SourceName} for multi-source facets
-        if (prop is null)
-        {
-            var sourceSimpleName = typeof(TSource).Name;
-            var projectionPropertyName = $"ProjectionFrom{sourceSimpleName}";
-            prop = typeof(TTarget).GetProperty(
-                projectionPropertyName,
-                BindingFlags.Public | BindingFlags.Static);
-
-            if (prop is null)
-            {
-                throw new InvalidOperationException(
-                    $"Type {typeof(TTarget).Name} does not define a public static Projection property or {projectionPropertyName} property. " +
-                    $"Ensure the facet is decorated with [Facet(typeof({typeof(TSource).Name}))].");
-            }
-        }
-
-        var expr = (Expression<Func<TSource, TTarget>>)prop.GetValue(null)!;
-        return source.Select(expr);
+        var declaredProjection = GetDeclaredProjectionLambda(typeof(TTarget), typeof(TSource));
+        var adapted = GetOrBuildAdaptedProjection(typeof(TSource), typeof(TTarget), declaredProjection);
+        return source.Select((Expression<Func<TSource, TTarget>>)adapted);
     }
 
     /// <summary>
@@ -478,23 +461,22 @@ public static class FacetExtensions
         // First try the standard "Projection" property (single-source facets)
         var prop = targetType.GetProperty("Projection", BindingFlags.Public | BindingFlags.Static);
 
-        // If no standard Projection, try ProjectionFrom{SourceName} for multi-source facets
+        // If no standard Projection, try ProjectionFrom{SourceName} for multi-source facets,
+        // named after the declared source the element type derives from (or is)
         if (prop == null && sourceElementType != null)
         {
-            var sourceSimpleName = sourceElementType.Name;
-            var projectionPropertyName = $"ProjectionFrom{sourceSimpleName}";
+            var declaredSource = GetMatchingDeclaredSourceType(targetType, sourceElementType) ?? sourceElementType;
+            var projectionPropertyName = $"ProjectionFrom{declaredSource.Name}";
             prop = targetType.GetProperty(projectionPropertyName, BindingFlags.Public | BindingFlags.Static);
         }
 
         if (prop == null)
         {
-            // Multi-source facet: no matching projection found.
-            // The caller must use the two-generic-parameter SelectFacet<TSource, TTarget> instead.
+            var sourceHint = sourceElementType != null
+                ? $" for source type {sourceElementType.Name}. Ensure the facet is decorated with [Facet(typeof({sourceElementType.Name}))] or with a base type of it"
+                : ". This may be a multi-source facet with multiple [Facet] attributes";
             throw new InvalidOperationException(
-                $"Type {targetType.Name} does not define a public static Projection property. " +
-                $"This may be a multi-source facet with multiple [Facet] attributes. " +
-                $"For multi-source facets, use SelectFacet<TSource, {targetType.Name}>() instead of SelectFacet<{targetType.Name}>(), " +
-                $"or use the source-specific projection property (e.g., ProjectionFrom{{SourceName}}).");
+                $"Type {targetType.Name} does not define a public static Projection or ProjectionFrom{{SourceName}} property{sourceHint}.");
         }
 
         var value = prop.GetValue(null)
