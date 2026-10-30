@@ -549,9 +549,15 @@ internal static class CodeGenerationHelpers
 
     /// <summary>
     /// Gets the simple type name from a fully qualified type name.
+    /// A type in the global namespace is <c>global::Name</c>, with no dot to split on.
     /// </summary>
     public static string GetSimpleTypeName(string fullyQualifiedTypeName)
     {
+        if (fullyQualifiedTypeName.StartsWith(FacetConstants.GlobalNamespacePrefix, StringComparison.Ordinal))
+        {
+            fullyQualifiedTypeName = fullyQualifiedTypeName.Substring(FacetConstants.GlobalNamespacePrefix.Length);
+        }
+
         var lastDotIndex = fullyQualifiedTypeName.LastIndexOf('.');
         if (lastDotIndex >= 0 && lastDotIndex < fullyQualifiedTypeName.Length - 1)
         {
