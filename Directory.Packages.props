@@ -73,7 +73,7 @@
 		<PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.14" />
 
 		<!-- SourceLink for debugging support -->
-		<PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.401" />
+		<PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.403" />
 
 		<!-- Testing Dependencies -->
 		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
