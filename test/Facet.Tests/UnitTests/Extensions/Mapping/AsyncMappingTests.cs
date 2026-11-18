@@ -114,7 +114,7 @@ public class AsyncMappingTests
             TestDataFactory.CreateUser("Test2", "User2")
         };
         var cts = new CancellationTokenSource();
-        cts.CancelAfter(TimeSpan.FromMilliseconds(5)); 
+        cts.Cancel();
 
         var act = () => users.ToFacetsAsync<UserDto, UserDtoAsyncMapper>(cts.Token);
         await act.Should().ThrowAsync<OperationCanceledException>();
